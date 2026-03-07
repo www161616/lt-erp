@@ -4566,6 +4566,10 @@
             <button id="dbTab-backorder" class="btn" style="padding:8px 16px; font-size:13px;" onclick="demandBackorderTab='backorder'; renderDemandBackorderStation();">
               🚨 欠品追蹤 <span style="background:#fef3c7; color:#b7791f; border-radius:10px; padding:1px 7px; font-size:11px; font-weight:bold; margin-left:4px;">${pendingBO}</span>
             </button>
+            <button class="btn" style="padding:8px 16px; font-size:13px; background:#047857;" onclick="document.getElementById('csvImportInput').click();">
+              📥 匯入CSV
+            </button>
+            <input type="file" id="csvImportInput" accept=".csv" style="display:none;" onchange="importDemandCSV(this)">
           </div>
           <div style="display:flex; gap:6px; align-items:center;">
             ${demandBackorderTab === 'demand' ? `
@@ -5588,7 +5592,7 @@
         return {
           id: r.id,
           storeId: r.storeId || '',
-          category: '追加商品',
+          category: r.category || '追加商品',
           productId: r.code || '',
           productName: r.name || '',
           qty: r.qty || 0,
@@ -5602,6 +5606,114 @@
         };
       });
     } catch(e) { console.error('syncInquiries error:', e); mockInquiries = []; }
+  }
+
+  // 匯入需求 CSV（格式：日期,店家,商品分類,商品編號,商品名稱,數量,處理經過,是否完成）
+  function importDemandCSV(input) {
+    const file = input.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        const text = e.target.result;
+        const lines = parseCSV(text);
+        // 找到表頭行（含「商品編號」）
+        let headerIdx = -1;
+        for (let i = 0; i < Math.min(lines.length, 10); i++) {
+          if (lines[i].some(c => c.includes('商品編號'))) { headerIdx = i; break; }
+        }
+        if (headerIdx === -1) { Swal.fire('錯誤', '找不到表頭（需含「商品編號」欄位）', 'error'); return; }
+
+        // 篩選未完成的項目（是否完成 != TRUE，且有商品編號）
+        const existing = JSON.parse(localStorage.getItem('portalAllRequests') || '[]');
+        const existingIds = new Set(existing.map(r => r.id));
+        let imported = 0, skipped = 0;
+
+        for (let i = headerIdx + 1; i < lines.length; i++) {
+          const row = lines[i];
+          if (row.length < 8) continue;
+          const [date, store, cat, pid, pname, qty, progress, done] = row;
+          if (!pid || !pid.trim()) continue;
+          if (done && done.trim() === 'TRUE') continue; // 已完成，跳過
+
+          // 判斷類型
+          let category = '追加商品';
+          if (cat && cat.includes('詢問')) category = '詢問到貨日';
+
+          // 產生唯一 ID（避免重複匯入）
+          const idBase = 'CSV' + (date || '').replace(/[^0-9]/g, '') + '_' + pid.trim();
+          const id = idBase + '_' + store;
+          if (existingIds.has(id)) { skipped++; continue; }
+
+          // 狀態映射
+          let status = 'pending';
+          const prog = (progress || '').trim();
+          if (prog === '已完成' || prog === '已取消') continue;
+
+          existing.push({
+            id,
+            storeId: (store || '').trim(),
+            code: pid.trim(),
+            name: (pname || '').trim(),
+            qty: parseInt(qty) || 0,
+            note: prog || '',
+            category,
+            createdAt: parseDateFromCSV(date),
+            status,
+            reply: ''
+          });
+          existingIds.add(id);
+          imported++;
+        }
+
+        localStorage.setItem('portalAllRequests', JSON.stringify(existing));
+        cloudSave('portalAllRequests');
+        Swal.fire('匯入完成', `成功匯入 ${imported} 筆未完成需求${skipped > 0 ? `（${skipped} 筆已存在跳過）` : ''}`, 'success');
+        renderDemandBackorderStation();
+      } catch(err) {
+        console.error('CSV import error:', err);
+        Swal.fire('錯誤', '匯入失敗：' + err.message, 'error');
+      }
+    };
+    reader.readAsText(file, 'UTF-8');
+    input.value = '';
+  }
+
+  // 簡易 CSV 解析（處理引號內逗號）
+  function parseCSV(text) {
+    const results = [];
+    const lines = text.split(/\r?\n/);
+    for (const line of lines) {
+      if (!line.trim()) continue;
+      const row = [];
+      let cur = '', inQuote = false;
+      for (let i = 0; i < line.length; i++) {
+        const ch = line[i];
+        if (inQuote) {
+          if (ch === '"' && line[i+1] === '"') { cur += '"'; i++; }
+          else if (ch === '"') { inQuote = false; }
+          else { cur += ch; }
+        } else {
+          if (ch === '"') { inQuote = true; }
+          else if (ch === ',') { row.push(cur); cur = ''; }
+          else { cur += ch; }
+        }
+      }
+      row.push(cur);
+      results.push(row);
+    }
+    return results;
+  }
+
+  // 解析 CSV 日期（如 "2/24( 周二)" → ISO 日期）
+  function parseDateFromCSV(dateStr) {
+    if (!dateStr) return new Date().toISOString();
+    const m = dateStr.match(/(\d{1,2})\/(\d{1,2})/);
+    if (!m) return new Date().toISOString();
+    const month = parseInt(m[1]);
+    const day = parseInt(m[2]);
+    const year = month >= 11 ? 2025 : 2026; // 11月、12月是2025年
+    return new Date(year, month - 1, day).toISOString();
   }
 
   // 總倉回覆後直接寫回共用 key
