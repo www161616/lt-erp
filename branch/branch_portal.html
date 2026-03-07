@@ -352,7 +352,14 @@
           <div style="display:flex; align-items:center; gap:8px; margin:12px 0 8px; flex-wrap:wrap;">
             <input type="text" id="orderSearchInput" placeholder="搜尋商品編號或名稱..." oninput="orderSearchKw=this.value.trim();renderOrderPage(1)"
               style="flex:1; min-width:180px; padding:8px 12px; border:1px solid var(--border); border-radius:6px; font-size:13px; font-family:inherit; outline:none;">
-            <button onclick="document.getElementById('orderSearchInput').value='';orderSearchKw='';renderOrderPage(1)"
+            <input type="date" id="orderDateFilter" onchange="renderOrderPage(1)"
+              style="padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; font-family:inherit; outline:none;">
+            <select id="orderDateType" onchange="renderOrderPage(1)"
+              style="padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; font-family:inherit; outline:none; background:white;">
+              <option value="endDate">依結單日</option>
+              <option value="startDate">依開團日</option>
+            </select>
+            <button onclick="document.getElementById('orderSearchInput').value='';orderSearchKw='';document.getElementById('orderDateFilter').value='';renderOrderPage(1)"
               style="padding:8px 14px; background:#6b7280; color:white; border:none; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;">清除</button>
           </div>
 
@@ -1065,6 +1072,11 @@
       if (orderSearchKw) {
         const kw = orderSearchKw.toLowerCase();
         orderList = orderList.filter(p => (p.productId || p.id || '').toLowerCase().includes(kw) || (p.name || '').toLowerCase().includes(kw));
+      }
+      const dateVal = document.getElementById('orderDateFilter')?.value;
+      if (dateVal) {
+        const dateType = document.getElementById('orderDateType')?.value || 'endDate';
+        orderList = orderList.filter(p => (p[dateType] || '') === dateVal);
       }
 
       const totalPages = Math.max(1, Math.ceil(orderList.length / ORDER_PER_PAGE));
