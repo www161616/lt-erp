@@ -650,7 +650,20 @@
     <button onclick="switchAidTab('mypost', this)" id="aidTab-mypost" style="padding:10px 18px; border:none; background:transparent; font-size:13px; font-weight:600; color:#6b7280; cursor:pointer; font-family:inherit; border-bottom:2px solid transparent; margin-bottom:-2px; white-space:nowrap;">📝 我的發文</button>
     <button onclick="switchAidTab('myresp', this)" id="aidTab-myresp" style="padding:10px 18px; border:none; background:transparent; font-size:13px; font-weight:600; color:#6b7280; cursor:pointer; font-family:inherit; border-bottom:2px solid transparent; margin-bottom:-2px; white-space:nowrap;">🙋 我的回應</button>
   </div>
+  <div style="display:flex; align-items:center; gap:8px; padding:10px 14px; background:#fff0f6; border:1px solid #fbcfe8; border-radius:8px; margin-bottom:12px; flex-wrap:wrap;">
+    <span style="font-size:13px; font-weight:600; color:#be185d;">🔍</span>
+    <input type="text" id="aidSearchInput" placeholder="商品名稱或編號..."
+      style="width:180px; padding:7px 10px; border:2px solid #f9a8d4; border-radius:6px; font-size:13px; font-family:inherit; outline:none; background:white;"
+      onfocus="this.style.borderColor='#be185d'" onblur="this.style.borderColor='#f9a8d4'"
+      onkeydown="if(event.key==='Enter'){aidSearchKw=this.value.trim();aidPageNum=1;renderAidBoard();}">
+    <button onclick="aidSearchKw=document.getElementById('aidSearchInput').value.trim();aidPageNum=1;renderAidBoard()"
+      style="padding:7px 16px; background:#be185d; color:white; border:none; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;">查詢</button>
+    <button onclick="aidSearchKw='';document.getElementById('aidSearchInput').value='';aidPageNum=1;renderAidBoard()"
+      style="padding:7px 14px; background:#6b7280; color:white; border:none; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;">清除</button>
+    <span id="aidPaginationTop" style="margin-left:auto; display:flex; align-items:center; gap:6px; flex-wrap:wrap;"></span>
+  </div>
   <div id="aidBoardList"></div>
+  <div id="aidPaginationBottom" style="display:flex; align-items:center; justify-content:center; gap:6px; margin-top:12px; flex-wrap:wrap;"></div>
 </div>
 
         <div id="pageLedger" class="page">
@@ -4047,6 +4060,9 @@ function submitShortageReply(negoId, replyData) {
 let aidBoard = [];
 let aidCounter = 1;
 let currentAidTab = 'all';
+let aidSearchKw = '';
+let aidPageNum = 1;
+const AID_PER_PAGE = 100;
 let aidItems = [{ code: '', name: '', qty: '', temp: '', price: 0 }];
 
 function initAidPage() {
@@ -4059,6 +4075,7 @@ function initAidPage() {
 
 function switchAidTab(tab, btn) {
   currentAidTab = tab;
+  aidPageNum = 1;
   ['all','need','offer','mypost','myresp'].forEach(t => {
     const el = document.getElementById('aidTab-' + t);
     if (!el) return;
@@ -4081,14 +4098,44 @@ function renderAidBoard() {
     a.items.some(item => item.responses && item.responses.some(r => r.store === myName))
   );
 
+  // 搜尋篩選
+  if (aidSearchKw) {
+    const kw = aidSearchKw.toLowerCase();
+    list = list.filter(a => a.items.some(item => (item.name || '').toLowerCase().includes(kw) || (item.code || '').toLowerCase().includes(kw)));
+  }
+
+  // 分頁
+  const totalItems = list.length;
+  const totalPages = Math.max(1, Math.ceil(totalItems / AID_PER_PAGE));
+  if (aidPageNum > totalPages) aidPageNum = totalPages;
+  if (aidPageNum < 1) aidPageNum = 1;
+  const pageList = list.slice((aidPageNum - 1) * AID_PER_PAGE, aidPageNum * AID_PER_PAGE);
+
+  // 分頁 HTML
+  const pgBtn = (active) => `padding:6px 12px; border-radius:4px; border:1px solid ${active ? 'var(--primary)' : '#d1d5db'}; background:${active ? 'var(--primary)' : 'white'}; color:${active ? 'white' : '#374151'}; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;`;
+  let pgHtml = '';
+  if (totalPages > 1) {
+    pgHtml = `<button onclick="aidPageNum=1;renderAidBoard()" ${aidPageNum===1?'disabled':''} style="${pgBtn(false)} ${aidPageNum===1?'opacity:0.4;cursor:default;':''}">⏮</button>` +
+      `<button onclick="aidPageNum=${aidPageNum-1};renderAidBoard()" ${aidPageNum===1?'disabled':''} style="${pgBtn(false)} ${aidPageNum===1?'opacity:0.4;cursor:default;':''}">◀</button>` +
+      `<span style="font-size:13px; color:#6b7280;">${aidPageNum}/${totalPages}（${totalItems}筆）</span>` +
+      `<button onclick="aidPageNum=${aidPageNum+1};renderAidBoard()" ${aidPageNum===totalPages?'disabled':''} style="${pgBtn(false)} ${aidPageNum===totalPages?'opacity:0.4;cursor:default;':''}">▶</button>` +
+      `<button onclick="aidPageNum=${totalPages};renderAidBoard()" ${aidPageNum===totalPages?'disabled':''} style="${pgBtn(false)} ${aidPageNum===totalPages?'opacity:0.4;cursor:default;':''}">⏭</button>`;
+  } else {
+    pgHtml = `<span style="font-size:13px; color:#6b7280;">共 ${totalItems} 筆</span>`;
+  }
+  const pgTop = document.getElementById('aidPaginationTop');
+  const pgBot = document.getElementById('aidPaginationBottom');
+  if (pgTop) pgTop.innerHTML = pgHtml;
+  if (pgBot) pgBot.innerHTML = pgHtml;
+
   const container = document.getElementById('aidBoardList');
   if (!container) return;
-  if (list.length === 0) {
+  if (pageList.length === 0) {
     container.innerHTML = '<div style="text-align:center; padding:40px; color:#9ca3af; font-size:14px;">目前沒有相關貼文</div>';
     return;
   }
 
-  container.innerHTML = list.map(post => {
+  container.innerHTML = pageList.map(post => {
     const isNeed = post.type === 'need';
     const typeBadge = isNeed
       ? '<span style="background:#dbeafe; color:#2563eb; padding:3px 10px; border-radius:12px; font-size:12px; font-weight:700;">🆘 需求</span>'
