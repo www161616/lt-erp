@@ -289,9 +289,9 @@
       <div class="menu-item active" onclick="switchPage('pageOrder', this)">🛒 結單填表</div>
       <div class="menu-item" id="menuTracking" onclick="switchPage('pageTracking', this)">🚚 訂貨動態追蹤<span id="shortageBadge" style="display:none; margin-left:6px; background:#dc2626; color:white; font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px; animation:pulse 1.5s infinite;"></span></div>
       <div class="menu-item" onclick="switchPage('pageSummary', this)">📊 開團總表</div>
-      <div class="menu-item" id="menuRequest" onclick="switchPage('pageRequest', this)">📋 需求表</div>
-      <div class="menu-item" id="menuTransfer" onclick="switchPage('pageTransfer', this)">🔄 店轉店登記</div>
-      <div class="menu-item" id="menuAid" onclick="switchPage('pageAid', this)">🤝 互助交流</div>
+      <div class="menu-item" id="menuRequest" onclick="switchPage('pageRequest', this)">📋 需求表<span id="notifyRequest" style="display:none; margin-left:6px; background:#dc2626; color:white; font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px; min-width:16px; text-align:center;">0</span></div>
+      <div class="menu-item" id="menuTransfer" onclick="switchPage('pageTransfer', this)">🔄 店轉店登記<span id="notifyTransfer" style="display:none; margin-left:6px; background:#dc2626; color:white; font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px; min-width:16px; text-align:center;">0</span></div>
+      <div class="menu-item" id="menuAid" onclick="switchPage('pageAid', this)">🤝 互助交流<span id="notifyAid" style="display:none; margin-left:6px; background:#dc2626; color:white; font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px; min-width:16px; text-align:center;">0</span></div>
       <div class="menu-item" onclick="switchPage('pageBilling', this)">💳 待結貨款</div>
       <div class="menu-item" onclick="switchPage('pageHistory', this)">📜 所有進貨單</div>
       <div class="menu-item" id="menuLedger" onclick="switchPage('pageLedger', this)">💰 簡易流水帳</div>
@@ -940,6 +940,67 @@
     }
 
     // ============================
+    // 通知徽章
+    // ============================
+    function updateNotificationBadges() {
+      const myName = currentStore?.name;
+      if (!myName) return;
+
+      // 需求表：本店發的需求，已被回覆(status=done)且尚未看過
+      const allReqs = JSON.parse(localStorage.getItem('portalAllRequests') || '[]');
+      const seenReqs = JSON.parse(localStorage.getItem('portal_seen_requests_' + myName) || '[]');
+      const reqCount = allReqs.filter(r => r.storeId === myName && r.status === 'done' && !seenReqs.includes(r.id)).length;
+
+      // 店轉店：轉入本店且未確認收到
+      const allTf = JSON.parse(localStorage.getItem('portalTransferList') || '[]');
+      const tfCount = allTf.filter(t => t.toStore === myName && (t.adminStatus || 'pending') !== 'received').length;
+
+      // 互助交流：本店發的貼文有新回應
+      const allAid = JSON.parse(localStorage.getItem('portalMutualAidBoard') || '[]');
+      const seenAid = JSON.parse(localStorage.getItem('portal_seen_aid_' + myName) || '{}');
+      let aidCount = 0;
+      allAid.forEach(post => {
+        if (post.posterStore !== myName) return;
+        const totalResp = (post.items || []).reduce((sum, item) => sum + (item.responses || []).length, 0);
+        if (totalResp > (seenAid[post.id] || 0)) aidCount++;
+      });
+
+      setBadge('notifyRequest', reqCount);
+      setBadge('notifyTransfer', tfCount);
+      setBadge('notifyAid', aidCount);
+    }
+
+    function setBadge(id, count) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (count > 0) {
+        el.textContent = count;
+        el.style.display = 'inline-block';
+      } else {
+        el.style.display = 'none';
+      }
+    }
+
+    function markPageSeen(pageId) {
+      const myName = currentStore?.name;
+      if (!myName) return;
+      if (pageId === 'pageRequest') {
+        const allReqs = JSON.parse(localStorage.getItem('portalAllRequests') || '[]');
+        const doneIds = allReqs.filter(r => r.storeId === myName && r.status === 'done').map(r => r.id);
+        localStorage.setItem('portal_seen_requests_' + myName, JSON.stringify(doneIds));
+      } else if (pageId === 'pageAid') {
+        const allAid = JSON.parse(localStorage.getItem('portalMutualAidBoard') || '[]');
+        const seen = {};
+        allAid.forEach(post => {
+          if (post.posterStore !== myName) return;
+          seen[post.id] = (post.items || []).reduce((sum, item) => sum + (item.responses || []).length, 0);
+        });
+        localStorage.setItem('portal_seen_aid_' + myName, JSON.stringify(seen));
+      }
+      // 店轉店不需要 seen 記錄，直接用 adminStatus !== 'received' 判斷
+    }
+
+    // ============================
     // 登出
     // ============================
     function doLogout() {
@@ -1133,6 +1194,7 @@
         Swal.close();
         renderOrderPage();
         updateShortageBadge();
+        updateNotificationBadges();
         loadProductDB(); // 載入商品資料庫（需求表/店轉店用）
       } catch(e) {
         Swal.fire('連線錯誤', e.message, 'error');
@@ -1144,6 +1206,12 @@
       const { data: { session } } = await sbClient.auth.getSession();
       if (session) SB_HEADERS['Authorization'] = `Bearer ${session.access_token}`;
     }, 600000);
+
+    // 通知徽章自動刷新（每 60 秒從雲端同步後更新）
+    setInterval(() => {
+      if (!currentStore) return;
+      cloudLoadAll().then(() => updateNotificationBadges()).catch(() => {});
+    }, 60000);
 
     // ============================
     // 批發帳號隱藏不需要的功能
@@ -1579,6 +1647,9 @@
         if (pageId === 'pageLedger') initLedgerPage();
         if (pageId === 'pageHistory') initHistoryPage();
         if (pageId === 'pageAid') initAidPage();
+        // 進入頁面時標記已讀，並更新徽章
+        markPageSeen(pageId);
+        updateNotificationBadges();
       };
       if (needsCloud) { cloudLoadAll().then(afterCloud).catch(afterCloud); }
       else { afterCloud(); }
