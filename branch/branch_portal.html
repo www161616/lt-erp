@@ -1240,6 +1240,34 @@
       cloudLoadAll().then(() => updateNotificationBadges()).catch(() => {});
     }, 60000);
 
+    // 頁面載入時自動恢復登入
+    (async () => {
+      try {
+        const { data: { session } } = await sbClient.auth.getSession();
+        if (!session) return;
+        const meta = session.user.user_metadata || {};
+        if (meta.role === 'admin' || meta.role === 'assistant' || !meta.store) return;
+        SB_HEADERS['Authorization'] = `Bearer ${session.access_token}`;
+        const storeName = meta.store;
+        const fullName = meta.full_name || meta.username;
+        currentStore = { id: meta.username, name: matchBranchName(storeName), employee: fullName };
+        sessionStorage.setItem('branch_employee', JSON.stringify(currentStore));
+        await cloudLoadAll();
+        initStoreData();
+        const typeMap = JSON.parse(localStorage.getItem('branchTypeMap') || '{}');
+        currentStore.type = typeMap[storeName] || 'store';
+        document.getElementById('storeNameBadge').textContent = `🏠 ${storeName}`;
+        document.getElementById('topbarInfo').textContent = `${storeName}｜${fullName}`;
+        document.getElementById('loginPage').style.display = 'none';
+        document.getElementById('mainApp').style.display = 'flex';
+        applyStoreTypePermissions();
+        renderOrderPage();
+        updateShortageBadge();
+        updateNotificationBadges();
+        loadProductDB();
+      } catch(e) { console.log('auto-restore skipped:', e); }
+    })();
+
     // ============================
     // 批發帳號隱藏不需要的功能
     // ============================

@@ -296,11 +296,41 @@
       const saved = sessionStorage.getItem('erp_employee');
       if (saved) {
         currentUser = JSON.parse(saved);
+        // 恢復 auth token
+        const { data: { session } } = await sbClient.auth.getSession();
+        if (session) {
+          HEADERS['Authorization'] = `Bearer ${session.access_token}`;
+          sessionStorage.setItem('sb_auth_token', session.access_token);
+        }
         document.getElementById('loginOverlay').style.display = 'none';
         document.getElementById('currentUserLabel').innerText = `👤 ${currentUser.full_name || currentUser.username}`;
         applyRolePermissions();
         renderDashboard();
       } else {
+        // 嘗試從 Supabase session 自動恢復
+        try {
+          const { data: { session } } = await sbClient.auth.getSession();
+          if (session) {
+            const meta = session.user.user_metadata || {};
+            if (meta.role === 'admin' || meta.role === 'assistant') {
+              HEADERS['Authorization'] = `Bearer ${session.access_token}`;
+              sessionStorage.setItem('sb_auth_token', session.access_token);
+              sessionStorage.setItem('sb_auth_token_admin_email', session.user.email);
+              currentUser = {
+                username: meta.username || '',
+                full_name: meta.full_name || '',
+                role: meta.role || 'staff',
+                store: meta.store || ''
+              };
+              sessionStorage.setItem('erp_employee', JSON.stringify(currentUser));
+              document.getElementById('loginOverlay').style.display = 'none';
+              document.getElementById('currentUserLabel').innerText = `👤 ${currentUser.full_name || currentUser.username}`;
+              applyRolePermissions();
+              renderDashboard();
+              return;
+            }
+          }
+        } catch(e) { console.log('auto-restore skipped:', e); }
         document.getElementById('loginOverlay').style.display = 'flex';
         document.getElementById('loginUser').focus();
       }
