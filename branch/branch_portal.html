@@ -1101,7 +1101,7 @@
 
         const disableReason = '總倉已結單，無法訂購';
         const inputProps = canOrder
-          ? `oninput="sanitizeQty(this);if(!orderDirty){orderDirty=true;updateSubmitBar();}" onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='var(--border)'"`
+          ? `oninput="sanitizeQty(this);if(!orderDirty){orderDirty=true;updateSubmitBar();}" onfocus="this.style.borderColor='var(--primary)';showQtyHint(this)" onblur="this.style.borderColor='var(--border)';hideQtyHint()"`
           : `disabled title="${disableReason}"`;
         const inputStyle = canOrder
           ? `background:white; border:2px solid var(--border); cursor:text;`
@@ -1566,6 +1566,22 @@
         if (!el.disabled) { el.readOnly = false; el.style.background = ''; el.style.cursor = ''; }
       });
       updateSubmitBar();
+    }
+
+    function showQtyHint(el) {
+      hideQtyHint();
+      const hint = document.createElement('div');
+      hint.id = 'qtyHint';
+      hint.textContent = '💡 填完記得按送出資料喔';
+      hint.style.cssText = 'position:absolute; background:#fef3c7; color:#92400e; font-size:12px; font-weight:600; padding:4px 10px; border-radius:6px; border:1px solid #fcd34d; white-space:nowrap; z-index:999; pointer-events:none; box-shadow:0 2px 6px rgba(0,0,0,0.1);';
+      document.body.appendChild(hint);
+      const rect = el.getBoundingClientRect();
+      hint.style.left = rect.left + 'px';
+      hint.style.top = (rect.bottom + 4 + window.scrollY) + 'px';
+    }
+    function hideQtyHint() {
+      const h = document.getElementById('qtyHint');
+      if (h) h.remove();
     }
 
     function updateSubmitBar() {
