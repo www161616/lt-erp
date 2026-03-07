@@ -1812,7 +1812,11 @@
           <div class="panel" style="flex: 2;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
               <div class="panel-title" style="margin: 0;">📋 待開立銷貨單的商品清單</div>
-              <button class="btn" style="background:#2c5282;" onclick="syncToERP()">🚀 寫入 ERP 並發布檔期</button>
+              <div style="display:flex; gap:6px;">
+                <button class="btn" style="background:#047857;" onclick="document.getElementById('bulkProductImport').click();">📥 商品批次匯入</button>
+                <input type="file" id="bulkProductImport" accept=".xls,.xlsx,.csv" style="display:none;" onchange="bulkImportProducts(this)">
+                <button class="btn" style="background:#2c5282;" onclick="syncToERP()">🚀 寫入 ERP 並發布檔期</button>
+              </div>
             </div>
             
             <div style="overflow-y: auto; max-height: calc(100vh - 180px);">
@@ -2115,6 +2119,143 @@
         stagingList = [];
         renderStagingList();
       });
+    }
+
+    // 商品批次匯入（支援 .xls/.xlsx/.csv）
+    async function bulkImportProducts(input) {
+      const file = input.files[0];
+      if (!file) return;
+      input.value = '';
+
+      const data = await file.arrayBuffer();
+      const wb = XLSX.read(data, { type: 'array' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
+
+      if (rows.length < 2) { Swal.fire('錯誤', '檔案內容不足', 'error'); return; }
+
+      // 偵測表頭
+      const header = rows[0].map(h => String(h).trim());
+      const colMap = {};
+      const fieldAliases = {
+        id:       ['商品代碼', '商品編號', '編號', 'id'],
+        name:     ['商品名稱', '名稱', 'name'],
+        category: ['商品分類', '分類', '類別', 'category'],
+        unit:     ['單位', 'unit'],
+        price:    ['售價', 'price'],
+        price_branch: ['進貨成本', '分店價', 'price_branch'],
+        cost:     ['成本', 'cost'],
+        supplier: ['供應商', 'supplier'],
+        alert_stock: ['安全庫存', 'alert_stock'],
+        status:   ['狀態', 'status']
+      };
+      for (const [field, aliases] of Object.entries(fieldAliases)) {
+        const idx = header.findIndex(h => aliases.some(a => h.includes(a)));
+        if (idx >= 0) colMap[field] = idx;
+      }
+
+      if (colMap.id === undefined || colMap.name === undefined) {
+        Swal.fire('錯誤', '找不到「商品代碼/商品編號」或「商品名稱」欄位', 'error');
+        return;
+      }
+
+      // 解析數字（移除逗號）
+      const parseNum = v => Number(String(v).replace(/,/g, '')) || 0;
+
+      // 整理資料
+      const items = [];
+      for (let i = 1; i < rows.length; i++) {
+        const r = rows[i];
+        const id = String(r[colMap.id] || '').trim();
+        const name = String(r[colMap.name] || '').trim();
+        if (!id || !name) continue;
+
+        items.push({
+          id,
+          name,
+          category:     colMap.category !== undefined ? String(r[colMap.category] || '').trim() : '未分類',
+          unit:         colMap.unit !== undefined ? String(r[colMap.unit] || '').trim() || '個' : '個',
+          price:        colMap.price !== undefined ? parseNum(r[colMap.price]) : 0,
+          price_branch: colMap.price_branch !== undefined ? parseNum(r[colMap.price_branch]) : 0,
+          price_wholesale: 0,
+          price_group:  0,
+          cost:         colMap.cost !== undefined ? parseNum(r[colMap.cost]) : 0,
+          supplier:     colMap.supplier !== undefined ? String(r[colMap.supplier] || '').trim() : '',
+          alert_stock:  colMap.alert_stock !== undefined ? parseNum(r[colMap.alert_stock]) : 0,
+          status:       colMap.status !== undefined ? String(r[colMap.status] || '').trim() || '啟用' : '啟用'
+        });
+      }
+
+      if (items.length === 0) { Swal.fire('錯誤', '沒有可匯入的商品', 'error'); return; }
+
+      // 確認匯入
+      const confirmResult = await Swal.fire({
+        title: '商品批次匯入',
+        html: `檔案：<b>${file.name}</b><br>偵測到 <b>${items.length}</b> 筆商品<br><br>欄位映射：<br>` +
+          Object.entries(colMap).map(([f, idx]) => `${f} ← ${header[idx]}`).join('<br>') +
+          '<br><br>已存在的商品編號將<b>跳過</b>不覆蓋',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: '開始匯入',
+        cancelButtonText: '取消',
+        confirmButtonColor: '#047857'
+      });
+      if (!confirmResult.isConfirmed) return;
+
+      // 查詢已存在的商品 ID（分批查，每批 200 個）
+      Swal.fire({ title: '匯入中...', html: '正在檢查已存在商品...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+      const existingIds = new Set();
+      const CHUNK = 200;
+      for (let i = 0; i < items.length; i += CHUNK) {
+        const chunk = items.slice(i, i + CHUNK);
+        const ids = chunk.map(it => `"${it.id}"`).join(',');
+        try {
+          const res = await fetch(`${SB_URL}/products?id=in.(${ids})&select=id`, { headers: HEADERS });
+          if (res.ok) {
+            const rows = await res.json();
+            rows.forEach(r => existingIds.add(r.id));
+          }
+        } catch(e) {}
+      }
+
+      const newItems = items.filter(it => !existingIds.has(it.id));
+      const skippedCount = items.length - newItems.length;
+
+      if (newItems.length === 0) {
+        Swal.fire('完成', `所有 ${items.length} 筆商品都已存在，無需匯入`, 'info');
+        return;
+      }
+
+      // 批次寫入 Supabase（每批 500 筆）
+      const BATCH = 500;
+      let savedCount = 0;
+      let errorMsg = '';
+      for (let i = 0; i < newItems.length; i += BATCH) {
+        const batch = newItems.slice(i, i + BATCH);
+        Swal.update({ html: `正在寫入... ${i}/${newItems.length}` });
+        try {
+          const res = await fetch(`${SB_URL}/products`, {
+            method: 'POST', headers: HEADERS, body: JSON.stringify(batch)
+          });
+          if (res.ok) {
+            savedCount += batch.length;
+          } else {
+            const err = await res.json().catch(() => ({}));
+            errorMsg = err.message || err.details || '寫入失敗';
+            break;
+          }
+        } catch(e) {
+          errorMsg = e.message;
+          break;
+        }
+      }
+
+      if (errorMsg) {
+        Swal.fire('部分失敗', `已寫入 ${savedCount} 筆，錯誤：${errorMsg}`, 'warning');
+      } else {
+        await logActivity('商品批次匯入', 'PRODUCTS', { count: savedCount, skipped: skippedCount, file: file.name });
+        Swal.fire('匯入完成', `✅ 寫入 <b>${savedCount}</b> 筆新商品<br>⏭️ 跳過 <b>${skippedCount}</b> 筆已存在`, 'success');
+      }
     }
 
 // ============================
