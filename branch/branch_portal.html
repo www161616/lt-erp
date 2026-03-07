@@ -1096,10 +1096,10 @@
       let html = '';
       pageItems.forEach(p => {
         const isClosed = p.status === 'closed';
-        const isExpired = p.endDate < today;
-        const canOrder = !isClosed && !isExpired;
+        const isExpired = !isClosed && p.endDate < today;
+        const canOrder = !isClosed;
 
-        const disableReason = isClosed ? '總倉已結單，無法訂購' : '已過結單日，無法訂購';
+        const disableReason = '總倉已結單，無法訂購';
         const inputProps = canOrder
           ? `oninput="sanitizeQty(this);if(!orderDirty){orderDirty=true;updateSubmitBar();}" onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='var(--border)'"`
           : `disabled title="${disableReason}"`;
@@ -1109,8 +1109,8 @@
 
         const statusBadge = isClosed
           ? '<span style="background:#fef2f2; color:#ef4444; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:700; margin-left:4px;">已結單</span>'
-          : isExpired
-            ? '<span style="background:#f3f4f6; color:#9ca3af; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:700; margin-left:4px;">已截止</span>'
+          : (p.endDate < today)
+            ? '<span style="background:#fef3c7; color:#b45309; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:700; margin-left:4px;">已過期</span>'
             : '';
 
         const cached = orderQtyCache[p.id] || '';
