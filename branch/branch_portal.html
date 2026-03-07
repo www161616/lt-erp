@@ -349,18 +349,23 @@
 
           <div id="submitBar" style="display:flex; align-items:center; gap:10px; margin-top:8px; flex-wrap:wrap;"></div>
 
-          <div style="display:flex; align-items:center; gap:8px; margin:12px 0 8px; flex-wrap:wrap;">
-            <input type="text" id="orderSearchInput" placeholder="搜尋商品編號或名稱..." oninput="orderSearchKw=this.value.trim();renderOrderPage(1)"
-              style="flex:1; min-width:180px; padding:8px 12px; border:1px solid var(--border); border-radius:6px; font-size:13px; font-family:inherit; outline:none;">
-            <input type="date" id="orderDateFilter" onchange="renderOrderPage(1)"
-              style="padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; font-family:inherit; outline:none;">
-            <select id="orderDateType" onchange="renderOrderPage(1)"
-              style="padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; font-family:inherit; outline:none; background:white;">
+          <div style="display:flex; align-items:center; gap:8px; margin:12px 0 8px; flex-wrap:wrap; padding:10px 14px; background:#fff0f6; border:1px solid #fbcfe8; border-radius:8px;">
+            <span style="font-size:13px; font-weight:600; color:#be185d;">🔍</span>
+            <input type="text" id="orderSearchInput" placeholder="商品編號或名稱..."
+              style="width:180px; padding:7px 10px; border:2px solid #f9a8d4; border-radius:6px; font-size:13px; font-family:inherit; outline:none; background:white;"
+              onfocus="this.style.borderColor='#be185d'" onblur="this.style.borderColor='#f9a8d4'"
+              onkeydown="if(event.key==='Enter'){orderSearchKw=this.value.trim();renderOrderPage(1);}">
+            <input type="date" id="orderDateFilter"
+              style="padding:7px 10px; border:2px solid #f9a8d4; border-radius:6px; font-size:13px; font-family:inherit; outline:none; background:white;">
+            <select id="orderDateType"
+              style="padding:7px 10px; border:2px solid #f9a8d4; border-radius:6px; font-size:13px; font-family:inherit; outline:none; background:white;">
               <option value="endDate">依結單日</option>
               <option value="startDate">依開團日</option>
             </select>
+            <button onclick="orderSearchKw=document.getElementById('orderSearchInput').value.trim();renderOrderPage(1)"
+              style="padding:7px 16px; background:#be185d; color:white; border:none; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;">查詢</button>
             <button onclick="document.getElementById('orderSearchInput').value='';orderSearchKw='';document.getElementById('orderDateFilter').value='';renderOrderPage(1)"
-              style="padding:8px 14px; background:#6b7280; color:white; border:none; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;">清除</button>
+              style="padding:7px 14px; background:#6b7280; color:white; border:none; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;">清除</button>
           </div>
 
           <div id="orderPaginationTop" style="display:flex; align-items:center; justify-content:center; gap:6px; margin-bottom:8px; flex-wrap:wrap;"></div>
