@@ -3914,6 +3914,7 @@
         supplier: item.supplier || ''
       }));
       localStorage.setItem('portalTrackingData', JSON.stringify(trackingData));
+      cloudSave('portalTrackingData');
       // 同步廠商專屬資料（小瀾）
       syncSupplierData();
     }

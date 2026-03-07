@@ -889,7 +889,7 @@
 
     async function cloudLoadAll() {
       try {
-        const resp = await fetch(`${SB_URL}/shared_kv?key=in.("branchOrderList","branchOrders","branchDataList","branchTypeMap","portalAllRequests","portalTransferList","portalMutualAidBoard")`, { headers: SB_HEADERS });
+        const resp = await fetch(`${SB_URL}/shared_kv?key=in.("branchOrderList","branchOrders","branchDataList","branchTypeMap","portalAllRequests","portalTransferList","portalMutualAidBoard","portalTrackingData")`, { headers: SB_HEADERS });
         if (resp.ok) {
           const rows = await resp.json();
           rows.forEach(r => {
@@ -1628,7 +1628,7 @@
       updateShortageBadge();
 
       // 切換分頁時從雲端重新載入共用資料，載入完再 render
-      const needsCloud = ['pageRequest','pageTransfer','pageAid','pageSummary','pageOrder'].includes(pageId);
+      const needsCloud = ['pageRequest','pageTransfer','pageAid','pageSummary','pageOrder','pageTracking'].includes(pageId);
       const afterCloud = () => {
         if (needsCloud) {
           const allReqs = JSON.parse(localStorage.getItem('portalAllRequests') || '[]');
