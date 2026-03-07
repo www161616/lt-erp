@@ -1603,7 +1603,7 @@
           floatBar.style.cssText = 'position:fixed; bottom:0; left:0; right:0; z-index:9999; background:#dc2626; color:white; display:flex; align-items:center; justify-content:center; gap:12px; padding:12px 20px; font-size:15px; font-weight:700; box-shadow:0 -4px 12px rgba(0,0,0,0.15);';
           document.body.appendChild(floatBar);
         }
-        floatBar.innerHTML = '⚠️ 數量已修改，記得送出！ <button onclick="submitOrder()" style="background:white; color:#dc2626; border:none; padding:8px 20px; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit;">🚀 立即送出</button>';
+        floatBar.innerHTML = '⚠️ 數量已修改，記得送出！ <button onclick="submitOrder()" style="background:white; color:#dc2626; border:none; padding:8px 20px; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit;">🚀 立即送出</button> <button onclick="orderDirty=false;updateSubmitBar()" style="background:transparent; color:white; border:1px solid white; padding:8px 16px; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;">✕ 關閉</button>';
         floatBar.style.display = 'flex';
       } else if (floatBar) {
         floatBar.style.display = 'none';
