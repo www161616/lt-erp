@@ -1,0 +1,136 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>客戶管理</title>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <style>
+    :root {
+      --primary: #475569;
+      --bg: #f8f9fb;
+      --border: #e2e8f0;
+      --text: #1e293b;
+    }
+    body { font-family: 'Noto Sans TC', sans-serif; background: var(--bg); padding: 20px; color: var(--text); margin: 0;}
+    
+    .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; background: #fff; padding: 15px 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(30,41,59,0.07); }
+    .search-box { display: flex; gap: 10px; align-items: center; }
+    .search-box input { padding: 8px 12px; border: 1px solid var(--border); border-radius: 4px; width: 250px; outline: none; }
+    .search-box input:focus { border-color: var(--primary); }
+    
+    .btn { padding: 8px 15px; background: var(--primary); color: white; border: none; border-radius: 4px; cursor: pointer; transition: 0.2s; display: inline-flex; align-items: center; gap: 6px; font-size: 14px; text-decoration: none;}
+    .btn:hover { background: #334155; }
+    .btn-secondary { background: #64748b; }
+    .btn-secondary:hover { background: #73767a; }
+
+    table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 8px rgba(30,41,59,0.07); font-size: 14px; }
+    th { background: #f1f5f9; padding: 12px 15px; text-align: left; font-weight: 600; color: #475569; border-bottom: 2px solid var(--border); }
+    td { padding: 12px 15px; border-bottom: 1px solid var(--border); vertical-align: middle; }
+    tr:hover { background-color: #f1f5f9; }
+    
+    .status-badge { padding: 4px 8px; border-radius: 12px; font-size: 12px; font-weight: bold; }
+    .status-active { background: #e2e8f0; color: var(--primary); }
+    .status-inactive { background: #fed7d7; color: #c53030; }
+    .price-group { background: #eef2f9; color: #0e7490; padding: 3px 6px; border-radius: 4px; font-size: 12px;}
+  </style>
+</head>
+<body>
+
+  <div class="toolbar">
+    <div class="search-box">
+      <input type="text" id="searchInput" placeholder="搜尋客戶編號、名稱或電話..." onkeyup="filterTable()">
+      <button class="btn btn-secondary" onclick="fetchCustomers()"><i class="fas fa-sync-alt"></i> 重新整理</button>
+    </div>
+    <a href="CustomerManager.html" class="btn"><i class="fas fa-user-plus"></i> 新增客戶</a>
+  </div>
+
+  <table id="customerTable">
+    <thead>
+      <tr>
+        <th width="12%">客戶編號</th>
+        <th width="18%">客戶名稱</th>
+        <th width="12%">聯絡人</th>
+        <th width="15%">聯絡電話</th>
+        <th width="10%">統一編號</th>
+        <th width="10%">價格等級</th>
+        <th width="8%">狀態</th>
+        <th width="10%">操作</th>
+      </tr>
+    </thead>
+    <tbody id="tableBody">
+      <tr><td colspan="8" style="text-align:center; padding: 30px;"><i class="fas fa-spinner fa-spin"></i> 載入中...</td></tr>
+    </tbody>
+  </table>
+
+  <script>
+    const SB_URL = 'https://gkuwoandmsgvlsxzmrjj.supabase.co/rest/v1';
+    const SB_KEY = 'sb_publishable_7K0w9Z8-Wv1dOgLsZkI0rA_WfNei_AS'; 
+    const AUTH_TOKEN = sessionStorage.getItem('sb_auth_token') || SB_KEY;
+    const HEADERS = { 'apikey': SB_KEY, 'Authorization': `Bearer ${AUTH_TOKEN}` };
+
+    let allCustomers = [];
+
+    window.onload = () => { fetchCustomers(); };
+
+    async function fetchCustomers() {
+      try {
+        const res = await fetch(`${SB_URL}/customers?order=id.desc`, { headers: HEADERS });
+        if (!res.ok) throw new Error('讀取失敗');
+        allCustomers = await res.json();
+        renderTable(allCustomers);
+      } catch (err) {
+        Swal.fire('錯誤', err.message, 'error');
+        document.getElementById('tableBody').innerHTML = `<tr><td colspan="8" style="text-align:center;color:red;">載入失敗</td></tr>`;
+      }
+    }
+
+    function renderTable(data) {
+      const tbody = document.getElementById('tableBody');
+      tbody.innerHTML = '';
+
+      if (data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center;">目前無客戶資料</td></tr>';
+        return;
+      }
+
+      data.forEach(c => {
+        const statusClass = c.status === '啟用' ? 'status-active' : 'status-inactive';
+        const phoneDisplay = c.mobile ? c.mobile : (c.phone || '-');
+        
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td><strong>${c.id}</strong></td>
+          <td>${c.name}</td>
+          <td>${c.contact || '-'}</td>
+          <td>${phoneDisplay}</td>
+          <td>${c.tax_id || '-'}</td>
+          <td><span class="price-group">${c.price_group || '一般'}</span></td>
+          <td><span class="status-badge ${statusClass}">${c.status || '啟用'}</span></td>
+          <td>
+            <button class="btn" style="padding: 4px 8px; font-size:12px;" onclick="editCustomer('${c.id}')">
+              <i class="fas fa-edit"></i> 編輯
+            </button>
+          </td>
+        `;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function filterTable() {
+      const keyword = document.getElementById('searchInput').value.toLowerCase();
+      const filtered = allCustomers.filter(c => 
+        (c.id && c.id.toLowerCase().includes(keyword)) || 
+        (c.name && c.name.toLowerCase().includes(keyword)) ||
+        (c.phone && c.phone.includes(keyword)) ||
+        (c.mobile && c.mobile.includes(keyword))
+      );
+      renderTable(filtered);
+    }
+
+    function editCustomer(id) {
+      window.location.href = `CustomerManager.html?id=${id}`;
+    }
+  </script>
+</body>
+</html>

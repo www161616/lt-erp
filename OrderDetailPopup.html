@@ -1,0 +1,284 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>單據詳情 - 龍潭進銷存系統</title>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <style>
+    /* ========== 石板灰護眼主題 (預設灰，JS 會根據類型切換) ========== */
+    :root {
+      --bg: #f8f9fb;
+      --surface: #ffffff;
+      --surface2: #f1f5f9;
+      --border: #e2e8f0;
+      --accent: #475569;
+      --accent-hover: #334155;
+      --accent-light: #e2e8f0;
+      --text: #1e293b;
+      --text2: #64748b;
+      --danger: #c53030;
+      --warning: #b7791f;
+      --orange: #c05621;
+    }
+
+    /* 進貨紅色系覆蓋 */
+    body.purchase {
+      --accent: #c53030;
+      --accent-hover: #9b2c2c;
+      --accent-light: #fed7d7;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    
+    body { 
+      font-family: 'Noto Sans TC', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 20px;
+      display: flex;
+      justify-content: center;
+      align-items: flex-start;
+      min-height: 100vh;
+    }
+
+    .popup-container {
+      background: var(--surface);
+      width: 100%;
+      max-width: 600px;
+      border-radius: 8px;
+      box-shadow: 0 4px 12px rgba(30,41,59,0.1);
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    .header {
+      background: var(--accent);
+      color: white;
+      padding: 15px 20px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .header .title { font-size: 18px; font-weight: bold; }
+    .header .type-badge {
+      background: rgba(255,255,255,0.2);
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 13px;
+    }
+
+    .content { padding: 20px; }
+
+    .info-box {
+      background: var(--surface2);
+      padding: 15px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .info-item { font-size: 14px; }
+    .info-item b { color: var(--text2); display: inline-block; width: 70px; }
+    .info-item .value { color: var(--text); font-weight: 500; }
+    
+    .status-tag {
+      display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 12px; font-weight: bold;
+    }
+    .status-unpaid { background: #fed7d7; color: var(--danger); border: 1px solid #feb2b2; }
+    .status-paid { background: var(--accent-light); color: var(--accent); border: 1px solid var(--accent); }
+
+    .table-area table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+    .table-area th { background: var(--surface2); padding: 10px; text-align: left; font-size: 13px; color: var(--text2); border-bottom: 2px solid var(--border); }
+    .table-area td { padding: 10px; border-bottom: 1px solid var(--border); font-size: 14px; }
+    .text-right { text-align: right; }
+    .text-center { text-align: center; }
+
+    .total-area { border-top: 2px solid var(--border); padding-top: 15px; text-align: right; }
+    .total-row { display: flex; justify-content: flex-end; gap: 20px; margin-bottom: 8px; font-size: 14px; color: var(--text2); }
+    .grand-total { display: flex; justify-content: flex-end; gap: 20px; margin-top: 10px; font-size: 18px; font-weight: bold; color: var(--accent); }
+    .total-area .value { width: 100px; text-align: right; font-family: monospace; }
+
+    .loading-text { text-align: center; padding: 40px; font-size: 16px; color: var(--text2); }
+  </style>
+</head>
+<body>
+
+  <div class="popup-container" id="mainContainer" style="display: none;">
+    <div class="header">
+      <div class="title">📄 單據明細</div>
+      <div class="type-badge" id="typeBadge">載入中...</div>
+    </div>
+    
+    <div class="content">
+      <div class="info-box">
+        <div class="info-item"><b>單號：</b><span class="value" id="val-orderId"></span></div>
+        <div class="info-item"><b>日期：</b><span class="value" id="val-date"></span></div>
+        <div class="info-item"><b id="partnerLabel">對象：</b><span class="value" id="val-partnerName"></span></div>
+        <div class="info-item"><b>狀態：</b><span class="value" id="val-status"></span></div>
+      </div>
+      
+      <div class="table-area">
+        <table>
+          <thead>
+            <tr>
+              <th>商品名稱</th>
+              <th class="text-center" style="width:80px;">數量</th>
+              <th class="text-right" style="width:90px;" id="priceLabel">單價</th>
+              <th class="text-right" style="width:100px;">小計</th>
+            </tr>
+          </thead>
+          <tbody id="val-itemsHtml">
+            </tbody>
+        </table>
+      </div>
+      
+      <div class="total-area">
+        <div class="total-row">
+          <span class="label">未稅金額：</span>
+          <span class="value" id="val-subtotal">$0</span>
+        </div>
+        <div class="total-row" id="taxRow">
+          <span class="label">稅額：</span>
+          <span class="value" id="val-taxAmount">$0</span>
+        </div>
+        <div class="grand-total">
+          <span class="label">含稅總計：</span>
+          <span class="value" id="val-grandTotal">$0</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <div id="loadingMsg" class="loading-text">🔄 正在讀取資料庫...</div>
+
+  <script>
+    // ========== 1. Supabase API 設定 ==========
+    const SB_URL = 'https://gkuwoandmsgvlsxzmrjj.supabase.co/rest/v1';
+    const SB_KEY = 'sb_publishable_7K0w9Z8-Wv1dOgLsZkI0rA_WfNei_AS'; 
+    const AUTH_TOKEN = sessionStorage.getItem('sb_auth_token') || SB_KEY;
+    const HEADERS = {
+      'apikey': SB_KEY,
+      'Authorization': `Bearer ${AUTH_TOKEN}`,
+      'Content-Type': 'application/json'
+    };
+
+    window.onload = async function() {
+      // 取得網址參數 (例如：OrderDetailPopup.html?orderId=SO0001&type=SALES)
+      const urlParams = new URLSearchParams(window.location.search);
+      const orderId = urlParams.get('orderId');
+      const type = urlParams.get('type'); // 'PURCHASE' 或 'SALES'
+
+      if (!orderId || !type) {
+        document.getElementById('loadingMsg').innerHTML = '❌ 網址錯誤，缺少單號或單據類型。';
+        return;
+      }
+
+      // 動態切換主題顏色與標籤
+      if (type === 'PURCHASE') {
+        document.body.classList.add('purchase');
+        document.getElementById('typeBadge').innerText = '進貨單';
+        document.getElementById('partnerLabel').innerText = '供應商：';
+        document.getElementById('priceLabel').innerText = '進價';
+      } else {
+        document.getElementById('typeBadge').innerText = '銷貨單';
+        document.getElementById('partnerLabel').innerText = '客戶：';
+        document.getElementById('priceLabel').innerText = '售價';
+      }
+
+      // 決定要查詢的資料表
+      const masterTable = type === 'PURCHASE' ? 'purchase_orders' : 'sales_orders';
+      const detailTable = type === 'PURCHASE' ? 'purchase_details' : 'sales_details';
+
+      try {
+        // 同時去抓主檔和明細
+        const [masterRes, detailRes] = await Promise.all([
+          fetch(`${SB_URL}/${masterTable}?id=eq.${orderId}`, { headers: HEADERS }),
+          fetch(`${SB_URL}/${detailTable}?order_id=eq.${orderId}`, { headers: HEADERS }) // 注意你的外鍵名稱是不是 order_id
+        ]);
+
+        if (!masterRes.ok) throw new Error('讀取主檔失敗');
+        if (!detailRes.ok) throw new Error('讀取明細失敗');
+
+        const masterData = await masterRes.json();
+        const detailData = await detailRes.json();
+
+        if (masterData.length === 0) throw new Error('找不到該筆單據！');
+
+        const order = masterData[0];
+
+        // 填寫基本資料
+        document.getElementById('val-orderId').innerText = order.id;
+        document.getElementById('val-date').innerText = order.order_date || order.date || '';
+        document.getElementById('val-partnerName').innerText = order.supplier_name || order.customer_name || '(未指定)';
+
+        // 處理狀態標籤
+        const status = order.payment_status || order.status || '未收款';
+        let statusHtml = `<span class="status-tag status-paid">${status}</span>`;
+        if (status.includes('未')) {
+            statusHtml = `<span class="status-tag status-unpaid">${status}</span>`;
+        }
+        document.getElementById('val-status').innerHTML = statusHtml;
+
+        // 填寫明細表格
+        let itemsHtml = '';
+        detailData.forEach(item => {
+          const price = Number(item.price || item.unit_price || item.cost || 0);
+          const subtotal = Number(item.subtotal || (item.qty * price) || 0);
+          
+          itemsHtml += `
+            <tr>
+              <td>
+                <div style="font-weight:600;">${item.product_name || item.product_id}</div>
+                ${item.note ? `<div style="font-size:11px; color:#999;">${item.note}</div>` : ''}
+              </td>
+              <td class="text-center">${item.qty} ${item.unit || ''}</td>
+              <td class="text-right">$${price.toLocaleString()}</td>
+              <td class="text-right" style="font-weight:600;">$${subtotal.toLocaleString()}</td>
+            </tr>
+          `;
+        });
+        document.getElementById('val-itemsHtml').innerHTML = itemsHtml;
+
+        // 填寫總計金額
+        const gTotal = Number(order.grand_total || order.total_amount || 0);
+        const tAmount = Number(order.tax_amount || 0);
+        const sTotal = gTotal - tAmount; // 或者是 order.subtotal
+
+        document.getElementById('val-subtotal').innerText = '$' + sTotal.toLocaleString();
+        
+        if (tAmount > 0) {
+          document.getElementById('val-taxAmount').innerText = '$' + tAmount.toLocaleString();
+        } else {
+          document.getElementById('taxRow').style.display = 'none'; // 沒稅金就隱藏
+        }
+        
+        document.getElementById('val-grandTotal').innerText = '$' + gTotal.toLocaleString();
+
+        // 切換顯示畫面
+        document.getElementById('loadingMsg').style.display = 'none';
+        document.getElementById('mainContainer').style.display = 'block';
+
+      } catch (err) {
+        document.getElementById('loadingMsg').innerHTML = `❌ 錯誤：${err.message}`;
+      }
+    };
+
+    // ========== 點擊單號：開啟內崁明細彈窗 ==========
+function showOrderDetail(orderId) {
+  Swal.fire({
+    title: '', // 隱藏預設標題，因為明細表自己有寫
+    html: `<iframe src="OrderDetailPopup.html?orderId=${orderId}&type=PURCHASE" style="width:100%; height:600px; border:none; border-radius:8px; display:block;"></iframe>`,
+    width: 650,           // 控制彈窗寬度
+    padding: '0px',       // 去除邊距讓 Iframe 貼齊
+    showConfirmButton: false,
+    showCloseButton: true,
+    background: '#f8f9fb'
+  });
+}
+  </script>
+</body>
+</html>

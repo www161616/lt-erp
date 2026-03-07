@@ -1,0 +1,719 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>匯入開團資料</title>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --accent: #2563eb;
+      --accent-light: #eff6ff;
+      --accent-dark: #1d4ed8;
+      --success: #059669;
+      --success-light: #ecfdf5;
+      --danger: #dc2626;
+      --warning: #d97706;
+      --border: #e5e7eb;
+      --text: #1f2937;
+      --text2: #6b7280;
+      --bg: #f1f5f9;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Noto Sans TC', system-ui, sans-serif; font-size: 14px; background: var(--bg); color: var(--text); }
+
+    .top-bar {
+      background: white; padding: 16px 24px; border-bottom: 1px solid var(--border);
+      display: flex; justify-content: space-between; align-items: center;
+      position: sticky; top: 0; z-index: 100;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+    }
+    .top-bar h1 { font-size: 18px; color: var(--accent); display: flex; align-items: center; gap: 8px; }
+    .top-bar .actions { display: flex; gap: 10px; }
+
+    .container { max-width: 1400px; margin: 0 auto; padding: 20px; }
+
+    .btn {
+      padding: 10px 20px; font-size: 14px; font-weight: 700; border: none;
+      border-radius: 6px; cursor: pointer; color: white; font-family: inherit;
+      display: inline-flex; align-items: center; gap: 6px; transition: 0.2s;
+    }
+    .btn:hover { opacity: 0.9; }
+    .btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .btn-primary { background: var(--accent); }
+    .btn-success { background: var(--success); }
+    .btn-warning { background: var(--warning); }
+    .btn-danger { background: var(--danger); }
+    .btn-sm { padding: 6px 12px; font-size: 12px; }
+
+    /* 步驟指示 */
+    .steps {
+      display: flex; gap: 0; margin-bottom: 20px; background: white;
+      border-radius: 10px; overflow: hidden; border: 1px solid var(--border);
+    }
+    .step {
+      flex: 1; padding: 14px 16px; text-align: center; font-size: 13px;
+      font-weight: 500; color: var(--text2); background: #f9fafb;
+      border-right: 1px solid var(--border); transition: 0.3s;
+    }
+    .step:last-child { border-right: none; }
+    .step.active { background: var(--accent); color: white; font-weight: 700; }
+    .step.done { background: var(--success-light); color: var(--success); }
+    .step .num { font-weight: 700; margin-right: 4px; }
+
+    /* 卡片 */
+    .card {
+      background: white; border-radius: 10px; padding: 20px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.04); border: 1px solid var(--border);
+      margin-bottom: 16px;
+    }
+    .card-title {
+      font-size: 15px; font-weight: 700; margin-bottom: 12px;
+      padding-bottom: 8px; border-bottom: 2px solid var(--accent-light);
+      display: flex; align-items: center; gap: 8px;
+    }
+
+    /* 統計 */
+    .stats {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+      gap: 12px; margin-bottom: 16px;
+    }
+    .stat-box {
+      background: var(--accent-light); border-radius: 8px; padding: 14px;
+      text-align: center;
+    }
+    .stat-box .num { font-size: 26px; font-weight: 700; color: var(--accent); }
+    .stat-box .label { font-size: 12px; color: var(--text2); margin-top: 2px; }
+
+    /* 批次列表 */
+    .batch-list { display: flex; flex-direction: column; gap: 8px; }
+    .batch-card {
+      display: flex; align-items: center; gap: 16px;
+      padding: 12px 16px; border: 1px solid var(--border);
+      border-radius: 8px; cursor: pointer; transition: 0.2s;
+    }
+    .batch-card:hover { border-color: var(--accent); background: #fafbff; }
+    .batch-card.selected { border-color: var(--accent); background: var(--accent-light); box-shadow: 0 0 0 2px rgba(37,99,235,0.15); }
+    .batch-date { font-weight: 700; color: var(--accent); min-width: 100px; }
+    .batch-info { flex: 1; font-size: 13px; color: var(--text2); }
+    .batch-count { font-weight: 700; font-size: 15px; }
+
+    /* 表格 */
+    .table-wrap { overflow-x: auto; max-height: 500px; overflow-y: auto; border: 1px solid var(--border); border-radius: 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th {
+      position: sticky; top: 0; z-index: 10;
+      background: #f1f5f9; padding: 10px 8px; text-align: center;
+      border-bottom: 2px solid var(--border); font-size: 12px; color: var(--text2);
+      white-space: nowrap;
+    }
+    td { padding: 8px; border-bottom: 1px solid #f0f0f0; text-align: center; }
+    td.name-cell { text-align: left; font-weight: 500; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    tr:hover { background: #fafbff; }
+
+    .zero { color: #ddd; }
+    .has-qty { color: var(--accent); font-weight: 600; }
+
+    /* 進度 */
+    .progress { width: 100%; height: 10px; background: #e5e7eb; border-radius: 5px; overflow: hidden; margin: 12px 0; }
+    .progress-fill { height: 100%; background: var(--accent); transition: width 0.3s; border-radius: 5px; }
+
+    .log-area {
+      background: #1e293b; color: #e2e8f0; border-radius: 8px; padding: 14px;
+      font-family: Consolas, monospace; font-size: 12px;
+      max-height: 180px; overflow-y: auto; line-height: 1.6;
+    }
+    .log-area .ok { color: #4ade80; }
+    .log-area .err { color: #f87171; }
+    .log-area .info { color: #60a5fa; }
+
+    .hidden { display: none !important; }
+
+    .check-all-row { padding: 8px 16px; background: #f9fafb; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  </style>
+</head>
+<body>
+
+  <div class="top-bar">
+    <h1>📥 匯入開團資料</h1>
+    <div class="actions">
+      <label class="btn btn-primary" style="margin:0;">
+        1️⃣ 上傳店家填表 CSV
+        <input type="file" id="fileInput" accept=".csv,.xlsx,.xls" onchange="handleFile(this, 'main')" style="display:none;">
+      </label>
+      <label class="btn btn-warning" id="btnPrice" style="margin:0; opacity:0.5; pointer-events:none;">
+        2️⃣ 上傳訂貨追蹤 CSV（售價+廠商）
+        <input type="file" id="priceFileInput" accept=".csv,.xlsx,.xls" onchange="handleFile(this, 'price')" style="display:none;">
+      </label>
+      <button class="btn btn-success" id="btnImport" onclick="importSelected()" disabled>3️⃣ 匯入所選批次</button>
+      <button class="btn btn-danger" id="btnClear" onclick="clearOldData()">🗑️ 清除舊資料</button>
+    </div>
+  </div>
+
+  <div class="container">
+    <!-- 步驟 -->
+    <div class="steps">
+      <div class="step active" id="step1"><span class="num">1</span>上傳 CSV / Excel</div>
+      <div class="step" id="step2"><span class="num">2</span>選擇批次預覽</div>
+      <div class="step" id="step3"><span class="num">3</span>確認匯入</div>
+    </div>
+
+    <!-- 統計摘要 -->
+    <div class="stats hidden" id="statsArea"></div>
+
+    <!-- 批次選擇 + 預覽 -->
+    <div class="hidden" id="mainArea" style="display:grid; grid-template-columns: 320px 1fr; gap: 16px;">
+      <!-- 左：批次列表 -->
+      <div class="card" style="max-height: 650px; overflow-y: auto;">
+        <div class="card-title">📅 依結單日分批</div>
+        <div class="check-all-row">
+          <input type="checkbox" id="checkAll" onchange="toggleAllBatches()">
+          <label for="checkAll" style="cursor:pointer;">全選 / 取消全選</label>
+        </div>
+        <div class="batch-list" id="batchList"></div>
+      </div>
+
+      <!-- 右：明細預覽 -->
+      <div class="card">
+        <div class="card-title" id="previewTitle">👆 請從左側選擇批次預覽</div>
+        <div class="table-wrap" id="previewTable">
+          <div style="text-align:center; padding:40px; color:#aaa;">選擇左側的結單日批次即可預覽商品明細</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 匯入結果 -->
+    <div class="card hidden" id="resultArea">
+      <div class="card-title">📋 匯入進度</div>
+      <div class="progress"><div class="progress-fill" id="progressFill" style="width:0%"></div></div>
+      <div class="log-area" id="logArea"></div>
+    </div>
+  </div>
+
+  <script>
+    // ===== Google Sheet 設定 =====
+    const SHEET_ID = '1WYkMRyAhbgN8aozpNUIjJt97RvqI8ltgp4psjmQHVH4';
+    const GID = '1581403578';
+    // 使用 Google 公開發布的 CSV 網址（不受 CORS 限制）
+    const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${GID}`;
+
+    // ===== 店家名稱對照 =====
+    const STORE_COLUMNS = ['三峽','中和','文山','四號','永和','忠順','淡水','環球','平鎮','古華','林口','南平','泰山','萬華','板橋','湖口','經國','松山','龍潭'];
+    const PERSONAL_COLUMNS = ['買','山','全','澤','絨','光','大','杰','胖','峯','柚','方','佑','楊'];
+
+    // ===== 全域變數 =====
+    let allRows = [];
+    let batches = {};        // { '1/1': [ {商品...}, ... ], ... }
+    let selectedBatches = new Set();
+    let currentPreview = null;
+    let priceMap = {};       // { '商品編號_結單日': 售價 }
+    let mainLoaded = false;
+
+    // ===== 讀取上傳的檔案 =====
+    function handleFile(input, type) {
+      const file = input.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+
+      if (file.name.endsWith('.csv')) {
+        reader.onload = function(e) {
+          if (type === 'price') processPriceCSV(e.target.result);
+          else processCSVText(e.target.result);
+        };
+        reader.readAsText(file, 'UTF-8');
+      } else {
+        reader.onload = function(e) {
+          const data = new Uint8Array(e.target.result);
+          const workbook = XLSX.read(data, { type: 'array' });
+          const sheetName = workbook.SheetNames[0];
+          const csv = XLSX.utils.sheet_to_csv(workbook.Sheets[sheetName]);
+          if (type === 'price') processPriceCSV(csv);
+          else processCSVText(csv);
+        };
+        reader.readAsArrayBuffer(file);
+      }
+    }
+
+    // ===== 處理訂貨追蹤（售價 + 廠商） =====
+    let supplierMap = {};  // { '商品編號_結單日': 廠商名 }
+
+    function processPriceCSV(text) {
+      try {
+        const rows = parseCSV(text);
+        const header = rows[0];
+        const colIdx = {};
+        header.forEach((h, i) => colIdx[h.replace(/\s+/g, '').trim()] = i);
+
+        // 自動偵測廠商欄位名稱（移除空格後比對）
+        const supplierColName = ['廠商', '供應商', '廠商名稱', '供應商名稱', '廠商/備註'].find(n => colIdx[n] !== undefined) || null;
+
+        let priceCount = 0;
+        let supplierCount = 0;
+        for (let i = 1; i < rows.length; i++) {
+          const r = rows[i];
+          const productId = (r[colIdx['商品編號']] || '').trim();
+          const closeDate = (r[colIdx['結單日']] || '').trim();
+          const price = parseFloat(r[colIdx['售價']]) || 0;
+          const supplier = supplierColName ? (r[colIdx[supplierColName]] || '').trim() : '';
+          if (!productId) continue;
+
+          if (price) {
+            priceMap[`${productId}_${closeDate}`] = price;
+            if (!priceMap[productId]) priceMap[productId] = price;
+            priceCount++;
+          }
+
+          if (supplier) {
+            supplierMap[`${productId}_${closeDate}`] = supplier;
+            if (!supplierMap[productId]) supplierMap[productId] = supplier;
+            supplierCount++;
+          }
+        }
+
+        // 把售價 + 廠商套用到已讀取的資料
+        allRows.forEach(item => {
+          const key = `${item.productId}_${item.closeDate}`;
+          item.price = priceMap[key] || priceMap[item.productId] || item.price || 0;
+          item.supplier = supplierMap[key] || supplierMap[item.productId] || item.supplier || '';
+        });
+
+        // 刷新預覽
+        if (currentPreview) previewBatch(currentPreview);
+
+        let msg = `已對應 <b>${priceCount}</b> 筆售價`;
+        if (supplierCount > 0) msg += `、<b>${supplierCount}</b> 筆廠商`;
+        else if (!supplierColName) msg += `<br><span style="font-size:12px; color:#b7791f;">未找到廠商欄位（需有「廠商」標頭）</span>`;
+
+        Swal.fire({
+          icon: 'success',
+          title: `匯入成功`,
+          html: msg,
+          timer: 2000, showConfirmButton: false, toast: true, position: 'top-end'
+        });
+
+      } catch(err) {
+        Swal.fire('讀取失敗', err.message, 'error');
+      }
+    }
+
+    function processCSVText(text) {
+      try {
+        const rows = parseCSV(text);
+        const header = rows[0];
+
+        // 找到各欄位的 index
+        const colIdx = {};
+        header.forEach((h, i) => colIdx[h.trim()] = i);
+
+        allRows = [];
+        for (let i = 1; i < rows.length; i++) {
+          const r = rows[i];
+          const productId = (r[colIdx['商品編號']] || '').trim();
+          if (!productId) continue;
+
+          const closeDate = (r[colIdx['結單日']] || '').trim();
+          const item = {
+            status: (r[colIdx['狀態']] || '').trim(),
+            closeDate: closeDate,
+            productId: productId,
+            productName: (r[colIdx['商品名稱']] || '').trim(),
+            totalQty: parseInt(r[colIdx['數量']]) || 0,
+            price: priceMap[`${productId}_${closeDate}`] || priceMap[productId] || 0,
+            supplier: supplierMap[`${productId}_${closeDate}`] || supplierMap[productId] || '',
+            stores: {},
+            personals: {},
+            stock: parseInt(r[colIdx['庫存']]) || 0,
+            damaged: parseInt(r[colIdx['破損']]) || 0,
+          };
+
+          STORE_COLUMNS.forEach(s => {
+            const key = header.findIndex(h => h.trim() === s);
+            item.stores[s] = key >= 0 ? (parseInt(r[key]) || 0) : 0;
+          });
+
+          PERSONAL_COLUMNS.forEach(p => {
+            const key = header.findIndex(h => h.trim() === p);
+            item.personals[p] = key >= 0 ? (parseInt(r[key]) || 0) : 0;
+          });
+
+          allRows.push(item);
+        }
+
+        // 依結單日分批
+        batches = {};
+        allRows.forEach(item => {
+          const d = item.closeDate || '未知';
+          if (!batches[d]) batches[d] = [];
+          batches[d].push(item);
+        });
+
+        // 排序（依日期）
+        const sortedKeys = Object.keys(batches).sort((a, b) => {
+          return parseDateKey(a) - parseDateKey(b);
+        });
+
+        // 顯示統計
+        const statsArea = document.getElementById('statsArea');
+        statsArea.classList.remove('hidden');
+        const totalProducts = allRows.length;
+        const totalBatches = sortedKeys.length;
+        const totalQty = allRows.reduce((s, r) => s + r.totalQty, 0);
+        statsArea.innerHTML = `
+          <div class="stat-box"><div class="num">${totalProducts.toLocaleString()}</div><div class="label">商品筆數</div></div>
+          <div class="stat-box"><div class="num">${totalBatches}</div><div class="label">結單批次</div></div>
+          <div class="stat-box"><div class="num">${totalQty.toLocaleString()}</div><div class="label">總訂購量</div></div>
+          <div class="stat-box"><div class="num">${STORE_COLUMNS.length}</div><div class="label">分店數</div></div>
+          <div class="stat-box"><div class="num">${PERSONAL_COLUMNS.length}</div><div class="label">個人戶數</div></div>
+        `;
+
+        // 顯示批次列表
+        const mainArea = document.getElementById('mainArea');
+        mainArea.classList.remove('hidden');
+        mainArea.style.display = 'grid';
+
+        const batchList = document.getElementById('batchList');
+        batchList.innerHTML = '';
+
+        sortedKeys.forEach(dateKey => {
+          const items = batches[dateKey];
+          const batchQty = items.reduce((s, r) => s + r.totalQty, 0);
+          const openDate = calcOpenDate(dateKey);
+
+          const div = document.createElement('div');
+          div.className = 'batch-card';
+          div.setAttribute('data-date', dateKey);
+          div.innerHTML = `
+            <input type="checkbox" class="batch-check" data-date="${dateKey}" onclick="event.stopPropagation(); toggleBatch('${dateKey}', this.checked)">
+            <div>
+              <div class="batch-date">結單 ${dateKey}</div>
+              <div style="font-size:11px; color:#6b7280;">開團 ${openDate}</div>
+            </div>
+            <div class="batch-info">${items.length} 項商品</div>
+            <div class="batch-count">${batchQty.toLocaleString()}</div>
+          `;
+          div.onclick = (e) => {
+            if (e.target.type === 'checkbox') return;
+            previewBatch(dateKey);
+          };
+          batchList.appendChild(div);
+        });
+
+        setStep(2);
+        mainLoaded = true;
+        // 啟用售價上傳按鈕
+        const priceBtn = document.getElementById('btnPrice');
+        priceBtn.style.opacity = '1';
+        priceBtn.style.pointerEvents = 'auto';
+
+      } catch (err) {
+        Swal.fire('讀取失敗', err.message, 'error');
+      }
+    }
+
+    // ===== CSV 解析（支援引號內逗號） =====
+    function parseCSV(text) {
+      const rows = [];
+      let current = [];
+      let cell = '';
+      let inQuote = false;
+
+      for (let i = 0; i < text.length; i++) {
+        const ch = text[i];
+        if (inQuote) {
+          if (ch === '"' && text[i + 1] === '"') { cell += '"'; i++; }
+          else if (ch === '"') { inQuote = false; }
+          else { cell += ch; }
+        } else {
+          if (ch === '"') { inQuote = true; }
+          else if (ch === ',') { current.push(cell); cell = ''; }
+          else if (ch === '\n' || (ch === '\r' && text[i + 1] === '\n')) {
+            current.push(cell); cell = '';
+            rows.push(current); current = [];
+            if (ch === '\r') i++;
+          } else { cell += ch; }
+        }
+      }
+      if (cell || current.length) { current.push(cell); rows.push(current); }
+      return rows;
+    }
+
+    // ===== 日期處理 =====
+    function parseDateKey(dateStr) {
+      // 格式 "1/25" 或 "2/28" → 轉為可排序數字
+      const parts = dateStr.split('/');
+      if (parts.length !== 2) return 99999;
+      return parseInt(parts[0]) * 100 + parseInt(parts[1]);
+    }
+
+    function calcOpenDate(closeDateStr) {
+      // 結單日往前推 2 天 = 開團日（3天開團期）
+      const parts = closeDateStr.split('/');
+      if (parts.length !== 2) return closeDateStr;
+      const month = parseInt(parts[0]) - 1;
+      const day = parseInt(parts[1]);
+      const closeDate = new Date(2026, month, day);
+      closeDate.setDate(closeDate.getDate() - 2);
+      return formatDate(closeDate);
+    }
+
+    function calcCloseFullDate(closeDateStr) {
+      const parts = closeDateStr.split('/');
+      if (parts.length !== 2) return closeDateStr;
+      return `2026-${parts[0].padStart(2,'0')}-${parts[1].padStart(2,'0')}`;
+    }
+
+    function formatDate(d) {
+      return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+    }
+
+    // ===== 選取批次 =====
+    function toggleBatch(dateKey, checked) {
+      if (checked) {
+        selectedBatches.add(dateKey);
+      } else {
+        selectedBatches.delete(dateKey);
+      }
+      updateImportBtn();
+    }
+
+    function toggleAllBatches() {
+      const checkAll = document.getElementById('checkAll').checked;
+      const checks = document.querySelectorAll('.batch-check');
+      checks.forEach(cb => {
+        cb.checked = checkAll;
+        const dk = cb.getAttribute('data-date');
+        if (checkAll) selectedBatches.add(dk);
+        else selectedBatches.delete(dk);
+      });
+      updateImportBtn();
+    }
+
+    function updateImportBtn() {
+      const btn = document.getElementById('btnImport');
+      btn.disabled = selectedBatches.size === 0;
+      if (selectedBatches.size > 0) {
+        const totalItems = [...selectedBatches].reduce((s, dk) => s + (batches[dk]?.length || 0), 0);
+        btn.innerHTML = `3️⃣ 匯入 ${selectedBatches.size} 批 (${totalItems} 項)`;
+      } else {
+        btn.innerHTML = '3️⃣ 匯入所選批次';
+      }
+    }
+
+    // ===== 預覽批次 =====
+    function previewBatch(dateKey) {
+      currentPreview = dateKey;
+
+      // 高亮卡片
+      document.querySelectorAll('.batch-card').forEach(el => el.classList.remove('selected'));
+      const card = document.querySelector(`.batch-card[data-date="${dateKey}"]`);
+      if (card) card.classList.add('selected');
+
+      const items = batches[dateKey];
+      const openDate = calcOpenDate(dateKey);
+
+      document.getElementById('previewTitle').innerHTML =
+        `📋 結單日 ${dateKey}（開團日 ${openDate}）— ${items.length} 項商品`;
+
+      let storeHeaders = STORE_COLUMNS.map(s => `<th>${s}</th>`).join('');
+      let personalHeaders = PERSONAL_COLUMNS.map(p => `<th style="background:#fef3c7;color:#92400e;">${p}</th>`).join('');
+
+      let tbody = '';
+      items.forEach((it, i) => {
+        let storeCells = STORE_COLUMNS.map(s => {
+          const v = it.stores[s] || 0;
+          return `<td class="${v ? 'has-qty' : 'zero'}">${v || '-'}</td>`;
+        }).join('');
+        let personalCells = PERSONAL_COLUMNS.map(p => {
+          const v = it.personals[p] || 0;
+          return `<td class="${v ? 'has-qty' : 'zero'}">${v || '-'}</td>`;
+        }).join('');
+
+        const priceDisplay = it.price ? `$${it.price}` : '<span style="color:#ddd;">—</span>';
+        tbody += `<tr>
+          <td>${i + 1}</td>
+          <td style="font-size:11px; color:#6b7280;">${it.productId}</td>
+          <td class="name-cell" title="${it.productName}">${it.productName}</td>
+          <td style="font-weight:600; color:#059669;">${priceDisplay}</td>
+          <td style="font-weight:700;">${it.totalQty}</td>
+          ${storeCells}
+          ${personalCells}
+          <td>${it.stock || '-'}</td>
+          <td style="color:${it.damaged ? '#dc2626' : '#ddd'}">${it.damaged || '-'}</td>
+        </tr>`;
+      });
+
+      document.getElementById('previewTable').innerHTML = `
+        <table>
+          <thead>
+            <tr>
+              <th>#</th><th>編號</th><th style="text-align:left;">商品名稱</th><th>售價</th><th>總量</th>
+              ${storeHeaders}
+              ${personalHeaders}
+              <th>庫存</th><th>破損</th>
+            </tr>
+          </thead>
+          <tbody>${tbody}</tbody>
+        </table>`;
+    }
+
+    // ===== 匯入所選批次 =====
+    async function importSelected() {
+      if (selectedBatches.size === 0) return;
+
+      const batchKeys = [...selectedBatches].sort((a, b) => parseDateKey(a) - parseDateKey(b));
+      const totalItems = batchKeys.reduce((s, dk) => s + (batches[dk]?.length || 0), 0);
+
+      const result = await Swal.fire({
+        title: '確認匯入',
+        html: `
+          <div style="text-align:left; font-size:14px; line-height:1.8;">
+            <b>批次數：</b>${batchKeys.length} 批<br>
+            <b>商品總數：</b>${totalItems} 項<br>
+            <b>日期範圍：</b>${batchKeys[0]} ~ ${batchKeys[batchKeys.length - 1]}<br>
+          </div>
+          <div style="margin-top:12px; padding:10px; background:#eff6ff; border-radius:6px; font-size:13px; color:#1e40af;">
+            資料將存入瀏覽器 localStorage，可在開團總表中查看
+          </div>`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: '確認匯入',
+        cancelButtonText: '取消',
+        confirmButtonColor: '#059669',
+      });
+
+      if (!result.isConfirmed) return;
+
+      setStep(3);
+      const resultArea = document.getElementById('resultArea');
+      resultArea.classList.remove('hidden');
+      const logArea = document.getElementById('logArea');
+      logArea.innerHTML = '';
+
+      // 讀取現有 localStorage 資料
+      let existingList = [];
+      let existingOrders = {};
+      try {
+        existingList = JSON.parse(localStorage.getItem('branchOrderList') || '[]');
+        existingOrders = JSON.parse(localStorage.getItem('branchOrders') || '{}');
+      } catch(e) {}
+
+      let importedCount = 0;
+      let skippedCount = 0;
+      let processed = 0;
+
+      for (const dateKey of batchKeys) {
+        const items = batches[dateKey];
+        const openDate = calcOpenDate(dateKey);
+        const openDateFull = calcOpenDate(dateKey);
+        const closeDateFull = calcCloseFullDate(dateKey);
+
+        addLog(`📅 處理批次：結單 ${dateKey}（開團 ${openDate}），${items.length} 項商品`, 'info');
+
+        for (const item of items) {
+          // 建立商品資料
+          const orderKey = `${item.productId}_${dateKey}`;
+          const productEntry = {
+            id: orderKey,
+            productId: item.productId,
+            name: item.productName,
+            price: item.price || 0,
+            supplier: item.supplier || '',
+            totalQty: item.totalQty,
+            startDate: openDateFull,
+            endDate: closeDateFull,
+            batchKey: dateKey,
+            importedAt: new Date().toISOString(),
+          };
+
+          // 檢查是否已存在（同編號 + 同結單日）
+          const existIdx = existingList.findIndex(p => p.id === orderKey);
+          if (existIdx >= 0) {
+            existingList[existIdx] = productEntry;
+            addLog(`  ⚠️ 已存在，已更新：${item.productName}`, 'warn');
+            skippedCount++;
+          } else {
+            existingList.push(productEntry);
+            importedCount++;
+          }
+
+          // 儲存各店數量（用 商品ID_結單日 作為 key 避免不同批次互相污染）
+          Object.entries(item.stores).forEach(([storeName, qty]) => {
+            if (!existingOrders[storeName]) existingOrders[storeName] = {};
+            existingOrders[storeName][orderKey] = qty;
+          });
+          Object.entries(item.personals).forEach(([pName, qty]) => {
+            if (!existingOrders[pName]) existingOrders[pName] = {};
+            existingOrders[pName][orderKey] = qty;
+          });
+
+          processed++;
+        }
+
+        // 更新進度
+        const pct = Math.round((processed / totalItems) * 100);
+        document.getElementById('progressFill').style.width = pct + '%';
+      }
+
+      // 存入 localStorage
+      localStorage.setItem('branchOrderList', JSON.stringify(existingList));
+      localStorage.setItem('branchOrders', JSON.stringify(existingOrders));
+      // 同時存入實際的店名與個人戶清單，供開團總表使用
+      localStorage.setItem('importedStoreNames', JSON.stringify(STORE_COLUMNS));
+      localStorage.setItem('importedPersonalNames', JSON.stringify(PERSONAL_COLUMNS));
+
+      addLog('————————————————', 'info');
+      addLog(`✅ 匯入完成！新增 ${importedCount} 項，更新 ${skippedCount} 項`, 'ok');
+
+      document.getElementById('progressFill').style.width = '100%';
+      document.getElementById('progressFill').style.background = '#059669';
+
+      Swal.fire({
+        icon: 'success',
+        title: '匯入完成！',
+        html: `<b>${importedCount}</b> 項新增，<b>${skippedCount}</b> 項更新<br><small>可到開團總表查看結果</small>`,
+        confirmButtonColor: '#059669',
+      });
+    }
+
+    // ===== 工具函數 =====
+    function addLog(msg, cls) {
+      const area = document.getElementById('logArea');
+      const time = new Date().toLocaleTimeString('zh-TW');
+      const span = document.createElement('div');
+      span.className = cls || '';
+      span.textContent = `[${time}] ${msg}`;
+      area.appendChild(span);
+      area.scrollTop = area.scrollHeight;
+    }
+
+    function clearOldData() {
+      var keys = ['branchOrderList', 'branchOrders', 'importedStoreNames', 'importedPersonalNames'];
+      var hasData = false;
+      for (var i = 0; i < keys.length; i++) {
+        if (localStorage.getItem(keys[i])) { hasData = true; break; }
+      }
+      if (!hasData) {
+        alert('沒有舊資料');
+        return;
+      }
+      if (!confirm('確定清除所有匯入的開團資料？\n\n清除後開團總表會回到空白狀態')) return;
+      for (var i = 0; i < keys.length; i++) {
+        localStorage.removeItem(keys[i]);
+      }
+      alert('已清除！所有舊匯入資料已刪除');
+    }
+
+    function setStep(n) {
+      for (let i = 1; i <= 3; i++) {
+        const el = document.getElementById(`step${i}`);
+        el.classList.remove('active', 'done');
+        if (i < n) el.classList.add('done');
+        else if (i === n) el.classList.add('active');
+      }
+    }
+  </script>
+</body>
+</html>

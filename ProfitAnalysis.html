@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <title>利潤分析儀表板</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    :root {
+      --bg: #f8f9fb;
+      --surface: #ffffff;
+      --border: #e2e8f0;
+      --accent: #475569;
+      --accent-hover: #334155;
+      --accent-light: #e2e8f0;
+      --text: #1e293b;
+      --text2: #64748b;
+      --danger: #c53030;
+      --warning: #b7791f;
+      --blue: #0e7490;
+      --shadow: 0 2px 12px rgba(30,41,59,0.07);
+      --radius: 12px;
+      --radius-sm: 8px;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 22px 18px;
+    }
+
+    /* ── 控制列 ── */
+    .control-bar {
+      background: var(--surface);
+      padding: 14px 20px;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+      border: 1px solid var(--border);
+    }
+
+    .control-bar label {
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text2);
+    }
+
+    .date-group {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    input[type="date"] {
+      padding: 8px 11px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      color: var(--text);
+      font-family: inherit;
+      background: #fafafa;
+      transition: border-color 0.2s;
+    }
+
+    input[type="date"]:focus {
+      border-color: var(--accent);
+      outline: none;
+      box-shadow: 0 0 0 3px rgba(71,85,105,0.12);
+    }
+
+    .date-group span { color: var(--text2); font-size: 13px; }
+
+    .btn {
+      padding: 9px 20px;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.18s;
+      font-family: inherit;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .btn-primary {
+      background: var(--accent);
+      color: white;
+      box-shadow: 0 2px 8px rgba(71,85,105,0.28);
+    }
+    .btn-primary:hover {
+      background: var(--accent-hover);
+      transform: translateY(-1px);
+      box-shadow: 0 4px 14px rgba(71,85,105,0.38);
+    }
+
+    /* ── KPI 卡片 ── */
+    .kpi-container {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .kpi-card {
+      background: var(--surface);
+      padding: 20px 22px;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+      position: relative;
+      overflow: hidden;
+      transition: box-shadow 0.2s;
+    }
+
+    .kpi-card:hover { box-shadow: 0 4px 20px rgba(30,41,59,0.11); }
+
+    .kpi-card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0;
+      width: 4px; height: 100%;
+      border-radius: 4px 0 0 4px;
+    }
+
+    .kpi-card.revenue::before { background: var(--accent); }
+    .kpi-card.profit::before  { background: var(--warning); }
+    .kpi-card.margin::before  { background: var(--blue); }
+
+    .kpi-icon {
+      font-size: 28px;
+      margin-bottom: 8px;
+      display: block;
+    }
+
+    .kpi-title {
+      font-size: 12px;
+      font-weight: 700;
+      color: var(--text2);
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      margin-bottom: 6px;
+    }
+
+    .kpi-value {
+      font-size: 26px;
+      font-weight: 700;
+      color: var(--text);
+      letter-spacing: -0.5px;
+    }
+
+    .kpi-sub {
+      font-size: 12px;
+      color: var(--text2);
+      margin-top: 5px;
+    }
+
+    /* ── 圖表區 ── */
+    .charts-wrapper {
+      display: grid;
+      grid-template-columns: 2fr 1fr;
+      gap: 16px;
+      margin-bottom: 20px;
+    }
+
+    .chart-card {
+      background: var(--surface);
+      padding: 20px;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+      height: 360px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .card-title {
+      font-size: 13px;
+      font-weight: 700;
+      color: var(--text2);
+      text-transform: uppercase;
+      letter-spacing: 0.8px;
+      margin-bottom: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+    }
+
+    .card-title::before {
+      content: '';
+      display: inline-block;
+      width: 3px; height: 14px;
+      background: var(--accent);
+      border-radius: 2px;
+    }
+
+    .chart-wrap {
+      flex: 1;
+      position: relative;
+      min-height: 0;
+    }
+
+    /* ── 表格 ── */
+    .table-card {
+      background: var(--surface);
+      padding: 20px;
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+      border: 1px solid var(--border);
+    }
+
+    .table-responsive {
+      overflow-x: auto;
+      max-height: 400px;
+      margin-top: 14px;
+    }
+
+    table { width: 100%; border-collapse: collapse; min-width: 760px; }
+
+    thead th {
+      position: sticky;
+      top: 0;
+      background: #f1f5f9;
+      z-index: 10;
+      padding: 10px 12px;
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text2);
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-bottom: 1.5px solid var(--border);
+      text-align: left;
+    }
+
+    tbody td {
+      padding: 11px 12px;
+      font-size: 14px;
+      border-bottom: 1px solid var(--border);
+      color: var(--text);
+    }
+
+    td.num {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      font-family: 'Consolas', monospace;
+    }
+
+    tbody tr:hover { background: var(--accent-light); }
+    tbody tr:last-child td { border-bottom: none; }
+
+    /* ── Loading 遮罩 ── */
+    .loading-overlay {
+      position: fixed;
+      top: 0; left: 0;
+      width: 100%; height: 100%;
+      background: rgba(255,255,255,0.88);
+      display: none;
+      justify-content: center;
+      align-items: center;
+      z-index: 999;
+      flex-direction: column;
+      gap: 14px;
+    }
+
+    .loading-overlay.show { display: flex; }
+
+    .loading-spinner {
+      width: 44px; height: 44px;
+      border: 4px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+
+    .loading-overlay p {
+      font-size: 15px;
+      color: var(--text2);
+      font-weight: 500;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── RWD ── */
+    @media (max-width: 768px) {
+      .kpi-container { grid-template-columns: 1fr; }
+      .charts-wrapper { grid-template-columns: 1fr; }
+      .chart-card { height: 300px; }
+    }
+  </style>
+</head>
+<body>
+
+  <div id="loading" class="loading-overlay">
+    <div class="loading-spinner"></div>
+    <p>數據分析中，請稍候...</p>
+  </div>
+
+  <!-- 控制列 -->
+  <div class="control-bar">
+    <div class="date-group">
+      <label>分析區間</label>
+      <input type="date" id="dateFrom">
+      <span>至</span>
+      <input type="date" id="dateTo">
+    </div>
+    <button class="btn btn-primary" onclick="loadData()">🔍 開始分析</button>
+  </div>
+
+  <!-- KPI 卡片 -->
+  <div class="kpi-container">
+    <div class="kpi-card revenue">
+      <span class="kpi-icon">💰</span>
+      <div class="kpi-title">總銷貨收入 Revenue</div>
+      <div class="kpi-value" id="kpiRevenue">$0</div>
+      <div class="kpi-sub">已扣除退貨與折讓</div>
+    </div>
+    <div class="kpi-card profit">
+      <span class="kpi-icon">📈</span>
+      <div class="kpi-title">總銷貨毛利 Profit</div>
+      <div class="kpi-value" id="kpiProfit">$0</div>
+      <div class="kpi-sub">收入 − 商品成本</div>
+    </div>
+    <div class="kpi-card margin">
+      <span class="kpi-icon">🎯</span>
+      <div class="kpi-title">平均毛利率 Margin</div>
+      <div class="kpi-value" id="kpiMargin">0.0%</div>
+      <div class="kpi-sub">毛利 ÷ 收入</div>
+    </div>
+  </div>
+
+  <!-- 圖表區 -->
+  <div class="charts-wrapper">
+    <div class="chart-card">
+      <div class="card-title">每日營收與毛利趨勢</div>
+      <div class="chart-wrap">
+        <canvas id="trendChart"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="card-title">熱銷商品毛利 TOP 5</div>
+      <div class="chart-wrap">
+        <canvas id="productChart"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <!-- 明細表格 -->
+  <div class="table-card">
+    <div class="card-title">銷售利潤明細</div>
+    <div class="table-responsive">
+      <table>
+        <thead>
+          <tr>
+            <th>日期</th>
+            <th>商品名稱</th>
+            <th class="num">數量</th>
+            <th class="num">銷售額</th>
+            <th class="num">總成本</th>
+            <th class="num">毛利</th>
+            <th class="num">毛利率</th>
+          </tr>
+        </thead>
+        <tbody id="detailBody">
+          <tr><td colspan="7" style="text-align:center;color:#64748b;padding:30px;">請選擇日期範圍後點擊「開始分析」</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <script>
+    // ========== 1. Supabase API 設定 ==========
+  const SB_URL = 'https://gkuwoandmsgvlsxzmrjj.supabase.co/rest/v1';
+  const SB_KEY = 'sb_publishable_7K0w9Z8-Wv1dOgLsZkI0rA_WfNei_AS';
+    const AUTH_TOKEN = sessionStorage.getItem('sb_auth_token') || SB_KEY;
+  const HEADERS = {
+    'apikey': SB_KEY,
+    'Authorization': `Bearer ${AUTH_TOKEN}`,
+    'Content-Type': 'application/json'
+  };
+
+  let trendChartInstance = null;
+  let productChartInstance = null;
+
+  // ========== 2. 初始化：預設本月 ==========
+  window.onload = function() {
+    const now = new Date();
+    const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+    const lastDay  = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    document.getElementById('dateFrom').valueAsDate = firstDay;
+    document.getElementById('dateTo').valueAsDate   = lastDay;
+    loadData();
+  };
+
+  // ========== 3. 讀取資料主函式 (安全且精準的版本) ==========
+  async function loadData() {
+    const from = document.getElementById('dateFrom').value;
+    const to   = document.getElementById('dateTo').value;
+    if (!from || !to) { alert('請選擇日期範圍'); return; }
+
+    showLoading(true);
+
+    try {
+      // 呼叫強大的 SQL 函數，突破 1000 筆限制，並取得「歷史真實毛利」
+      const res = await fetch(`${SB_URL}/rpc/web_get_profit_details`, {
+        method: 'POST',
+        headers: HEADERS,
+        body: JSON.stringify({ p_date_from: from, p_date_to: to })
+      });
+
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.message || `HTTP ${res.status}`);
+      }
+
+      const rawData = await res.json();
+      
+      // ── 4-1 整理每筆明細 (這已是依日期和商品加總過的正確數字) ──
+      const rows = rawData.map(d => {
+        const qty      = Number(d.qty || 0);
+        const revenue  = Number(d.revenue || 0);
+        const cost     = Number(d.cost || 0);
+        const profit   = Number(d.profit || 0);
+        const margin   = revenue > 0 ? ((profit / revenue) * 100).toFixed(1) : '0.0';
+        
+        return {
+          date: d.order_date,
+          product: d.product_name,
+          qty,
+          revenue,
+          cost,
+          profit,
+          margin: parseFloat(margin)
+        };
+      }).filter(r => r.date);
+
+      // 將資料交給原本負責渲染 UI 的流程
+      renderDashboard(rows);
+
+    } catch (e) {
+      alert('讀取失敗：' + e.message);
+    } finally {
+      showLoading(false);
+    }
+  }
+
+  // ========== 4. 資料聚合與渲染 (保留原本優秀的圖表邏輯) ==========
+  function renderDashboard(rows) {
+    // ── 4-2 KPI 加總 ──
+    const totalRevenue = rows.reduce((s, r) => s + r.revenue, 0);
+    const totalProfit  = rows.reduce((s, r) => s + r.profit, 0);
+    const avgMargin    = totalRevenue > 0
+      ? ((totalProfit / totalRevenue) * 100).toFixed(1)
+      : '0.0';
+
+    document.getElementById('kpiRevenue').textContent = formatCurrency(totalRevenue);
+    document.getElementById('kpiProfit').textContent  = formatCurrency(totalProfit);
+    document.getElementById('kpiMargin').textContent  = avgMargin + '%';
+
+    const marginEl = document.getElementById('kpiMargin');
+    marginEl.style.color = parseFloat(avgMargin) < 20 ? '#c53030' : '#475569';
+
+    // ── 4-3 每日趨勢（Group by date）──
+    const dayMap = {};
+    rows.forEach(r => {
+      if (!dayMap[r.date]) dayMap[r.date] = { revenue: 0, profit: 0 };
+      dayMap[r.date].revenue += r.revenue;
+      dayMap[r.date].profit  += r.profit;
+    });
+    const sortedDays = Object.keys(dayMap).sort();
+    const trendData  = sortedDays.map(d => [d, dayMap[d].revenue, dayMap[d].profit]);
+
+    // ── 4-4 商品毛利 TOP 5（Group by product）──
+    const prodMap = {};
+    rows.forEach(r => {
+      if (!prodMap[r.product]) prodMap[r.product] = 0;
+      prodMap[r.product] += r.profit;
+    });
+    const prodData = Object.entries(prodMap)
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 5)
+      .map(([name, profit]) => [name, profit]);
+
+    // ── 4-5 渲染 ──
+    renderTrendChart(trendData);
+    renderProductChart(prodData);
+    renderTable(rows);
+  }
+
+  // ========== 5. 格式化 ==========
+  function formatCurrency(num) {
+    return 'NT$ ' + Math.round(num).toLocaleString();
+  }
+
+  // ========== 6. 趨勢圖 ==========
+  function renderTrendChart(trendData) {
+    const ctx = document.getElementById('trendChart').getContext('2d');
+    if (trendChartInstance) trendChartInstance.destroy();
+
+    const labels  = trendData.map(d => d[0].substring(5)); // MM-DD
+    const revData = trendData.map(d => d[1]);
+    const proData = trendData.map(d => d[2]);
+
+    trendChartInstance = new Chart(ctx, {
+      type: 'line',
+      data: {
+        labels,
+        datasets: [
+          {
+            label: '營收',
+            data: revData,
+            borderColor: '#475569',
+            backgroundColor: 'rgba(71,85,105,0.08)',
+            fill: true,
+            tension: 0.3,
+            pointRadius: 3,
+            pointBackgroundColor: '#475569'
+          },
+          {
+            label: '毛利',
+            data: proData,
+            borderColor: '#b7791f',
+            backgroundColor: 'transparent',
+            borderDash: [5, 5],
+            tension: 0.3,
+            pointRadius: 3,
+            pointBackgroundColor: '#b7791f'
+          }
+        ]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: { legend: { position: 'top', labels: { font: { size: 12 } } } },
+        scales: {
+          y: { ticks: { callback: v => 'NT$' + (v / 1000).toFixed(0) + 'k', font: { size: 11 } }, grid: { color: '#f8f9fb' } },
+          x: { ticks: { font: { size: 11 } }, grid: { display: false } }
+        }
+      }
+    });
+  }
+
+  // ========== 7. 商品排行圖 ==========
+  function renderProductChart(prodData) {
+    const ctx = document.getElementById('productChart').getContext('2d');
+    if (productChartInstance) productChartInstance.destroy();
+
+    const labels = prodData.map(d => d[0]);
+    const data   = prodData.map(d => d[1]);
+
+    productChartInstance = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels,
+        datasets: [{
+          label: '毛利',
+          data,
+          backgroundColor: ['rgba(71,85,105,0.75)', 'rgba(64,158,255,0.75)', 'rgba(230,162,60,0.75)', 'rgba(245,108,108,0.75)', 'rgba(144,147,153,0.75)'],
+          borderRadius: 5
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        indexAxis: 'y',
+        plugins: { legend: { display: false } },
+        scales: {
+          x: { ticks: { callback: v => 'NT$' + (v / 1000).toFixed(0) + 'k', font: { size: 11 } }, grid: { color: '#f8f9fb' } },
+          y: { ticks: { font: { size: 12 } }, grid: { display: false } }
+        }
+      }
+    });
+  }
+
+  // ========== 8. 明細表格 ==========
+  function renderTable(rows) {
+    const tbody = document.getElementById('detailBody');
+    tbody.innerHTML = '';
+
+    if (!rows || rows.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="7" style="text-align:center;color:#64748b;padding:30px;">此區間無銷售資料</td></tr>';
+      return;
+    }
+
+    // 依日期排序
+    rows.sort((a, b) => a.date.localeCompare(b.date));
+
+    rows.forEach(row => {
+      const tr = document.createElement('tr');
+      const marginColor = row.margin < 0 ? 'color:var(--danger);' : row.margin < 20 ? 'color:var(--warning);' : 'color:var(--accent);';
+      tr.innerHTML = `
+        <td>${row.date}</td>
+        <td>${row.product}</td>
+        <td class="num">${row.qty.toLocaleString()}</td>
+        <td class="num">${Math.round(row.revenue).toLocaleString()}</td>
+        <td class="num" style="color:var(--text2);">${Math.round(row.cost).toLocaleString()}</td>
+        <td class="num" style="font-weight:700;">${Math.round(row.profit).toLocaleString()}</td>
+        <td class="num" style="${marginColor}font-weight:600;">${row.margin}%</td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  // ========== 9. Loading 控制 ==========
+  function showLoading(show) {
+    document.getElementById('loading').classList.toggle('show', show);
+  }
+  </script>
+</body>
+</html>

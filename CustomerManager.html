@@ -1,0 +1,1023 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <title>客戶管理</title>
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <style>
+    :root {
+      --bg: #f8f9fb;
+      --surface: #ffffff;
+      --border: #e2e8f0;
+      --accent: #475569;
+      --accent-hover: #334155;
+      --accent-light: #e2e8f0;
+      --accent-glow: rgba(71,85,105,0.15);
+      --text: #1e293b;
+      --text2: #64748b;
+      --danger: #c53030;
+      --danger-hover: #9b2c2c;
+      --warning: #b7791f;
+      --blue: #0e7490;
+      --blue-hover: #2980d4;
+      --shadow: 0 2px 16px rgba(30,41,59,0.07);
+      --shadow-lg: 0 8px 32px rgba(0,0,0,0.12);
+      --radius: 14px;
+      --radius-sm: 8px;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Noto Sans TC', 'Segoe UI', Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 20px 15px;
+      min-height: 100vh;
+    }
+
+    .container {
+      max-width: 760px;
+      margin: 0 auto;
+      background: var(--surface);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow-lg);
+      overflow: hidden;
+      border: 1px solid var(--border);
+    }
+
+    /* ── 頂部標題 ── */
+    .header {
+      background: linear-gradient(135deg, var(--accent) 0%, #067a5a 100%);
+      color: white;
+      padding: 24px 30px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+    }
+
+    .header-icon {
+      width: 48px; height: 48px;
+      background: rgba(255,255,255,0.2);
+      border-radius: 12px;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 24px;
+      flex-shrink: 0;
+    }
+
+    .header h1 {
+      font-size: 22px;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+
+    .header p {
+      font-size: 13px;
+      opacity: 0.85;
+      margin-top: 2px;
+    }
+
+    /* ── 標籤頁 ── */
+    .tabs {
+      display: flex;
+      background: #f8fafb;
+      border-bottom: 1.5px solid var(--border);
+    }
+
+    .tab-btn {
+      flex: 1;
+      padding: 16px 20px;
+      border: none;
+      background: transparent;
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text2);
+      cursor: pointer;
+      transition: all 0.25s ease;
+      position: relative;
+      font-family: inherit;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+    }
+
+    .tab-btn:hover {
+      background: var(--accent-light);
+      color: var(--accent);
+    }
+
+    .tab-btn.active {
+      color: var(--accent);
+      background: var(--surface);
+    }
+
+    .tab-btn.active::after {
+      content: '';
+      position: absolute;
+      bottom: -1.5px;
+      left: 0; right: 0;
+      height: 2.5px;
+      background: var(--accent);
+      border-radius: 2px 2px 0 0;
+    }
+
+    /* ── 內容區 ── */
+    .tab-content {
+      display: none;
+      padding: 26px 30px;
+      animation: fadeIn 0.25s ease;
+    }
+
+    .tab-content.active { display: block; }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(8px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+
+    /* ── 表單格線 ── */
+    .form-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+    }
+
+    .form-group { display: flex; flex-direction: column; }
+    .form-group.full-width { grid-column: 1 / -1; }
+
+    .form-group label {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text2);
+      margin-bottom: 6px;
+      letter-spacing: 0.6px;
+      text-transform: uppercase;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    .required { color: var(--danger); }
+
+    .form-group input,
+    .form-group select,
+    .form-group textarea {
+      padding: 10px 13px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      color: var(--text);
+      font-family: inherit;
+      background: #fafafa;
+      transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+    }
+
+    .form-group input:focus,
+    .form-group select:focus,
+    .form-group textarea:focus {
+      border-color: var(--accent);
+      background: #fff;
+      outline: none;
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    .form-group textarea {
+      resize: vertical;
+      min-height: 72px;
+    }
+
+    /* 價格群組高亮 */
+    .form-group.highlight select {
+      border-color: var(--accent);
+      background: var(--accent-light);
+    }
+
+    /* ── 區段分隔 ── */
+    .section-divider {
+      grid-column: 1 / -1;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin: 6px 0 2px;
+    }
+
+    .section-divider span {
+      font-size: 11px;
+      font-weight: 700;
+      color: var(--text2);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      white-space: nowrap;
+    }
+
+    .section-divider::before,
+    .section-divider::after {
+      content: '';
+      flex: 1;
+      height: 1px;
+      background: var(--border);
+    }
+
+    /* ── 按鈕 ── */
+    .btn {
+      padding: 11px 22px;
+      border: none;
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.18s;
+      font-family: inherit;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      white-space: nowrap;
+    }
+
+    .btn-primary {
+      background: var(--blue);
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(64,158,255,0.28);
+    }
+    .btn-primary:hover { background: var(--blue-hover); transform: translateY(-1px); }
+
+    .btn-success {
+      background: var(--accent);
+      color: #fff;
+      box-shadow: 0 2px 8px rgba(71,85,105,0.28);
+    }
+    .btn-success:hover { background: var(--accent-hover); transform: translateY(-1px); }
+
+    .btn-danger {
+      background: #fff;
+      color: var(--danger);
+      border: 1.5px solid var(--danger);
+    }
+    .btn-danger:hover {
+      background: var(--danger);
+      color: #fff;
+      transform: translateY(-1px);
+      box-shadow: 0 4px 12px rgba(245,108,108,0.3);
+    }
+
+    .btn-secondary {
+      background: #f8f9fb;
+      color: var(--text2);
+      border: 1.5px solid var(--border);
+    }
+    .btn-secondary:hover { background: #e2e8f0; color: var(--text); }
+
+    .btn:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none !important;
+    }
+
+    .button-row {
+      display: flex;
+      gap: 10px;
+      margin-top: 22px;
+      justify-content: flex-end;
+      padding-top: 16px;
+      border-top: 1.5px solid var(--border);
+    }
+
+    .button-row.space-between { justify-content: space-between; }
+
+    /* ── 搜尋 ── */
+    .search-box {
+      display: flex;
+      gap: 10px;
+      margin-bottom: 16px;
+    }
+
+    .search-box input {
+      flex: 1;
+      padding: 11px 15px;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+      font-size: 14px;
+      color: var(--text);
+      font-family: inherit;
+      background: #fafafa;
+      transition: border-color 0.2s, box-shadow 0.2s;
+    }
+
+    .search-box input:focus {
+      border-color: var(--accent);
+      background: #fff;
+      outline: none;
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+
+    /* ── 搜尋結果 ── */
+    .result-list {
+      max-height: 280px;
+      overflow-y: auto;
+      border: 1.5px solid var(--border);
+      border-radius: var(--radius-sm);
+    }
+
+    .result-item {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 13px 16px;
+      border-bottom: 1px solid var(--border);
+      cursor: pointer;
+      transition: all 0.18s;
+      background: #fafafa;
+    }
+
+    .result-item:last-child { border-bottom: none; }
+
+    .result-item:hover {
+      background: var(--accent-light);
+      transform: translateX(3px);
+    }
+
+    .result-item:hover .arrow { opacity: 1; }
+
+    .result-item .name { font-weight: 600; font-size: 14px; color: var(--text); }
+    .result-item .detail { font-size: 12px; color: var(--text2); margin-top: 3px; }
+
+    .result-item .arrow {
+      font-size: 14px;
+      color: var(--accent);
+      font-weight: 700;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+
+    .no-result {
+      padding: 40px;
+      text-align: center;
+      color: var(--text2);
+      font-size: 14px;
+    }
+
+    .no-result .icon { font-size: 42px; margin-bottom: 10px; }
+
+    /* ── 表單區（修改） ── */
+    .form-section { display: none; animation: slideIn 0.3s ease; }
+    .form-section.active { display: block; }
+
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateX(15px); }
+      to   { opacity: 1; transform: translateX(0); }
+    }
+
+    .form-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding-bottom: 16px;
+      margin-bottom: 18px;
+      border-bottom: 1.5px solid var(--border);
+    }
+
+    .form-header h3 { font-size: 16px; font-weight: 700; color: var(--text); }
+
+    .customer-badge {
+      background: var(--accent-light);
+      border: 1px solid rgba(71,85,105,0.3);
+      color: var(--accent);
+      padding: 4px 14px;
+      border-radius: 20px;
+      font-weight: 700;
+      font-size: 13px;
+    }
+
+    .back-link {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      color: var(--accent);
+      font-weight: 600;
+      font-size: 14px;
+      cursor: pointer;
+      margin-bottom: 18px;
+      transition: all 0.2s;
+    }
+
+    .back-link:hover { color: var(--accent-hover); transform: translateX(-2px); }
+
+    /* ── Loading spinner ── */
+    .loading-spinner {
+      display: inline-block;
+      width: 16px; height: 16px;
+      border: 2.5px solid rgba(255,255,255,0.35);
+      border-radius: 50%;
+      border-top-color: white;
+      animation: spin 0.7s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    .loading-text {
+      text-align: center;
+      padding: 36px;
+      color: var(--text2);
+      font-size: 14px;
+    }
+
+    .loading-text .spinner {
+      width: 36px; height: 36px;
+      border: 3.5px solid var(--border);
+      border-top-color: var(--accent);
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      margin: 0 auto 12px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- 頂部標題 -->
+    <div class="header">
+      <div class="header-icon">👥</div>
+      <div>
+        <h1>客戶管理</h1>
+        <p>新增、修改、刪除客戶資料</p>
+      </div>
+    </div>
+
+    <!-- 標籤頁導航 -->
+    <div class="tabs">
+      <button class="tab-btn active" onclick="switchTab('add', this)">
+        ➕ 新增客戶
+      </button>
+      <button class="tab-btn" onclick="switchTab('edit', this)">
+        ✏️ 修改 / 刪除
+      </button>
+    </div>
+
+    <!-- ==================== 新增客戶 Tab ==================== -->
+    <div id="tab-add" class="tab-content active">
+      <form id="addForm" onsubmit="submitAddForm(event)">
+        <div class="form-grid">
+
+          <div class="section-divider"><span>基本資料</span></div>
+
+          <div class="form-group" style="position:relative;">
+            <label><span class="required">*</span> 客戶名稱</label>
+            <input type="text" id="add-name" required placeholder="請輸入客戶名稱" autocomplete="off">
+            <div id="name-match-hint" style="display:none; position:absolute; top:100%; left:0; right:0; z-index:50; background:#fffbeb; border:1px solid #ecc94b; border-radius:6px; padding:10px; margin-top:4px; font-size:13px; max-height:160px; overflow-y:auto; box-shadow:0 4px 12px rgba(0,0,0,0.1);"></div>
+          </div>
+
+          <div class="form-group">
+            <label>聯絡人</label>
+            <input type="text" id="add-contact" placeholder="聯絡人姓名">
+          </div>
+
+          <div class="form-group">
+            <label>電話</label>
+            <input type="text" id="add-phone" placeholder="市話">
+          </div>
+
+          <div class="form-group">
+            <label>手機</label>
+            <input type="text" id="add-mobile" placeholder="手機號碼">
+          </div>
+
+          <div class="form-group full-width">
+            <label>地址</label>
+            <input type="text" id="add-address" placeholder="完整地址">
+          </div>
+
+          <div class="form-group">
+            <label>Email</label>
+            <input type="email" id="add-email" placeholder="電子郵件">
+          </div>
+
+          <div class="section-divider"><span>發票 / 稅務</span></div>
+
+          <div class="form-group">
+            <label>統一編號</label>
+            <input type="text" id="add-taxId" maxlength="8" placeholder="8位數字">
+          </div>
+
+          <div class="form-group">
+            <label>發票抬頭</label>
+            <input type="text" id="add-invoiceTitle" placeholder="發票抬頭">
+          </div>
+
+          <div class="form-group">
+            <label>稅制</label>
+            <select id="add-taxType">
+              <option value="免稅">免稅</option>
+              <option value="應稅">應稅</option>
+              <option value="外加5%">外加5%</option>
+            </select>
+          </div>
+
+          <div class="section-divider"><span>付款 / 群組</span></div>
+
+          <div class="form-group">
+            <label>付款方式</label>
+            <select id="add-paymentTerm">
+              <option value="現金">現金</option>
+              <option value="匯款">匯款</option>
+              <option value="貨到付款">貨到付款</option>
+              <option value="月結15天">月結15天</option>
+              <option value="月結30天">月結30天</option>
+              <option value="月結60天">月結60天</option>
+            </select>
+          </div>
+
+          <div class="form-group highlight">
+            <label>價格群組</label>
+            <select id="add-priceGroup">
+              <option value="一般">一般客戶（原價）</option>
+              <option value="分店">🏪 分店（分店價）</option>
+              <option value="批發">🚚 批發（批發價）</option>
+              <option value="團購">👨‍👩‍👧‍👦 團購（團購價）</option>
+            </select>
+          </div>
+
+          <div class="form-group full-width">
+            <label>備註</label>
+            <textarea id="add-note" placeholder="其他備註事項..."></textarea>
+          </div>
+        </div>
+
+        <div class="button-row">
+          <button type="button" class="btn btn-secondary" onclick="resetAddForm()">🔄 清除</button>
+          <button type="submit" class="btn btn-success" id="addBtn">✅ 儲存客戶</button>
+        </div>
+      </form>
+    </div>
+
+    <!-- ==================== 修改/刪除 Tab ==================== -->
+    <div id="tab-edit" class="tab-content">
+
+      <!-- 搜尋區 -->
+      <div id="searchSection">
+        <div class="search-box">
+          <input type="text" id="searchInput" placeholder="輸入客戶編號、名稱或電話搜尋..."
+            onkeypress="if(event.key==='Enter') searchCustomer()">
+          <button class="btn btn-primary" onclick="searchCustomer()">🔍 搜尋</button>
+        </div>
+        <div id="searchResults">
+          <div class="no-result">
+            <div class="icon">🔍</div>
+            <div>請輸入關鍵字搜尋客戶</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 編輯表單區 -->
+      <div id="editFormSection" class="form-section">
+        <div class="back-link" onclick="backToSearch()">← 返回搜尋</div>
+
+        <div class="form-header">
+          <h3>✏️ 編輯客戶資料</h3>
+          <span id="displayId" class="customer-badge"></span>
+        </div>
+
+        <input type="hidden" id="edit-id">
+
+        <div class="form-grid">
+
+          <div class="section-divider"><span>基本資料</span></div>
+
+          <div class="form-group">
+            <label><span class="required">*</span> 客戶名稱</label>
+            <input type="text" id="edit-name" required>
+          </div>
+
+          <div class="form-group">
+            <label>聯絡人</label>
+            <input type="text" id="edit-contact">
+          </div>
+
+          <div class="form-group">
+            <label>電話</label>
+            <input type="text" id="edit-phone">
+          </div>
+
+          <div class="form-group">
+            <label>手機</label>
+            <input type="text" id="edit-mobile">
+          </div>
+
+          <div class="form-group full-width">
+            <label>地址</label>
+            <input type="text" id="edit-address">
+          </div>
+
+          <div class="form-group">
+            <label>Email</label>
+            <input type="email" id="edit-email">
+          </div>
+
+          <div class="section-divider"><span>發票 / 稅務</span></div>
+
+          <div class="form-group">
+            <label>統一編號</label>
+            <input type="text" id="edit-taxId" maxlength="8">
+          </div>
+
+          <div class="form-group">
+            <label>發票抬頭</label>
+            <input type="text" id="edit-invoiceTitle">
+          </div>
+
+          <div class="form-group">
+            <label>稅制</label>
+            <select id="edit-taxType">
+              <option value="免稅">免稅</option>
+              <option value="應稅">應稅</option>
+              <option value="外加5%">外加5%</option>
+            </select>
+          </div>
+
+          <div class="section-divider"><span>付款 / 群組</span></div>
+
+          <div class="form-group">
+            <label>付款方式</label>
+            <select id="edit-paymentTerm">
+              <option value="現金">現金</option>
+              <option value="匯款">匯款</option>
+              <option value="貨到付款">貨到付款</option>
+              <option value="月結15天">月結15天</option>
+              <option value="月結30天">月結30天</option>
+              <option value="月結60天">月結60天</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>信用額度</label>
+            <input type="number" id="edit-creditLimit" value="0">
+          </div>
+
+          <div class="form-group highlight">
+            <label>價格群組</label>
+            <select id="edit-priceGroup">
+              <option value="一般">一般客戶（原價）</option>
+              <option value="分店">🏪 分店（分店價）</option>
+              <option value="批發">🚚 批發（批發價）</option>
+              <option value="團購">👨‍👩‍👧‍👦 團購（團購價）</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label>狀態</label>
+            <select id="edit-status">
+              <option value="啟用">啟用</option>
+              <option value="停用">停用</option>
+            </select>
+          </div>
+
+          <div class="form-group full-width">
+            <label>備註</label>
+            <textarea id="edit-note"></textarea>
+          </div>
+        </div>
+
+        <div class="button-row space-between">
+          <button type="button" class="btn btn-danger" id="deleteBtn" onclick="deleteCustomer()">🗑️ 刪除客戶</button>
+          <button type="button" class="btn btn-success" id="saveBtn" onclick="saveChanges()">💾 儲存修改</button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // ========== 1. Supabase API 設定 ==========
+    const SB_URL = 'https://gkuwoandmsgvlsxzmrjj.supabase.co/rest/v1';
+    const SB_KEY = 'sb_publishable_7K0w9Z8-Wv1dOgLsZkI0rA_WfNei_AS';
+    const AUTH_TOKEN = sessionStorage.getItem('sb_auth_token') || SB_KEY;
+    const HEADERS = {
+      'apikey': SB_KEY,
+      'Authorization': `Bearer ${AUTH_TOKEN}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation'
+    };
+
+    // ========== 2. 標籤頁切換 ==========
+    function switchTab(tab, el) {
+      document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+      el.classList.add('active');
+      document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+      document.getElementById('tab-' + tab).classList.add('active');
+      if (tab === 'edit') backToSearch();
+    }
+
+    // ========== 2.5 名稱防呆：即時比對現有客戶 ==========
+    let nameCheckTimer = null;
+    document.getElementById('add-name').addEventListener('input', function() {
+      clearTimeout(nameCheckTimer);
+      const kw = this.value.trim();
+      const hint = document.getElementById('name-match-hint');
+      if (kw.length < 1) { hint.style.display = 'none'; return; }
+      nameCheckTimer = setTimeout(async () => {
+        try {
+          const res = await fetch(`${SB_URL}/customers?name=ilike.*${encodeURIComponent(kw)}*&select=id,name,phone,mobile&limit=10`, { headers: HEADERS });
+          const data = await res.json();
+          if (data.length === 0) { hint.style.display = 'none'; return; }
+          hint.style.display = 'block';
+          hint.innerHTML = '<div style="font-weight:700; color:#b7791f; margin-bottom:6px;">⚠ 以下現有客戶名稱相似：</div>' +
+            data.map(c => `<div style="padding:4px 0; border-bottom:1px solid #f0e6c0; color:#1e293b;">${c.id} — <b>${c.name}</b>${c.phone ? ' ('+c.phone+')' : c.mobile ? ' ('+c.mobile+')' : ''}</div>`).join('');
+        } catch(e) { hint.style.display = 'none'; }
+      }, 300);
+    });
+
+    // ========== 3. 新增客戶 (改呼叫 SQL 函數) ==========
+    async function submitAddForm(e) {
+      e.preventDefault();
+
+      const name = document.getElementById('add-name').value.trim();
+      if (!name) {
+        Swal.fire({ icon: 'warning', title: '欄位不完整', text: '請輸入客戶名稱！' });
+        return;
+      }
+
+      // 防呆：送出前再次檢查是否有同名客戶
+      try {
+        const chk = await fetch(`${SB_URL}/customers?name=eq.${encodeURIComponent(name)}&select=id,name&limit=5`, { headers: HEADERS });
+        const dup = await chk.json();
+        if (dup.length > 0) {
+          const r = await Swal.fire({
+            icon: 'warning',
+            title: '發現同名客戶！',
+            html: `已存在：<b>${dup.map(d => d.id + ' ' + d.name).join('、')}</b><br><br>確定還是要新增嗎？`,
+            showCancelButton: true,
+            confirmButtonText: '確定新增',
+            cancelButtonText: '取消',
+            confirmButtonColor: '#475569'
+          });
+          if (!r.isConfirmed) return;
+        }
+      } catch(e) { /* 查詢失敗不阻擋 */ }
+
+      // 傳送給 SQL 函數的資料結構
+      const payload = {
+        p_id:           '', // 留空由資料庫自動產生
+        p_name:         name,
+        p_contact:      document.getElementById('add-contact').value.trim(),
+        p_phone:        document.getElementById('add-phone').value.trim(),
+        p_mobile:       document.getElementById('add-mobile').value.trim(),
+        p_address:      document.getElementById('add-address').value.trim(),
+        p_email:        document.getElementById('add-email').value.trim(),
+        p_tax_id:       document.getElementById('add-taxId').value.trim(),
+        p_invoice_title:document.getElementById('add-invoiceTitle').value.trim(),
+        p_payment_term: document.getElementById('add-paymentTerm').value,
+        p_credit_limit: 0,
+        p_tax_type:     document.getElementById('add-taxType').value,
+        p_status:       '啟用',
+        p_note:         document.getElementById('add-note').value.trim(),
+        p_price_group:  document.getElementById('add-priceGroup').value
+      };
+
+      const btn = document.getElementById('addBtn');
+      btn.innerHTML = '<span class="loading-spinner"></span> 儲存中...';
+      btn.disabled = true;
+      Swal.showLoading();
+
+      try {
+        const res = await fetch(`${SB_URL}/rpc/web_save_customer`, {
+          method: 'POST',
+          headers: HEADERS,
+          body: JSON.stringify(payload)
+        });
+        
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.message || `HTTP ${res.status}`);
+        }
+        
+        const newId = await res.json();
+        
+        Swal.fire({ icon: 'success', title: '新增成功！', text: `客戶「${name}」已建立，系統編號：${newId}` });
+        resetAddForm();
+      } catch (e) {
+        Swal.fire({ icon: 'error', title: '新增失敗', text: e.message });
+      } finally {
+        btn.innerHTML = '✅ 儲存客戶';
+        btn.disabled = false;
+      }
+    }
+
+    function resetAddForm() {
+      document.getElementById('addForm').reset();
+    }
+
+    // ========== 4. 搜尋客戶 ==========
+    document.getElementById('searchInput').addEventListener('keypress', function(e) {
+      if (e.key === 'Enter') searchCustomer();
+    });
+
+    async function searchCustomer() {
+      const kw = document.getElementById('searchInput').value.trim();
+      const container = document.getElementById('searchResults');
+      
+      if (!kw) {
+        container.innerHTML = '<div class="no-result"><div class="icon">🔍</div><div>請輸入客戶名稱、編號或電話進行搜尋</div></div>';
+        return;
+      }
+
+      container.innerHTML = '<div class="no-result"><span class="loading-spinner"></span> 搜尋中...</div>';
+
+      try {
+        const q = encodeURIComponent(`%${kw}%`);
+        const queryStr = `or=(name.ilike.${q},id.ilike.${q},phone.ilike.${q},mobile.ilike.${q})&order=id.asc`;
+        
+        const res = await fetch(`${SB_URL}/customers?${queryStr}`, { headers: HEADERS });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        
+        const data = await res.json();
+        renderResults(data);
+      } catch (e) {
+        Swal.fire({ icon: 'error', title: '搜尋失敗', text: e.message });
+        document.getElementById('searchResults').innerHTML = '';
+      }
+    }
+
+    // ========== 5. 顯示搜尋結果 ==========
+    function renderResults(results) {
+      const container = document.getElementById('searchResults');
+      if (!results || results.length === 0) {
+        container.innerHTML = '<div class="no-result"><div class="icon">😕</div><div>找不到符合的客戶</div></div>';
+        return;
+      }
+
+      let html = '<div class="result-list">';
+      results.forEach(function(c) {
+        const id    = c.id || '';
+        const name  = c.name || '';
+        const phone = c.phone || c.mobile || '無電話';
+        html += `<div class="result-item" onclick="loadCustomerDetails('${id}')">
+                   <div class="result-title">${name} <span class="result-id">#${id}</span></div>
+                   <div class="result-desc">📞 ${phone}</div>
+                 </div>`;
+      });
+      html += '</div>';
+      container.innerHTML = html;
+    }
+
+    // ========== 6. 載入客戶明細 ==========
+    async function loadCustomerDetails(id) {
+      Swal.showLoading();
+      try {
+        const res = await fetch(`${SB_URL}/customers?id=eq.${encodeURIComponent(id)}`, { headers: HEADERS });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        if (data && data.length > 0) {
+          fillEditForm(data[0]);
+          document.getElementById('searchSection').style.display = 'none';
+          document.getElementById('editFormSection').classList.add('active');
+          Swal.close();
+        }
+      } catch (e) {
+        Swal.fire({ icon: 'error', title: '讀取失敗', text: e.message });
+      }
+    }
+
+    // ========== 7. 填入編輯表單 ==========
+    function fillEditForm(c) {
+      document.getElementById('edit-id').value            = c.id || '';
+      document.getElementById('edit-name').value          = c.name || '';
+      document.getElementById('edit-contact').value       = c.contact || '';
+      document.getElementById('edit-phone').value         = c.phone || '';
+      document.getElementById('edit-mobile').value        = c.mobile || '';
+      document.getElementById('edit-address').value       = c.address || '';
+      document.getElementById('edit-email').value         = c.email || '';
+      document.getElementById('edit-taxId').value         = c.tax_id || '';
+      document.getElementById('edit-invoiceTitle').value  = c.invoice_title || '';
+      document.getElementById('edit-paymentTerm').value   = c.payment_term || '現金';
+      document.getElementById('edit-creditLimit').value   = c.credit_limit || '';
+      document.getElementById('edit-taxType').value       = c.tax_type || '免稅';
+      document.getElementById('edit-status').value        = c.status || '啟用';
+      document.getElementById('edit-priceGroup').value    = c.price_group || '一般';
+      document.getElementById('edit-note').value          = c.note || '';
+    }
+
+    function backToSearch() {
+      document.getElementById('editFormSection').classList.remove('active');
+      document.getElementById('searchSection').style.display = 'block';
+    }
+
+    // ========== 8. 儲存修改 (改呼叫 SQL 函數) ==========
+    async function saveChanges() {
+      const customerId = document.getElementById('edit-id').value;
+      const name = document.getElementById('edit-name').value.trim();
+
+      if (!name) {
+        Swal.fire({ icon: 'warning', title: '欄位不完整', text: '客戶名稱為必填欄位！' });
+        return;
+      }
+
+      const payload = {
+        p_id:           customerId, // 傳入舊 ID 代表更新
+        p_name:         name,
+        p_contact:      document.getElementById('edit-contact').value.trim(),
+        p_phone:        document.getElementById('edit-phone').value.trim(),
+        p_mobile:       document.getElementById('edit-mobile').value.trim(),
+        p_address:      document.getElementById('edit-address').value.trim(),
+        p_email:        document.getElementById('edit-email').value.trim(),
+        p_tax_id:       document.getElementById('edit-taxId').value.trim(),
+        p_invoice_title:document.getElementById('edit-invoiceTitle').value.trim(),
+        p_payment_term: document.getElementById('edit-paymentTerm').value,
+        p_credit_limit: parseFloat(document.getElementById('edit-creditLimit').value) || 0,
+        p_tax_type:     document.getElementById('edit-taxType').value,
+        p_status:       document.getElementById('edit-status').value,
+        p_note:         document.getElementById('edit-note').value.trim(),
+        p_price_group:  document.getElementById('edit-priceGroup').value
+      };
+
+      const btn = document.getElementById('saveBtn');
+      btn.innerHTML = '<span class="loading-spinner"></span> 儲存中...';
+      btn.disabled = true;
+      Swal.showLoading();
+
+      try {
+        const res = await fetch(`${SB_URL}/rpc/web_save_customer`, {
+          method: 'POST',
+          headers: HEADERS,
+          body: JSON.stringify(payload)
+        });
+        
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.message || `HTTP ${res.status}`);
+        }
+        
+        Swal.fire({ icon: 'success', title: '儲存成功！', text: `客戶「${name}」的資料已更新` });
+      } catch (e) {
+        Swal.fire({ icon: 'error', title: '儲存失敗', text: e.message });
+      } finally {
+        btn.innerHTML = '💾 儲存修改';
+        btn.disabled = false;
+      }
+    }
+
+    // ========== 9. 刪除客戶 ==========
+    async function deleteCustomer() {
+      const customerId = document.getElementById('edit-id').value;
+      const customerName = document.getElementById('edit-name').value;
+
+      const result = await Swal.fire({
+        icon: 'warning',
+        title: `確定刪除「${customerName}」？`,
+        text: '此操作無法復原！',
+        showCancelButton: true,
+        confirmButtonColor: '#c53030',
+        cancelButtonText: '取消',
+        confirmButtonText: '確定刪除'
+      });
+
+      if (!result.isConfirmed) return;
+
+      const btn = document.getElementById('deleteBtn');
+      btn.innerHTML = '<span class="loading-spinner"></span> 刪除中...';
+      btn.disabled = true;
+      Swal.showLoading();
+
+      try {
+        const res = await fetch(
+          `${SB_URL}/customers?id=eq.${encodeURIComponent(customerId)}`,
+          { method: 'DELETE', headers: HEADERS }
+        );
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.message || `HTTP ${res.status}`);
+        }
+        Swal.fire({ icon: 'success', title: '刪除成功！', text: `客戶「${customerName}」已被刪除` });
+        backToSearch();
+        // 刪除後重新搜尋以刷新列表
+        const kw = document.getElementById('searchInput').value.trim();
+        if (kw) searchCustomer();
+        else document.getElementById('searchResults').innerHTML =
+          '<div class="no-result"><div class="icon">🔍</div><div>請重新搜尋</div></div>';
+      } catch (e) {
+        Swal.fire({ icon: 'error', title: '刪除失敗', text: e.message });
+      } finally {
+        btn.innerHTML = '🗑️ 刪除客戶';
+        btn.disabled = false;
+      }
+    }
+
+    // ========== 10. 監聽網址參數，自動進入編輯模式 ==========
+    window.addEventListener('DOMContentLoaded', () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const editId = urlParams.get('id');
+      
+      if (editId) {
+        // 1. 取得「修改/刪除」這個 Tab 的按鈕並觸發點擊
+        const editTabBtn = document.querySelectorAll('.tab-btn')[1]; 
+        switchTab('edit', editTabBtn);
+        
+        // 2. 直接載入該客戶資料
+        loadCustomerDetails(editId);
+      }
+    });
+  </script>
+</body>
+</html>

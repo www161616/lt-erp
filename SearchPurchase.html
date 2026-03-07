@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>查詢進貨單 - 龍潭進銷存系統</title>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  
+  <style>
+    /* ========== 全域與佈局設定 ========== */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: "Microsoft JhengHei", "微軟正黑體", sans-serif; font-size: 14px; background: #f8f9fb; height: 100vh; overflow: hidden; padding: 15px; display: flex; flex-direction: column; }
+
+    .main-layout { display: grid; grid-template-columns: 4fr 6fr; gap: 15px; flex: 1; overflow: hidden; }
+    .panel { background: white; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); display: flex; flex-direction: column; overflow: hidden; height: 100%; }
+
+    /* 頂部標題列 (石板灰) */
+    .header-bar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; background: white; padding: 10px 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(30,41,59,0.07); border-left: 5px solid #475569; }
+    .header-title { font-size: 20px; font-weight: bold; color: #475569; }
+
+    /* ========== 左側：搜尋與列表 ========== */
+    .panel-left { border-top: 4px solid #475569; }
+    .search-area { padding: 15px; background: #f1f5f9; border-bottom: 1px solid #e2e8f0; }
+    
+    .search-row { display: flex; gap: 10px; margin-bottom: 10px; }
+    .date-row { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px; }
+    
+    .list-scroll { flex: 1; overflow-y: auto; background: #fff; padding: 0; }
+    
+    /* 訂單卡片樣式 */
+    .order-card { padding: 12px 15px; border-bottom: 1px solid #eee; cursor: pointer; transition: background 0.2s; border-left: 4px solid transparent; }
+    .order-card:hover { background-color: #f5f5f5; }
+    .order-card.active { background-color: #f1f5f9; border-left-color: #475569; }
+    
+    .card-top { display: flex; justify-content: space-between; margin-bottom: 5px; }
+    .card-id { font-weight: bold; color: #334155; font-size: 15px; }
+    .card-date { font-size: 12px; color: #666; }
+    .card-mid { display: flex; justify-content: space-between; align-items: flex-start; }
+    .card-supp { font-weight: bold; color: #333; font-size: 14px; }
+    .card-amt { font-weight: bold; color: #c05621; font-size: 16px; text-align: right; }
+
+    /* 狀態標籤樣式 */
+    .badge-tag { font-size: 12px; padding: 2px 8px; border-radius: 12px; color: white; display: inline-block; margin-top: 4px; }
+    .st-paid { background: #276749; } 
+    .st-unpaid { background: #c53030; } 
+    .st-partial { background: #b7791f; } 
+
+    /* ========== 右側：詳情 ========== */
+    .panel-right { border-top: 4px solid #475569; background: #fafafa; }
+    .detail-empty { display: flex; align-items: center; justify-content: center; height: 100%; color: #aaa; font-size: 16px; flex-direction: column; }
+    .detail-container { display: flex; flex-direction: column; height: 100%; }
+    .detail-header { padding: 15px; background: #fff; border-bottom: 1px solid #ddd; display: flex; justify-content: space-between; align-items: flex-start; }
+    .dh-left h2 { margin: 0; color: #334155; font-size: 22px; }
+    .dh-tags { margin-top: 5px; display: flex; gap: 10px; font-size: 13px; color: #666; }
+    .detail-body { flex: 1; overflow-y: auto; padding: 15px; }
+    .info-grid { display: grid; grid-template-columns: repeat(2, 1fr); gap: 10px; background: #f1f5f9; padding: 10px; border-radius: 6px; margin-bottom: 15px; font-size: 13px; }
+    .items-table { width: 100%; border-collapse: collapse; background: #fff; border-radius: 8px; overflow: hidden; border: 1px solid #eee; margin-top: 10px; }
+    .items-table th { background: #f1f5f9; padding: 10px; text-align: left; font-size: 13px; color: #475569; }
+    .items-table td { padding: 10px; border-bottom: 1px solid #f0f0f0; font-size: 14px; }
+    .detail-footer { padding: 12px 15px; background: #fff; border-top: 1px solid #ddd; }
+    .totals-row { display: flex; justify-content: flex-end; align-items: center; gap: 20px; margin-bottom: 10px; font-size: 14px; }
+    .big-total { font-size: 24px; font-weight: bold; color: #1e293b; }
+    .action-row { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
+    .action-row .btn { flex: 1; min-width: 0; justify-content: center; }
+
+    /* 通用元件 */
+    input, select { padding: 8px; border: 1px solid #ddd; border-radius: 4px; font-size: 14px; width: 100%; }
+    .btn { padding: 8px 16px; font-size: 14px; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; color: white; display: inline-flex; align-items: center; gap: 5px; transition: opacity 0.2s; }
+    .btn:hover { opacity: 0.9; }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+    .btn-search { background: #475569; justify-content: center; }
+    .btn-excel { background: #1D6F42; justify-content: center; }
+    .search-area .btn-search, .search-area .btn-excel { width: 100%; margin-top: 5px; }
+    .btn-edit { background: #b7791f; }
+    .btn-copy { background: #276749; }
+    .btn-print { background: #475569; }
+    .btn-delete { background: #c53030; color: white; }
+    .btn-pay { background: #0e7490; }
+
+    /* 列表統計 */
+    .list-summary { padding: 10px 15px; background: #f1f5f9; border-bottom: 1px solid #e2e8f0; font-size: 13px; color: #475569; display: flex; justify-content: space-between; }
+  </style>
+</head>
+<body>
+
+  <div class="header-bar">
+    <div class="header-title">🔍 查詢進貨單</div>
+    <button class="btn" style="background:#475569;" onclick="goToNewPurchase()">➕ 開立進貨單</button>
+  </div>
+
+  <div class="main-layout">
+    <!-- ========== 左側面板：搜尋與列表 ========== -->
+    <div class="panel panel-left">
+      <div class="search-area">
+        <div class="search-row">
+          <input type="text" id="suppSearch" placeholder="🏢 快搜供應商..." autocomplete="off"
+            oninput="filterSupplierSelect()" style="flex:1;">
+        </div>
+        <div style="margin-bottom:8px;">
+          <select id="supplierSelect" size="1" onchange="onSuppPick()" style="width:100%;">
+            <option value="">— 全部供應商 —</option>
+          </select>
+        </div>
+        <div class="search-row">
+           <input type="text" id="keyword" placeholder="🔍 單號關鍵字..." onkeypress="if(event.key==='Enter') doSearch()" style="flex:1;">
+        </div>
+
+        <div class="date-row">
+          <div>
+            <label style="font-size:12px; color:#666;">起始日期</label>
+            <input type="date" id="dateFrom">
+          </div>
+          <div>
+            <label style="font-size:12px; color:#666;">結束日期</label>
+            <input type="date" id="dateTo">
+          </div>
+        </div>
+
+        <div class="search-row">
+           <label style="font-size:12px; color:#666; align-self:center;">狀態</label>
+           <select id="statusFilter" style="flex:1;" onchange="doSearch()">
+             <option value="ALL">📋 全部顯示</option>
+             <option value="UNPAID">❌ 未付款/部分</option>
+             <option value="PAID">✅ 已付款</option>
+           </select>
+        </div>
+        
+        <button class="btn btn-search" onclick="doSearch()">🔍 查詢</button>
+        <button id="exportListBtn" class="btn btn-excel" onclick="exportListToExcel()" disabled>📥 匯出列表</button>
+      </div>
+
+      <!-- 列表統計區 -->
+      <div class="list-summary" id="listSummary" style="display:none;">
+        <span id="summaryCount">共 0 筆</span>
+        <span id="summaryTotal">合計 $0</span>
+      </div>
+
+      <div class="list-scroll" id="orderList">
+        <div style="text-align:center; padding:30px; color:#999;">讀取中...</div>
+      </div>
+    </div>
+
+    <!-- ========== 右側面板：詳情 ========== -->
+    <div class="panel panel-right" id="rightPanel">
+      <div class="detail-empty">
+        <div style="font-size:40px; margin-bottom:10px;">👈</div>
+        <div>請從左側選擇進貨單檢視詳情</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // ========== Supabase 設定 ==========
+    const SB_URL = 'https://gkuwoandmsgvlsxzmrjj.supabase.co/rest/v1';
+    const SB_KEY = 'sb_publishable_7K0w9Z8-Wv1dOgLsZkI0rA_WfNei_AS';
+    const AUTH_TOKEN = sessionStorage.getItem('sb_auth_token') || SB_KEY;
+    const HEADERS = {
+      'apikey': SB_KEY,
+      'Authorization': `Bearer ${AUTH_TOKEN}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'return=representation'
+    };
+
+    // ========== 全域變數 ==========
+    let currentOrders = [];
+    let currentDetail = null;
+    let allSuppliers = [];
+
+    // ========== 頁面初始化 ==========
+    window.onload = function() {
+      // 1. 初始化日期：預設當月一號到今天
+      const today = new Date();
+      const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
+      document.getElementById('dateFrom').value = firstDay.toISOString().split('T')[0];
+      document.getElementById('dateTo').value = today.toISOString().split('T')[0];
+      
+      // 2. 載入供應商 & 自動查詢
+      loadSuppliers();
+      doSearch();
+    };
+
+    // ========== 載入供應商清單 ==========
+    async function loadSuppliers() {
+      try {
+        const res = await fetch(`${SB_URL}/suppliers?select=id,name&order=name.asc`, { headers: HEADERS });
+        if (!res.ok) throw new Error('載入供應商失敗');
+        allSuppliers = await res.json();
+        renderSupplierSelect('');
+      } catch (err) {
+        console.error('loadSuppliers error:', err);
+        document.getElementById('suppSearch').placeholder = '⚠️ 載入失敗';
+      }
+    }
+
+    function renderSupplierSelect(kw) {
+      const sel = document.getElementById('supplierSelect');
+      const filtered = kw
+        ? allSuppliers.filter(s => s.name.toLowerCase().includes(kw.toLowerCase()))
+        : allSuppliers;
+      sel.innerHTML = '<option value="">— 全部供應商 —</option>';
+      filtered.forEach(s => {
+        sel.innerHTML += `<option value="${s.id}">${s.name}</option>`;
+      });
+      if (kw) {
+        sel.size = Math.min(filtered.length + 1, 8);
+        sel.style.cssText = 'width:100%; background:#fff; border:2px solid #1976D2; border-radius:6px; box-shadow:0 4px 12px rgba(25,118,210,0.15); outline:none;';
+      } else {
+        sel.size = 1;
+        sel.style.cssText = 'width:100%;';
+      }
+    }
+
+    function filterSupplierSelect() {
+      const kw = document.getElementById('suppSearch').value.trim();
+      renderSupplierSelect(kw);
+    }
+
+    function onSuppPick() {
+      const sel = document.getElementById('supplierSelect');
+      sel.size = 1;
+      sel.style.cssText = 'width:100%;';
+    }
+
+    // ========== 查詢進貨單 ==========
+    async function doSearch() {
+      const supplierId = document.getElementById('supplierSelect').value;
+      const keyword = document.getElementById('keyword').value.trim();
+      const dateFrom = document.getElementById('dateFrom').value;
+      const dateTo = document.getElementById('dateTo').value;
+      const status = document.getElementById('statusFilter').value;
+
+      // 顯示載入中
+      document.getElementById('orderList').innerHTML = '<div style="text-align:center; padding:20px; color:#9b2c2c;">🔄 查詢中...</div>';
+      document.getElementById('exportListBtn').disabled = true;
+      document.getElementById('listSummary').style.display = 'none';
+
+      try {
+        // 建構查詢條件
+        let query = `${SB_URL}/purchase_orders?select=*&order=order_date.desc,id.desc`;
+        
+        // 日期範圍
+        if (dateFrom) query += `&order_date=gte.${dateFrom}`;
+        if (dateTo) query += `&order_date=lte.${dateTo}`;
+        
+        // 供應商篩選
+        if (supplierId) query += `&supplier_id=eq.${supplierId}`;
+        
+        // 關鍵字搜尋 (單號)
+        if (keyword) query += `&id=ilike.*${keyword}*`;
+        
+        // 狀態篩選
+        if (status === 'PAID') {
+          query += `&payment_status=eq.已付款`;
+        } else if (status === 'UNPAID') {
+          query += `&payment_status=neq.已付款`;
+        }
+
+        const res = await fetch(query, { headers: HEADERS });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        
+        const data = await res.json();
+        
+        // 轉換為前端格式 (snake_case → camelCase)
+        currentOrders = data.map(o => ({
+          orderId: o.id,
+          date: o.order_date,
+          supplierId: o.supplier_id,
+          supplierName: o.supplier_name || '未知供應商',
+          total: Number(o.grand_total || o.subtotal || 0),
+          subtotal: Number(o.subtotal || 0),
+          taxAmount: Number(o.tax_amount || 0),
+          grandTotal: Number(o.grand_total || o.subtotal || 0),
+          status: o.payment_status || '未付款',
+          note: o.note || '',
+          handler: o.handler || '',
+          expectedPaymentDate: o.expected_payment_date || ''
+        }));
+
+        renderList(currentOrders);
+        
+      } catch (err) {
+        console.error('doSearch error:', err);
+        document.getElementById('orderList').innerHTML = `<div style="padding:20px; color:red;">❌ 查詢錯誤: ${err.message}</div>`;
+      }
+    }
+
+    // ========== 渲染列表 ==========
+    function renderList(data) {
+      const listDiv = document.getElementById('orderList');
+      const exportBtn = document.getElementById('exportListBtn');
+      const summaryDiv = document.getElementById('listSummary');
+      
+      if (!data || data.length === 0) {
+        listDiv.innerHTML = '<div style="text-align:center; padding:30px; color:#999;">沒有符合的資料 🍃</div>';
+        summaryDiv.style.display = 'none';
+        return;
+      }
+
+      exportBtn.disabled = false;
+
+      // 計算統計
+      const totalAmount = data.reduce((sum, o) => sum + (o.total || 0), 0);
+      document.getElementById('summaryCount').textContent = `共 ${data.length} 筆`;
+      document.getElementById('summaryTotal').textContent = `合計 $${totalAmount.toLocaleString()}`;
+      summaryDiv.style.display = 'flex';
+
+      let html = '';
+      data.forEach((o) => {
+        let statusBadge = '';
+        if (o.status === '已付款') {
+          statusBadge = '<div class="badge-tag st-paid">已付款</div>';
+        } else if (o.status === '部分付款') {
+          statusBadge = '<div class="badge-tag st-partial">部分付款</div>';
+        } else {
+          statusBadge = '<div class="badge-tag st-unpaid">未付款</div>';
+        }
+
+        html += `
+          <div class="order-card" id="card-${o.orderId}" onclick="selectOrder('${o.orderId}')">
+            <div class="card-top">
+              <span class="card-id">${o.orderId}</span>
+              <span class="card-date">${o.date}</span>
+            </div>
+            <div class="card-mid">
+              <div>
+                <div class="card-supp">${o.supplierName}</div>
+                ${statusBadge}
+              </div>
+              <span class="card-amt">$${(o.total || 0).toLocaleString()}</span>
+            </div>
+          </div>
+        `;
+      });
+      listDiv.innerHTML = html;
+    }
+
+    // ========== 選擇訂單 (載入明細) ==========
+    async function selectOrder(orderId) {
+      // 高亮選中卡片
+      document.querySelectorAll('.order-card').forEach(el => el.classList.remove('active'));
+      const card = document.getElementById(`card-${orderId}`);
+      if (card) card.classList.add('active');
+
+      const rightPanel = document.getElementById('rightPanel');
+      rightPanel.innerHTML = '<div class="detail-container" style="justify-content:center; align-items:center;"><div style="color:#9b2c2c; font-weight:bold; font-size:16px;">🔄 讀取明細中...</div></div>';
+
+      try {
+        // 1. 取得主單資料
+        const orderRes = await fetch(`${SB_URL}/purchase_orders?id=eq.${orderId}&select=*`, { headers: HEADERS });
+        if (!orderRes.ok) throw new Error('讀取主單失敗');
+        const orderData = await orderRes.json();
+        if (!orderData || orderData.length === 0) throw new Error('找不到此單據');
+        
+        const order = orderData[0];
+
+        // 2. 取得明細資料
+        const detailRes = await fetch(`${SB_URL}/purchase_details?order_id=eq.${orderId}&select=*&order=id.asc`, { headers: HEADERS });
+        if (!detailRes.ok) throw new Error('讀取明細失敗');
+        const detailData = await detailRes.json();
+
+        // 3. 解析付款方式 (從 note 中提取)
+        let paymentMethod = '現金';
+        if (order.note) {
+          const match = order.note.match(/付款方式[:：](\S+)/);
+          if (match) paymentMethod = match[1];
+        }
+
+        // 4. 組合成前端格式
+        currentDetail = {
+          orderId: order.id,
+          date: order.order_date,
+          supplierId: order.supplier_id,
+          supplierName: order.supplier_name || '未知供應商',
+          totalAmount: Number(order.subtotal || 0),
+          taxAmount: Number(order.tax_amount || 0),
+          grandTotal: Number(order.grand_total || order.subtotal || 0),
+          status: order.payment_status || '未付款',
+          note: order.note || '',
+          handler: order.handler || '',
+          paymentMethod: paymentMethod,
+          paymentTerm: order.expected_payment_date ? `預計 ${order.expected_payment_date}` : '-',
+          items: detailData.map(d => ({
+            productId: d.product_id,
+            productName: d.product_name,
+            qty: Number(d.qty || 0),
+            unit: d.unit || '個',
+            cost: Number(d.cost || 0),
+            subtotal: Number(d.subtotal || 0),
+            note: d.note || ''
+          }))
+        };
+
+        renderDetail(currentDetail);
+
+      } catch (err) {
+        console.error('selectOrder error:', err);
+        rightPanel.innerHTML = `<div style="padding:20px; color:red;">❌ 讀取失敗: ${err.message}</div>`;
+      }
+    }
+
+    // ========== 渲染詳情面板 ==========
+    function renderDetail(o) {
+      const rightPanel = document.getElementById('rightPanel');
+      
+      let itemRows = '';
+      o.items.forEach((it, i) => {
+        const lineTotal = it.qty * it.cost;
+        itemRows += `
+          <tr>
+            <td>${i + 1}</td>
+            <td><b>${it.productName}</b><br><small style="color:#888;">ID: ${it.productId}</small></td>
+            <td style="text-align:center;">${it.qty} ${it.unit}</td>
+            <td style="text-align:right;">$${it.cost.toLocaleString()}</td>
+            <td style="text-align:right; font-weight:bold;">$${lineTotal.toLocaleString()}</td>
+          </tr>`;
+      });
+
+      // 清理備註中的付款方式顯示
+      let displayNote = o.note || '無';
+      displayNote = displayNote.replace(/\s*\|\s*付款方式[:：]\S+/g, '').replace(/付款方式[:：]\S+\s*\|?\s*/g, '').trim() || '無';
+
+      const html = `
+        <div class="detail-container">
+          <div class="detail-header">
+            <div class="dh-left">
+              <h2>${o.orderId}</h2>
+              <div class="dh-tags">
+                <span>📅 ${o.date}</span>
+                <span>💰 ${o.paymentMethod}</span>
+              </div>
+            </div>
+            <div style="text-align:right;">
+              <div style="font-size:18px; font-weight:bold; color:#333;">${o.supplierName}</div>
+            </div>
+          </div>
+          
+          <div class="detail-body">
+            <div class="info-grid">
+              <div><b>付款條件：</b>${o.paymentTerm}</div>
+              <div><b>備註：</b>${displayNote}</div>
+            </div>
+            
+            <table class="items-table">
+              <thead>
+                <tr>
+                  <th>#</th>
+                  <th>品名</th>
+                  <th style="text-align:center;">數量</th>
+                  <th style="text-align:right;">單價</th>
+                  <th style="text-align:right;">小計</th>
+                </tr>
+              </thead>
+              <tbody>${itemRows}</tbody>
+            </table>
+          </div>
+          
+          <div class="detail-footer">
+            <div class="totals-row">
+              <span>未稅: $${o.totalAmount.toLocaleString()}</span>
+              ${o.taxAmount > 0 ? `<span>+ 稅: $${o.taxAmount.toLocaleString()}</span>` : ''}
+              <span style="font-size:16px; margin-left:10px;">總計:</span>
+              <span class="big-total">$${o.grandTotal.toLocaleString()}</span>
+            </div>
+            <div class="action-row">
+              <button class="btn btn-print" onclick="printOrder()">🖨️ 列印</button>
+              <button class="btn btn-excel" onclick="exportDetailToExcel()">📊 Excel</button>
+              <button class="btn btn-pay" onclick="triggerPayment('${o.orderId}', ${o.grandTotal}, '${o.supplierId}')">💸 付款</button>
+              <button class="btn btn-copy" onclick="copyOrder('${o.orderId}')">📋 複製</button>
+              <button class="btn btn-edit" onclick="editOrder('${o.orderId}')">✏️ 修改</button>
+              <button class="btn btn-delete" onclick="deleteOrder('${o.orderId}', 'purchase')">🗑️ 刪除作廢</button>
+            </div>
+          </div>
+        </div>`;
+      
+      rightPanel.innerHTML = html;
+    }
+
+    // ========== 列印功能 ==========
+    async function printOrder() {
+      if (!currentDetail) return;
+      const o = currentDetail;
+
+      // Query supplier address/phone
+      let suppPhone = '', suppAddr = '';
+      if (o.supplierId) {
+        try {
+          const sRes = await fetch(`${SB_URL}/suppliers?id=eq.${o.supplierId}&select=phone,mobile,address`, { headers: HEADERS });
+          const sData = await sRes.json();
+          if (sData.length > 0) { suppPhone = sData[0].phone || sData[0].mobile || ''; suppAddr = sData[0].address || ''; }
+        } catch(e) {}
+      }
+
+      const itemRows = o.items.map((it, i) => {
+        const lineTotal = it.qty * it.cost;
+        return `<tr>
+          <td class="text-center">${i+1}</td>
+          <td style="font-family:monospace;">${it.productId || ''}</td>
+          <td>${it.productName}</td>
+          <td class="text-center">${it.unit || ''}</td>
+          <td class="text-center">${it.qty}</td>
+          <td class="text-right">${it.cost.toLocaleString()}</td>
+          <td class="text-right">${lineTotal.toLocaleString()}</td>
+        </tr>`;
+      }).join('');
+
+      const printHTML = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>進貨單 - ${o.orderId}</title>
+<style>
+  body{font-family:'Noto Sans TC','Microsoft JhengHei',sans-serif; padding:20px 30px; font-size:13px; color:#333; margin:0;}
+  .company{text-align:center; font-size:22px; font-weight:bold; margin-bottom:6px;}
+  .doc-type{text-align:center; font-size:15px; letter-spacing:8px; margin-bottom:16px; color:#333;}
+  .info-box{border:1px solid #999; padding:10px 14px; margin-bottom:14px; font-size:13px; line-height:2;}
+  .info-row{display:flex;}
+  .info-row span{flex:1;}
+  .info-row span.wide{flex:2;}
+  table{width:100%; border-collapse:collapse; margin-top:0;}
+  th{border:1px solid #999; padding:6px 8px; background:#f0f0f0; font-size:12px; font-weight:bold; white-space:nowrap;}
+  td{border:1px solid #ccc; padding:5px 8px; font-size:12px; line-height:1.3;}
+  .text-right{text-align:right;} .text-center{text-align:center;}
+  .summary{margin-top:8px; text-align:right; font-size:13px; line-height:1.8;}
+  .summary .grand{font-size:15px; font-weight:bold;}
+  .sign-footer{margin-top:25px; display:flex; justify-content:space-around; font-size:12px;}
+  .sign-line{width:100px; border-bottom:1px solid #333; margin:20px auto 4px;}
+  @media print{body{padding:10px 15px;} *{-webkit-print-color-adjust:exact !important; print-color-adjust:exact !important;}}
+</style></head>
+<body>
+  <div class="company">丸十水產股份有限公司</div>
+  <div class="doc-type">進 貨 單（龍潭總倉）</div>
+  <div class="info-box">
+    <div class="info-row"><span><b>單號：</b>${o.orderId}</span><span><b>日期：</b>${o.date}</span></div>
+    <div class="info-row"><span><b>供應商：</b>${o.supplierName}</span><span><b>電話：</b>${suppPhone}</span></div>
+    <div class="info-row"><span class="wide"><b>地址：</b>${suppAddr}</span><span><b>付款方式：</b>${o.paymentMethod || ''}</span></div>
+    ${o.note ? '<div class="info-row" style="background:#f0f0f0; margin-top:4px; padding:2px 4px; border-radius:2px;"><span class="wide"><b>備註：</b>' + o.note + '</span></div>' : ''}
+  </div>
+  <table>
+    <thead><tr><th width="6%">序</th><th width="14%">商品編號</th><th width="36%">品名／規格</th><th width="8%">單位</th><th width="8%">數量</th><th width="13%">單價</th><th width="15%">金額</th></tr></thead>
+    <tbody>${itemRows}</tbody>
+  </table>
+  <div class="summary">
+    小計：NT$ ${(o.totalAmount || 0).toLocaleString()}<br>
+    ${o.taxAmount > 0 ? '稅金：NT$ ' + o.taxAmount.toLocaleString() + '<br>' : ''}
+    <span class="grand">總計：NT$ ${(o.grandTotal || 0).toLocaleString()}</span>
+  </div>
+  <div class="sign-footer">
+    <div style="text-align:center;"><div class="sign-line"></div>經手人</div>
+    <div style="text-align:center;"><div class="sign-line"></div>主管</div>
+    <div style="text-align:center;"><div class="sign-line"></div>會計</div>
+  </div>
+  <script>window.onload=function(){ setTimeout(()=>{ window.print(); window.close(); }, 500); }<\/script>
+</body></html>`;
+
+      const w = window.open('', '_blank');
+      if (w) {
+        w.document.open();
+        w.document.write(printHTML);
+        w.document.close();
+      } else {
+        Swal.fire('錯誤', '瀏覽器攔截了彈跳視窗，請允許開啟視窗。', 'error');
+      }
+    }
+
+    function exportDetailToExcel() {
+      if (!currentDetail) return;
+      const o = currentDetail;
+      let csv = '\uFEFF項次,商品編號,品名,數量,單位,單價成本,小計\n';
+      let grandTotal = 0;
+      o.items.forEach((it, i) => {
+        const lineTotal = it.qty * it.cost;
+        grandTotal += lineTotal;
+        const safeId = '="' + String(it.productId).replace(/"/g, '""') + '"';
+        const safeName = it.productName ? `"${it.productName.replace(/"/g, '""')}"` : '';
+        csv += `${i+1},${safeId},${safeName},${it.qty},"${it.unit||'個'}",${it.cost},${lineTotal}\n`;
+      });
+      csv += `,,,,,,\n`;
+      csv += `,,,,,總計,${grandTotal}\n`;
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = `進貨單_${o.orderId}_${o.date}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+    }
+
+    // ========== 付款功能 (完美對接大腦版) ==========
+    function triggerPayment(orderId, totalAmount, supplierId) {
+      const amount = Math.round(totalAmount);
+
+      Swal.fire({
+        title: '💸 支付貨款',
+        html: `
+          <div style="text-align:left; font-size:14px;">
+            單號：<b>${orderId}</b><br>
+            應付：<b>$${amount.toLocaleString()}</b>
+          </div>
+          <br>
+          <input type="number" id="payAmount" class="swal2-input" value="${amount}" style="margin-bottom:10px;">
+          <select id="payMethod" class="swal2-input" style="margin-bottom:10px;">
+            <option value="老闆付款">老闆付款</option>
+            <option value="現金">現金</option>
+            <option value="零用金">零用金</option>
+            <option value="匯款">匯款</option>
+          </select>
+          <input type="text" id="payNote" class="swal2-input" placeholder="備註 (例如：匯款後五碼)">`,
+        showCancelButton: true,
+        confirmButtonText: '確定付款',
+        confirmButtonColor: '#0e7490',
+        cancelButtonText: '取消',
+        preConfirm: () => {
+          const payAmt = document.getElementById('payAmount').value;
+          if (!payAmt || parseFloat(payAmt) <= 0) {
+            Swal.showValidationMessage('請輸入有效金額');
+            return false;
+          }
+          return {
+            date: new Date().toISOString().split('T')[0],
+            supplierId: supplierId,
+            amount: parseFloat(payAmt),
+            paymentMethod: document.getElementById('payMethod').value,
+            orderId: orderId,
+            note: document.getElementById('payNote').value
+          };
+        }
+      }).then(async (result) => {
+        if (result.isConfirmed) {
+          Swal.fire({ title: '處理中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+          
+          try {
+            // 📦 整理要傳給大腦的資料 (參數名稱對齊 web_make_payment)
+            const paymentRecord = {
+              payment_date: result.value.date,
+              supplier_id: result.value.supplierId,
+              supplier_name: currentDetail.supplierName, // 從全域變數抓廠商名稱
+              amount: result.value.amount,
+              payment_method: result.value.paymentMethod,
+              order_id: result.value.orderId,
+              note: result.value.note || `進貨單 ${result.value.orderId} 付款`
+            };
+
+            // ✨ 呼叫專屬付款大腦：自動記帳 + 沖銷應付帳款 + 變更單據狀態！
+            const payRes = await fetch(`${SB_URL}/rpc/web_make_payment`, {
+              method: 'POST',
+              headers: HEADERS,
+              body: JSON.stringify({ p_data: paymentRecord })
+            });
+
+            if (!payRes.ok) throw new Error('付款處理失敗');
+
+            Swal.fire('成功', '已成功紀錄付款並沖銷應付帳款！', 'success');
+            
+            // 重新查詢列表與明細，讓畫面狀態變成「已付款」
+            doSearch(); 
+            selectOrder(orderId);
+            
+          } catch (err) {
+            console.error('Payment error:', err);
+            Swal.fire('錯誤', '付款處理失敗: ' + err.message, 'error');
+          }
+        }
+      });
+    }
+
+    
+
+    // ========== 編輯功能 ==========
+    function editOrder(orderId) {
+      // 跳轉至編輯頁面 (帶參數)
+      Swal.fire({
+        title: '即將跳轉...',
+        text: '正在載入編輯頁面',
+        didOpen: () => Swal.showLoading()
+      });
+      
+      // 假設編輯頁面為 purchase_form.html
+      setTimeout(() => {
+        window.location.href = `purchase_form.html?edit=${orderId}`;
+      }, 500);
+    }
+
+    // ========== 複製功能 ==========
+    async function copyOrder(orderId) {
+      const result = await Swal.fire({
+        title: '📋 複製進貨單',
+        text: `確定要複製 ${orderId} 嗎？`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: '確定複製',
+        cancelButtonText: '取消'
+      });
+
+      if (!result.isConfirmed) return;
+
+      Swal.fire({ title: '複製中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+      try {
+        // 取得原單據資料並跳轉至新增頁面
+        if (currentDetail) {
+          // 將資料存入 sessionStorage 供新增頁面讀取
+          const copyData = { ...currentDetail, isCopy: true };
+          sessionStorage.setItem('purchaseCopyData', JSON.stringify(copyData));
+          
+          Swal.close();
+          window.location.href = 'purchase_form.html?copy=true';
+        }
+      } catch (err) {
+        Swal.fire('錯誤', '複製失敗: ' + err.message, 'error');
+      }
+    }
+
+    // ========== 匯出 Excel (CSV) ==========
+    function exportListToExcel() {
+      if (currentOrders.length === 0) {
+        Swal.fire('提示', '沒有資料可匯出', 'info');
+        return;
+      }
+
+      let csv = '\uFEFF進貨單號,日期,供應商,總金額,狀態\n';
+      currentOrders.forEach(o => {
+        csv += `"${o.orderId}","${o.date}","${o.supplierName}",${o.total},"${o.status}"\n`;
+      });
+
+      downloadCSV(csv, '進貨單列表');
+    }
+
+    function downloadCSV(content, filename) {
+      const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `${filename}_${new Date().toISOString().split('T')[0]}.csv`;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    }
+
+    // ========== 跳轉至新增進貨單 ==========
+    function goToNewPurchase() {
+      window.location.href = 'PurchaseOrder.html';
+    }
+
+    // 範例：前端刪除訂單的 JS 函式
+async function deleteOrder(orderId, type) {
+  // type 可以傳入 'sales' 或 'purchase'
+  const isSales = type === 'sales';
+  const rpcName = isSales ? 'web_delete_sales_order' : 'web_delete_purchase_order';
+  const titleName = isSales ? '銷貨單' : '進貨單';
+
+  // 1. 跳出再次確認視窗 (防呆)
+  const result = await Swal.fire({
+    title: `確定要刪除 ${titleName} ${orderId} 嗎？`,
+    text: "刪除後，相關的庫存、應收付款都會自動回補與撤銷，此動作無法復原！",
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonColor: '#d33',
+    cancelButtonColor: '#3085d6',
+    confirmButtonText: '是的，我要刪除！'
+  });
+
+  if (result.isConfirmed) {
+    try {
+      // 2. 呼叫我們剛剛寫的 SQL 刪除神氣
+      const res = await fetch(`${SB_URL}/rpc/${rpcName}`, {
+        method: 'POST',
+        headers: HEADERS,
+        body: JSON.stringify({ p_order_id: orderId }) 
+      });
+
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.message || '刪除失敗');
+      }
+
+      Swal.fire('已刪除', `${titleName} ${orderId} 已經徹底從系統移除並回補帳務！`, 'success');
+      
+      // 3. 重新整理畫面列表
+      doSearch(); 
+      document.getElementById('rightPanel').innerHTML = '<div class="detail-empty"><div>🗑️ 單據已刪除</div></div>';
+
+    } catch (error) {
+      Swal.fire('系統錯誤', error.message, 'error');
+    }
+  }
+}
+  </script>
+</body>
+</html>

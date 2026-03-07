@@ -1,0 +1,885 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>龍潭進銷存總倉 ERP 系統</title>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
+  
+  <style>
+    :root {
+      --bg:#f8f9fb;
+      --surface:#ffffff;
+      --surface2:#f1f5f9;
+      --surface-sidebar:#f1f4f8;
+      --border:#e2e8f0;
+      --text:#1e293b;
+      --text2:#64748b;
+      --accent:#475569;
+      --accent2:#334155;
+      --danger:#c53030;
+      --success:#276749;
+      --warning:#b7791f;
+      --orange:#c05621;
+      --purple:#553c9a;
+      --pink:#b83280;
+      --teal:#0e7490;
+      --surface-dark:#e2e8f0;
+      --text-on-dark:#1e293b;
+      --accent-light:#e2e8f0;
+      --shadow:rgba(30,41,59,0.07);
+      /* legacy aliases */
+      --sidebar-bg:#f1f4f8;
+      --sidebar-hover:#e2e8f0;
+      --blue:#0e7490;
+    }
+
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: 'Noto Sans TC', sans-serif; background: var(--bg); display: flex; height: 100vh; overflow: hidden; }
+
+    /* ── 左側選單 (Sidebar) ── */
+    .sidebar { width: 250px; background: var(--surface-sidebar); color: var(--text); display: flex; flex-direction: column; flex-shrink: 0; height: 100%; border-right: 1px solid var(--border); }
+    .sidebar-header { padding: 25px 20px; background: var(--surface-dark); text-align: center; border-bottom: 1px solid var(--border); cursor: pointer;}
+    .sidebar-header h1 { font-size: 18px; color: var(--accent2); font-weight: 700; }
+
+    .nav-scroll { flex: 1; overflow-y: auto; padding: 15px 0; }
+    .nav-scroll::-webkit-scrollbar { width: 6px; }
+    .nav-scroll::-webkit-scrollbar-thumb { background: rgba(30,41,59,0.15); border-radius: 3px; }
+
+    .nav-group-label { padding: 12px 20px 4px; font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: 1px; font-weight: 700; cursor: pointer; display: flex; justify-content: space-between; align-items: center; user-select: none; }
+    .nav-group-label:hover { color: var(--accent2); }
+    .nav-group-label .arrow { font-size: 10px; transition: transform 0.2s; }
+    .nav-group-label.collapsed .arrow { transform: rotate(-90deg); }
+    .nav-group-items { overflow: hidden; transition: max-height 0.25s ease; }
+    .nav-group-items.collapsed { max-height: 0 !important; }
+    .nav-item { padding: 10px 25px; display: flex; align-items: center; gap: 12px; color: var(--text); text-decoration: none; font-size: 14px; transition: 0.2s; cursor: pointer;}
+    .nav-item:hover { background: var(--sidebar-hover); color: var(--accent2); }
+    .nav-item i { width: 18px; text-align: center; font-size: 15px; }
+    .nav-item.active { background: var(--accent); color: #ffffff; border-right: 4px solid var(--accent2);}
+
+    /* ── 右側主架構 ── */
+    .main-wrapper { flex: 1; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
+    
+    .header { display: flex; justify-content: space-between; align-items: center; padding: 20px 30px; background: var(--surface); border-bottom: 1px solid var(--border); z-index: 10; box-shadow: 0 2px 10px var(--shadow);}
+    .header h2 { font-size: 20px; color: var(--text); display: flex; align-items: center; gap: 10px;}
+    .shortcut-bar { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+    .shortcut-btn { padding: 5px 12px; font-size: 12px; border: 1px solid var(--border); border-radius: 6px; background: var(--surface); color: var(--text); cursor: pointer; transition: 0.2s; white-space: nowrap; }
+    .shortcut-btn:hover { background: var(--accent); color: #fff; border-color: var(--accent); }
+    .shortcut-btn i { margin-right: 4px; }
+    .header h2 i { color: var(--accent); font-size: 18px; }
+
+    .main-content { flex: 1; padding: 25px 30px; overflow-y: auto; position: relative; }
+
+    #content-frame { width: 100%; height: 100%; border: none; border-radius: 8px; background: var(--surface); box-shadow: 0 2px 10px var(--shadow); display: none; }
+    #dashboard-view { display: block; animation: fadeIn 0.3s ease; }
+    @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+
+    /* ===== WELCOME BAR ===== */
+    .welcome-bar { background:linear-gradient(135deg, #e2e8f0 0%, #cbd5e1 100%); border:1px solid var(--border); border-radius:14px; padding:20px 24px; margin-bottom:20px; display:flex; align-items:center; justify-content:space-between; box-shadow:0 2px 10px var(--shadow); }
+    .welcome-left h2 { font-size:20px; font-weight:700; margin-bottom:4px; color:var(--text); }
+    .welcome-left p { font-size:13px; color:var(--text2); }
+    .welcome-right { text-align:right; }
+    .welcome-time { font-size:28px; font-weight:700; color:var(--accent); font-variant-numeric:tabular-nums; }
+    .welcome-date { font-size:12px; color:var(--text2); margin-top:2px; }
+
+    /* ===== STATS ===== */
+    .stats-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:12px; margin-bottom:20px; }
+    .stat-card { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px 18px; cursor:pointer; transition:all 0.15s; }
+    .stat-card:hover { transform:translateY(-2px); border-color:var(--accent); }
+    .stat-top { display:flex; align-items:center; justify-content:space-between; margin-bottom:10px; }
+    .stat-icon { font-size:22px; }
+    .stat-tag { font-size:10px; color:var(--text2); background:var(--surface2); padding:2px 7px; border-radius:10px; }
+    .stat-value { font-size:20px; font-weight:700; margin-bottom:3px; }
+    .stat-label { font-size:11px; color:var(--text2); }
+
+    /* ===== CALENDAR ===== */
+    .cal-section{background:var(--surface);border:1px solid var(--border);border-radius:14px;overflow:hidden;margin-bottom:20px;}
+    .cal-wrap{display:grid;grid-template-columns:auto 1fr 1fr;min-height:260px;}
+    .cal-left{padding:14px 16px;border-right:1px solid var(--border);}
+    .cal-nav{display:flex;align-items:center;gap:8px;margin-bottom:10px;}
+    .cal-arrow{background:none;border:1px solid var(--border);border-radius:6px;width:28px;height:28px;cursor:pointer;font-size:14px;color:var(--text2);display:flex;align-items:center;justify-content:center;}
+    .cal-arrow:hover{background:var(--surface2);color:var(--text);}
+    .cal-month{font-size:14px;font-weight:700;flex:1;text-align:center;}
+    .cal-today-btn{font-size:11px;padding:3px 10px;border-radius:5px;border:1px solid var(--border);background:var(--surface2);color:var(--text2);cursor:pointer;}
+    .cal-today-btn:hover{background:var(--accent);color:#fff;border-color:var(--accent);}
+    .cal-table{border-collapse:collapse;}
+    .cal-table th{font-size:10px;color:var(--text2);padding:4px 0;width:36px;text-align:center;}
+    .cal-table td{text-align:center;padding:0;vertical-align:top;}
+    .cal-day{width:34px;height:32px;border-radius:8px;border:none;background:none;cursor:pointer;font-size:12px;color:var(--text);position:relative;font-family:inherit;display:inline-flex;align-items:center;justify-content:center;}
+    .cal-day:hover{background:var(--surface2);}
+    .cal-day.today{background:var(--accent);color:#fff;font-weight:700;}
+    .cal-day.selected{outline:2px solid var(--accent);outline-offset:-2px;}
+    .cal-day.other{color:var(--border);}
+    .cal-day .dot{position:absolute;bottom:2px;left:50%;transform:translateX(-50%);width:5px;height:5px;border-radius:50%;}
+    .cal-day .dot.memo{background:var(--accent);}
+    .cal-day .dot.remind{background:var(--danger);}
+    .cal-right{padding:14px 16px;display:flex;flex-direction:column;}
+    .cal-right-title{font-size:14px;font-weight:700;margin-bottom:10px;}
+    .cal-events{flex:1;overflow-y:auto;max-height:180px;}
+    .cal-empty{color:var(--text2);font-size:12px;padding:20px 0;text-align:center;}
+    .cal-ev-item{display:flex;align-items:center;gap:8px;padding:7px 10px;border-radius:8px;margin-bottom:4px;font-size:12px;background:var(--bg);}
+    .cal-ev-item.remind{border-left:3px solid var(--danger);}
+    .cal-ev-item.memo{border-left:3px solid var(--accent);}
+    .cal-ev-item .ev-text{flex:1;}
+    .cal-ev-item .ev-type{font-size:10px;color:var(--text2);white-space:nowrap;}
+    .cal-ev-item .ev-del{background:none;border:none;color:var(--text2);cursor:pointer;font-size:14px;padding:0 2px;line-height:1;}
+    .cal-ev-item .ev-del:hover{color:var(--danger);}
+    .cal-add{padding-top:10px;border-top:1px solid var(--border);margin-top:8px;}
+    .cal-add input{padding:6px 10px;border:1px solid var(--border);border-radius:4px;font-size:13px;width:100%;outline:none;font-family:inherit;}
+    .cal-add input:focus{border-color:var(--accent);}
+    .cal-add select{padding:4px 8px;border:1px solid var(--border);border-radius:4px;font-size:12px;outline:none;font-family:inherit;}
+    .cal-add-btn{padding:6px 14px;border-radius:6px;border:none;background:var(--accent);color:#fff;font-size:12px;cursor:pointer;font-family:inherit;white-space:nowrap;}
+    .cal-add-btn:hover{opacity:0.85;}
+    .cal-todo{padding:14px 16px;border-left:1px solid var(--border);display:flex;flex-direction:column;}
+    .todo-list{flex:1;overflow-y:auto;max-height:180px;}
+    .todo-item{display:flex;align-items:center;gap:8px;padding:6px 8px;border-radius:7px;margin-bottom:3px;font-size:12px;background:var(--bg);cursor:pointer;transition:background 0.1s;}
+    .todo-item:hover{background:var(--surface2);}
+    .todo-item.done{opacity:0.5;}
+    .todo-item.done .todo-text{text-decoration:line-through;color:var(--text2);}
+    .todo-chk{width:16px;height:16px;accent-color:var(--accent);cursor:pointer;flex-shrink:0;}
+    .todo-text{flex:1;line-height:1.4;}
+    .todo-del{background:none;border:none;color:var(--text2);cursor:pointer;font-size:14px;padding:0 2px;line-height:1;flex-shrink:0;}
+    .todo-del:hover{color:var(--danger);}
+    .todo-add{padding-top:10px;border-top:1px solid var(--border);margin-top:8px;}
+    .todo-empty{color:var(--text2);font-size:12px;padding:20px 0;text-align:center;}
+
+    /* ===== MODULE GRID ===== */
+    .section-header { display:flex; align-items:center; gap:10px; margin-bottom:14px; }
+    .section-title { font-size:13px; font-weight:600; color:var(--text2); text-transform:uppercase; letter-spacing:1px; }
+    .section-line { flex:1; height:1px; background:var(--border); }
+    .modules-section { margin-bottom:24px; }
+    .modules-grid { display:grid; grid-template-columns:repeat(5,1fr); gap:10px; }
+    .module-btn { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:16px 12px; text-align:center; cursor:pointer; transition:all 0.15s; text-decoration:none; color:var(--text); display:flex; flex-direction:column; align-items:center; gap:6px; }
+    .module-btn:hover { transform:translateY(-2px); }
+    .module-btn .m-icon { font-size:26px; }
+    .module-btn .m-label { font-size:12px; font-weight:600; line-height:1.3; }
+    .module-btn .m-desc { font-size:10px; color:var(--text2); }
+    .module-btn.sales:hover { border-color:var(--accent); background:rgba(71,85,105,0.06); }
+    .module-btn.sales .m-label { color:var(--accent); }
+    .module-btn.purchase:hover { border-color:var(--orange); background:rgba(192,86,33,0.06); }
+    .module-btn.purchase .m-label { color:var(--orange); }
+    .module-btn.inventory:hover { border-color:var(--success); background:rgba(39,103,73,0.06); }
+    .module-btn.inventory .m-label { color:var(--success); }
+    .module-btn.finance:hover { border-color:var(--purple); background:rgba(85,60,154,0.06); }
+    .module-btn.finance .m-label { color:var(--purple); }
+    .module-btn.report:hover { border-color:var(--warning); background:rgba(183,121,31,0.06); }
+    .module-btn.report .m-label { color:var(--warning); }
+    .module-btn.master:hover { border-color:var(--pink); background:rgba(184,50,128,0.06); }
+    .module-btn.master .m-label { color:var(--pink); }
+
+    /* ===== BOTTOM PANELS ===== */
+    .bottom-grid { display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:24px; }
+    .panel { background:var(--surface); border:1px solid var(--border); border-radius:12px; overflow:hidden; }
+    .panel-header { padding:12px 16px; border-bottom:1px solid var(--border); display:flex; align-items:center; justify-content:space-between; }
+    .panel-title { font-size:13px; font-weight:600; }
+    .panel-link { font-size:12px; color:var(--accent); text-decoration:none; cursor:pointer; }
+    .panel-link:hover { text-decoration:underline; }
+    .dash-table { width:100%; border-collapse:collapse; }
+    .dash-table thead th { padding:8px 14px; font-size:11px; color:var(--text2); background:var(--surface2); font-weight:500; border-bottom:1px solid var(--border); text-align:left; }
+    .dash-table tbody tr { border-bottom:1px solid var(--border); transition:background 0.1s; cursor:pointer; }
+    .dash-table tbody tr:hover { background:var(--surface2); }
+    .dash-table tbody tr:last-child { border-bottom:none; }
+    .dash-table tbody td { padding:9px 14px; font-size:12px; }
+    .badge { display:inline-block; padding:2px 7px; border-radius:10px; font-size:10px; font-weight:500; }
+    .badge-success { background:#d1fae5; color:var(--success); }
+    .badge-danger  { background:#fee2e2; color:var(--danger); }
+    .badge-warning { background:#fef3c7; color:var(--warning); }
+    .empty-row td { text-align:center; padding:28px !important; color:var(--text2); font-size:12px; }
+    .spinner { width:20px; height:20px; border:2px solid var(--border); border-top-color:var(--accent); border-radius:50%; animation:spin 0.8s linear infinite; display:inline-block; margin:0 auto; }
+    @keyframes spin { to{transform:rotate(360deg)} }
+
+    @media (max-width: 1024px) { .stats-grid { grid-template-columns: 1fr 1fr; } .modules-grid { grid-template-columns: repeat(3,1fr); } .bottom-grid { grid-template-columns: 1fr; } .cal-wrap { grid-template-columns: 1fr; } .cal-left { border-right:none; border-bottom:1px solid var(--border); } .cal-todo { border-left:none; border-top:1px solid var(--border); } }
+    /* ── Login Overlay ── */
+    #loginOverlay {
+      position:fixed; top:0; left:0; width:100%; height:100%; z-index:9999;
+      background:var(--bg); display:flex; align-items:center; justify-content:center;
+    }
+    .login-box {
+      background:var(--surface); border:1px solid var(--border); border-radius:12px;
+      padding:40px; width:360px; box-shadow:0 8px 30px var(--shadow); text-align:center;
+    }
+    .login-box h1 { font-size:20px; color:var(--accent2); margin-bottom:6px; }
+    .login-box .sub { font-size:13px; color:var(--text2); margin-bottom:24px; }
+    .login-box input {
+      width:100%; padding:10px 14px; margin-bottom:12px; border:1px solid var(--border);
+      border-radius:8px; font-size:14px; font-family:inherit; outline:none;
+    }
+    .login-box input:focus { border-color:var(--accent); box-shadow:0 0 0 3px rgba(71,85,105,0.12); }
+    .login-box button {
+      width:100%; padding:11px; background:var(--accent2); color:#fff; border:none;
+      border-radius:8px; font-size:15px; font-weight:600; cursor:pointer; font-family:inherit;
+    }
+    .login-box button:hover { background:var(--accent); }
+    .login-box button:disabled { opacity:0.6; cursor:not-allowed; }
+  </style>
+</head>
+<body>
+
+  <!-- Login Overlay -->
+  <div id="loginOverlay">
+    <div class="login-box">
+      <h1>龍潭總倉 ERP</h1>
+      <div class="sub">請登入管理員帳號</div>
+      <input type="text" id="erpLoginUser" placeholder="帳號" autocomplete="username">
+      <input type="password" id="erpLoginPass" placeholder="密碼" autocomplete="current-password"
+        onkeypress="if(event.key==='Enter') erpDoLogin()">
+      <button onclick="erpDoLogin()" id="erpLoginBtn">登入</button>
+    </div>
+  </div>
+
+  <aside class="sidebar">
+    <div class="sidebar-header" onclick="loadPage('dashboard', '首頁看板', this)">
+      <h1>龍潭總倉 ERP</h1>
+    </div>
+    <div class="nav-scroll">
+      
+      <a class="nav-item active" data-url="dashboard" data-title="首頁看板">
+        <i class="fas fa-home"></i> 儀表板 <span id="calBadge" style="display:none;font-size:10px;background:var(--danger);color:white;padding:1px 6px;border-radius:10px;margin-left:4px;">0</span>
+      </a>
+
+      <div class="nav-group-label" data-group="orders" onclick="toggleGroup(this)">開單作業 <span class="arrow">▾</span></div>
+      <div class="nav-group-items" data-group="orders">
+        <a class="nav-item" data-url="SalesOrder.html" data-title="開新銷貨單"><i class="fas fa-file-invoice"></i> 開新銷貨單</a>
+        <a class="nav-item" data-url="SearchSales.html" data-title="查詢銷貨單"><i class="fas fa-search"></i> 查詢銷貨單</a>
+        <div style="height: 1px; background: var(--border); margin: 4px 20px;"></div>
+        <a class="nav-item" data-url="PurchaseOrder.html" data-title="開新進貨單"><i class="fas fa-file-import"></i> 開新進貨單</a>
+        <a class="nav-item" data-url="SearchPurchase.html" data-title="查詢進貨單"><i class="fas fa-search-plus"></i> 查詢進貨單</a>
+      </div>
+
+      <div class="nav-group-label" data-group="payment" onclick="toggleGroup(this)">收付款管理 <span class="arrow">▾</span></div>
+      <div class="nav-group-items" data-group="payment">
+        <a class="nav-item" data-url="ReceivePayment.html" data-title="客戶收款紀錄"><i class="fas fa-hand-holding-usd"></i> 客戶收款</a>
+        <a class="nav-item" data-url="ReceivePaymentList.html" data-title="收款紀錄查詢"><i class="fas fa-list-alt"></i> 收款紀錄查詢</a>
+        <a class="nav-item" data-url="MakePayment.html" data-title="供應商付款"><i class="fas fa-money-bill-wave"></i> 供應商付款</a>
+      </div>
+
+      <div class="nav-group-label" data-group="inventory" onclick="toggleGroup(this)">庫存管理 <span class="arrow">▾</span></div>
+      <div class="nav-group-items" data-group="inventory">
+        <a class="nav-item" data-url="Inventory.html" data-title="庫存查詢"><i class="fas fa-warehouse"></i> 庫存查詢</a>
+        <a class="nav-item" data-url="Stocktake.html" data-title="庫存盤點"><i class="fas fa-clipboard-check"></i> 庫存盤點</a>
+        <a class="nav-item" data-url="Lowstockalert.html" data-title="庫存預警"><i class="fas fa-exclamation-triangle"></i> 庫存預警</a>
+        <a class="nav-item" data-url="InventoryLog.html" data-title="庫存異動記錄"><i class="fas fa-history"></i> 異動記錄</a>
+      </div>
+
+      <div class="nav-group-label" data-group="finance" onclick="toggleGroup(this)">財務管理 <span class="arrow">▾</span></div>
+      <div class="nav-group-items" data-group="finance">
+        <a class="nav-item" data-url="PettyCashPanel.html" data-title="零用金管理"><i class="fas fa-coins"></i> 零用金管理</a>
+        <a class="nav-item" data-url="AddExpense.html" data-title="現金支出"><i class="fas fa-wallet"></i> 記錄現金支出</a>
+        <a class="nav-item" data-url="ExpenseList.html" data-title="支出明細"><i class="fas fa-receipt"></i> 支出明細</a>
+      </div>
+
+      <div class="nav-group-label" data-group="reports" onclick="toggleGroup(this)">報表分析 <span class="arrow">▾</span></div>
+      <div class="nav-group-items" data-group="reports">
+        <a class="nav-item" data-url="Receivablereport.html" data-title="應收帳款報表"><i class="fas fa-file-invoice-dollar"></i> 應收帳款報表</a>
+        <a class="nav-item" data-url="PayableReport.html" data-title="應付帳款報表"><i class="fas fa-file-signature"></i> 應付帳款報表</a>
+        <a class="nav-item" data-url="MonthlyReport.html" data-title="利潤與銷貨收入"><i class="fas fa-chart-line"></i> 利潤與銷貨收入</a>
+        <a class="nav-item" data-url="DetailedReport.html" data-title="詳細月結總表"><i class="fas fa-calendar-alt"></i> 詳細月結總表</a>
+        <a class="nav-item" data-url="CustomerMonthlyReport.html" data-title="客戶月結對帳"><i class="fas fa-users-cog"></i> 客戶月結對帳</a>
+        <a class="nav-item" data-url="ProductAnalysis.html" data-title="商品分析"><i class="fas fa-chart-pie"></i> 商品分析</a>
+      </div>
+
+      <div class="nav-group-label" data-group="settings" onclick="toggleGroup(this)">基礎設定 <span class="arrow">▾</span></div>
+      <div class="nav-group-items" data-group="settings">
+        <a class="nav-item" data-url="ProductList.html" data-title="商品管理"><i class="fas fa-box"></i> 所有商品</a>
+        <a class="nav-item" data-url="CustomerList.html" data-title="客戶管理"><i class="fas fa-user-friends"></i> 所有客戶</a>
+        <a class="nav-item" data-url="SupplierList.html" data-title="供應商管理"><i class="fas fa-industry"></i> 所有供應商</a>
+        <a class="nav-item" data-url="PriceForm.html" data-title="設定客戶特價"><i class="fas fa-tags"></i> 設定客戶特價</a>
+      </div>
+    </div>
+  </aside>
+
+  <div class="main-wrapper">
+    <div class="header">
+      <h2 id="page-title"><i class="fas fa-home"></i> 首頁看板</h2>
+      <div class="shortcut-bar">
+        <button class="shortcut-btn" onclick="loadPage('SalesOrder.html','開新銷貨單')"><i class="fas fa-file-invoice"></i>銷貨單</button>
+        <button class="shortcut-btn" onclick="loadPage('SearchSales.html','查詢銷貨單')"><i class="fas fa-search"></i>查銷貨</button>
+        <button class="shortcut-btn" onclick="loadPage('PurchaseOrder.html','開新進貨單')"><i class="fas fa-file-import"></i>進貨單</button>
+        <button class="shortcut-btn" onclick="loadPage('Inventory.html','庫存查詢')"><i class="fas fa-warehouse"></i>庫存</button>
+        <span style="font-size:12px;color:var(--text2);margin-left:4px;" id="current-date"></span>
+      </div>
+    </div>
+
+    <main class="main-content">
+      <div id="dashboard-view">
+
+        <!-- 日曆記事 -->
+        <div class="cal-section">
+          <div class="cal-wrap">
+            <div class="cal-left">
+              <div class="cal-nav">
+                <button class="cal-arrow" onclick="calNav(-1)">&lt;</button>
+                <span class="cal-month" id="calMonth"></span>
+                <button class="cal-arrow" onclick="calNav(1)">&gt;</button>
+                <button class="cal-today-btn" onclick="calGoToday()">今天</button>
+              </div>
+              <table class="cal-table">
+                <thead><tr><th>日</th><th>一</th><th>二</th><th>三</th><th>四</th><th>五</th><th>六</th></tr></thead>
+                <tbody id="calBody"></tbody>
+              </table>
+            </div>
+            <div class="cal-right">
+              <div class="cal-right-title" id="calSelDate">選擇日期查看記事</div>
+              <div class="cal-events" id="calEvents"><div class="cal-empty">點擊日期查看或新增記事</div></div>
+              <div class="cal-add" id="calAddArea" style="display:none;">
+                <input type="text" id="calNewText" placeholder="輸入記事內容..." onkeydown="if(event.key==='Enter')addCalEvent()">
+                <div style="display:flex;gap:6px;margin-top:6px;">
+                  <select id="calNewType">
+                    <option value="memo">一般記事</option>
+                    <option value="remind">到期提醒</option>
+                  </select>
+                  <button class="cal-add-btn" onclick="addCalEvent()">新增</button>
+                </div>
+              </div>
+            </div>
+            <div class="cal-todo">
+              <div class="cal-right-title">待辦事項</div>
+              <div class="todo-list" id="todoList"></div>
+              <div class="todo-add">
+                <input type="text" id="todoNewText" placeholder="新增待辦..." style="font-size:13px;padding:6px 10px;border:1px solid var(--border);border-radius:4px;width:100%;outline:none;font-family:inherit;" onkeydown="if(event.key==='Enter')addTodo()">
+                <button class="cal-add-btn" onclick="addTodo()" style="margin-top:6px;">新增</button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 歡迎列 -->
+        <div class="welcome-bar">
+          <div class="welcome-left">
+            <h2 id="greeting">載入中...</h2>
+            <p id="todayStr">正在讀取系統資料...</p>
+          </div>
+          <div class="welcome-right">
+            <div class="welcome-time" id="clock">--:--</div>
+            <div class="welcome-date" id="dateStr"></div>
+          </div>
+        </div>
+
+        <!-- 最近銷貨 & 未收款 -->
+        <div class="bottom-grid">
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title">📋 最近銷貨單</div>
+              <a class="panel-link" href="#" onclick="loadPage('SearchSales.html', '查詢銷貨單', this)">查看全部 →</a>
+            </div>
+            <table class="dash-table">
+              <thead><tr><th>單號</th><th>客戶</th><th>金額</th><th>狀態</th></tr></thead>
+              <tbody id="recentSales"><tr><td colspan="4" style="text-align:center;padding:20px"><div class="spinner"></div></td></tr></tbody>
+            </table>
+          </div>
+          <div class="panel">
+            <div class="panel-header">
+              <div class="panel-title">⚠️ 未收款清單</div>
+              <a class="panel-link" href="#" onclick="loadPage('ReceivePayment.html', '客戶收款紀錄', this)">前往收款 →</a>
+            </div>
+            <table class="dash-table">
+              <thead><tr><th>單號</th><th>客戶</th><th>未收金額</th><th>日期</th></tr></thead>
+              <tbody id="unpaidList"><tr><td colspan="4" style="text-align:center;padding:20px"><div class="spinner"></div></td></tr></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 統計卡片 -->
+        <div class="stats-grid">
+          <div class="stat-card" onclick="loadPage('SearchSales.html', '查詢銷貨單')">
+            <div class="stat-top"><div class="stat-icon">📋</div><div class="stat-tag">本月</div></div>
+            <div class="stat-value" style="color:var(--accent)" id="st-sales">-</div>
+            <div class="stat-label">銷貨筆數</div>
+          </div>
+          <div class="stat-card" onclick="loadPage('SearchSales.html', '查詢銷貨單')">
+            <div class="stat-top"><div class="stat-icon">💰</div><div class="stat-tag">本月</div></div>
+            <div class="stat-value" style="color:var(--orange)" id="st-revenue">-</div>
+            <div class="stat-label">銷貨總額</div>
+          </div>
+          <div class="stat-card" onclick="loadPage('Receivablereport.html', '應收帳款報表')">
+            <div class="stat-top"><div class="stat-icon">⚠️</div><div class="stat-tag">累計</div></div>
+            <div class="stat-value" style="color:var(--danger)" id="st-unpaid">-</div>
+            <div class="stat-label">未收款金額</div>
+          </div>
+          <div class="stat-card" onclick="loadPage('SearchPurchase.html', '查詢進貨單')">
+            <div class="stat-top"><div class="stat-icon">📥</div><div class="stat-tag">本月</div></div>
+            <div class="stat-value" style="color:var(--success)" id="st-purchase">-</div>
+            <div class="stat-label">進貨總額</div>
+          </div>
+          <div class="stat-card" onclick="loadPage('PettyCashPanel.html', '零用金管理')">
+            <div class="stat-top"><div class="stat-icon">🪙</div><div class="stat-tag">即時</div></div>
+            <div class="stat-value" style="color:var(--warning)" id="st-petty">-</div>
+            <div class="stat-label">零用金結餘</div>
+          </div>
+        </div>
+
+        <!-- 銷貨模組 -->
+        <div class="modules-section">
+          <div class="section-header">
+            <div class="section-title" style="color:var(--accent)">🛒 銷貨管理</div>
+            <div class="section-line"></div>
+          </div>
+          <div class="modules-grid">
+            <a class="module-btn sales" href="#" onclick="loadPage('SalesOrder.html','開新銷貨單',this)"><div class="m-icon">➕</div><div class="m-label">開立銷貨單</div><div class="m-desc">建立新訂單</div></a>
+            <a class="module-btn sales" href="#" onclick="loadPage('SearchSales.html','查詢銷貨單',this)"><div class="m-icon">🔍</div><div class="m-label">銷貨查詢</div><div class="m-desc">明細 / 列印</div></a>
+            <a class="module-btn sales" href="#" onclick="loadPage('ReceivePayment.html','客戶收款紀錄',this)"><div class="m-icon">💰</div><div class="m-label">客戶收款</div><div class="m-desc">記錄收款</div></a>
+            <a class="module-btn sales" href="#" onclick="loadPage('Receivablereport.html','應收帳款報表',this)"><div class="m-icon">📋</div><div class="m-label">應收帳款</div><div class="m-desc">日常查帳</div></a>
+            <a class="module-btn sales" href="#" onclick="loadPage('CustomerMonthlyReport.html','客戶月結對帳',this)"><div class="m-icon">📊</div><div class="m-label">客戶月結</div><div class="m-desc">對帳單</div></a>
+          </div>
+        </div>
+
+        <!-- 進貨模組 -->
+        <div class="modules-section">
+          <div class="section-header">
+            <div class="section-title" style="color:var(--orange)">📥 進貨管理</div>
+            <div class="section-line"></div>
+          </div>
+          <div class="modules-grid">
+            <a class="module-btn purchase" href="#" onclick="loadPage('PurchaseOrder.html','開新進貨單',this)"><div class="m-icon">📥</div><div class="m-label">開立進貨單</div><div class="m-desc">成品 / 原物料</div></a>
+            <a class="module-btn purchase" href="#" onclick="loadPage('SearchPurchase.html','查詢進貨單',this)"><div class="m-icon">🔍</div><div class="m-label">進貨查詢</div><div class="m-desc">查詢明細</div></a>
+            <a class="module-btn purchase" href="#" onclick="loadPage('MakePayment.html','供應商付款',this)"><div class="m-icon">💳</div><div class="m-label">供應商付款</div><div class="m-desc">記錄付款</div></a>
+            <a class="module-btn purchase" href="#" onclick="loadPage('PayableReport.html','應付帳款報表',this)"><div class="m-icon">📋</div><div class="m-label">應付帳款</div><div class="m-desc">查詢欠款</div></a>
+            <a class="module-btn purchase" href="#" onclick="loadPage('SupplierList.html','供應商管理',this)"><div class="m-icon">🏢</div><div class="m-label">供應商管理</div><div class="m-desc">新增 / 編輯</div></a>
+          </div>
+        </div>
+
+        <!-- 庫存模組 -->
+        <div class="modules-section">
+          <div class="section-header">
+            <div class="section-title" style="color:var(--success)">📦 庫存管理</div>
+            <div class="section-line"></div>
+          </div>
+          <div class="modules-grid">
+            <a class="module-btn inventory" href="#" onclick="loadPage('Inventory.html','庫存查詢',this)"><div class="m-icon">📦</div><div class="m-label">庫存查詢</div><div class="m-desc">即時庫存</div></a>
+            <a class="module-btn inventory" href="#" onclick="loadPage('Stocktake.html','庫存盤點',this)"><div class="m-icon">✅</div><div class="m-label">庫存盤點</div><div class="m-desc">定期盤點</div></a>
+            <a class="module-btn inventory" href="#" onclick="loadPage('Lowstockalert.html','庫存預警',this)"><div class="m-icon">⚠️</div><div class="m-label">庫存預警</div><div class="m-desc">低於安全量</div></a>
+            <a class="module-btn inventory" href="#" onclick="loadPage('InventoryLog.html','庫存異動記錄',this)"><div class="m-icon">📝</div><div class="m-label">庫存異動</div><div class="m-desc">進出記錄</div></a>
+            <a class="module-btn inventory" href="#" onclick="loadPage('ProductList.html','商品管理',this)"><div class="m-icon">🍎</div><div class="m-label">商品管理</div><div class="m-desc">新增 / 編輯</div></a>
+          </div>
+        </div>
+
+        <!-- 財務模組 -->
+        <div class="modules-section">
+          <div class="section-header">
+            <div class="section-title" style="color:var(--purple)">💸 財務管理</div>
+            <div class="section-line"></div>
+          </div>
+          <div class="modules-grid">
+            <a class="module-btn finance" href="#" onclick="loadPage('AddExpense.html','現金支出',this)"><div class="m-icon">💸</div><div class="m-label">新增支出</div><div class="m-desc">記錄支出</div></a>
+            <a class="module-btn finance" href="#" onclick="loadPage('ExpenseList.html','支出明細',this)"><div class="m-icon">📄</div><div class="m-label">支出明細</div><div class="m-desc">查詢明細</div></a>
+            <a class="module-btn finance" href="#" onclick="loadPage('PettyCashPanel.html','零用金管理',this)"><div class="m-icon">🪙</div><div class="m-label">零用金管理</div><div class="m-desc">零用金收支</div></a>
+            <a class="module-btn finance" href="#" onclick="loadPage('ReceivePaymentList.html','收款紀錄查詢',this)"><div class="m-icon">📒</div><div class="m-label">收款紀錄</div><div class="m-desc">已收帳清單</div></a>
+          </div>
+        </div>
+
+        <!-- 報表模組 -->
+        <div class="modules-section">
+          <div class="section-header">
+            <div class="section-title" style="color:var(--warning)">📈 報表分析</div>
+            <div class="section-line"></div>
+          </div>
+          <div class="modules-grid">
+            <a class="module-btn report" href="#" onclick="loadPage('MonthlyReport.html','利潤與銷貨收入',this)"><div class="m-icon">📊</div><div class="m-label">簡易月結</div><div class="m-desc">月份總覽</div></a>
+            <a class="module-btn report" href="#" onclick="loadPage('DetailedReport.html','詳細月結總表',this)"><div class="m-icon">📈</div><div class="m-label">詳細月結</div><div class="m-desc">完整報表</div></a>
+            <a class="module-btn report" href="#" onclick="loadPage('CustomerMonthlyReport.html','客戶月結對帳',this)"><div class="m-icon">👤</div><div class="m-label">客戶月結</div><div class="m-desc">對帳單</div></a>
+            <a class="module-btn report" href="#" onclick="loadPage('ProductAnalysis.html','商品分析',this)"><div class="m-icon">🛍️</div><div class="m-label">商品分析</div><div class="m-desc">熱銷排名</div></a>
+          </div>
+        </div>
+
+        <!-- 基本資料模組 -->
+        <div class="modules-section">
+          <div class="section-header">
+            <div class="section-title" style="color:var(--pink)">⚙️ 基本資料</div>
+            <div class="section-line"></div>
+          </div>
+          <div class="modules-grid">
+            <a class="module-btn master" href="#" onclick="loadPage('CustomerList.html','客戶管理',this)"><div class="m-icon">👥</div><div class="m-label">客戶管理</div><div class="m-desc">新增 / 編輯</div></a>
+            <a class="module-btn master" href="#" onclick="loadPage('PriceForm.html','設定客戶特價',this)"><div class="m-icon">🏷️</div><div class="m-label">客戶特價</div><div class="m-desc">特價設定</div></a>
+            <a class="module-btn master" href="#" onclick="loadPage('SupplierList.html','供應商管理',this)"><div class="m-icon">🏢</div><div class="m-label">供應商管理</div><div class="m-desc">新增 / 編輯</div></a>
+            <a class="module-btn master" href="#" onclick="loadPage('ProductList.html','商品管理',this)"><div class="m-icon">🍎</div><div class="m-label">商品管理</div><div class="m-desc">新增 / 編輯</div></a>
+          </div>
+        </div>
+
+      </div>
+
+      <iframe id="content-frame" name="contentFrame"></iframe>
+    </main>
+  </div>
+
+  <script>
+    // ===== Supabase =====
+    const SB_URL = 'https://gkuwoandmsgvlsxzmrjj.supabase.co/rest/v1';
+    const SB_KEY = 'sb_publishable_7K0w9Z8-Wv1dOgLsZkI0rA_WfNei_AS';
+    const SB_BASE = 'https://gkuwoandmsgvlsxzmrjj.supabase.co';
+    const sbClient = supabase.createClient(SB_BASE, SB_KEY);
+
+    // Auth token: 登入後用 session token，未登入用 anon key
+    function getAuthToken() { return sessionStorage.getItem('sb_auth_token') || SB_KEY; }
+    function getHeaders() { return { 'apikey': SB_KEY, 'Authorization': `Bearer ${getAuthToken()}` }; }
+    const HEADERS = { 'apikey': SB_KEY, 'Authorization': `Bearer ${SB_KEY}` }; // will be overridden after login
+
+    // Login
+    async function erpDoLogin() {
+      const username = document.getElementById('erpLoginUser').value.trim();
+      const password = document.getElementById('erpLoginPass').value;
+      if (!username || !password) { Swal.fire('提醒','請輸入帳號與密碼','warning'); return; }
+      const btn = document.getElementById('erpLoginBtn');
+      btn.disabled = true; btn.textContent = '登入中...';
+      try {
+        const { data, error } = await sbClient.auth.signInWithPassword({
+          email: username + '@lt-erp.com', password: password
+        });
+        if (error) { Swal.fire('登入失敗', error.message, 'error'); btn.disabled=false; btn.textContent='登入'; return; }
+        const meta = data.user.user_metadata || {};
+        if (meta.role !== 'admin') {
+          await sbClient.auth.signOut();
+          Swal.fire('權限不足','此帳號非管理員，無法使用 ERP 系統。','error');
+          btn.disabled=false; btn.textContent='登入'; return;
+        }
+        // Store token
+        sessionStorage.setItem('sb_auth_token', data.session.access_token);
+        sessionStorage.setItem('sb_auth_user', JSON.stringify(meta));
+        // Update HEADERS for this page
+        HEADERS['Authorization'] = `Bearer ${data.session.access_token}`;
+        // Hide login, show ERP
+        document.getElementById('loginOverlay').style.display = 'none';
+        initAfterLogin();
+      } catch(e) {
+        Swal.fire('錯誤', e.message, 'error');
+      }
+      btn.disabled=false; btn.textContent='登入';
+    }
+
+    // Check existing session on page load
+    async function checkSession() {
+      const { data: { session } } = await sbClient.auth.getSession();
+      if (session) {
+        const meta = session.user.user_metadata || {};
+        if (meta.role === 'admin') {
+          sessionStorage.setItem('sb_auth_token', session.access_token);
+          sessionStorage.setItem('sb_auth_user', JSON.stringify(meta));
+          HEADERS['Authorization'] = `Bearer ${session.access_token}`;
+          document.getElementById('loginOverlay').style.display = 'none';
+          initAfterLogin();
+          return;
+        }
+      }
+      // No valid session, show login
+      document.getElementById('loginOverlay').style.display = 'flex';
+    }
+
+    // Refresh token periodically (every 10 min)
+    setInterval(async () => {
+      const { data: { session } } = await sbClient.auth.getSession();
+      if (session) {
+        sessionStorage.setItem('sb_auth_token', session.access_token);
+        HEADERS['Authorization'] = `Bearer ${session.access_token}`;
+      }
+    }, 600000);
+
+    function initAfterLogin() {
+      initDateTime();
+      refreshDashboard();
+      calRender();
+      renderTodos();
+      updateCalBadge();
+    }
+
+    function fmt(n){ return 'NT$ '+Number(n||0).toLocaleString(); }
+    function statusBadge(s){
+      if(s==='已收款') return `<span class="badge badge-success">${s}</span>`;
+      if(s==='未收款') return `<span class="badge badge-danger">${s}</span>`;
+      return `<span class="badge badge-warning">${s||'-'}</span>`;
+    }
+
+    // ===== Navigation =====
+    function loadPage(url, title, element) {
+      document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
+      let targetNav = document.querySelector(`.nav-item[data-url="${url}"]`);
+      if(targetNav) targetNav.classList.add('active');
+
+      let iconHtml = targetNav ? targetNav.querySelector('i').outerHTML : '<i class="fas fa-layer-group"></i>';
+      document.getElementById('page-title').innerHTML = `${iconHtml} ${title||''}`;
+
+      const dashboard = document.getElementById('dashboard-view');
+      const iframe = document.getElementById('content-frame');
+
+      if (url === 'dashboard') {
+        dashboard.style.display = 'block';
+        iframe.style.display = 'none';
+        iframe.src = '';
+        refreshDashboard();
+      } else {
+        dashboard.style.display = 'none';
+        iframe.style.display = 'block';
+        iframe.src = url;
+      }
+      return false;
+    }
+
+    document.querySelectorAll('.nav-item').forEach(item => {
+      item.addEventListener('click', function() {
+        const url = this.getAttribute('data-url');
+        const title = this.getAttribute('data-title');
+        loadPage(url, title, this);
+      });
+    });
+
+    // ===== Sidebar Accordion =====
+    function toggleGroup(label){
+      const g=label.getAttribute('data-group');
+      const items=document.querySelector(`.nav-group-items[data-group="${g}"]`);
+      const isCollapsed=items.classList.toggle('collapsed');
+      label.classList.toggle('collapsed',isCollapsed);
+      if(!isCollapsed) items.style.maxHeight=items.scrollHeight+'px';
+      saveSidebarState();
+    }
+    function saveSidebarState(){
+      const state={};
+      document.querySelectorAll('.nav-group-items').forEach(el=>{
+        state[el.getAttribute('data-group')]=el.classList.contains('collapsed');
+      });
+      localStorage.setItem('lt_sidebarState',JSON.stringify(state));
+    }
+    function initSidebar(){
+      const saved=JSON.parse(localStorage.getItem('lt_sidebarState')||'{}');
+      const defaultCollapsed=['payment','inventory','finance','reports','settings'];
+      document.querySelectorAll('.nav-group-items').forEach(el=>{
+        const g=el.getAttribute('data-group');
+        const shouldCollapse=(g in saved)?saved[g]:defaultCollapsed.includes(g);
+        if(shouldCollapse){
+          el.classList.add('collapsed');
+          el.previousElementSibling.classList.add('collapsed');
+        } else {
+          el.style.maxHeight=el.scrollHeight+'px';
+        }
+      });
+    }
+    initSidebar();
+
+    // When navigating, auto-expand the group containing the target
+    const _origLoadPage=loadPage;
+    loadPage=function(url,title,element){
+      document.querySelectorAll('.nav-group-items').forEach(gi=>{
+        const match=gi.querySelector(`.nav-item[data-url="${url}"]`);
+        if(match && gi.classList.contains('collapsed')){
+          gi.classList.remove('collapsed');
+          gi.previousElementSibling.classList.remove('collapsed');
+          gi.style.maxHeight=gi.scrollHeight+'px';
+          saveSidebarState();
+        }
+      });
+      return _origLoadPage(url,title,element);
+    };
+
+    // ===== Clock =====
+    function updateClock(){
+      const now=new Date();
+      document.getElementById('clock').textContent=`${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    }
+    setInterval(updateClock,1000);
+    updateClock();
+
+    // ===== Greeting & Date =====
+    function initDateTime(){
+      const now=new Date();
+      const h=now.getHours();
+      const greeting=h<5?'夜深了！🌙':h<12?'早安！☀️':h<14?'午安！🍱':h<18?'下午好！☕':h<22?'晚安！🌙':'夜深了！🌙';
+      const wdays=['日','一','二','三','四','五','六'];
+      const dateLabel=`${now.getFullYear()} 年 ${now.getMonth()+1} 月 ${now.getDate()} 日　星期${wdays[now.getDay()]}`;
+      document.getElementById('greeting').textContent=greeting;
+      document.getElementById('dateStr').textContent=dateLabel;
+      document.getElementById('current-date').textContent=dateLabel;
+      document.getElementById('todayStr').textContent='歡迎使用龍潭總倉進銷存系統，以下是今日摘要';
+    }
+
+    // ===== Dashboard Data =====
+    async function refreshDashboard(){
+      const now=new Date();
+      const y=now.getFullYear(), m=String(now.getMonth()+1).padStart(2,'0');
+      const firstDay=`${y}-${m}-01`;
+      try{
+        const [salesRes, purRes, arRes, pRes] = await Promise.all([
+          fetch(`${SB_URL}/sales_orders?order_date=gte.${firstDay}&select=id,customer_name,grand_total,payment_status,order_date&order=order_date.desc,id.desc`, {headers:HEADERS}),
+          fetch(`${SB_URL}/purchase_orders?order_date=gte.${firstDay}&select=grand_total`, {headers:HEADERS}),
+          fetch(`${SB_URL}/accounts_receivable?unpaid_amount=gt.0&select=unpaid_amount,order_id,customer_name,order_date`, {headers:HEADERS}),
+          fetch(`${SB_URL}/petty_cash?select=balance&order=id.desc&limit=1`, {headers:HEADERS})
+        ]);
+
+        const sales = salesRes.ok ? await salesRes.json() : [];
+        const purchases = purRes.ok ? await purRes.json() : [];
+        const unpaid = arRes.ok ? await arRes.json() : [];
+        const petty = pRes.ok ? await pRes.json() : [];
+
+        const revenue = sales.reduce((s,o)=>s+Number(o.grand_total||0),0);
+        const purTotal = purchases.reduce((s,o)=>s+Number(o.grand_total||0),0);
+        const unpaidTotal = unpaid.reduce((s,o)=>s+Number(o.unpaid_amount||0),0);
+        const pettyBal = petty.length>0 ? Number(petty[0].balance||0) : 0;
+
+        document.getElementById('st-sales').textContent = sales.length+' 筆';
+        document.getElementById('st-revenue').textContent = fmt(revenue);
+        document.getElementById('st-unpaid').textContent = fmt(unpaidTotal);
+        document.getElementById('st-purchase').textContent = fmt(purTotal);
+        document.getElementById('st-petty').textContent = fmt(pettyBal);
+
+        // 最近銷貨
+        document.getElementById('recentSales').innerHTML = sales.length
+          ? sales.slice(0,6).map(o=>`<tr onclick="loadPage('SearchSales.html','查詢銷貨單')">
+              <td><strong style="color:var(--accent)">${o.id}</strong></td>
+              <td>${o.customer_name}</td>
+              <td style="color:var(--orange);font-weight:600">${fmt(o.grand_total)}</td>
+              <td>${statusBadge(o.payment_status)}</td>
+            </tr>`).join('')
+          : '<tr class="empty-row"><td colspan="4">本月尚無銷貨記錄</td></tr>';
+
+        // 未收款
+        document.getElementById('unpaidList').innerHTML = unpaid.length
+          ? unpaid.slice(0,8).map(o=>`<tr onclick="loadPage('ReceivePayment.html','客戶收款紀錄')">
+              <td><strong style="color:var(--accent)">${o.order_id||'-'}</strong></td>
+              <td>${o.customer_name||'-'}</td>
+              <td style="color:var(--danger);font-weight:600">${fmt(o.unpaid_amount)}</td>
+              <td style="color:var(--text2);font-size:11px">${o.order_date||''}</td>
+            </tr>`).join('')
+          : '<tr class="empty-row"><td colspan="4">目前沒有未收款</td></tr>';
+
+      }catch(e){
+        console.error('Dashboard Error:', e);
+        document.getElementById('todayStr').textContent='⚠️ 部分資料載入失敗';
+      }
+    }
+
+    // ===== Calendar =====
+    let calYear, calMonth, calSelectedDate=null;
+    function getLocalDateStr(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
+    const calToday=new Date();
+    const calTodayStr=getLocalDateStr(calToday);
+    calYear=calToday.getFullYear();
+    calMonth=calToday.getMonth();
+
+    function getCalEvents(){return JSON.parse(localStorage.getItem('lt_calendarEvents')||'[]');}
+    function saveCalEvents(list){localStorage.setItem('lt_calendarEvents',JSON.stringify(list));updateCalBadge();}
+
+    function updateCalBadge(){
+      const events=getCalEvents();
+      const td=calTodayStr;
+      const todayReminders=events.filter(e=>e.date===td&&e.type==='remind');
+      const allReminders=events.filter(e=>e.type==='remind'&&e.date<=td);
+      const badge=document.getElementById('calBadge');
+      if(!badge)return;
+      const count=allReminders.length;
+      if(count>0){
+        badge.textContent=count;
+        badge.style.display='';
+      }else{
+        badge.style.display='none';
+      }
+    }
+
+    function calNav(dir){calMonth+=dir;if(calMonth<0){calMonth=11;calYear--;}if(calMonth>11){calMonth=0;calYear++;}calRender();}
+    function calGoToday(){calYear=calToday.getFullYear();calMonth=calToday.getMonth();calSelectedDate=calTodayStr;calRender();showDayEvents(calSelectedDate);}
+
+    function calRender(){
+      document.getElementById('calMonth').textContent=`${calYear} 年 ${calMonth+1} 月`;
+      const lastDay=new Date(calYear,calMonth+1,0).getDate();
+      const startDay=new Date(calYear,calMonth,1).getDay();
+      const events=getCalEvents();
+      const todayStr=calTodayStr;
+      const eventDates={};
+      events.forEach(e=>{if(!eventDates[e.date])eventDates[e.date]=new Set();eventDates[e.date].add(e.type);});
+
+      let html='';let day=1;
+      const prevLast=new Date(calYear,calMonth,0).getDate();
+      for(let w=0;w<6;w++){
+        html+='<tr>';
+        for(let d=0;d<7;d++){
+          const idx=w*7+d;
+          if(idx<startDay){
+            html+=`<td><button class="cal-day other" disabled>${prevLast-startDay+1+idx}</button></td>`;
+          }else if(day>lastDay){
+            html+=`<td><button class="cal-day other" disabled>${day-lastDay}</button></td>`;day++;
+          }else{
+            const dateStr=`${calYear}-${String(calMonth+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+            let cls='cal-day';
+            if(dateStr===todayStr)cls+=' today';
+            if(dateStr===calSelectedDate)cls+=' selected';
+            let dot='';
+            if(eventDates[dateStr]){
+              dot=eventDates[dateStr].has('remind')?'<span class="dot remind"></span>':'<span class="dot memo"></span>';
+            }
+            html+=`<td><button class="${cls}" onclick="selectCalDay('${dateStr}')">${day}${dot}</button></td>`;
+            day++;
+          }
+        }
+        html+='</tr>';if(day>lastDay)break;
+      }
+      document.getElementById('calBody').innerHTML=html;
+    }
+
+    function selectCalDay(dateStr){calSelectedDate=dateStr;calRender();showDayEvents(dateStr);}
+
+    function showDayEvents(dateStr){
+      const events=getCalEvents().filter(e=>e.date===dateStr);
+      const d=new Date(dateStr+'T00:00:00');
+      const wdays=['日','一','二','三','四','五','六'];
+      document.getElementById('calSelDate').textContent=`${dateStr}（${wdays[d.getDay()]}）`;
+      document.getElementById('calAddArea').style.display='block';
+      document.getElementById('calNewText').value='';
+      if(!events.length){
+        document.getElementById('calEvents').innerHTML='<div class="cal-empty">這天沒有記事</div>';return;
+      }
+      document.getElementById('calEvents').innerHTML=events.map(e=>`
+        <div class="cal-ev-item ${e.type}">
+          <span class="ev-text">${e.text}</span>
+          <span class="ev-type">${e.type==='remind'?'提醒':'記事'}</span>
+          <button class="ev-del" onclick="delCalEvent(${e.id})" title="刪除">&times;</button>
+        </div>`).join('');
+    }
+
+    function addCalEvent(){
+      const text=document.getElementById('calNewText').value.trim();
+      if(!text||!calSelectedDate)return;
+      const type=document.getElementById('calNewType').value;
+      const events=getCalEvents();
+      events.push({id:Date.now(),date:calSelectedDate,text,type,createdAt:new Date().toISOString()});
+      saveCalEvents(events);calRender();showDayEvents(calSelectedDate);
+      document.getElementById('calNewText').value='';
+    }
+
+    function delCalEvent(id){
+      let events=getCalEvents();events=events.filter(e=>e.id!==id);
+      saveCalEvents(events);calRender();
+      if(calSelectedDate)showDayEvents(calSelectedDate);
+    }
+
+    // ===== Todos =====
+    function getTodos(){return JSON.parse(localStorage.getItem('lt_calendarTodos')||'[]');}
+    function saveTodos(list){localStorage.setItem('lt_calendarTodos',JSON.stringify(list));renderTodos();}
+
+    function renderTodos(){
+      const todos=getTodos();
+      if(!todos.length){document.getElementById('todoList').innerHTML='<div class="todo-empty">沒有待辦事項</div>';return;}
+      const sorted=[...todos].sort((a,b)=>a.done===b.done?0:a.done?1:-1);
+      document.getElementById('todoList').innerHTML=sorted.map(t=>`
+        <div class="todo-item ${t.done?'done':''}" onclick="toggleTodo(${t.id})">
+          <input type="checkbox" class="todo-chk" ${t.done?'checked':''} onclick="event.stopPropagation();toggleTodo(${t.id})">
+          <span class="todo-text">${t.text}</span>
+          <button class="todo-del" onclick="event.stopPropagation();delTodo(${t.id})" title="刪除">&times;</button>
+        </div>`).join('');
+    }
+
+    function addTodo(){
+      const input=document.getElementById('todoNewText');
+      const text=input.value.trim();if(!text)return;
+      const todos=getTodos();
+      todos.push({id:Date.now(),text,done:false,createdAt:new Date().toISOString()});
+      saveTodos(todos);input.value='';
+    }
+    function toggleTodo(id){const todos=getTodos();const t=todos.find(x=>x.id===id);if(t)t.done=!t.done;saveTodos(todos);}
+    function delTodo(id){saveTodos(getTodos().filter(x=>x.id!==id));}
+
+    // ===== Init =====
+    window.onload = function(){
+      checkSession();
+    };
+    setInterval(updateCalBadge, 5000);
+  </script>
+</body>
+</html>

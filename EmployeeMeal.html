@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <style>
+    /* ========== 完全保留您的原始 CSS ========== */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: "Microsoft JhengHei", Arial, sans-serif;
+      padding: 20px;
+      background: linear-gradient(135deg, #475569 0%, #334155 100%);
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 550px;
+      margin: 0 auto;
+      background: white;
+      border-radius: 16px;
+      padding: 30px;
+      box-shadow: 0 20px 60px rgba(30,41,59,0.3);
+    }
+    h2 {
+      color: #475569;
+      font-size: 26px;
+      margin-bottom: 25px;
+      text-align: center;
+      border-bottom: 3px solid #475569;
+      padding-bottom: 15px;
+    }
+    .form-group {
+      margin-bottom: 20px;
+    }
+    label {
+      display: block;
+      font-weight: 600;
+      font-size: 15px;
+      margin-bottom: 8px;
+      color: #333;
+    }
+    input, select, textarea {
+      width: 100%;
+      padding: 12px 15px;
+      font-size: 15px;
+      border: 2px solid #ddd;
+      border-radius: 8px;
+      transition: all 0.3s;
+    }
+    input:focus, select:focus, textarea:focus {
+      outline: none;
+      border-color: #475569;
+      box-shadow: 0 0 0 4px rgba(71, 85, 105, 0.1);
+    }
+    .btn {
+      width: 100%;
+      padding: 14px;
+      font-size: 16px;
+      font-weight: 600;
+      border: none;
+      border-radius: 8px;
+      cursor: pointer;
+      transition: all 0.3s;
+      margin-top: 10px;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #475569 0%, #334155 100%);
+      color: white;
+      box-shadow: 0 4px 15px rgba(71, 85, 105, 0.4);
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(71, 85, 105, 0.5);
+    }
+    .btn-primary:disabled {
+      opacity: 0.6;
+      cursor: not-allowed;
+      transform: none;
+    }
+    .btn-secondary {
+      background: #6c757d;
+      color: white;
+    }
+    .status-msg {
+      padding: 12px;
+      border-radius: 8px;
+      margin-bottom: 20px;
+      display: none;
+      text-align: center;
+      font-weight: 600;
+    }
+    .status-msg.success {
+      background: #d4edda;
+      color: #155724;
+      border: 1px solid #c3e6cb;
+      display: block;
+    }
+    .status-msg.error {
+      background: #f8d7da;
+      color: #721c24;
+      border: 1px solid #f5c6cb;
+      display: block;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h2>🍱 記錄員工餐費</h2>
+    
+    <div id="statusMsg" class="status-msg"></div>
+    
+    <form id="mealForm">
+      <div class="form-group">
+        <label>📅 日期 *</label>
+        <input type="date" id="date" required>
+      </div>
+      
+      <div class="form-group">
+        <label>👥 用餐人數 *</label>
+        <input type="number" id="headcount" min="1" required placeholder="例如：5">
+      </div>
+      
+      <div class="form-group">
+        <label>💰 金額 *</label>
+        <input type="number" id="amount" min="0" required placeholder="例如：500">
+      </div>
+      
+      <div class="form-group">
+        <label>💳 付款方式 *</label>
+        <select id="paymentMethod" required>
+         <option value="零用金" selected>零用金 (由我代墊)</option>
+        </select>
+      </div>
+      
+      <div class="form-group">
+        <label>📝 備註</label>
+        <textarea id="note" rows="2" placeholder="例如：午餐便當、晚餐聚餐..."></textarea>
+      </div>
+      
+      <button type="submit" class="btn btn-primary" id="submitBtn">✅ 儲存記錄</button>
+      <button type="button" class="btn btn-secondary" onclick="resetForm()">🔄 清除</button>
+    </form>
+  </div>
+
+  <script>
+    // ========== 1. Supabase API 設定 ==========
+    const SB_URL = "https://gkuwoandmsgvlsxzmrjj.supabase.co/rest/v1";
+    const SB_KEY = "sb_publishable_7K0w9Z8-Wv1dOgLsZkI0rA_WfNei_AS";
+    const AUTH_TOKEN = sessionStorage.getItem('sb_auth_token') || SB_KEY;
+
+    const api = {
+      headers: { "apikey": SB_KEY, "Authorization": `Bearer ${AUTH_TOKEN}`, "Content-Type": "application/json", "Prefer": "return=representation" },
+      rpc: async (fn, data) => {
+        const res = await fetch(SB_URL + "rpc/" + fn, {
+          method: "POST",
+          headers: api.headers,
+          body: JSON.stringify(data)
+        });
+        const result = await res.json();
+        if (!res.ok) throw new Error(result.message || "資料庫執行失敗");
+        return result;
+      }
+    };
+
+    // ========== 2. UI 互動與存檔邏輯 ==========
+
+    // 自動填入今天日期
+    document.getElementById('date').valueAsDate = new Date();
+    
+    // 顯示狀態訊息
+    function showStatus(message, isError) {
+      var statusMsg = document.getElementById('statusMsg');
+      statusMsg.textContent = message;
+      statusMsg.className = 'status-msg ' + (isError ? 'error' : 'success');
+      
+      if (!isError) {
+        setTimeout(function() {
+          statusMsg.style.display = 'none';
+        }, 3000);
+      }
+    }
+    
+    // 表單提交 (替換為 Supabase 呼叫)
+    document.getElementById('mealForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      
+      var submitBtn = document.getElementById('submitBtn');
+      submitBtn.disabled = true;
+      submitBtn.textContent = '⏳ 儲存中...';
+      
+      // 準備要傳給 Supabase 函數的資料
+      var payload = {
+        p_date: document.getElementById('date').value,
+        p_headcount: parseInt(document.getElementById('headcount').value, 10),
+        p_amount: parseFloat(document.getElementById('amount').value),
+        p_payment_method: document.getElementById('paymentMethod').value,
+        p_note: document.getElementById('note').value.trim()
+      };
+      
+      try {
+        // 呼叫我們剛剛在 Supabase 建立的函數
+        const newMealId = await api.rpc("web_add_employee_meal", payload);
+        
+        submitBtn.disabled = false;
+        submitBtn.textContent = '✅ 儲存記錄';
+        
+        showStatus('✅ 記錄成功！編號：' + newMealId, false);
+        resetForm();
+        
+        // 脫離 GAS 後的關閉視窗邏輯
+        // (注意：若是直接用瀏覽器開分頁，通常需透過 window.open 開的才能用 window.close 關閉)
+        setTimeout(function() {
+          window.close();
+        }, 3000);
+        
+      } catch (error) {
+        submitBtn.disabled = false;
+        submitBtn.textContent = '✅ 儲存記錄';
+        showStatus('❌ 系統錯誤：' + error.message, true);
+      }
+    });
+    
+    // 清除表單
+    function resetForm() {
+      document.getElementById('mealForm').reset();
+      document.getElementById('date').valueAsDate = new Date();
+      document.getElementById('statusMsg').style.display = 'none';
+    }
+  </script>
+</body>
+</html>
