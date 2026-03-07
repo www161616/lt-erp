@@ -1575,11 +1575,23 @@
       if (isQtyLocked) {
         html += '<div style="display:flex; align-items:center; gap:10px; padding:8px 14px; background:#fef3c7; border:1px solid #fcd34d; border-radius:8px; font-size:13px; color:#92400e;">🔒 數量已鎖定，避免誤按　<button onclick="unlockQtyInputs()" style="background:#b45309; color:white; border:none; padding:5px 14px; border-radius:5px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;">🔓 解鎖修改</button></div>';
       }
-      if (orderDirty) {
-        html += '<div style="display:flex; align-items:center; gap:6px; padding:8px 14px; background:#fef2f2; border:1px solid #fca5a5; border-radius:8px; font-size:13px; color:#dc2626; font-weight:600; animation:pulse 1.5s infinite;">⚠️ 數量已修改，記得按「送出資料」！</div>';
-      }
       html += '<button onclick="submitOrder()" style="background:#be185d; color:white; border:none; padding:10px 20px; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit;">🚀 送出資料</button>';
       bar.innerHTML = html;
+
+      // 底部固定浮動提醒
+      let floatBar = document.getElementById('orderDirtyFloat');
+      if (orderDirty) {
+        if (!floatBar) {
+          floatBar = document.createElement('div');
+          floatBar.id = 'orderDirtyFloat';
+          floatBar.style.cssText = 'position:fixed; bottom:0; left:0; right:0; z-index:9999; background:#dc2626; color:white; display:flex; align-items:center; justify-content:center; gap:12px; padding:12px 20px; font-size:15px; font-weight:700; box-shadow:0 -4px 12px rgba(0,0,0,0.15);';
+          document.body.appendChild(floatBar);
+        }
+        floatBar.innerHTML = '⚠️ 數量已修改，記得送出！ <button onclick="submitOrder()" style="background:white; color:#dc2626; border:none; padding:8px 20px; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit;">🚀 立即送出</button>';
+        floatBar.style.display = 'flex';
+      } else if (floatBar) {
+        floatBar.style.display = 'none';
+      }
     }
 
     // ============================
