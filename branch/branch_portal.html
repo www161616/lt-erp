@@ -1823,9 +1823,7 @@ function renderSummaryPage() {
   stores.forEach(s => {
     const isSelf = currentStore && currentStore.name === s.name;
     const shortName = s.name.replace('店', '');
-    html += `<th style="padding:4px 2px; border-bottom:2px solid var(--border); color:${isSelf ? '#be185d' : '#6b7280'}; font-weight:${isSelf ? '700' : '600'}; width:32px; min-width:28px;">
-      <div style="writing-mode:vertical-rl; white-space:nowrap; font-size:12px; line-height:1.2; padding:4px 0;">${shortName}${isSelf ? '✦' : ''}</div>
-    </th>`;
+    html += `<th style="padding:6px 8px; border-bottom:2px solid var(--border); color:${isSelf ? '#be185d' : '#6b7280'}; font-weight:${isSelf ? '700' : '600'}; text-align:center; white-space:nowrap; font-size:12px;">${shortName}${isSelf ? '✦' : ''}</th>`;
   });
 
   html += `<th style="padding:8px 6px; text-align:center; border-bottom:2px solid var(--border); color:#1f2937; font-weight:700; white-space:nowrap; min-width:48px;">總計</th></tr></thead><tbody>`;
