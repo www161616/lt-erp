@@ -4051,6 +4051,7 @@ function renderAidBoard() {
           cancelBtn +
         '</div>' +
       '</div>' +
+      (post.note ? '<div style="margin:6px 0 4px; padding:8px 12px; background:#fefce8; border-radius:6px; font-size:13px; color:#92400e; border-left:3px solid #f59e0b;">💬 ' + post.note + '</div>' : '') +
       itemsHtml +
     '</div>';
   }).join('');
@@ -4063,7 +4064,9 @@ function openAidPostModal(type) {
   Swal.fire({
     title,
     html: '<div id="aidModalItemsWrap"></div>' +
-      '<button onclick="addAidModalItem()" style="margin-top:8px; padding:6px 14px; background:#fff0f6; color:#be185d; border:1px solid #be185d; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;">＋ 新增商品</button>',
+      '<button onclick="addAidModalItem()" style="margin-top:8px; padding:6px 14px; background:#fff0f6; color:#be185d; border:1px solid #be185d; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;">＋ 新增商品</button>' +
+      '<div style="margin-top:12px;"><label style="font-size:13px; font-weight:600; color:#374151;">備註／留言</label>' +
+      '<textarea id="aidPostNote" rows="2" placeholder="可填寫補充說明（選填）" style="width:100%; margin-top:4px; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px; font-size:13px; font-family:inherit; resize:vertical; box-sizing:border-box;"></textarea></div>',
     width: 520,
     showCancelButton: true,
     confirmButtonText: '送出',
@@ -4084,7 +4087,10 @@ function openAidPostModal(type) {
       return validItems;
     }
   }).then(result => {
-    if (result.isConfirmed) submitAidPost(type, result.value);
+    if (result.isConfirmed) {
+      const note = document.getElementById('aidPostNote')?.value?.trim() || '';
+      submitAidPost(type, result.value, note);
+    }
   });
 }
 
@@ -4178,7 +4184,7 @@ function hideAidDropdown(idx) {
   if (drop) drop.style.display = 'none';
 }
 
-function submitAidPost(type, validItems) {
+function submitAidPost(type, validItems, note) {
   const now = new Date();
   const ts = now.getFullYear() + '/' + String(now.getMonth()+1).padStart(2,'0') + '/' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
   const newPost = {
@@ -4188,6 +4194,7 @@ function submitAidPost(type, validItems) {
     posterEmployee: currentStore?.employee || '',
     createdAt: ts,
     status: 'open',
+    note: note || '',
     items: validItems.map(i => ({
       code: i.code || '', name: i.name.trim(), temp: i.temp || '', price: i.price || 0,
       qty: parseInt(i.qty), fulfilledQty: 0, responses: []
