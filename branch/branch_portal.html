@@ -4004,7 +4004,8 @@ function renderAidBoard() {
         } else if (r.store === myName) {
           tfBtn = " <button onclick=\"createAidTransfer('" + post.id + "', " + iIdx + ", " + rIdx + ")\" style=\"padding:3px 10px; background:#be185d; color:white; border:none; border-radius:4px; font-size:11px; font-weight:700; cursor:pointer; font-family:inherit;\">開立店轉店</button>";
         }
-        return '<div style="font-size:12px; color:#6b7280; padding:3px 0; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">🏪 ' + r.store + ' 提供 ' + r.qty + ' 件 (' + r.respondedAt + ')' + tfBtn + '</div>';
+        var noteHtml = r.note ? ' <span style="color:#92400e; font-style:italic;">— ' + r.note + '</span>' : '';
+        return '<div style="font-size:12px; color:#6b7280; padding:3px 0; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">🏪 ' + r.store + ' 提供 ' + r.qty + ' 件 (' + r.respondedAt + ')' + noteHtml + tfBtn + '</div>';
       }).join('');
 
       var actionBtn = '';
@@ -4217,25 +4218,25 @@ function openRespondModal(postId, itemIdx) {
     title: actionLabel + '數量',
     html: '<div style="text-align:left; font-size:14px; margin-bottom:12px;">' +
       '<div><b>' + (item.code || '') + '</b> ' + item.name + '</div>' +
-      '<div style="color:#6b7280; margin-top:4px;">剩餘需求：<b style="color:#dc2626;">' + remaining + '</b> 件</div></div>',
-    input: 'number',
-    inputAttributes: { min: 1, max: remaining, step: 1 },
-    inputValue: remaining,
+      '<div style="color:#6b7280; margin-top:4px;">剩餘需求：<b style="color:#dc2626;">' + remaining + '</b> 件</div></div>' +
+      '<input id="aidRespQty" type="number" min="1" max="' + remaining + '" value="' + remaining + '" class="swal2-input" style="margin-bottom:8px;">' +
+      '<textarea id="aidRespNote" rows="2" placeholder="備註／留言（選填）" style="width:100%; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px; font-size:13px; font-family:inherit; resize:vertical; box-sizing:border-box;"></textarea>',
     showCancelButton: true,
     confirmButtonText: '確認' + actionLabel,
     cancelButtonText: '取消',
     confirmButtonColor: '#be185d',
-    inputValidator: (val) => {
-      const n = parseInt(val);
-      if (!n || n < 1) return '請輸入有效數量';
-      if (n > remaining) return '最多只能' + actionLabel + ' ' + remaining + ' 件';
+    preConfirm: () => {
+      const n = parseInt(document.getElementById('aidRespQty').value);
+      if (!n || n < 1) { Swal.showValidationMessage('請輸入有效數量'); return false; }
+      if (n > remaining) { Swal.showValidationMessage('最多只能' + actionLabel + ' ' + remaining + ' 件'); return false; }
+      return { qty: n, note: (document.getElementById('aidRespNote').value || '').trim() };
     }
   }).then(result => {
-    if (result.isConfirmed) submitAidResponse(postId, itemIdx, parseInt(result.value));
+    if (result.isConfirmed) submitAidResponse(postId, itemIdx, result.value.qty, result.value.note);
   });
 }
 
-function submitAidResponse(postId, itemIdx, qty) {
+function submitAidResponse(postId, itemIdx, qty, note) {
   const post = aidBoard.find(a => a.id === postId);
   if (!post) return;
   const item = post.items[itemIdx];
@@ -4247,7 +4248,7 @@ function submitAidResponse(postId, itemIdx, qty) {
   const ts = now.getFullYear() + '/' + String(now.getMonth()+1).padStart(2,'0') + '/' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
   item.fulfilledQty = (item.fulfilledQty || 0) + qty;
   if (!item.responses) item.responses = [];
-  item.responses.push({ store: myName, employee: myEmployee, qty, transferId: '', respondedAt: ts });
+  item.responses.push({ store: myName, employee: myEmployee, qty, transferId: '', respondedAt: ts, note: note || '' });
 
   if (post.items.every(i => (i.fulfilledQty || 0) >= i.qty)) {
     post.status = 'fulfilled';
