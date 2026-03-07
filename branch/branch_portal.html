@@ -1575,7 +1575,7 @@
       hint.style.cssText = 'position:absolute; background:#fef3c7; color:#92400e; font-size:12px; font-weight:600; padding:4px 10px; border-radius:6px; border:1px solid #fcd34d; white-space:nowrap; z-index:999; box-shadow:0 2px 6px rgba(0,0,0,0.1);';
       document.body.appendChild(hint);
       const rect = el.getBoundingClientRect();
-      hint.style.left = '20px';
+      hint.style.left = (rect.left + window.scrollX - 80) + 'px';
       hint.style.top = (rect.bottom + 4 + window.scrollY) + 'px';
     }
     function hideQtyHint() {
