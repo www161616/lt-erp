@@ -3616,9 +3616,10 @@ const TEMP_MAP = { '1': '❄️ 冷凍', '2': '🧊 冷藏', '3': '🌡️ 常�
 
 let trackingCurrentPage = 1;
 let trackingCurrentFilter = 'all';
-const TRACKING_PAGE_SIZE = 50;
+let trackingSearchKw = '';
+const TRACKING_PAGE_SIZE = 100;
 
-function initTrackingPage() { trackingCurrentPage = 1; trackingCurrentFilter = 'all'; renderTrackingPage(); }
+function initTrackingPage() { trackingCurrentPage = 1; trackingCurrentFilter = 'all'; trackingSearchKw = ''; renderTrackingPage(); }
 
 function setTrackingFilter(f) { trackingCurrentFilter = f; trackingCurrentPage = 1; renderTrackingPage(); }
 function setTrackingPage(p) { trackingCurrentPage = p; renderTrackingPage(); }
@@ -3650,9 +3651,13 @@ function renderTrackingPage() {
     </button>`;
   }).join('');
 
-  // 篩選 + 排序（開團日新到舊）
-  const filtered = (filter === 'all' ? [...trackingData] : trackingData.filter(d => d.procStatus === filter))
-    .sort((a, b) => (b.startDate || '').localeCompare(a.startDate || ''));
+  // 篩選 + 搜尋 + 排序（開團日新到舊）
+  let filtered = filter === 'all' ? [...trackingData] : trackingData.filter(d => d.procStatus === filter);
+  if (trackingSearchKw) {
+    const kw = trackingSearchKw.toLowerCase();
+    filtered = filtered.filter(d => (d.productId || '').toLowerCase().includes(kw) || (d.name || '').toLowerCase().includes(kw));
+  }
+  filtered.sort((a, b) => (b.startDate || '').localeCompare(a.startDate || ''));
 
   // 分頁
   const totalItems = filtered.length;
@@ -3721,6 +3726,21 @@ function renderTrackingPage() {
         <span style="font-size:13px; color:#6b7280; font-weight:700;">篩選狀態：</span>
         ${filterBtns}
       </div>
+
+      <!-- 搜尋列 -->
+      <div style="display:flex; align-items:center; gap:8px; padding:10px 14px; background:#fff0f6; border:1px solid #fbcfe8; border-radius:8px; flex-wrap:wrap;">
+        <span style="font-size:13px; font-weight:600; color:#be185d;">🔍</span>
+        <input type="text" id="trackingSearchInput" placeholder="商品編號或名稱..." value="${trackingSearchKw}"
+          style="width:180px; padding:7px 10px; border:2px solid #f9a8d4; border-radius:6px; font-size:13px; font-family:inherit; outline:none; background:white;"
+          onfocus="this.style.borderColor='#be185d'" onblur="this.style.borderColor='#f9a8d4'"
+          onkeydown="if(event.key==='Enter'){trackingSearchKw=this.value.trim();trackingCurrentPage=1;renderTrackingPage();}">
+        <button onclick="trackingSearchKw=document.getElementById('trackingSearchInput').value.trim();trackingCurrentPage=1;renderTrackingPage()"
+          style="padding:7px 16px; background:#be185d; color:white; border:none; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;">查詢</button>
+        <button onclick="trackingSearchKw='';trackingCurrentPage=1;renderTrackingPage()"
+          style="padding:7px 14px; background:#6b7280; color:white; border:none; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;">清除</button>
+      </div>
+
+      ${paginationHtml}
 
       <!-- 追蹤表格 -->
       <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:hidden; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
