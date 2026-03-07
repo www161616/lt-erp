@@ -331,10 +331,6 @@
                 style="background:#6b7280; color:white; border:none; padding:10px 16px; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit;">
                 🗑️ 清除數量
               </button>
-              <button onclick="submitOrder()"
-                style="background:#be185d; color:white; border:none; padding:10px 20px; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit;">
-                🚀 送出資料
-              </button>
             </div>
           </div>
           <div id="importReport" style="display:none; margin-top:8px; border-radius:8px; font-size:13px; line-height:1.7; border:1px solid #fecaca; overflow:hidden;">
@@ -350,6 +346,8 @@
               <div id="importReportContent"></div>
             </div>
           </div>
+
+          <div id="submitBar" style="display:flex; align-items:center; gap:10px; margin-top:8px; flex-wrap:wrap;"></div>
 
           <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow-x:auto; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
             <table style="width:100%; border-collapse:collapse; min-width:650px;">
@@ -370,7 +368,7 @@
           <!-- 分頁 -->
           <div id="orderPagination" style="display:flex; align-items:center; justify-content:center; gap:6px; margin-top:16px; flex-wrap:wrap;"></div>
 
-          <!-- 送出按鈕已移至上方 -->
+          <!-- 送出按鈕在 submitBar -->
 
         </div>
 
@@ -1140,6 +1138,7 @@
       pg += `<span style="margin-left:8px; font-size:13px;">到第 <input id="orderJumpPage" type="number" min="1" max="${totalPages}" value="${orderPageNum}" style="width:50px; padding:4px; text-align:center; border:1px solid #d1d5db; border-radius:4px; font-size:13px; font-family:inherit;"> 頁</span>`;
       pg += `<button onclick="renderOrderPage(parseInt(document.getElementById('orderJumpPage').value)||1)" style="${btnStyle(false)}">跳轉</button>`;
       pgBox.innerHTML = pg;
+      updateSubmitBar();
     }
 
     // 登入：透過 Supabase Auth 驗證
@@ -1496,17 +1495,7 @@
       document.querySelectorAll('.qty-input').forEach(el => {
         if (!el.disabled) { el.readOnly = true; el.style.background = '#f3f4f6'; el.style.cursor = 'not-allowed'; }
       });
-      // 顯示解鎖按鈕
-      let lockBar = document.getElementById('lockBar');
-      if (!lockBar) {
-        lockBar = document.createElement('div');
-        lockBar.id = 'lockBar';
-        lockBar.style.cssText = 'display:flex; align-items:center; gap:10px; margin-top:8px; padding:8px 14px; background:#fef3c7; border:1px solid #fcd34d; border-radius:8px; font-size:13px; color:#92400e;';
-        const reportDiv = document.getElementById('importReport');
-        reportDiv.parentNode.insertBefore(lockBar, reportDiv.nextSibling);
-      }
-      lockBar.innerHTML = '🔒 數量已鎖定，避免誤按　<button onclick="unlockQtyInputs()" style="background:#b45309; color:white; border:none; padding:5px 14px; border-radius:5px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;">🔓 解鎖修改</button>';
-      lockBar.style.display = 'flex';
+      updateSubmitBar();
     }
 
     function unlockQtyInputs() {
@@ -1514,8 +1503,18 @@
       document.querySelectorAll('.qty-input').forEach(el => {
         if (!el.disabled) { el.readOnly = false; el.style.background = ''; el.style.cursor = ''; }
       });
-      const lockBar = document.getElementById('lockBar');
-      if (lockBar) lockBar.style.display = 'none';
+      updateSubmitBar();
+    }
+
+    function updateSubmitBar() {
+      const bar = document.getElementById('submitBar');
+      if (!bar) return;
+      let html = '';
+      if (isQtyLocked) {
+        html += '<div style="display:flex; align-items:center; gap:10px; padding:8px 14px; background:#fef3c7; border:1px solid #fcd34d; border-radius:8px; font-size:13px; color:#92400e;">🔒 數量已鎖定，避免誤按　<button onclick="unlockQtyInputs()" style="background:#b45309; color:white; border:none; padding:5px 14px; border-radius:5px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;">🔓 解鎖修改</button></div>';
+      }
+      html += '<button onclick="submitOrder()" style="background:#be185d; color:white; border:none; padding:10px 20px; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit;">🚀 送出資料</button>';
+      bar.innerHTML = html;
     }
 
     // ============================
