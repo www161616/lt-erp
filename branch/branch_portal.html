@@ -349,6 +349,15 @@
 
           <div id="submitBar" style="display:flex; align-items:center; gap:10px; margin-top:8px; flex-wrap:wrap;"></div>
 
+          <div style="display:flex; align-items:center; gap:8px; margin:12px 0 8px; flex-wrap:wrap;">
+            <input type="text" id="orderSearchInput" placeholder="搜尋商品編號或名稱..." oninput="orderSearchKw=this.value.trim();renderOrderPage(1)"
+              style="flex:1; min-width:180px; padding:8px 12px; border:1px solid var(--border); border-radius:6px; font-size:13px; font-family:inherit; outline:none;">
+            <button onclick="document.getElementById('orderSearchInput').value='';orderSearchKw='';renderOrderPage(1)"
+              style="padding:8px 14px; background:#6b7280; color:white; border:none; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;">清除</button>
+          </div>
+
+          <div id="orderPaginationTop" style="display:flex; align-items:center; justify-content:center; gap:6px; margin-bottom:8px; flex-wrap:wrap;"></div>
+
           <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow-x:auto; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
             <table style="width:100%; border-collapse:collapse; min-width:650px;">
               <thead>
@@ -1036,7 +1045,8 @@
     // 渲染訂貨清單
     // ============================
     let orderPageNum = 1;
-    const ORDER_PER_PAGE = 50;
+    const ORDER_PER_PAGE = 100;
+    let orderSearchKw = '';
     let orderQtyCache = JSON.parse(localStorage.getItem('bp_orderQtyCache') || '{}');
     function saveQtyCache() { localStorage.setItem('bp_orderQtyCache', JSON.stringify(orderQtyCache)); }
 
@@ -1049,8 +1059,13 @@
       saveQtyCache();
 
       const today = new Date().toISOString().split('T')[0];
-      const orderList = JSON.parse(localStorage.getItem('branchOrderList') || '[]')
+      let orderList = JSON.parse(localStorage.getItem('branchOrderList') || '[]')
         .sort((a, b) => (b.endDate || '').localeCompare(a.endDate || ''));
+
+      if (orderSearchKw) {
+        const kw = orderSearchKw.toLowerCase();
+        orderList = orderList.filter(p => (p.productId || p.id || '').toLowerCase().includes(kw) || (p.name || '').toLowerCase().includes(kw));
+      }
 
       const totalPages = Math.max(1, Math.ceil(orderList.length / ORDER_PER_PAGE));
       if (page !== undefined) orderPageNum = page;
@@ -1125,19 +1140,20 @@
         });
       });
 
-      // 分頁列
-      const pgBox = document.getElementById('orderPagination');
-      if (totalPages <= 1) { pgBox.innerHTML = ''; return; }
+      // 分頁列（上＋下）
       const btnStyle = (active) => `padding:6px 12px; border:1px solid ${active ? 'var(--primary)' : '#d1d5db'}; background:${active ? 'var(--primary)' : 'white'}; color:${active ? 'white' : '#374151'}; border-radius:4px; cursor:pointer; font-size:13px; font-weight:${active ? '700' : '500'}; font-family:inherit;`;
       let pg = '';
-      pg += `<button onclick="renderOrderPage(1)" style="${btnStyle(false)}" ${orderPageNum===1?'disabled':''}>⏮ 首頁</button>`;
-      pg += `<button onclick="renderOrderPage(${orderPageNum-1})" style="${btnStyle(false)}" ${orderPageNum===1?'disabled':''}>◀ 上頁</button>`;
-      pg += `<span style="font-size:13px; color:#6b7280; margin:0 4px;">第 ${orderPageNum} / ${totalPages} 頁（共 ${orderList.length} 筆）</span>`;
-      pg += `<button onclick="renderOrderPage(${orderPageNum+1})" style="${btnStyle(false)}" ${orderPageNum===totalPages?'disabled':''}>下頁 ▶</button>`;
-      pg += `<button onclick="renderOrderPage(${totalPages})" style="${btnStyle(false)}" ${orderPageNum===totalPages?'disabled':''}>末頁 ⏭</button>`;
-      pg += `<span style="margin-left:8px; font-size:13px;">到第 <input id="orderJumpPage" type="number" min="1" max="${totalPages}" value="${orderPageNum}" style="width:50px; padding:4px; text-align:center; border:1px solid #d1d5db; border-radius:4px; font-size:13px; font-family:inherit;"> 頁</span>`;
-      pg += `<button onclick="renderOrderPage(parseInt(document.getElementById('orderJumpPage').value)||1)" style="${btnStyle(false)}">跳轉</button>`;
-      pgBox.innerHTML = pg;
+      if (totalPages > 1) {
+        pg += `<button onclick="renderOrderPage(1)" style="${btnStyle(false)}" ${orderPageNum===1?'disabled':''}>⏮ 首頁</button>`;
+        pg += `<button onclick="renderOrderPage(${orderPageNum-1})" style="${btnStyle(false)}" ${orderPageNum===1?'disabled':''}>◀ 上頁</button>`;
+        pg += `<span style="font-size:13px; color:#6b7280; margin:0 4px;">第 ${orderPageNum} / ${totalPages} 頁（共 ${orderList.length} 筆）</span>`;
+        pg += `<button onclick="renderOrderPage(${orderPageNum+1})" style="${btnStyle(false)}" ${orderPageNum===totalPages?'disabled':''}>下頁 ▶</button>`;
+        pg += `<button onclick="renderOrderPage(${totalPages})" style="${btnStyle(false)}" ${orderPageNum===totalPages?'disabled':''}>末頁 ⏭</button>`;
+      } else {
+        pg = `<span style="font-size:13px; color:#6b7280;">共 ${orderList.length} 筆</span>`;
+      }
+      document.getElementById('orderPaginationTop').innerHTML = pg;
+      document.getElementById('orderPagination').innerHTML = pg;
       updateSubmitBar();
     }
 
