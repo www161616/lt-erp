@@ -305,6 +305,7 @@
         document.getElementById('loginOverlay').style.display = 'none';
         document.getElementById('currentUserLabel').innerText = `👤 ${currentUser.full_name || currentUser.username}`;
         applyRolePermissions();
+        autoCloseJanFeb();
         renderDashboard();
       } else {
         // 嘗試從 Supabase session 自動恢復
@@ -326,6 +327,7 @@
               document.getElementById('loginOverlay').style.display = 'none';
               document.getElementById('currentUserLabel').innerText = `👤 ${currentUser.full_name || currentUser.username}`;
               applyRolePermissions();
+              autoCloseJanFeb();
               renderDashboard();
               return;
             }
@@ -333,6 +335,25 @@
         } catch(e) { console.log('auto-restore skipped:', e); }
         document.getElementById('loginOverlay').style.display = 'flex';
         document.getElementById('loginUser').focus();
+      }
+    }
+
+    // 一次性：1、2月商品自動結單
+    function autoCloseJanFeb() {
+      const saved = JSON.parse(localStorage.getItem('branchOrderList') || '[]');
+      let changed = 0;
+      saved.forEach(p => {
+        if (p.status === 'closed') return;
+        const ed = p.endDate || '';
+        if (ed.startsWith('2026-01') || ed.startsWith('2026-02') || ed.startsWith('2025-')) {
+          p.status = 'closed';
+          changed++;
+        }
+      });
+      if (changed > 0) {
+        localStorage.setItem('branchOrderList', JSON.stringify(saved));
+        cloudSave('branchOrderList');
+        console.log(`autoCloseJanFeb: ${changed} 筆已結單`);
       }
     }
 
