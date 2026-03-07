@@ -2057,6 +2057,9 @@
       if (skipped.length)  msg += `⏭️ 編號已存在跳過：<b>${skipped.length}</b> 件<br>`;
       msg += `📤 已同步 <b>${stagingList.length}</b> 件至分店結單填表`;
 
+      // 匯入後同步訂貨追蹤給分店
+      syncOrderTrackingData().then(() => syncProcurementToPortal());
+
       Swal.fire({ title: '寫入完成！', html: msg, icon: 'success' }).then(() => {
         stagingList = [];
         renderStagingList();
@@ -6244,6 +6247,7 @@
     if (procItem) procItem.status = entry.status;
 
     logActivity(entry.status === 'closed' ? '結單' : '重新開放', itemId, entry.name);
+    syncProcurementToPortal();
 
     // 3. 刷新開團總表（保持當前頁）
     filterAdminSummary(false, asPageNum);
