@@ -3633,9 +3633,11 @@ const TEMP_MAP = { '1': '❄️ 冷凍', '2': '🧊 冷藏', '3': '🌡️ 常�
 let trackingCurrentPage = 1;
 let trackingCurrentFilter = 'all';
 let trackingSearchKw = '';
+let trackingDateVal = '';
+let trackingDateType = 'endDate';
 const TRACKING_PAGE_SIZE = 100;
 
-function initTrackingPage() { trackingCurrentPage = 1; trackingCurrentFilter = 'all'; trackingSearchKw = ''; renderTrackingPage(); }
+function initTrackingPage() { trackingCurrentPage = 1; trackingCurrentFilter = 'all'; trackingSearchKw = ''; trackingDateVal = ''; trackingDateType = 'endDate'; renderTrackingPage(); }
 
 function setTrackingFilter(f) { trackingCurrentFilter = f; trackingCurrentPage = 1; renderTrackingPage(); }
 function setTrackingPage(p) { trackingCurrentPage = p; renderTrackingPage(); }
@@ -3672,6 +3674,9 @@ function renderTrackingPage() {
   if (trackingSearchKw) {
     const kw = trackingSearchKw.toLowerCase();
     filtered = filtered.filter(d => (d.productId || '').toLowerCase().includes(kw) || (d.name || '').toLowerCase().includes(kw));
+  }
+  if (trackingDateVal) {
+    filtered = filtered.filter(d => (d[trackingDateType] || '') === trackingDateVal);
   }
   filtered.sort((a, b) => (b.startDate || '').localeCompare(a.startDate || ''));
 
@@ -3718,20 +3723,18 @@ function renderTrackingPage() {
   const page = trackingCurrentPage;
   const pageBtnStyle = (active) => `padding:6px 12px; border-radius:4px; border:1px solid ${active ? 'var(--primary)' : '#d1d5db'}; background:${active ? 'var(--primary)' : 'white'}; color:${active ? 'white' : '#374151'}; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;`;
 
+  let paginationInner = '';
   let paginationHtml = '';
   if (totalPages > 1) {
-    paginationHtml = `
-      <div style="display:flex; align-items:center; justify-content:center; gap:6px; padding:12px 0; flex-wrap:wrap;">
-        <button onclick="setTrackingPage(1)" ${page===1?'disabled':''} style="${pageBtnStyle(false)} ${page===1?'opacity:0.4;cursor:default;':''}">首頁</button>
-        <button onclick="setTrackingPage(${page-1})" ${page===1?'disabled':''} style="${pageBtnStyle(false)} ${page===1?'opacity:0.4;cursor:default;':''}">‹ 上一頁</button>
-        <span style="font-size:13px; color:#6b7280; margin:0 8px;">第 ${page} / ${totalPages} 頁（共 ${totalItems} 筆）</span>
-        <button onclick="setTrackingPage(${page+1})" ${page===totalPages?'disabled':''} style="${pageBtnStyle(false)} ${page===totalPages?'opacity:0.4;cursor:default;':''}">下一頁 ›</button>
-        <button onclick="setTrackingPage(${totalPages})" ${page===totalPages?'disabled':''} style="${pageBtnStyle(false)} ${page===totalPages?'opacity:0.4;cursor:default;':''}">末頁</button>
-        <span style="margin-left:10px; font-size:13px; color:#6b7280;">跳至</span>
-        <input type="number" min="1" max="${totalPages}" value="${page}" onkeydown="if(event.key==='Enter'){const v=Math.max(1,Math.min(${totalPages},parseInt(this.value)||1));setTrackingPage(v);}"
-          style="width:50px; padding:5px 6px; border:1px solid #d1d5db; border-radius:4px; font-size:13px; text-align:center; font-family:inherit;">
-        <span style="font-size:13px; color:#6b7280;">頁</span>
-      </div>`;
+    paginationInner = `
+        <button onclick="setTrackingPage(1)" ${page===1?'disabled':''} style="${pageBtnStyle(false)} ${page===1?'opacity:0.4;cursor:default;':''}">⏮</button>
+        <button onclick="setTrackingPage(${page-1})" ${page===1?'disabled':''} style="${pageBtnStyle(false)} ${page===1?'opacity:0.4;cursor:default;':''}">◀</button>
+        <span style="font-size:13px; color:#6b7280;">${page}/${totalPages}（${totalItems}筆）</span>
+        <button onclick="setTrackingPage(${page+1})" ${page===totalPages?'disabled':''} style="${pageBtnStyle(false)} ${page===totalPages?'opacity:0.4;cursor:default;':''}">▶</button>
+        <button onclick="setTrackingPage(${totalPages})" ${page===totalPages?'disabled':''} style="${pageBtnStyle(false)} ${page===totalPages?'opacity:0.4;cursor:default;':''}">⏭</button>`;
+    paginationHtml = `<div style="display:flex; align-items:center; justify-content:center; gap:6px; padding:12px 0; flex-wrap:wrap;">${paginationInner}</div>`;
+  } else {
+    paginationInner = `<span style="font-size:13px; color:#6b7280;">共 ${totalItems} 筆</span>`;
   }
 
   container.innerHTML = `
@@ -3743,20 +3746,26 @@ function renderTrackingPage() {
         ${filterBtns}
       </div>
 
-      <!-- 搜尋列 -->
+      <!-- 搜尋列 + 上方分頁 -->
       <div style="display:flex; align-items:center; gap:8px; padding:10px 14px; background:#fff0f6; border:1px solid #fbcfe8; border-radius:8px; flex-wrap:wrap;">
         <span style="font-size:13px; font-weight:600; color:#be185d;">🔍</span>
         <input type="text" id="trackingSearchInput" placeholder="商品編號或名稱..." value="${trackingSearchKw}"
           style="width:180px; padding:7px 10px; border:2px solid #f9a8d4; border-radius:6px; font-size:13px; font-family:inherit; outline:none; background:white;"
           onfocus="this.style.borderColor='#be185d'" onblur="this.style.borderColor='#f9a8d4'"
           onkeydown="if(event.key==='Enter'){trackingSearchKw=this.value.trim();trackingCurrentPage=1;renderTrackingPage();}">
-        <button onclick="trackingSearchKw=document.getElementById('trackingSearchInput').value.trim();trackingCurrentPage=1;renderTrackingPage()"
+        <input type="date" id="trackingDateFilter" value="${trackingDateVal}"
+          style="padding:7px 10px; border:2px solid #f9a8d4; border-radius:6px; font-size:13px; font-family:inherit; outline:none; background:white;">
+        <select id="trackingDateType"
+          style="padding:7px 10px; border:2px solid #f9a8d4; border-radius:6px; font-size:13px; font-family:inherit; outline:none; background:white;">
+          <option value="endDate" ${trackingDateType==='endDate'?'selected':''}>依結單日</option>
+          <option value="startDate" ${trackingDateType==='startDate'?'selected':''}>依開團日</option>
+        </select>
+        <button onclick="trackingSearchKw=document.getElementById('trackingSearchInput').value.trim();trackingDateVal=document.getElementById('trackingDateFilter').value;trackingDateType=document.getElementById('trackingDateType').value;trackingCurrentPage=1;renderTrackingPage()"
           style="padding:7px 16px; background:#be185d; color:white; border:none; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;">查詢</button>
-        <button onclick="trackingSearchKw='';trackingCurrentPage=1;renderTrackingPage()"
+        <button onclick="trackingSearchKw='';trackingDateVal='';trackingCurrentPage=1;renderTrackingPage()"
           style="padding:7px 14px; background:#6b7280; color:white; border:none; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;">清除</button>
+        <span style="margin-left:auto; display:flex; align-items:center; gap:6px; flex-wrap:wrap;">${paginationInner}</span>
       </div>
-
-      ${paginationHtml}
 
       <!-- 追蹤表格 -->
       <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:hidden; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
