@@ -263,14 +263,14 @@
       const role = currentUser?.role || 'staff';
       const isAdmin = role === 'admin';
       const isAssistant = role === 'assistant';
-
-      // 系統管理：僅 admin
-      document.getElementById('menu-employees').style.display = isAdmin ? '' : 'none';
-      document.getElementById('menu-employees-section').style.display = isAdmin ? '' : 'none';
-      document.getElementById('menu-branches').style.display = isAdmin ? '' : 'none';
-
-      // 陸貨專區（漂漂館+團購叫貨）：僅 assistant 和 www161616 admin
       const isMainAdmin = isAdmin && (currentUser?.username === 'www161616');
+
+      // 系統管理：僅 www161616
+      document.getElementById('menu-employees').style.display = isMainAdmin ? '' : 'none';
+      document.getElementById('menu-employees-section').style.display = isMainAdmin ? '' : 'none';
+      document.getElementById('menu-branches').style.display = isMainAdmin ? '' : 'none';
+
+      // 陸貨專區（漂漂館+團購叫貨）：僅 assistant 和 www161616
       const showPP = isMainAdmin || isAssistant;
       document.getElementById('menu-ppAssistant').style.display = showPP ? '' : 'none';
       document.getElementById('menu-gbOrder').style.display = showPP ? '' : 'none';
