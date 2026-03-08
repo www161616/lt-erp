@@ -1436,6 +1436,7 @@
             const quantities = {};
             const csvNames = {};
             let csvTotalQty = 0;
+            const noIdRows = []; // 無法解析編號的列
 
             json.forEach(row => {
               const nameB = String(row['名稱'] || '');
@@ -1456,6 +1457,10 @@
                 quantities[productId] += qty;
                 const shortName = styleC.match(/【(.+?)】/);
                 if (!csvNames[productId]) csvNames[productId] = shortName ? shortName[1] : nameB.slice(0, 30);
+              } else {
+                // 名稱和款式都沒有 #編號#
+                const displayName = (styleC.match(/【(.+?)】/) || [])[1] || nameB.slice(0, 40) || '(無名稱)';
+                noIdRows.push({ name: displayName, qty });
               }
             });
 
@@ -1561,12 +1566,18 @@
               rpt += `<br><b style="color:#dc2626;">找不到的編號：</b>`;
               rpt += missingIds.map(m => `<br>　• <code>${m.id}</code>　${m.name}（數量 ${m.qty}）`).join('');
             }
+            if (noIdRows.length > 0) {
+              const noIdTotal = noIdRows.reduce((s, r) => s + r.qty, 0);
+              rpt += `<br><b style="color:#b45309;">⚠️ 無法解析商品編號（名稱和款式都沒有 #編號#）：</b>`;
+              rpt += noIdRows.map(r => `<br>　• ${r.name}（數量 ${r.qty}）`).join('');
+              rpt += `<br><span style="font-size:12px; color:#9ca3af;">共 ${noIdRows.length} 筆，數量 ${noIdTotal}</span>`;
+            }
 
             const reportDiv = document.getElementById('importReport');
-            const hasError = missingIds.length > 0;
+            const hasError = missingIds.length > 0 || noIdRows.length > 0;
             document.getElementById('importReportContent').innerHTML = rpt;
             document.getElementById('importReportSummary').innerHTML =
-              `📋 匯入報告：成功 ${matchCount} 筆${closedItems.length > 0 ? `，已結單 ${closedItems.length}` : ''}${skippedCount > 0 ? `，跳過 ${skippedCount}` : ''}${hasError ? `，<span style="color:#dc2626;">${missingIds.length} 筆未匹配</span>` : ''}`;
+              `📋 匯入報告：成功 ${matchCount} 筆${closedItems.length > 0 ? `，已結單 ${closedItems.length}` : ''}${skippedCount > 0 ? `，跳過 ${skippedCount}` : ''}${missingIds.length > 0 ? `，<span style="color:#dc2626;">${missingIds.length} 筆未匹配</span>` : ''}${noIdRows.length > 0 ? `，<span style="color:#b45309;">${noIdRows.length} 筆無編號</span>` : ''}`;
             document.getElementById('importReportBody').style.display = 'block';
             document.querySelector('.rpt-arrow').textContent = '▾';
             reportDiv.style.display = 'block';
