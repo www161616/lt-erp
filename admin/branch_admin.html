@@ -117,7 +117,8 @@
   <div class="sidebar">
     <div class="sidebar-header">📦 總倉調度中心</div>
     <div class="menu-item active" id="menu-home" onclick="switchTab('home', this)">🏠 總倉儀表板</div>
-    
+    <div class="menu-item" id="menu-bulletin" onclick="switchTab('bulletin', this)">📢 公告欄</div>
+
     <div id="label-product" style="padding: 10px 20px; font-size: 11px; color: var(--text2); margin-top: 10px;">商品與採購</div>
     <div class="menu-item" id="menu-campaign" onclick="switchTab('campaign', this)">📅 商品建檔</div>
     <div class="menu-item" id="menu-purchase" onclick="switchTab('purchase', this)">📝 新增採購單</div>
@@ -138,7 +139,6 @@
     <div class="menu-item" id="menu-demandBackorder" onclick="switchTab('demandBackorder', this)">📋 需求與欠品管理</div>
     <div class="menu-item" id="menu-transfer" onclick="switchTab('transfer', this)">🔄 店轉店與退倉審核</div>
     <div class="menu-item" id="menu-aid" onclick="switchTab('aid', this)">🤝 互助交流板</div>
-    <div class="menu-item" id="menu-bulletin" onclick="switchTab('bulletin', this)">📢 公告欄</div>
 
     <div id="label-accounting" style="padding: 10px 20px; font-size: 11px; color: var(--text2); margin-top: 10px;">帳務</div>
     <div class="menu-item" id="menu-accounting" onclick="switchTab('accounting', this)">💳 銷貨單管理</div>
@@ -269,8 +269,9 @@
       document.getElementById('menu-employees-section').style.display = isAdmin ? '' : 'none';
       document.getElementById('menu-branches').style.display = isAdmin ? '' : 'none';
 
-      // 陸貨專區（漂漂館+團購叫貨）：assistant + admin
-      const showPP = isAdmin || isAssistant;
+      // 陸貨專區（漂漂館+團購叫貨）：僅 assistant 和 www161616 admin
+      const isMainAdmin = isAdmin && (currentUser?.username === 'www161616');
+      const showPP = isMainAdmin || isAssistant;
       document.getElementById('menu-ppAssistant').style.display = showPP ? '' : 'none';
       document.getElementById('menu-gbOrder').style.display = showPP ? '' : 'none';
 
@@ -300,6 +301,15 @@
         const { data: { session } } = await sbClient.auth.getSession();
         if (!session) {
           sessionStorage.removeItem('erp_employee');
+          document.getElementById('loginOverlay').style.display = 'flex';
+          document.getElementById('loginUser').focus();
+          return;
+        }
+        // 檢查 role 權限
+        const meta = session.user.user_metadata || {};
+        if (meta.role !== 'admin' && meta.role !== 'assistant') {
+          sessionStorage.removeItem('erp_employee');
+          try { await sbClient.auth.signOut({ scope: 'local' }); } catch(e) {}
           document.getElementById('loginOverlay').style.display = 'flex';
           document.getElementById('loginUser').focus();
           return;
@@ -389,7 +399,7 @@
 
         const meta = authData.user.user_metadata || {};
         if (meta.role !== 'admin' && meta.role !== 'assistant') {
-          await sbClient.auth.signOut();
+          await sbClient.auth.signOut({ scope: 'local' });
           Swal.fire('權限不足', '此帳號無法使用管理後台。', 'error');
           return;
         }
@@ -430,7 +440,7 @@
         if (result.isConfirmed) {
           logActivity('登出系統', 'USER', '主動登出');
           sessionStorage.removeItem('erp_employee');
-          try { await sbClient.auth.signOut(); } catch(e) {}
+          try { await sbClient.auth.signOut({ scope: 'local' }); } catch(e) {}
           currentUser = null;
           document.getElementById('loginOverlay').style.display = 'flex';
           document.getElementById('loginUser').value = '';

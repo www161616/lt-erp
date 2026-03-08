@@ -288,6 +288,7 @@
       <div class="sidebar-header">📦 通路夥伴進貨入口</div>
       <div class="store-badge" id="storeNameBadge">🏠 載入中...</div>
 
+      <div class="menu-item" id="menuBulletin" onclick="switchPage('pageBulletin', this)">📢 公告欄<span id="notifyBulletin" style="display:none; margin-left:6px; background:#dc2626; color:white; font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px; min-width:16px; text-align:center;">!</span></div>
       <div class="menu-item active" onclick="switchPage('pageOrder', this)">🛒 結單填表</div>
       <div class="menu-item" id="menuTracking" onclick="switchPage('pageTracking', this)">🚚 訂貨動態追蹤<span id="shortageBadge" style="display:none; margin-left:6px; background:#dc2626; color:white; font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px; animation:pulse 1.5s infinite;"></span></div>
       <div class="menu-item" onclick="switchPage('pageSummary', this)">📊 開團總表</div>
@@ -297,7 +298,6 @@
       <div class="menu-item" onclick="switchPage('pageBilling', this)">💳 待結貨款</div>
       <div class="menu-item" onclick="switchPage('pageHistory', this)">📜 所有進貨單</div>
       <div class="menu-item" id="menuLedger" onclick="switchPage('pageLedger', this)">💰 簡易流水帳</div>
-      <div class="menu-item" id="menuBulletin" onclick="switchPage('pageBulletin', this)">📢 公告欄<span id="notifyBulletin" style="display:none; margin-left:6px; background:#dc2626; color:white; font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px; min-width:16px; text-align:center;">!</span></div>
       <div class="menu-item" id="menuCommon" onclick="switchPage('pageCommon', this)">⭐ 常用功能</div>
 
       <div class="sidebar-footer">
@@ -1068,7 +1068,7 @@
         confirmButtonColor: '#be185d'
       }).then(async result => {
         if (result.isConfirmed) {
-          try { await sbClient.auth.signOut(); } catch(e) {}
+          try { await sbClient.auth.signOut({ scope: 'local' }); } catch(e) {}
           currentStore = null;
           document.getElementById('loginStore').value = '';
           document.getElementById('loginPassword').value = '';
@@ -1229,12 +1229,12 @@
         }
         const meta = authData.user.user_metadata || {};
         if (meta.role === 'admin' || meta.role === 'assistant') {
-          await sbClient.auth.signOut();
+          await sbClient.auth.signOut({ scope: 'local' });
           Swal.fire('權限錯誤', '管理員請使用管理後台登入。', 'error');
           return;
         }
         if (!meta.store) {
-          await sbClient.auth.signOut();
+          await sbClient.auth.signOut({ scope: 'local' });
           Swal.fire('登入失敗', '此帳號尚未指定所屬分店，請聯繫總倉管理員。', 'error');
           return;
         }
