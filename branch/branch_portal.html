@@ -205,6 +205,7 @@
 
     .main-content {
       flex: 1;
+      min-height: 0;
       display: flex;
       flex-direction: column;
       overflow: hidden;
@@ -225,6 +226,7 @@
 
     .content-area {
       flex: 1;
+      min-height: 0;
       overflow-y: auto;
       padding: 24px;
       overflow-x: hidden;
@@ -320,6 +322,10 @@
             <div>
               <div style="font-size:17px; font-weight:700; color:var(--primary); margin-bottom:4px;" id="campaignTitle">📅 本期可訂購商品清單</div>
               <div style="font-size:13px; color:#6b7280;">系統會自動拉取當期商品，已結單之商品將反灰無法填寫。</div>
+              <div style="font-size:12px; color:#b45309; background:#fef3c7; padding:6px 10px; border-radius:6px; margin-top:6px; line-height:1.6;">
+                💡 <b>快速匯入</b>：點「📥 匯入樂樂報表」可直接匯入樂樂資料，系統自動比對商品填入數量。匯入後請再次檢查數量是否正確。<br>
+                ✏️ <b>手動填寫</b>：可一次輸入所有商品數量，全部填完後再按「送出訂單」即可。
+              </div>
             </div>
             <div id="importExcelWrap" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
               <input type="file" id="excelUpload" accept=".xlsx,.xls,.csv" style="display:none;" onchange="handleExcelUpload(event)">
@@ -395,24 +401,21 @@
         <div id="pageTracking" class="page"></div>
 
         <div id="pageSummary" class="page">
-          <div style="background:white; border-radius:8px; border:1px solid var(--border); padding:16px 20px; margin-bottom:20px; display:flex; align-items:center; flex-wrap:wrap; gap:12px 20px; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
-            <div style="display:flex; align-items:center; gap:8px;">
-              <span style="font-size:14px; font-weight:700; color:#6b7280; white-space:nowrap;">開團日起：</span>
-              <input type="date" id="summaryDateFrom" onchange="renderSummaryPage()" style="padding:7px 10px; border:1.5px solid var(--border); border-radius:6px; font-size:14px; font-family:inherit;">
-            </div>
-            <div style="display:flex; align-items:center; gap:8px;">
-              <span style="font-size:14px; font-weight:700; color:#6b7280; white-space:nowrap;">迄：</span>
-              <input type="date" id="summaryDateTo" onchange="renderSummaryPage()" style="padding:7px 10px; border:1.5px solid var(--border); border-radius:6px; font-size:14px; font-family:inherit;">
-            </div>
-            <div style="display:flex; align-items:center; gap:8px; flex:1; min-width:180px;">
-              <span style="font-size:14px; font-weight:700; color:#6b7280; white-space:nowrap;">商品搜尋：</span>
-              <input type="text" id="summaryKeyword" oninput="renderSummaryPage()" placeholder="輸入商品名稱或編號…" style="flex:1; padding:7px 10px; border:1.5px solid var(--border); border-radius:6px; font-size:14px; font-family:inherit;">
-            </div>
-            <button onclick="clearSummaryFilters()" style="padding:7px 14px; border:1.5px solid #d1d5db; border-radius:6px; background:white; font-size:13px; color:#6b7280; cursor:pointer; white-space:nowrap;">清除篩選</button>
-            <span id="summaryResultCount" style="font-size:13px; color:#9ca3af; white-space:nowrap;"></span>
+          <div style="background:white; border-radius:8px; border:1px solid var(--border); padding:12px 16px; margin-bottom:20px; display:flex; align-items:center; flex-wrap:wrap; gap:8px 12px; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
+            <span style="font-size:13px; font-weight:700; color:#6b7280; white-space:nowrap;">開團日</span>
+            <input type="date" id="summaryDateFrom" onchange="sumCurrentPage=1; renderSummaryPage()" style="padding:6px 8px; border:1.5px solid var(--border); border-radius:6px; font-size:12px; font-family:inherit;">
+            <span style="font-size:13px; color:#6b7280;">~</span>
+            <input type="date" id="summaryDateTo" onchange="sumCurrentPage=1; renderSummaryPage()" style="padding:6px 8px; border:1.5px solid var(--border); border-radius:6px; font-size:12px; font-family:inherit;">
+            <div style="width:1px; height:24px; background:var(--border); margin:0 2px;"></div>
+            <input type="text" id="summaryKeyword" oninput="sumCurrentPage=1; renderSummaryPage()" placeholder="搜尋…" style="width:120px; padding:6px 10px; border:1.5px solid var(--border); border-radius:6px; font-size:12px; font-family:inherit;">
+            <button onclick="clearSummaryFilters()" style="padding:6px 10px; border:1px solid #d1d5db; border-radius:6px; background:white; font-size:12px; color:#6b7280; cursor:pointer; white-space:nowrap;">清除</button>
+            <span id="summaryResultCount" style="font-size:12px; color:#9ca3af; white-space:nowrap;"></span>
+            <div style="flex:1;"></div>
+            <div id="sumPaginationTop" style="display:flex; align-items:center; gap:4px; font-size:12px;"></div>
           </div>
-          
+
           <div id="summaryTableWrap"></div>
+          <div id="sumPaginationBottom" style="display:flex; align-items:center; justify-content:center; gap:4px; font-size:12px; margin-top:12px;"></div>
         </div>
 
 <div id="pageRequest" class="page">
@@ -454,29 +457,31 @@
     </div>
   </div>
 
-  <!-- 搜尋列 -->
-  <div style="background:white; border-radius:8px; border:1px solid var(--border); padding:12px 16px; margin-bottom:12px; display:flex; align-items:center; gap:10px; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
-    <span style="font-size:13px; font-weight:700; color:#6b7280; white-space:nowrap;">🔍 搜尋：</span>
-    <input type="text" id="reqSearchInput" oninput="renderRequestPage()" placeholder="輸入單號、商品名稱、分店名稱…"
-      style="flex:1; padding:7px 12px; border:1.5px solid var(--border); border-radius:6px; font-size:13px; font-family:inherit;">
-    <button onclick="document.getElementById('reqSearchInput').value=''; renderRequestPage();"
-      style="padding:7px 12px; border:1.5px solid #d1d5db; border-radius:6px; background:white; font-size:12px; color:#6b7280; cursor:pointer; white-space:nowrap;">清除</button>
-  </div>
-
-  <!-- Tab 切換 -->
-  <div style="display:flex; gap:0; border-bottom:2px solid var(--border); margin-bottom:16px;">
+  <!-- Tab + 搜尋 + 分頁 合併列 -->
+  <div style="background:white; border-radius:8px; border:1px solid var(--border); padding:8px 12px; margin-bottom:12px; display:flex; align-items:center; gap:6px; flex-wrap:wrap; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
     <button onclick="switchReqTab('pending', this)" id="reqTab-pending"
-      style="padding:10px 22px; border:none; background:transparent; font-size:14px; font-weight:700; color:var(--primary); cursor:pointer; font-family:inherit; border-bottom:2px solid var(--primary); margin-bottom:-2px;">
+      style="padding:6px 14px; border:none; background:var(--primary); color:white; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit; border-radius:6px;">
       📋 待處理
     </button>
     <button onclick="switchReqTab('done', this)" id="reqTab-done"
-      style="padding:10px 22px; border:none; background:transparent; font-size:14px; font-weight:600; color:#6b7280; cursor:pointer; font-family:inherit; border-bottom:2px solid transparent; margin-bottom:-2px;">
+      style="padding:6px 14px; border:1px solid var(--border); background:white; color:#6b7280; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; border-radius:6px;">
       ✅ 已處理
     </button>
     <button onclick="switchReqTab('history', this)" id="reqTab-history"
-      style="padding:10px 22px; border:none; background:transparent; font-size:14px; font-weight:600; color:#6b7280; cursor:pointer; font-family:inherit; border-bottom:2px solid transparent; margin-bottom:-2px;">
+      style="padding:6px 14px; border:1px solid var(--border); background:white; color:#6b7280; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit; border-radius:6px;">
       📜 全部歷史
     </button>
+    <div style="width:1px; height:24px; background:var(--border); margin:0 4px;"></div>
+    <select id="reqStoreFilter" onchange="reqCurrentPage=1; renderRequestPage()"
+      style="padding:6px 8px; border:1.5px solid var(--border); border-radius:6px; font-size:12px; font-family:inherit;">
+      <option value="">全部分店</option>
+    </select>
+    <input type="text" id="reqSearchInput" oninput="reqCurrentPage=1; renderRequestPage()" placeholder="搜尋…"
+      style="width:120px; padding:6px 10px; border:1.5px solid var(--border); border-radius:6px; font-size:12px; font-family:inherit;">
+    <button onclick="reqClearSearch()"
+      style="padding:6px 10px; border:1px solid #d1d5db; border-radius:6px; background:white; font-size:12px; color:#6b7280; cursor:pointer; white-space:nowrap;">清除</button>
+    <div style="flex:1;"></div>
+    <div id="reqPagination" style="display:flex; align-items:center; gap:4px; font-size:12px;"></div>
   </div>
 
   <!-- 待處理 -->
@@ -1766,14 +1771,51 @@ function initSummaryPage() {
   renderSummaryPage();
 }
 
+let sumCurrentPage = 1;
+const SUM_PAGE_SIZE = 100;
+
 function clearSummaryFilters() {
+  const kw = document.getElementById('summaryKeyword');
+  const df = document.getElementById('summaryDateFrom');
+  const dt = document.getElementById('summaryDateTo');
   const now = new Date();
   const y = now.getFullYear(), m = String(now.getMonth()+1).padStart(2,'0');
   const lastDay = new Date(y, now.getMonth()+1, 0).getDate();
-  document.getElementById('summaryDateFrom').value = `${y}-${m}-01`;
-  document.getElementById('summaryDateTo').value   = `${y}-${m}-${String(lastDay).padStart(2,'0')}`;
-  document.getElementById('summaryKeyword').value  = '';
-  renderSummaryPage();
+  const defFrom = `${y}-${m}-01`, defTo = `${y}-${m}-${String(lastDay).padStart(2,'0')}`;
+  if (!kw.value.trim() && df.value === defFrom && dt.value === defTo) return;
+  Swal.fire({
+    title: '確認清除篩選？', icon: 'question',
+    showCancelButton: true, confirmButtonText: '清除', cancelButtonText: '取消',
+    confirmButtonColor: '#be185d'
+  }).then(r => {
+    if (r.isConfirmed) {
+      df.value = defFrom; dt.value = defTo; kw.value = '';
+      sumCurrentPage = 1; renderSummaryPage();
+    }
+  });
+}
+
+function renderSumPagination(totalItems) {
+  const totalPages = Math.ceil(totalItems / SUM_PAGE_SIZE) || 1;
+  if (totalPages <= 1) {
+    document.getElementById('sumPaginationTop').innerHTML = '';
+    document.getElementById('sumPaginationBottom').innerHTML = '';
+    return;
+  }
+  const btnStyle = (active) => `padding:4px 10px; border:1px solid ${active ? '#be185d' : '#d1d5db'}; border-radius:4px; background:${active ? '#be185d' : 'white'}; color:${active ? 'white' : '#374151'}; cursor:pointer; font-size:12px; font-family:inherit;`;
+  let html = '';
+  html += `<button onclick="sumCurrentPage=1; renderSummaryPage()" style="${btnStyle(false)}" ${sumCurrentPage===1?'disabled':''}>&laquo;</button>`;
+  html += `<button onclick="sumCurrentPage=Math.max(1,sumCurrentPage-1); renderSummaryPage()" style="${btnStyle(false)}" ${sumCurrentPage===1?'disabled':''}>&lsaquo;</button>`;
+  let start = Math.max(1, sumCurrentPage - 2), end = Math.min(totalPages, start + 4);
+  if (end - start < 4) start = Math.max(1, end - 4);
+  for (let i = start; i <= end; i++) {
+    html += `<button onclick="sumCurrentPage=${i}; renderSummaryPage()" style="${btnStyle(i===sumCurrentPage)}">${i}</button>`;
+  }
+  html += `<button onclick="sumCurrentPage=Math.min(${totalPages},sumCurrentPage+1); renderSummaryPage()" style="${btnStyle(false)}" ${sumCurrentPage===totalPages?'disabled':''}>&rsaquo;</button>`;
+  html += `<button onclick="sumCurrentPage=${totalPages}; renderSummaryPage()" style="${btnStyle(false)}" ${sumCurrentPage===totalPages?'disabled':''}>&raquo;</button>`;
+  html += `<span style="color:#9ca3af; margin-left:6px;">${sumCurrentPage}/${totalPages}</span>`;
+  document.getElementById('sumPaginationTop').innerHTML = html;
+  document.getElementById('sumPaginationBottom').innerHTML = html;
 }
 
 function renderSummaryPage() {
@@ -1818,6 +1860,9 @@ function renderSummaryPage() {
   const countEl = document.getElementById('summaryResultCount');
   if (countEl) countEl.textContent = `共 ${filteredData.length} 筆`;
 
+  renderSumPagination(filteredData.length);
+  const pageData = filteredData.slice((sumCurrentPage-1)*SUM_PAGE_SIZE, sumCurrentPage*SUM_PAGE_SIZE);
+
   // 日期格式輔助：YYYY-MM-DD → MM/DD
   const fmtDate = d => d ? d.substring(5).replace('-', '/') : '';
 
@@ -1842,10 +1887,10 @@ function renderSummaryPage() {
   html += `<th style="padding:8px 6px; text-align:center; border-bottom:2px solid var(--border); color:#1f2937; font-weight:700; white-space:nowrap; min-width:48px;">總計</th></tr></thead><tbody>`;
 
   // 表格資料列
-  if (filteredData.length === 0) {
+  if (pageData.length === 0) {
     html += `<tr><td colspan="${5 + stores.length}" style="padding:24px; text-align:center; color:#9ca3af;">查無符合條件的開團資料</td></tr>`;
   } else {
-    filteredData.forEach((item, idx) => {
+    pageData.forEach((item, idx) => {
       const totalQty = stores.reduce((sum, s) => sum + (item.qtys[s.name] || 0), 0);
       const bg = idx % 2 === 0 ? '' : 'background:#fafafa;';
       html += `<tr style="${bg} border-bottom:1px solid #f3f4f6;">`;
@@ -1965,16 +2010,48 @@ function hideReqDropdown() {
 let requestList = [];
 let reqCounter = 1;
 let currentReqTab = 'pending';
+let reqCurrentPage = 1;
+const REQ_PAGE_SIZE = 100;
+
+function reqClearSearch() {
+  const input = document.getElementById('reqSearchInput');
+  const storeSelect = document.getElementById('reqStoreFilter');
+  if (!input.value.trim() && !storeSelect.value) return;
+  Swal.fire({
+    title: '確認清除篩選？', icon: 'question', showCancelButton: true,
+    confirmButtonText: '確認', cancelButtonText: '取消', confirmButtonColor: '#be185d'
+  }).then(r => { if (r.isConfirmed) { input.value = ''; storeSelect.value = ''; reqCurrentPage = 1; renderRequestPage(); } });
+}
+
+function renderReqPagination(totalItems) {
+  const totalPages = Math.ceil(totalItems / REQ_PAGE_SIZE) || 1;
+  if (reqCurrentPage > totalPages) reqCurrentPage = totalPages;
+  const el = document.getElementById('reqPagination');
+  if (totalPages <= 1) { el.innerHTML = `<span style="color:#9ca3af;">${totalItems} 筆</span>`; return; }
+  let html = `<span style="color:#6b7280; margin-right:4px;">${totalItems}筆</span>`;
+  const btnStyle = (active) => `padding:4px 8px; border:1px solid ${active ? 'var(--primary)' : '#d1d5db'}; background:${active ? 'var(--primary)' : 'white'}; color:${active ? 'white' : '#374151'}; border-radius:4px; cursor:pointer; font-size:12px; font-family:inherit;`;
+  html += `<button onclick="reqCurrentPage=1;renderRequestPage()" style="${btnStyle(false)}" ${reqCurrentPage===1?'disabled':''}>&laquo;</button>`;
+  html += `<button onclick="reqCurrentPage=Math.max(1,reqCurrentPage-1);renderRequestPage()" style="${btnStyle(false)}" ${reqCurrentPage===1?'disabled':''}>&lsaquo;</button>`;
+  let start = Math.max(1, reqCurrentPage - 2), end = Math.min(totalPages, start + 4);
+  if (end - start < 4) start = Math.max(1, end - 4);
+  for (let i = start; i <= end; i++) {
+    html += `<button onclick="reqCurrentPage=${i};renderRequestPage()" style="${btnStyle(i===reqCurrentPage)}">${i}</button>`;
+  }
+  html += `<button onclick="reqCurrentPage=Math.min(${totalPages},reqCurrentPage+1);renderRequestPage()" style="${btnStyle(false)}" ${reqCurrentPage===totalPages?'disabled':''}>&rsaquo;</button>`;
+  html += `<button onclick="reqCurrentPage=${totalPages};renderRequestPage()" style="${btnStyle(false)}" ${reqCurrentPage===totalPages?'disabled':''}>&raquo;</button>`;
+  el.innerHTML = html;
+}
 
 function switchReqTab(tab, btn) {
   currentReqTab = tab;
-  // 更新 tab 樣式
+  reqCurrentPage = 1;
   ['pending','done','history'].forEach(t => {
     const el = document.getElementById('reqTab-' + t);
     const isActive = t === tab;
-    el.style.color = isActive ? 'var(--primary)' : '#6b7280';
+    el.style.background = isActive ? 'var(--primary)' : 'white';
+    el.style.color = isActive ? 'white' : '#6b7280';
     el.style.fontWeight = isActive ? '700' : '600';
-    el.style.borderBottom = isActive ? '2px solid var(--primary)' : '2px solid transparent';
+    el.style.border = isActive ? 'none' : '1px solid var(--border)';
     document.getElementById('reqPanel-' + t).style.display = isActive ? 'block' : 'none';
   });
   renderRequestPage();
@@ -2005,15 +2082,26 @@ function renderRequestPage() {
 
   const now = new Date();
   const kw = (document.getElementById('reqSearchInput')?.value || '').trim().toLowerCase();
+  const storeFilter = document.getElementById('reqStoreFilter')?.value || '';
 
-  // 搜尋過濾：單號 / 商品名稱 / 分店
+  // 建立分店篩選下拉
+  const storeSelect = document.getElementById('reqStoreFilter');
+  if (storeSelect) {
+    const stores = [...new Set(requestList.map(r => r.storeId).filter(Boolean))].sort();
+    const currentVal = storeSelect.value;
+    storeSelect.innerHTML = '<option value="">全部分店</option>' + stores.map(s => `<option value="${s}" ${s===currentVal?'selected':''}>${s}</option>`).join('');
+  }
+
+  // 搜尋+分店過濾
   function applySearch(list) {
-    if (!kw) return list;
-    return list.filter(r =>
+    let result = list;
+    if (storeFilter) result = result.filter(r => r.storeId === storeFilter);
+    if (kw) result = result.filter(r =>
       r.id.toLowerCase().includes(kw) ||
       r.name.toLowerCase().includes(kw) ||
       (r.storeId || '').toLowerCase().includes(kw)
     );
+    return result;
   }
 
   // 分店 badge
@@ -2025,11 +2113,13 @@ function renderRequestPage() {
 
   if (currentReqTab === 'pending') {
     const pending = applySearch(requestList.filter(r => r.status === 'pending'));
+    renderReqPagination(pending.length);
+    const pageItems = pending.slice((reqCurrentPage-1)*REQ_PAGE_SIZE, reqCurrentPage*REQ_PAGE_SIZE);
     let html = '';
-    if (pending.length === 0) {
+    if (pageItems.length === 0) {
       html = `<tr><td colspan="9" style="padding:24px; text-align:center; color:#9ca3af;">${kw ? '查無符合條件的需求單' : '目前沒有待處理的需求 👍'}</td></tr>`;
     } else {
-      pending.forEach(r => {
+      pageItems.forEach(r => {
         const hoursAgo = (now - r.createdAt) / 1000 / 3600;
         const isMine = currentStore && r.storeId === currentStore.name;
         const canEdit = isMine && hoursAgo < 24;
@@ -2065,11 +2155,13 @@ function renderRequestPage() {
       return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` === filterMonth;
     });
     filtered = applySearch(filtered);
+    renderReqPagination(filtered.length);
+    const doneItems = filtered.slice((reqCurrentPage-1)*REQ_PAGE_SIZE, reqCurrentPage*REQ_PAGE_SIZE);
     let html = '';
-    if (filtered.length === 0) {
+    if (doneItems.length === 0) {
       html = `<tr><td colspan="9" style="padding:24px; text-align:center; color:#9ca3af;">${kw ? '查無符合條件的需求單' : '此月份沒有已處理的需求'}</td></tr>`;
     } else {
-      filtered.forEach(r => {
+      doneItems.forEach(r => {
         const isMine = currentStore && r.storeId === currentStore.name;
         const timeStr = r.createdAt.toLocaleString('zh-TW', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
         html += `
@@ -2099,11 +2191,13 @@ function renderRequestPage() {
     });
     if (filterStatus !== 'all') filtered = filtered.filter(r => r.status === filterStatus);
     filtered = applySearch(filtered);
+    renderReqPagination(filtered.length);
+    const histItems = filtered.slice((reqCurrentPage-1)*REQ_PAGE_SIZE, reqCurrentPage*REQ_PAGE_SIZE);
     let html = '';
-    if (filtered.length === 0) {
+    if (histItems.length === 0) {
       html = `<tr><td colspan="10" style="padding:24px; text-align:center; color:#9ca3af;">${kw ? '查無符合條件的需求單' : '沒有符合條件的紀錄'}</td></tr>`;
     } else {
-      filtered.forEach(r => {
+      histItems.forEach(r => {
         const isMine = currentStore && r.storeId === currentStore.name;
         const timeStr = r.createdAt.toLocaleString('zh-TW', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
         const statusBadge = r.status === 'pending'
@@ -3395,15 +3489,15 @@ function renderCustomLinks() {
       <div style="font-size:26px; margin-bottom:8px;">🛒</div>
       <div style="font-size:13px; font-weight:700; color:#1f2937;">樂樂團購</div>
     </button>
-    <button onclick="window.open('https://account.line.biz...', '_blank')" style="background:white; border:1px solid var(--border); border-radius:8px; padding:16px 8px; text-align:center; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,0.04); transition:0.2s;" onmouseover="this.style.borderColor='#00B900'" onmouseout="this.style.borderColor='var(--border)'">
+    <button onclick="window.open('https://account.line.biz/login?redirectUri=https%3A%2F%2Faccount.line.biz%2Foauth2%2Fcallback%3Fclient_id%3D10%26code_challenge%3DqnnWbKlUb1KD-GqMg3CO4AZWew-C0AndQlITk5z-IRA%26code_challenge_method%3DS256%26redirect_uri%3Dhttps%253A%252F%252Fmanager.line.biz%252Fapi%252Foauth2%252FbizId%252Fcallback%26response_type%3Dcode%26state%3D4VpQze6jseUys2g1DhQ8vTKI25oYFOiJ', '_blank')" style="background:white; border:1px solid var(--border); border-radius:8px; padding:16px 8px; text-align:center; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,0.04); transition:0.2s;" onmouseover="this.style.borderColor='#00B900'" onmouseout="this.style.borderColor='var(--border)'">
       <div style="font-size:26px; margin-bottom:8px;">💬</div>
-      <div style="font-size:13px; font-weight:700; color:#1f2937;">LINE後台</div>
+      <div style="font-size:13px; font-weight:700; color:#1f2937;">LINE@</div>
     </button>
     <button onclick="showBranchInfo()" style="background:white; border:1px solid var(--border); border-radius:8px; padding:16px 8px; text-align:center; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,0.04); transition:0.2s;" onmouseover="this.style.borderColor='var(--primary)'" onmouseout="this.style.borderColor='var(--border)'">
       <div style="font-size:26px; margin-bottom:8px;">📞</div>
       <div style="font-size:13px; font-weight:700; color:#1f2937;">分店通訊</div>
     </button>
-    <button onclick="window.open('https://drive.google.com...', '_blank')" style="background:white; border:1px solid var(--border); border-radius:8px; padding:16px 8px; text-align:center; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,0.04); transition:0.2s;" onmouseover="this.style.borderColor='var(--primary)'" onmouseout="this.style.borderColor='var(--border)'">
+    <button onclick="window.open('https://drive.google.com/drive/folders/1wl-DpyF9iVNyO0-r9R608H6Fw_mCRpYq?usp=sharing', '_blank')" style="background:white; border:1px solid var(--border); border-radius:8px; padding:16px 8px; text-align:center; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,0.04); transition:0.2s;" onmouseover="this.style.borderColor='var(--primary)'" onmouseout="this.style.borderColor='var(--border)'">
       <div style="font-size:26px; margin-bottom:8px;">🖼️</div>
       <div style="font-size:13px; font-weight:700; color:#1f2937;">行銷素材</div>
     </button>
