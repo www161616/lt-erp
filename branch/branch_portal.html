@@ -565,9 +565,10 @@
       </table>
     </div>
   </div>
+  <div id="reqPaginationBottom" style="display:flex; align-items:center; justify-content:center; gap:4px; font-size:12px; margin-top:12px;"></div>
 
 </div>
-        
+
 
 
 <div id="pageTransfer" class="page">
@@ -2026,8 +2027,14 @@ function reqClearSearch() {
 function renderReqPagination(totalItems) {
   const totalPages = Math.ceil(totalItems / REQ_PAGE_SIZE) || 1;
   if (reqCurrentPage > totalPages) reqCurrentPage = totalPages;
-  const el = document.getElementById('reqPagination');
-  if (totalPages <= 1) { el.innerHTML = `<span style="color:#9ca3af;">${totalItems} 筆</span>`; return; }
+  const elTop = document.getElementById('reqPagination');
+  const elBot = document.getElementById('reqPaginationBottom');
+  if (totalPages <= 1) {
+    const simple = `<span style="color:#9ca3af;">${totalItems} 筆</span>`;
+    elTop.innerHTML = simple;
+    if (elBot) elBot.innerHTML = '';
+    return;
+  }
   let html = `<span style="color:#6b7280; margin-right:4px;">${totalItems}筆</span>`;
   const btnStyle = (active) => `padding:4px 8px; border:1px solid ${active ? 'var(--primary)' : '#d1d5db'}; background:${active ? 'var(--primary)' : 'white'}; color:${active ? 'white' : '#374151'}; border-radius:4px; cursor:pointer; font-size:12px; font-family:inherit;`;
   html += `<button onclick="reqCurrentPage=1;renderRequestPage()" style="${btnStyle(false)}" ${reqCurrentPage===1?'disabled':''}>&laquo;</button>`;
@@ -2039,7 +2046,9 @@ function renderReqPagination(totalItems) {
   }
   html += `<button onclick="reqCurrentPage=Math.min(${totalPages},reqCurrentPage+1);renderRequestPage()" style="${btnStyle(false)}" ${reqCurrentPage===totalPages?'disabled':''}>&rsaquo;</button>`;
   html += `<button onclick="reqCurrentPage=${totalPages};renderRequestPage()" style="${btnStyle(false)}" ${reqCurrentPage===totalPages?'disabled':''}>&raquo;</button>`;
-  el.innerHTML = html;
+  html += `<span style="color:#9ca3af; margin-left:6px;">${reqCurrentPage}/${totalPages}</span>`;
+  elTop.innerHTML = html;
+  if (elBot) elBot.innerHTML = html;
 }
 
 function switchReqTab(tab, btn) {
