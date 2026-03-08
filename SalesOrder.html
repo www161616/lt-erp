@@ -1516,6 +1516,7 @@ async function executeSalesPrint(orderId, format, extraInfo = null) {
       .text-right{text-align:right;} .text-center{text-align:center;}
       .summary{margin-top:8px; text-align:right; font-size:13px; line-height:1.8;}
       .summary .grand{font-size:15px; font-weight:bold;}
+      @page{margin:3mm;}
       @media print{body{padding:10px 15px;} *{-webkit-print-color-adjust:exact !important; print-color-adjust:exact !important;}}
     </style></head><body>`;
 
@@ -1588,6 +1589,7 @@ async function executeSalesPrint(orderId, format, extraInfo = null) {
     
     printHTML += `<div class="no-print" style="position:fixed;top:10px;right:10px;z-index:9999;">
         <button onclick="window.print()" style="padding:10px 24px;font-size:16px;background:#1976d2;color:#fff;border:none;border-radius:6px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.3);">🖨️ 列印</button>
+        <button onclick="window.close()" style="padding:10px 24px;font-size:16px;background:#757575;color:#fff;border:none;border-radius:6px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.3);margin-left:8px;">✕ 關閉</button>
       </div>
       <style>@media print{.no-print{display:none!important;}}<\/style>
       </body></html>`;

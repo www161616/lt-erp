@@ -486,40 +486,40 @@
     .footer { margin-top: 15px; padding-top: 8px; border-top: 2px solid #000; display: flex; justify-content: space-between; }
     .footer-right { text-align: right; line-height: 1.8; width: 60%; }
     .total-row { font-size: 16px; font-weight: bold; border-top: 1px solid #000; margin-top: 4px; padding-top: 4px; color: #c53030; }
-    @page { margin: 10mm; size: A4; }
+    @page { margin: 3mm; size: A4; }
     @media print{ body{padding:10px 15px;} *{-webkit-print-color-adjust:exact !important; print-color-adjust:exact !important;} }
   </style>
 </head>
 <body>
   <div style="text-align:center; font-size:22px; font-weight:bold; margin-bottom:6px;">丸十水產股份有限公司</div>
-  <div style="text-align:center; font-size:15px; letter-spacing:8px; margin-bottom:16px;">客 戶 月 結 對 帳 單（龍潭總倉）</div>
-  <div class="header">
-    <h1>丸十水產股份有限公司 - 客戶對帳單</h1>
-    <p style="margin-top:2mm;">期間：${reportData.dateRange.from} ~ ${reportData.dateRange.to} &nbsp;|&nbsp; 往來客戶：${reportData.customer.name}</p>
+  <div style="text-align:center; font-size:15px; letter-spacing:8px; margin-bottom:12px;">客 戶 月 結 對 帳 單（龍潭總倉）</div>
+  <div style="display:flex; justify-content:space-between; margin-bottom:8px; font-size:11px; border-bottom:2px solid #000; padding-bottom:6px;">
+    <span>期間：${reportData.dateRange.from} ~ ${reportData.dateRange.to}　|　往來客戶：${reportData.customer.name}</span>
+    <span>製表：${new Date().toISOString().split('T')[0]}</span>
   </div>
   
   <table>
     <thead>
       <tr>
-        <th width="15%">日期 / 單號</th>
+        <th width="20%">日期 / 單號</th>
         <th width="12%" class="text-right">單張總額</th>
-        <th width="73%">交易內容與明細摘要</th>
+        <th width="68%">交易內容與明細摘要</th>
       </tr>
     </thead>
     <tbody>
       ${reportData.orders.map(order => {
-        const itemLines = order.items.map(i => `• ${i.productName} x${i.qty}${i.unit} ($${i.subtotal.toLocaleString()})`).join('<br>');
+        const itemLines = order.items.map(i => `${i.productName} x${i.qty}${i.unit} ($${i.subtotal.toLocaleString()})`).join('、');
         let struct = `未稅:$${order.subtotal.toLocaleString()} + 稅:$${order.taxAmount.toLocaleString()}`;
         if(order.shipping > 0) struct += ` + 運費:$${order.shipping.toLocaleString()}`;
         if(order.deduction > 0) struct += ` - 扣款:$${order.deduction.toLocaleString()}`;
 
         return `
           <tr>
-            <td class="text-center"><b>${order.date}</b><br><span style="font-size:9px;">${order.orderId}</span></td>
+            <td class="text-center" style="white-space:nowrap;"><b>${order.date}</b><br><span style="font-size:9px;word-break:break-all;white-space:normal;">${order.orderId}</span></td>
             <td class="text-right"><b>$${order.grandTotal.toLocaleString()}</b></td>
             <td>
-              <div class="item-list">${itemLines}</div>
-              <div style="margin-top:3mm; padding-top:2mm; border-top:1px dashed #ccc; font-size:9px; color:#666;">
+              <div class="item-list" style="line-height:1.5;">${itemLines}</div>
+              <div style="margin-top:4px; padding-top:3px; border-top:1px dashed #ccc; font-size:9px; color:#666;">
                 金額構成: ${struct} = <b>$${order.grandTotal.toLocaleString()}</b>
               </div>
             </td>
@@ -541,6 +541,7 @@
   </div>
   <div class="no-print" style="position:fixed;top:10px;right:10px;z-index:9999;">
     <button onclick="window.print()" style="padding:10px 24px;font-size:16px;background:#1976d2;color:#fff;border:none;border-radius:6px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.3);">🖨️ 列印</button>
+    <button onclick="window.close()" style="padding:10px 24px;font-size:16px;background:#757575;color:#fff;border:none;border-radius:6px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.3);margin-left:8px;">✕ 關閉</button>
   </div>
   <style>@media print{.no-print{display:none!important;}}</style>
 </body>

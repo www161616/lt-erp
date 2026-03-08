@@ -126,17 +126,22 @@
     .empty-state { text-align: center; padding: 60px; color: var(--text2); font-size: 16px; border: 2px dashed var(--border); border-radius: 8px; background: var(--surface); }
 
     /* 列印樣式 */
+    @page { margin: 3mm; }
     @media print {
       * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-      body { background: white; padding: 10px 15px; }
+      body { background: white; padding: 5px 10px; font-size: 11px; }
       .print-header { display: block !important; }
-      .header-box { box-shadow: none; border: 1px solid #000; border-top: 1px solid #000; }
-      .btn { display: none !important; }
-      .summary-cards { grid-template-columns: repeat(4, 1fr); gap: 10px; }
-      .card, .profit-card, .section { box-shadow: none; border: 1px solid #333; page-break-inside: avoid; padding: 15px; }
-      .profit-formula { border: 1px solid #ccc; }
-      th { background: #eee !important; color: #000; border-bottom: 2px solid #000; }
-      td { border-bottom: 1px solid #ccc; }
+      .header-box { display: none !important; }
+      .summary-cards, .profit-card { display: none !important; height: 0 !important; margin: 0 !important; padding: 0 !important; overflow: hidden !important; }
+      .section { box-shadow: none; border: none; padding: 0; margin-bottom: 8px; page-break-inside: avoid; }
+      .section-header { margin-bottom: 4px; padding-bottom: 2px; }
+      .section-title { font-size: 12px; }
+      table { margin-top: 2px; }
+      th { background: #eee !important; color: #000; border: 1px solid #999; padding: 3px 5px; font-size: 10px; }
+      td { border: 1px solid #ccc; padding: 2px 5px; font-size: 10px; line-height: 1.3; }
+      .text-right { font-size: 10px; }
+      .total-row { font-size: 11px; }
+      .empty-state { display: none; }
     }
     .print-header { display: none; }
 
@@ -151,15 +156,16 @@
 
   <div class="print-header" style="text-align:center; margin-bottom:16px;">
     <div style="font-size:22px; font-weight:bold; margin-bottom:6px;">丸十水產股份有限公司</div>
-    <div style="font-size:15px; letter-spacing:8px;">簡 易 月 結 報 表（龍潭總倉）</div>
+    <div style="font-size:15px; letter-spacing:8px;">月 結 明 細 報 表（龍潭總倉）</div>
   </div>
 
   <div class="header-box">
-    <h2>📊 簡易月結報表</h2>
+    <h2>📋 月結明細報表</h2>
+    <button class="btn" onclick="window.location.href='DetailedReport.html'" style="background:#0e7490;color:#fff;">📊 切換彙總</button>
     <input type="month" id="monthInput">
     <button class="btn btn-query" onclick="fetchData()">🔍 產生報表</button>
     <button id="exportBtn" class="btn btn-export" onclick="exportToExcel()" disabled>📥 匯出 Excel</button>
-    <button class="btn btn-print" onclick="window.print()">🖨️ 列印此頁</button>
+    <button class="btn btn-print" onclick="printReport()">🖨️ 列印此頁</button>
   </div>
 
   <div id="reportArea">
@@ -471,6 +477,47 @@
       html += '</tbody></table></div>';
       
       area.innerHTML = html;
+    }
+
+    // ========== 列印（乾淨頁面） ==========
+    function printReport() {
+      if (!currentData) return;
+      const month = document.getElementById('monthInput').value;
+      const sections = document.querySelectorAll('#reportArea .section');
+      let tablesHTML = '';
+      sections.forEach(s => { tablesHTML += s.outerHTML; });
+
+      const printContent = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>月結明細報表</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;}
+  body{font-family:'Noto Sans TC','Microsoft JhengHei',sans-serif;padding:10px 15px;font-size:11px;color:#333;}
+  @page{margin:3mm;}
+  .section{margin-bottom:8px;}
+  .section-header{margin-bottom:4px;padding-bottom:2px;border-bottom:1px solid #999;}
+  .section-title{font-size:12px;font-weight:bold;display:flex;align-items:center;gap:4px;}
+  table{width:100%;border-collapse:collapse;margin-top:2px;}
+  th{background:#eee;border:1px solid #999;padding:3px 5px;font-size:10px;text-align:left;font-weight:bold;white-space:nowrap;}
+  td{border:1px solid #ccc;padding:2px 5px;font-size:10px;line-height:1.3;white-space:nowrap;}
+  td:last-child{white-space:normal;}
+  .text-right{text-align:right;font-family:monospace;font-size:10px;}
+  .total-row{background:#f0f0f0;font-weight:bold;font-size:11px;}
+  code{font-size:10px;}
+  @media print{*{-webkit-print-color-adjust:exact!important;print-color-adjust:exact!important;}.no-print{display:none!important;}}
+</style></head><body>
+  <div style="text-align:center;font-size:22px;font-weight:bold;margin-bottom:6px;">丸十水產股份有限公司</div>
+  <div style="text-align:center;font-size:15px;letter-spacing:8px;margin-bottom:12px;">月 結 明 細 報 表（龍潭總倉）</div>
+  <div style="display:flex;justify-content:space-between;margin-bottom:8px;font-size:11px;border-bottom:2px solid #000;padding-bottom:6px;">
+    <span>統計月份：${month}</span>
+    <span>製表：${new Date().toISOString().split('T')[0]}</span>
+  </div>
+  ${tablesHTML}
+  <div class="no-print" style="position:fixed;top:10px;right:10px;z-index:9999;">
+    <button onclick="window.print()" style="padding:10px 24px;font-size:16px;background:#1976d2;color:#fff;border:none;border-radius:6px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.3);">🖨️ 列印</button>
+    <button onclick="window.close()" style="padding:10px 24px;font-size:16px;background:#757575;color:#fff;border:none;border-radius:6px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.3);margin-left:8px;">✕ 關閉</button>
+  </div>
+</body></html>`;
+      const blob = new Blob([printContent], { type: 'text/html; charset=utf-8' });
+      window.open(URL.createObjectURL(blob), '_blank');
     }
 
     // ========== 4. 匯出 Excel (CSV) ==========

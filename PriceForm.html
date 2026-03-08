@@ -243,7 +243,7 @@
     try {
       const [custRes, prodRes, specRes] = await Promise.all([
         fetchAllData('customers?select=*&order=name.asc'),
-        fetchAllData('products?select=*'), 
+        fetchAllData('products?select=*&or=(status.eq.啟用,status.is.null)'),
         fetchAllData('special_prices?select=*')
       ]);
 
