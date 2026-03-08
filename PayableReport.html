@@ -462,23 +462,23 @@
   <title>每月應付帳款彙總表-${month}</title>
   <style>
     * { margin: 0; padding: 0; box-sizing: border-box; }
-    body { font-family: "Microsoft JhengHei", sans-serif; padding: 8mm; font-size: 12px; }
-    .header { text-align: center; margin-bottom: 6mm; border-bottom: 2px solid #000; padding-bottom: 4mm; }
-    .header h1 { font-size: 20px; margin-bottom: 3mm; }
-    .header h2 { font-size: 16px; margin-bottom: 3mm; }
+    body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; padding: 20px 30px; font-size: 13px; color: #333; margin: 0; }
+    .header { text-align: center; margin-bottom: 14px; border-bottom: 2px solid #000; padding-bottom: 10px; }
+    .header h1 { font-size: 20px; margin-bottom: 6px; }
+    .header h2 { font-size: 16px; margin-bottom: 6px; }
     .header p { font-size: 12px; color: #333; }
-    table { width: 100%; border-collapse: collapse; margin-top: 5mm; }
-    th { background: #d0d0d0; padding: 3mm 2mm; border: 1px solid #000; text-align: center; font-size: 12px; font-weight: bold; }
-    td { padding: 3mm 2mm; border: 1px solid #999; font-size: 12px; }
+    table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    th { background: #f0f0f0; padding: 6px 8px; border: 1px solid #999; text-align: center; font-size: 12px; font-weight: bold; white-space: nowrap; }
+    td { padding: 5px 8px; border: 1px solid #ccc; font-size: 12px; line-height: 1.3; }
     .text-right { text-align: right; }
-    .total-row { background: #e8e8e8; font-weight: bold; font-size: 13px; }
+    .total-row { background: #e8e8e8; font-weight: bold; }
     .unpaid { color: #c00; font-weight: bold; }
     .paid { color: #060; }
-    .footer { margin-top: 8mm; padding-top: 4mm; border-top: 2px solid #000; text-align: right; font-size: 12px; }
-    .footer-row { margin: 2mm 0; }
-    .footer-total { font-size: 16px; font-weight: bold; margin-top: 4mm; }
-    @page { margin: 8mm; size: A4; }
-    @media print{ *{-webkit-print-color-adjust:exact !important; print-color-adjust:exact !important;} }
+    .footer { margin-top: 15px; padding-top: 8px; border-top: 2px solid #000; text-align: right; font-size: 13px; line-height: 1.8; }
+    .footer-row { margin: 2px 0; }
+    .footer-total { font-size: 16px; font-weight: bold; margin-top: 6px; }
+    @page { margin: 10mm; size: A4; }
+    @media print{ body{padding:10px 15px;} *{-webkit-print-color-adjust:exact !important; print-color-adjust:exact !important;} }
   </style>
 </head>
 <body>
@@ -526,7 +526,7 @@
       let csvContent = '\uFEFF應付帳款報表\n' + `查詢期間,${dateFrom} ~ ${dateTo}\n\n` + '進貨單號,日期,供應商,應付金額,已付金額,未付金額,付款狀態\n';
       let totalPayable = 0, totalPaid = 0, totalUnpaid = 0;
       
-      currentData.forEach(function(row) {
+      [...currentData].sort((a, b) => (a.date || '').localeCompare(b.date || '')).forEach(function(row) {
         totalPayable += row.totalAmount || 0; totalPaid += row.paidAmount || 0; totalUnpaid += row.unpaidAmount || 0;
         csvContent += `"${row.purchaseId}","${row.date}","${row.supplierName}",${row.totalAmount},${row.paidAmount},${row.unpaidAmount},"${row.status}"\n`;
       });

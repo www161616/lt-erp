@@ -165,6 +165,7 @@
     .hidden { display: none !important; }
     .loading-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.9); display: flex; justify-content: center; align-items: center; z-index: 2000; font-size: 15px; color: var(--accent); font-weight: 600; flex-direction: column; gap: 12px;}
     .modal-overlay { position: fixed; inset: 0; background: rgba(0, 0, 0, 0.5); z-index: 3000; display: flex; justify-content: center; align-items: center; }
+    .swal2-container { z-index: 4000 !important; }
     
     .modal-content-lg { background: var(--surface); width: 800px; max-width: 95vw; border-radius: 6px; box-shadow: 0 12px 32px rgba(0,0,0,0.1); max-height: 90vh; display: flex; flex-direction: column; overflow: hidden; }
     .modal-content-sm { background: var(--surface); width: 450px; max-width: 95vw; border-radius: 6px; box-shadow: 0 12px 32px rgba(0,0,0,0.1); }
@@ -337,7 +338,7 @@
                  </div>
                  <div class="form-group"><label>編號</label><input type="text" id="qa_id" placeholder="留空將自動產生"></div>
                  <div class="form-group"><label>規格</label><input type="text" id="qa_spec" placeholder="例如: 10入/盒"></div>
-                 <div class="form-group"><label>單位 *</label><input type="text" id="qa_unit" value="個"></div>
+                 <div class="form-group"><label>單位 *</label><input type="text" id="qa_unit" placeholder="自行填寫"></div>
               </div>
               <div class="form-group" style="margin-top:12px;"><label>備註</label><textarea id="qa_note" rows="2"></textarea></div>
             </div>
@@ -1012,7 +1013,7 @@
     function resetQaForm() {
       const ids = ['qa_id', 'qa_name', 'qa_spec', 'qa_category', 'qa_cost', 'qa_supplier', 'qa_note', 'qa_price', 'qa_price_branch', 'qa_price_wholesale', 'qa_price_group'];
       ids.forEach(id => { const el = document.getElementById(id); if(el) el.value = (el.type==='number')?0:''; });
-      document.getElementById('qa_unit').value = '個';
+      document.getElementById('qa_unit').value = '';
       document.getElementById('qa_alert').value = '10';
       document.getElementById('qa_name').focus();
     }

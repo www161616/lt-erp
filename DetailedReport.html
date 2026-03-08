@@ -501,11 +501,11 @@
       csvContent += `"總計",,${reportData.totals.purchase},${reportData.totals.purchasePaid},${reportData.totals.purchaseUnpaid}\n\n`;
 
       csvContent += '【員工餐費】\n日期,人數,金額,方式,備註\n';
-      reportData.mealList.forEach(m => csvContent += `"${m.date}",${m.headcount},${m.amount},"${m.paymentMethod}","${m.note}"\n`);
+      [...reportData.mealList].sort((a, b) => (a.date || '').localeCompare(b.date || '')).forEach(m => csvContent += `"${m.date}",${m.headcount},${m.amount},"${m.paymentMethod}","${m.note}"\n`);
       csvContent += `,,${reportData.totals.meals},,\n\n`;
 
       csvContent += '【現金支出】\n日期,類別,項目,對象,金額\n';
-      reportData.expenseList.forEach(e => csvContent += `"${e.date}","${e.category}","${e.item}","${e.payee}",${e.amount}\n`);
+      [...reportData.expenseList].sort((a, b) => (a.date || '').localeCompare(b.date || '')).forEach(e => csvContent += `"${e.date}","${e.category}","${e.item}","${e.payee}",${e.amount}\n`);
       csvContent += `,,,${reportData.totals.expense}\n`;
       
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });

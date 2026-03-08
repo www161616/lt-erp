@@ -7,19 +7,18 @@
   <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
   <style>
-    /* ========== 鼎新風格主題變數 ========== */
+    /* ========== 石板灰護眼主題 ========== */
     :root {
-      --bg: #f8f9fb;             
-      --surface: #ffffff;        
-      --surface2: #f1f5f9;       
-      --border: #e2e8f0;         
-      --accent: #475569;         /* 石板灰 */
-      --text: #1e293b;           
-      --text2: #64748b;          
-      --danger: #c53030;         
-      --warning: #b7791f;        
+      --bg: #f8f9fb;
+      --surface: #ffffff;
+      --surface2: #f1f5f9;
+      --border: #e2e8f0;
+      --accent: #475569;
+      --text: #1e293b;
+      --text2: #64748b;
+      --danger: #c53030;
+      --warning: #b7791f;
       --blue: #0e7490;
-      
       --purple-grad: linear-gradient(135deg, #6a11cb 0%, #2575fc 100%);
       --pink-grad: linear-gradient(135deg, #ff7eb3 0%, #ff758c 100%);
       --blue-grad: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%);
@@ -27,11 +26,11 @@
 
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: 'Noto Sans TC', sans-serif; background: var(--bg); padding: 24px; color: var(--text); }
-    
+
     .header { display: flex; align-items: center; margin-bottom: 24px; border-bottom: 3px solid var(--accent); padding-bottom: 12px; }
     .header h2 { color: var(--accent); font-size: 24px; flex-grow: 1; margin: 0; display: flex; align-items: center; gap: 8px;}
 
-    /* 📊 統計字卡區 */
+    /* 統計字卡 */
     .summary-container { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; margin-bottom: 24px; }
     .card { padding: 24px; border-radius: 12px; color: white; text-align: left; box-shadow: 0 4px 16px rgba(0,0,0,0.1); position: relative; overflow: hidden;}
     .card::after { content: ''; position: absolute; top: -50%; right: -20%; width: 150px; height: 150px; background: rgba(255,255,255,0.1); border-radius: 50%; transform: rotate(45deg); }
@@ -41,42 +40,50 @@
     .card-label { font-size: 15px; opacity: 0.9; margin-bottom: 12px; font-weight: 500;}
     .card-value { font-size: 36px; font-weight: 900; font-family: monospace; letter-spacing: -1px;}
 
-    /* 🔍 篩選區 */
+    /* 篩選區 */
     .filter-bar { background: var(--surface); padding: 20px; border-radius: 8px; display: flex; flex-wrap: wrap; gap: 16px; align-items: flex-end; margin-bottom: 24px; box-shadow: 0 2px 12px rgba(30,41,59,0.05); border: 1px solid var(--border);}
     .filter-group { display: flex; flex-direction: column; gap: 8px; }
     .filter-group label { font-size: 13px; font-weight: 700; color: var(--text2); }
     input, select { padding: 10px 14px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; outline: none; font-family: inherit; color: var(--text); background: var(--surface);}
     input:focus, select:focus { border-color: var(--accent); }
-    
+
     .btn { padding: 10px 20px; border: none; border-radius: 6px; cursor: pointer; font-weight: 700; display: inline-flex; align-items: center; gap: 6px; font-size: 14px; transition: 0.2s; font-family: inherit;}
     .btn:active { transform: translateY(1px); }
     .btn-search { background: var(--accent); color: white; }
-    .btn-search:hover { background: var(--accent-hover); }
-    .btn-print { background: var(--blue); color: white; }
-    .btn-print:hover { background: #66b1ff; }
+    .btn-search:hover { background: #334155; }
     .btn-export { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
     .btn-export:hover { background: #e2e8f0; }
     .btn-export:disabled { background: var(--bg); color: var(--text2); cursor: not-allowed; }
+    .btn-print { background: var(--blue); color: white; }
+    .btn-print:hover { background: #0c6b82; }
 
-    /* 📋 表格區 */
+    /* 表格 - 分組格式 */
     .table-container { background: var(--surface); border-radius: 8px; overflow: hidden; box-shadow: 0 2px 12px rgba(30,41,59,0.05); border: 1px solid var(--border);}
     table { width: 100%; border-collapse: collapse; font-size: 13px; }
-    th { background: var(--surface2); padding: 14px 16px; text-align: left; color: var(--text2); font-weight: 700; border-bottom: 1px solid var(--border); }
-    td { padding: 14px 16px; border-bottom: 1px solid var(--border); color: var(--text); }
-    tr:hover { background: #fafafa; }
+    th { background: var(--surface2); padding: 10px 12px; text-align: center; color: var(--text2); font-weight: 700; border-bottom: 2px solid var(--accent); font-size: 12px; }
+    td { padding: 6px 10px; border-bottom: 1px solid var(--border); color: var(--text); font-size: 13px; }
 
-    /* 🏷️ 狀態標籤 */
-    .status-badge { padding: 4px 10px; border-radius: 12px; font-size: 12px; font-weight: 700; color: white; display: inline-block; text-align: center; min-width: 60px;}
+    .cust-header-row { background: #e8f0fe; }
+    .cust-header-row td { font-weight: 900; color: var(--accent); border-bottom: 1px solid #b0c4de; padding: 8px 10px; }
+    .cust-subtotal-row { background: #f0f4f8; }
+    .cust-subtotal-row td { font-weight: 700; border-top: 1px solid #b0c4de; border-bottom: 2px solid #94a3b8; padding: 7px 10px; }
+    .detail-row:hover { background: #fafafa; }
+    .text-right { text-align: right; font-family: monospace; }
+    .text-center { text-align: center; }
+    .unpaid-val { color: var(--danger); font-weight: 700; }
+
+    /* 狀態標籤 */
+    .status-badge { padding: 3px 8px; border-radius: 10px; font-size: 11px; font-weight: 700; color: white; display: inline-block; text-align: center; min-width: 55px;}
     .status-unpaid { background: var(--danger); }
     .status-partial { background: var(--warning); }
     .status-paid { background: var(--accent); }
 
-    /* 📄 明細蓋板 */
+    /* 明細蓋板 */
     .overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.6); display: none; justify-content: center; align-items: center; z-index: 1000; backdrop-filter: blur(2px);}
     .overlay-content { background: var(--surface); width: 95%; max-width: 800px; max-height: 90vh; border-radius: 12px; padding: 30px; overflow-y: auto; position: relative; box-shadow: 0 10px 40px rgba(0,0,0,0.2); }
     .close-overlay { position: absolute; top: 20px; right: 24px; font-size: 28px; cursor: pointer; color: var(--text2); transition: 0.2s; line-height: 1;}
     .close-overlay:hover { color: var(--danger); transform: scale(1.1);}
-    
+
     .detail-header { background: #f0f9eb; padding: 20px; border-radius: 8px; margin-bottom: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; border: 1px solid #c2e7b0;}
     .detail-header div { font-size: 14px; color: var(--text); }
     .detail-header b { color: var(--accent); }
@@ -84,9 +91,8 @@
     .loading-overlay { position: fixed; inset: 0; background: rgba(255,255,255,0.8); display: flex; justify-content: center; align-items: center; z-index: 2000; font-size: 16px; color: var(--accent); font-weight: 700; flex-direction: column; gap: 12px;}
     .hidden { display: none !important; }
 
-    .clickable-id { font-weight: 700; color: var(--blue); cursor: pointer; text-decoration: underline; text-underline-offset: 4px; }
+    .clickable-id { font-weight: 700; color: var(--blue); cursor: pointer; text-decoration: underline; text-underline-offset: 3px; font-family: monospace; font-size: 12px; }
     .clickable-id:hover { color: #66b1ff; }
-    .text-right { text-align: right; font-family: monospace; font-size: 14px;}
   </style>
 </head>
 <body>
@@ -96,7 +102,7 @@
   </div>
 
   <div class="header">
-    <h2>📊 應收帳款報表</h2>
+    <h2>📊 應收帳款彙總表</h2>
   </div>
 
   <div class="summary-container">
@@ -142,28 +148,31 @@
     </div>
     <button class="btn btn-search" onclick="fetchData()">🔍 查詢帳款</button>
     <button id="exportBtn" class="btn btn-export" onclick="exportToExcel()" disabled>📥 匯出 Excel</button>
-    <button class="btn btn-print" onclick="openPrintModal()">🖨️ 列印月結對帳單</button>
+    <button class="btn btn-print" onclick="printGroupedReport()">🖨️ 列印</button>
   </div>
 
   <div class="table-container">
     <table>
       <thead>
         <tr>
-          <th width="15%">銷貨單號</th>
-          <th width="12%">日期</th>
-          <th width="20%">客戶名稱</th>
-          <th width="13%" style="text-align:right;">應收金額</th>
-          <th width="13%" style="text-align:right;">已收金額</th>
-          <th width="13%" style="text-align:right;">未收金額</th>
-          <th width="14%" style="text-align:center;">付款狀態</th>
+          <th width="14%">請款客戶</th>
+          <th width="10%">單據日期</th>
+          <th width="16%">來源單號</th>
+          <th width="10%" style="text-align:right;">金額</th>
+          <th width="9%" style="text-align:right;">稅額</th>
+          <th width="12%" style="text-align:right;">應收金額</th>
+          <th width="11%" style="text-align:right;">已收金額</th>
+          <th width="11%" style="text-align:right;">未收金額</th>
+          <th width="7%" style="text-align:center;">狀態</th>
         </tr>
       </thead>
       <tbody id="reportList">
-        <tr><td colspan="7" style="text-align:center; padding:40px; color:var(--text2);">👆 請設定條件後點擊查詢</td></tr>
+        <tr><td colspan="9" style="text-align:center; padding:40px; color:var(--text2);">👆 請設定條件後點擊查詢</td></tr>
       </tbody>
     </table>
   </div>
 
+  <!-- 銷貨單明細彈窗 -->
   <div id="detailOverlay" class="overlay">
     <div class="overlay-content">
       <span class="close-overlay" onclick="closeDetail()">&times;</span>
@@ -172,22 +181,10 @@
     </div>
   </div>
 
-  <div id="printModal" class="overlay">
-    <div class="overlay-content" style="max-width: 450px;">
-      <span class="close-overlay" onclick="closePrintModal()">&times;</span>
-      <h3 style="margin-bottom:24px; color:var(--blue); font-size:20px;">🖨️ 列印每月應收帳款彙總表</h3>
-      <div style="margin-bottom: 24px;">
-        <label style="font-weight: 700; display: block; margin-bottom: 8px; color:var(--text);">📅 選擇統計月份</label>
-        <input type="month" id="printMonth" style="width: 100%; padding: 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 16px; outline:none;">
-      </div>
-      <button onclick="printMonthlySummary()" class="btn" style="width: 100%; padding: 14px; background: var(--blue); font-size: 16px;">產生並列印報表</button>
-    </div>
-  </div>
-
   <script>
     // ========== 1. Supabase API 設定 ==========
     const SB_URL = 'https://gkuwoandmsgvlsxzmrjj.supabase.co/rest/v1';
-    const SB_KEY = 'sb_publishable_7K0w9Z8-Wv1dOgLsZkI0rA_WfNei_AS'; 
+    const SB_KEY = 'sb_publishable_7K0w9Z8-Wv1dOgLsZkI0rA_WfNei_AS';
     const AUTH_TOKEN = sessionStorage.getItem('sb_auth_token') || SB_KEY;
     const HEADERS = {
       'apikey': SB_KEY,
@@ -196,22 +193,20 @@
       'Prefer': 'return=representation'
     };
 
-    var currentData = [];
+    var currentData = [];        // flat list
+    var groupedData = [];        // grouped by customer
     var currentSummary = { total: 0, paid: 0, unpaid: 0 };
     var allCustomers = [];
 
     window.onload = function() {
       const today = new Date();
       const firstDay = new Date(today.getFullYear(), today.getMonth(), 1);
-      
       const offset = today.getTimezoneOffset() * 60000;
       const localToday = (new Date(today - offset)).toISOString().split('T')[0];
       const localFirstDay = (new Date(firstDay - offset)).toISOString().split('T')[0];
-      const localMonth = (new Date(today - offset)).toISOString().substring(0, 7);
-      
+
       document.getElementById('dateFrom').value = localFirstDay;
       document.getElementById('dateTo').value = localToday;
-      document.getElementById('printMonth').value = localMonth;
 
       loadCustomers();
       fetchData();
@@ -252,7 +247,7 @@
       sel.style.cssText = '';
     }
 
-    // ========== 2. 查詢應收帳款明細（直接讀 sales_orders + payment_received） ==========
+    // ========== 2. 查詢應收帳款 ==========
     async function fetchData() {
       const from = document.getElementById('dateFrom').value;
       const to = document.getElementById('dateTo').value;
@@ -260,26 +255,20 @@
       const customerId = document.getElementById('customerFilter').value;
 
       const listBody = document.getElementById('reportList');
-      listBody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:40px; color:var(--accent); font-weight:700;">🔄 正在讀取帳務資料...</td></tr>';
+      listBody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:40px; color:var(--accent); font-weight:700;">🔄 正在讀取帳務資料...</td></tr>';
       document.getElementById('exportBtn').disabled = true;
 
       try {
-        // 從 sales_orders 直接讀取所有銷貨單
-        let query = `${SB_URL}/sales_orders?select=*&order=order_date.desc,id.desc`;
+        let query = `${SB_URL}/sales_orders?select=*&order=order_date.asc,id.asc`;
         if (from) query += `&order_date=gte.${from}`;
         if (to) query += `&order_date=lte.${to}`;
         if (customerId) query += `&customer_id=eq.${customerId}`;
 
-        console.log('[應收帳款] 查詢URL:', query);
         const orderRes = await fetch(query, { headers: HEADERS, cache: 'no-store' });
-        if (!orderRes.ok) {
-          const errText = await orderRes.text();
-          throw new Error('無法讀取銷貨單: HTTP ' + orderRes.status + ' ' + errText);
-        }
+        if (!orderRes.ok) throw new Error('無法讀取銷貨單: HTTP ' + orderRes.status);
         const orders = await orderRes.json();
-        console.log('[應收帳款] 讀到', orders.length, '筆銷貨單');
 
-        // 讀取收款紀錄，計算每張單已收多少
+        // 讀取收款紀錄
         let paymentsMap = {};
         try {
           const payRes = await fetch(`${SB_URL}/payment_received?select=ref_id,amount`, { headers: HEADERS, cache: 'no-store' });
@@ -289,21 +278,23 @@
               if (p.ref_id) paymentsMap[p.ref_id] = (paymentsMap[p.ref_id] || 0) + Number(p.amount || 0);
             });
           }
-        } catch (e) { console.warn('payment_received 查詢失敗'); }
+        } catch (e) {}
 
         let sumTotal = 0, sumPaid = 0, sumUnpaid = 0;
 
         const formattedData = orders.map(o => {
-          const total = Number(o.grand_total || o.total_amount || 0);
+          const grandTotal = Number(o.grand_total || o.total_amount || 0);
+          const subtotal = Number(o.subtotal || grandTotal);
+          const taxAmount = Number(o.tax_amount || 0);
           let paid = paymentsMap[o.id] || 0;
-          if (paid === 0 && (o.payment_status === '已收款' || o.payment_status === '已結清')) paid = total;
-          const unpaid = Math.max(0, total - paid);
+          if (paid === 0 && (o.payment_status === '已收款' || o.payment_status === '已結清')) paid = grandTotal;
+          const unpaid = Math.max(0, grandTotal - paid);
 
           let finalStatus = '未收款';
-          if (unpaid === 0 && total > 0) finalStatus = '已收款';
+          if (unpaid === 0 && grandTotal > 0) finalStatus = '已收款';
           else if (paid > 0 && unpaid > 0) finalStatus = '部分收款';
 
-          sumTotal += total;
+          sumTotal += grandTotal;
           sumPaid += paid;
           sumUnpaid += unpaid;
 
@@ -311,7 +302,10 @@
             orderId: o.id,
             date: o.order_date || o.date,
             customerName: o.customer_name || o.customer_id || '未指定',
-            total: total,
+            customerId: o.customer_id || '',
+            subtotal: subtotal,
+            taxAmount: taxAmount,
+            total: grandTotal,
             paid: paid,
             unpaid: unpaid,
             status: finalStatus
@@ -321,73 +315,133 @@
         // 前端篩選付款狀態
         const filtered = (status === '全部') ? formattedData : formattedData.filter(r => r.status === status);
 
-        // 重新計算篩選後的合計
+        // 重新計算
         let fTotal = 0, fPaid = 0, fUnpaid = 0;
         filtered.forEach(r => { fTotal += r.total; fPaid += r.paid; fUnpaid += r.unpaid; });
 
-        renderReport({ list: filtered, summary: { total: fTotal, paid: fPaid, unpaid: fUnpaid } });
+        currentData = filtered;
+        currentSummary = { total: fTotal, paid: fPaid, unpaid: fUnpaid };
+
+        // 按客戶分組
+        groupedData = buildGroupedData(filtered);
+
+        renderReport();
 
       } catch (error) {
-        console.error('[應收帳款] 錯誤:', error);
-        listBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:40px; color:var(--danger);">❌ 讀取失敗：${error.message}</td></tr>`;
+        listBody.innerHTML = `<tr><td colspan="9" style="text-align:center; padding:40px; color:var(--danger);">❌ 讀取失敗：${error.message}</td></tr>`;
       }
     }
 
-    function renderReport(res) {
-      document.getElementById('totalAR').innerText = '$' + res.summary.total.toLocaleString();
-      document.getElementById('totalUnpaid').innerText = '$' + res.summary.unpaid.toLocaleString();
-      document.getElementById('totalPaid').innerText = '$' + res.summary.paid.toLocaleString();
+    // ========== 分組邏輯 ==========
+    function buildGroupedData(list) {
+      const map = {};
+      const order = [];
+      list.forEach(r => {
+        const key = r.customerName;
+        if (!map[key]) {
+          map[key] = { customerName: key, customerId: r.customerId, orders: [], sumSubtotal: 0, sumTax: 0, sumTotal: 0, sumPaid: 0, sumUnpaid: 0 };
+          order.push(key);
+        }
+        map[key].orders.push(r);
+        map[key].sumSubtotal += r.subtotal;
+        map[key].sumTax += r.taxAmount;
+        map[key].sumTotal += r.total;
+        map[key].sumPaid += r.paid;
+        map[key].sumUnpaid += r.unpaid;
+      });
+      return order.map(k => map[k]);
+    }
 
-      currentData = res.list;
-      currentSummary = res.summary;
+    // ========== 3. 渲染分組報表 ==========
+    function renderReport() {
+      document.getElementById('totalAR').innerText = '$' + currentSummary.total.toLocaleString();
+      document.getElementById('totalUnpaid').innerText = '$' + currentSummary.unpaid.toLocaleString();
+      document.getElementById('totalPaid').innerText = '$' + currentSummary.paid.toLocaleString();
 
       const tbody = document.getElementById('reportList');
-      if (res.list.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:40px; color:var(--text2);">查無符合條件的帳務資料 🍃</td></tr>';
+      if (groupedData.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:40px; color:var(--text2);">查無符合條件的帳務資料 🍃</td></tr>';
         return;
       }
-      
+
       document.getElementById('exportBtn').disabled = false;
 
-      tbody.innerHTML = res.list.map(r => {
-        let badgeClass = 'status-unpaid';
-        if (r.status === '已收款' || r.unpaid <= 0) badgeClass = 'status-paid';
-        else if (r.paid > 0) badgeClass = 'status-partial';
-        
-        return `
-          <tr>
-            <td class="clickable-id" onclick="openDetail('${r.orderId}')">${r.orderId}</td>
+      let html = '';
+      groupedData.forEach(g => {
+        // 客戶標題行
+        html += `<tr class="cust-header-row">
+          <td colspan="5" style="font-size:14px;">${g.customerName}</td>
+          <td class="text-right" style="font-size:11px; color:var(--text2);">應收</td>
+          <td class="text-right" style="font-size:11px; color:var(--text2);">已收</td>
+          <td class="text-right unpaid-val">${g.sumUnpaid.toLocaleString()}</td>
+          <td></td>
+        </tr>`;
+
+        // 明細行
+        g.orders.forEach(r => {
+          let badgeClass = 'status-unpaid';
+          if (r.status === '已收款') badgeClass = 'status-paid';
+          else if (r.status === '部分收款') badgeClass = 'status-partial';
+
+          html += `<tr class="detail-row">
+            <td></td>
             <td>${r.date}</td>
-            <td style="font-weight:700;">${r.customerName}</td>
-            <td class="text-right">$${r.total.toLocaleString()}</td>
-            <td class="text-right" style="color:var(--accent);">$${r.paid.toLocaleString()}</td>
-            <td class="text-right" style="color:var(--danger); font-weight:700;">$${r.unpaid.toLocaleString()}</td>
-            <td style="text-align:center;"><span class="status-badge ${badgeClass}">${r.status}</span></td>
-          </tr>
-        `;
-      }).join('');
+            <td><span class="clickable-id" onclick="openDetail('${r.orderId}')">銷貨 ${r.orderId}</span></td>
+            <td class="text-right">${r.subtotal.toLocaleString()}</td>
+            <td class="text-right">${r.taxAmount.toLocaleString()}</td>
+            <td class="text-right">${r.total.toLocaleString()}</td>
+            <td class="text-right" style="color:var(--accent);">${r.paid.toLocaleString()}</td>
+            <td class="text-right unpaid-val">${r.unpaid.toLocaleString()}</td>
+            <td class="text-center"><span class="status-badge ${badgeClass}">${r.status}</span></td>
+          </tr>`;
+        });
+
+        // 合計行
+        html += `<tr class="cust-subtotal-row">
+          <td></td>
+          <td colspan="2" style="text-align:right;">合計：</td>
+          <td class="text-right">${g.sumSubtotal.toLocaleString()}</td>
+          <td class="text-right">${g.sumTax.toLocaleString()}</td>
+          <td class="text-right" style="font-weight:900;">${g.sumTotal.toLocaleString()}</td>
+          <td class="text-right">${g.sumPaid.toLocaleString()}</td>
+          <td class="text-right unpaid-val" style="font-size:14px;">${g.sumUnpaid.toLocaleString()}</td>
+          <td></td>
+        </tr>`;
+      });
+
+      // 全部合計
+      html += `<tr style="background:#e2e8f0; font-weight:900;">
+        <td colspan="3" style="text-align:center; font-size:14px; padding:10px; border-top:3px solid var(--accent);">全部合計（${groupedData.length} 家客戶，${currentData.length} 筆）</td>
+        <td class="text-right" style="border-top:3px solid var(--accent); padding:10px;">${currentSummary.total.toLocaleString()}</td>
+        <td style="border-top:3px solid var(--accent);"></td>
+        <td class="text-right" style="border-top:3px solid var(--accent); padding:10px; font-size:14px;">${currentSummary.total.toLocaleString()}</td>
+        <td class="text-right" style="border-top:3px solid var(--accent); padding:10px;">${currentSummary.paid.toLocaleString()}</td>
+        <td class="text-right unpaid-val" style="border-top:3px solid var(--accent); padding:10px; font-size:15px;">${currentSummary.unpaid.toLocaleString()}</td>
+        <td style="border-top:3px solid var(--accent);"></td>
+      </tr>`;
+
+      tbody.innerHTML = html;
     }
 
-    // ========== 3. 銷貨單明細彈窗 ==========
+    // ========== 4. 銷貨單明細彈窗 ==========
     async function openDetail(orderId) {
       document.getElementById('detailOverlay').style.display = 'flex';
       const inner = document.getElementById('detailInner');
       inner.innerHTML = '<div style="text-align:center; padding:40px; color:var(--accent); font-weight:700;">⏳ 正在讀取明細資料...</div>';
-      
+
       try {
-        // 同時抓取 主單 與 明細
         const [orderRes, detailRes] = await Promise.all([
           fetch(`${SB_URL}/sales_orders?id=eq.${orderId}&select=*`, { headers: HEADERS }),
           fetch(`${SB_URL}/sales_details?order_id=eq.${orderId}&select=*`, { headers: HEADERS })
         ]);
 
         if (!orderRes.ok || !detailRes.ok) throw new Error('無法讀取單據資料');
-        
+
         const orderData = await orderRes.json();
         const detailData = await detailRes.json();
 
         if (orderData.length === 0) throw new Error('找不到該筆銷貨單');
-        
+
         const o = orderData[0];
         const gTotal = Number(o.grand_total || o.total || o.total_amount || 0);
         const tAmount = Number(o.tax_amount || o.tax || 0);
@@ -427,7 +481,6 @@
             <div style="font-weight:900; color:var(--danger); font-size:24px; font-family:monospace;">含稅總計：$${gTotal.toLocaleString()}</div>
           </div>
         `;
-
       } catch (error) {
         inner.innerHTML = `<div style="text-align:center; padding:30px; color:var(--danger);">❌ ${error.message}</div>`;
       }
@@ -437,202 +490,126 @@
       document.getElementById('detailOverlay').style.display = 'none';
     }
 
-    // ========== 4. 🖨️ 列印月結總表 ==========
-    function openPrintModal() {
-      document.getElementById('printModal').style.display = 'flex';
-    }
+    // ========== 5. 列印分組報表 ==========
+    function printGroupedReport() {
+      if (groupedData.length === 0) { Swal.fire('提示', '請先查詢資料', 'warning'); return; }
 
-    function closePrintModal() {
-      document.getElementById('printModal').style.display = 'none';
-    }
+      const from = document.getElementById('dateFrom').value;
+      const to = document.getElementById('dateTo').value;
 
-    async function printMonthlySummary() {
-      const month = document.getElementById('printMonth').value;
-      if (!month) { Swal.fire('提示','請選擇月份！','warning'); return; }
-      
-      const btn = event.target;
-      btn.disabled = true;
-      btn.innerText = '🔄 報表產生中...';
-
-      // 算出月份起迄
-      const [y, m] = month.split('-');
-      const startDate = `${y}-${m}-01`;
-      const lastDay = new Date(y, m, 0).getDate();
-      const endDate = `${y}-${m}-${lastDay}`;
-
-      try {
-        // 從 sales_orders 讀取該月銷貨單
-        const orderRes = await fetch(`${SB_URL}/sales_orders?select=*&order_date=gte.${startDate}&order_date=lte.${endDate}`, { headers: HEADERS });
-        if (!orderRes.ok) throw new Error('讀取資料失敗');
-        const orders = await orderRes.json();
-
-        if (orders.length === 0) {
-          Swal.fire('提示', '該月份尚無帳務紀錄', 'info');
-          btn.disabled = false;
-          btn.innerText = '產生並列印報表';
-          return;
-        }
-
-        // 讀取收款紀錄
-        let paymentsMap = {};
-        try {
-          const payRes = await fetch(`${SB_URL}/payment_received?select=ref_id,amount&payment_date=gte.${startDate}&payment_date=lte.${endDate}`, { headers: HEADERS });
-          if (payRes.ok) {
-            const payments = await payRes.json();
-            payments.forEach(p => { if (p.ref_id) paymentsMap[p.ref_id] = (paymentsMap[p.ref_id] || 0) + Number(p.amount || 0); });
-          }
-        } catch (e) {}
-
-        // 依據客戶名稱 Group By 加總
-        const custMap = {};
-        orders.forEach(o => {
-          const cName = o.customer_name || o.customer_id || '未指定';
-          if (!custMap[cName]) custMap[cName] = { custName: cName, sales: 0, paid: 0, unpaid: 0 };
-          const total = Number(o.grand_total || o.total_amount || 0);
-          let paid = paymentsMap[o.id] || 0;
-          if (paid === 0 && (o.payment_status === '已收款' || o.payment_status === '已結清')) paid = total;
-          const unpaid = Math.max(0, total - paid);
-          custMap[cName].sales += total;
-          custMap[cName].paid += paid;
-          custMap[cName].unpaid += unpaid;
+      let tableRows = '';
+      groupedData.forEach(g => {
+        // 客戶標題
+        tableRows += `<tr class="cust-hdr"><td colspan="5" style="font-weight:bold; font-size:13px;">${g.customerName}</td><td></td><td></td><td></td><td class="text-right" style="font-weight:bold;">${g.sumUnpaid.toLocaleString()}</td></tr>`;
+        // 明細
+        g.orders.forEach(r => {
+          tableRows += `<tr>
+            <td></td>
+            <td>${r.date}</td>
+            <td>銷貨 ${r.orderId}</td>
+            <td class="text-right">${r.subtotal.toLocaleString()}</td>
+            <td class="text-right">${r.taxAmount.toLocaleString()}</td>
+            <td class="text-right">${r.total.toLocaleString()}</td>
+            <td class="text-right">${r.paid.toLocaleString()}</td>
+            <td class="text-right">${r.unpaid.toLocaleString()}</td>
+            <td class="text-center">${r.status}</td>
+          </tr>`;
         });
-
-        const printData = Object.values(custMap);
-        closePrintModal();
-        openPrintWindow(printData, month);
-
-      } catch (error) {
-        Swal.fire('錯誤', error.message, 'error');
-      } finally {
-        btn.disabled = false;
-        btn.innerText = '產生並列印報表';
-      }
-    }
-
-    // ⭐ 專業列印格式（對帳單）
-    function openPrintWindow(data, month) {
-      let sumSales = 0, sumPaid = 0, sumUnpaid = 0;
-      data.forEach(row => {
-        sumSales += row.sales;
-        sumPaid += row.paid;
-        sumUnpaid += row.unpaid;
+        // 合計
+        tableRows += `<tr class="sub-total"><td></td><td colspan="2" style="text-align:right; font-weight:bold;">合計：</td><td class="text-right">${g.sumSubtotal.toLocaleString()}</td><td class="text-right">${g.sumTax.toLocaleString()}</td><td class="text-right" style="font-weight:bold;">${g.sumTotal.toLocaleString()}</td><td class="text-right">${g.sumPaid.toLocaleString()}</td><td class="text-right" style="font-weight:bold; color:#c00;">${g.sumUnpaid.toLocaleString()}</td><td></td></tr>`;
       });
 
+      // 全部合計
+      tableRows += `<tr class="grand-total"><td colspan="3" style="text-align:center; font-weight:bold;">全部合計（${groupedData.length} 家，${currentData.length} 筆）</td><td class="text-right">${currentSummary.total.toLocaleString()}</td><td></td><td class="text-right" style="font-weight:bold;">${currentSummary.total.toLocaleString()}</td><td class="text-right">${currentSummary.paid.toLocaleString()}</td><td class="text-right" style="font-weight:bold; color:#c00; font-size:14px;">${currentSummary.unpaid.toLocaleString()}</td><td></td></tr>`;
+
       const w = window.open('', '_blank');
-      w.document.write(`
-        <!DOCTYPE html>
-        <html>
-        <head>
-          <meta charset="UTF-8">
-          <title>每月應收帳款彙總表-${month}</title>
-          <style>
-            * { margin: 0; padding: 0; box-sizing: border-box; }
-            body { font-family: "Microsoft JhengHei", sans-serif; padding: 8mm; font-size: 12px; }
-            .header { text-align: center; margin-bottom: 6mm; border-bottom: 2px solid #000; padding-bottom: 4mm; }
-            .header h1 { font-size: 22px; margin-bottom: 3mm; letter-spacing: 2px;}
-            .header h2 { font-size: 16px; margin-bottom: 3mm; }
-            .header p { font-size: 13px; color: #333; }
-            table { width: 100%; border-collapse: collapse; margin-top: 5mm; }
-            th { background: #f0f0f0; padding: 3mm; border: 1px solid #000; text-align: center; font-size: 13px; font-weight: bold; }
-            td { padding: 3mm; border: 1px solid #666; font-size: 13px; }
-            .text-right { text-align: right; font-family: monospace; font-size: 14px;}
-            .text-center { text-align: center; }
-            .total-row { background: #e8e8e8; font-weight: bold; }
-            .total-row td { border-top: 2px solid #000;}
-            .unpaid { color: #c00; font-weight: bold; }
-            .footer { margin-top: 8mm; padding-top: 4mm; border-top: 2px solid #000; text-align: right; font-size: 13px; }
-            .footer-row { margin: 2mm 0; }
-            .footer-total { font-size: 18px; font-weight: bold; margin-top: 4mm; }
-            @page { margin: 8mm; size: A4; }
-            @media print{ *{-webkit-print-color-adjust:exact !important; print-color-adjust:exact !important;} }
-          </style>
-        </head>
-        <body>
-          <div style="text-align:center; font-size:22px; font-weight:bold; margin-bottom:6px;">丸十水產股份有限公司</div>
-          <div style="text-align:center; font-size:15px; letter-spacing:8px; margin-bottom:16px;">應 收 帳 款 報 表（龍潭總倉）</div>
-          <div class="header">
-            <h1>龍潭進銷存總倉</h1>
-            <h2>每月應收帳款彙總表</h2>
-            <p>統計月份：${month}</p>
-          </div>
-          
-          <table>
-            <thead>
-              <tr>
-                <th width="30%">客戶名稱</th>
-                <th width="20%">本月總銷售 (含稅)</th>
-                <th width="25%">本月已實收</th>
-                <th width="25%">結餘未收款</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${data.map(row => `
-              <tr>
-                <td style="font-weight:bold;">${row.custName}</td>
-                <td class="text-right">$${row.sales.toLocaleString()}</td>
-                <td class="text-right">$${row.paid.toLocaleString()}</td>
-                <td class="text-right unpaid">$${row.unpaid.toLocaleString()}</td>
-              </tr>
-              `).join('')}
-              <tr class="total-row">
-                <td class="text-center">全體客戶總計</td>
-                <td class="text-right">$${sumSales.toLocaleString()}</td>
-                <td class="text-right">$${sumPaid.toLocaleString()}</td>
-                <td class="text-right unpaid" style="font-size:16px;">$${sumUnpaid.toLocaleString()}</td>
-              </tr>
-            </tbody>
-          </table>
-          
-          <div class="footer">
-            <div class="footer-row">交易客戶數：${data.length} 家</div>
-            <div class="footer-row">本月總銷售：$${sumSales.toLocaleString()}</div>
-            <div class="footer-row">本月已收款：$${sumPaid.toLocaleString()}</div>
-            <div class="footer-row footer-total">應收總計：$${sumUnpaid.toLocaleString()}</div>
-          </div>
-          <script>
-            window.onload = function() { setTimeout(function() { window.print(); window.close(); }, 500); };
-          <\/script>
-        </body>
-        </html>
-      `);
+      w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>應收帳款彙總表</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { font-family:'Noto Sans TC','Microsoft JhengHei',sans-serif; padding:20px 30px; font-size:13px; color:#333; margin:0; }
+  table { width:100%; border-collapse:collapse; }
+  th { background:#f0f0f0; padding:6px 8px; border:1px solid #999; text-align:center; font-size:11px; font-weight:bold; white-space:nowrap; }
+  td { padding:4px 6px; border:1px solid #ccc; font-size:11px; line-height:1.3; }
+  .text-right { text-align:right; font-family:monospace; }
+  .text-center { text-align:center; }
+  .cust-hdr { background:#e8f0fe; }
+  .cust-hdr td { border-bottom:1px solid #8ba8d0; }
+  .sub-total { background:#f0f4f8; }
+  .sub-total td { border-top:1px solid #8ba8d0; border-bottom:2px solid #94a3b8; }
+  .grand-total { background:#dde5ed; }
+  .grand-total td { border-top:3px solid #333; padding:6px; }
+  @page { margin:8mm; size:A4 landscape; }
+  @media print { body{padding:10px 15px;} *{-webkit-print-color-adjust:exact !important; print-color-adjust:exact !important;} }
+</style></head><body>
+  <div style="text-align:center; font-size:20px; font-weight:bold; margin-bottom:4px;">丸十水產股份有限公司</div>
+  <div style="text-align:center; font-size:14px; letter-spacing:6px; margin-bottom:12px;">應 收 帳 款 彙 總 表（龍潭總倉）</div>
+  <div style="display:flex; justify-content:space-between; margin-bottom:8px; font-size:11px; border-bottom:2px solid #000; padding-bottom:6px;">
+    <span>單據日期：${from} ~ ${to}</span>
+    <span>製表：${new Date().toISOString().split('T')[0]}</span>
+  </div>
+  <table>
+    <thead><tr>
+      <th width="13%">請款客戶</th>
+      <th width="10%">單據日期</th>
+      <th width="16%">來源單號</th>
+      <th width="10%">金額</th>
+      <th width="8%">稅額</th>
+      <th width="12%">應收金額</th>
+      <th width="11%">已收金額</th>
+      <th width="11%">未收金額</th>
+      <th width="9%">狀態</th>
+    </tr></thead>
+    <tbody>${tableRows}</tbody>
+  </table>
+  <script>window.onload=function(){ setTimeout(()=>{ window.print(); window.close(); }, 600); }<\/script>
+</body></html>`);
       w.document.close();
     }
 
-    // ========== 5. 匯出 Excel 功能 ==========
+    // ========== 6. 匯出 Excel（分組格式） ==========
     function exportToExcel() {
-      if (currentData.length === 0) return;
-      
+      if (groupedData.length === 0) return;
+
       const btn = document.getElementById('exportBtn');
       btn.disabled = true;
       btn.innerText = '⏳ 匯出中...';
-      
+
       const dateFrom = document.getElementById('dateFrom').value;
       const dateTo = document.getElementById('dateTo').value;
-      
-      let csvContent = '\uFEFF'; 
-      csvContent += '應收帳款報表\n';
-      csvContent += `查詢期間,${dateFrom} ~ ${dateTo}\n\n`;
-      csvContent += '銷貨單號,日期,客戶名稱,應收金額,已收金額,未收金額,付款狀態\n';
-      
-      currentData.forEach(row => {
-        csvContent += `"${row.orderId}","${row.date}","${row.customerName}","${row.total.toLocaleString()}","${row.paid.toLocaleString()}","${row.unpaid.toLocaleString()}","${row.status}"\n`;
+
+      let csv = '\uFEFF';
+      csv += '丸十水產股份有限公司\n';
+      csv += '應收帳款彙總表\n';
+      csv += `單據日期：${dateFrom} ~ ${dateTo}\n\n`;
+      csv += '請款客戶,單據日期,來源單號,金額,稅額,應收金額,已收金額,未收金額\n';
+
+      groupedData.forEach(g => {
+        // 客戶標題行
+        csv += `"${g.customerName}","","","","","","","${g.sumUnpaid.toLocaleString()}"\n`;
+
+        // 明細行（日期由舊到新，buildGroupedData 已按 asc 排序）
+        g.orders.forEach(r => {
+          csv += `"","${r.date}","銷貨 ${r.orderId}","${r.subtotal.toLocaleString()}","${r.taxAmount.toLocaleString()}","${r.total.toLocaleString()}","${r.paid.toLocaleString()}","${r.unpaid.toLocaleString()}"\n`;
+        });
+
+        // 合計行
+        csv += `"","","合計：","${g.sumSubtotal.toLocaleString()}","${g.sumTax.toLocaleString()}","${g.sumTotal.toLocaleString()}","${g.sumPaid.toLocaleString()}","${g.sumUnpaid.toLocaleString()}"\n`;
       });
 
-      csvContent += '\n';
-      csvContent += `"","","合計","${currentSummary.total.toLocaleString()}","${currentSummary.paid.toLocaleString()}","${currentSummary.unpaid.toLocaleString()}",""\n`;
-      csvContent += `"","","共 ${currentData.length} 筆","","","",""\n`;
-      
-      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      csv += '\n';
+      csv += `"全部合計（${groupedData.length} 家客戶，${currentData.length} 筆）","","","${currentSummary.total.toLocaleString()}","","${currentSummary.total.toLocaleString()}","${currentSummary.paid.toLocaleString()}","${currentSummary.unpaid.toLocaleString()}"\n`;
+
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
       const link = document.createElement('a');
-      
       link.setAttribute('href', url);
-      link.setAttribute('download', `應收帳款報表_${dateFrom}_${dateTo}.csv`);
+      link.setAttribute('download', `應收帳款彙總表_${dateFrom}_${dateTo}.csv`);
       link.style.display = 'none';
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-      
+      URL.revokeObjectURL(url);
+
       btn.disabled = false;
       btn.innerText = '📥 匯出 Excel';
     }

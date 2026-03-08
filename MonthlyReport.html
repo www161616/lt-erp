@@ -489,24 +489,24 @@
       
       // 銷貨
       csv += '【(1) 銷貨收入明細】\n客戶名稱,訂單日期,單號,金額,已收,未收,收款狀態與備註\n';
-      currentData.salesList.forEach(s => {
+      [...currentData.salesList].sort((a, b) => (a.date || '').localeCompare(b.date || '')).forEach(s => {
         csv += `"${s.customerName}","${s.date}","${s.orderId}",${s.amount},${s.paidAmount},${s.unpaidAmount},"${s.note}"\n`;
       });
       csv += `,,,小計：,${currentData.totals.sales},,\n\n`;
       
       // 進貨
       csv += '【(2) 進貨成本明細】\n供應商,進貨日期,單號,金額,備註\n';
-      currentData.purchaseList.forEach(p => csv += `"${p.supplierName}","${p.date}","${p.orderId}",${p.amount},"${p.note}"\n`);
+      [...currentData.purchaseList].sort((a, b) => (a.date || '').localeCompare(b.date || '')).forEach(p => csv += `"${p.supplierName}","${p.date}","${p.orderId}",${p.amount},"${p.note}"\n`);
       csv += `,,,小計：,${currentData.totals.purchase}\n\n`;
       
       // 費用
       csv += '【(3) 費用支出明細】\n日期,類別,項目,對象,金額,付款方式\n';
-      currentData.expenseList.forEach(e => csv += `"${e.date}","${e.category}","${e.item}","${e.payee}",${e.amount},"${e.paymentMethod}"\n`);
+      [...currentData.expenseList].sort((a, b) => (a.date || '').localeCompare(b.date || '')).forEach(e => csv += `"${e.date}","${e.category}","${e.item}","${e.payee}",${e.amount},"${e.paymentMethod}"\n`);
       csv += `,,,,小計：,${currentData.totals.expense}\n\n`;
       
       // 餐費
       csv += '【(4) 員工餐費明細】\n日期,人數,金額,付款方式,備註\n';
-      currentData.mealList.forEach(m => csv += `"${m.date}",${m.headcount},${m.amount},"${m.paymentMethod}","${m.note}"\n`);
+      [...currentData.mealList].sort((a, b) => (a.date || '').localeCompare(b.date || '')).forEach(m => csv += `"${m.date}",${m.headcount},${m.amount},"${m.paymentMethod}","${m.note}"\n`);
       csv += `,,小計：,${currentData.totals.meals},\n`;
       
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });

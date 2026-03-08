@@ -715,7 +715,7 @@
       }
 
       let csv = '\uFEFF進貨單號,日期,供應商,總金額,狀態\n';
-      currentOrders.forEach(o => {
+      [...currentOrders].sort((a, b) => (a.date || '').localeCompare(b.date || '')).forEach(o => {
         csv += `"${o.orderId}","${o.date}","${o.supplierName}",${o.total},"${o.status}"\n`;
       });
 

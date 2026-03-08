@@ -499,7 +499,7 @@
     function exportListToExcel() {
       if (currentOrders.length === 0) return alert('無資料');
       let csv = '\uFEFF銷貨單號,日期,客戶名稱,總金額,收款狀態\n';
-      currentOrders.forEach(o => csv += `"${o.orderId}","${o.date}","${o.customerName}",${o.total},"${o.paymentStatus}"\n`);
+      [...currentOrders].sort((a, b) => (a.date || '').localeCompare(b.date || '')).forEach(o => csv += `"${o.orderId}","${o.date}","${o.customerName}",${o.total},"${o.paymentStatus}"\n`);
       
       const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
       const url = URL.createObjectURL(blob);
