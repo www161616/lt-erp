@@ -615,11 +615,11 @@
       csvContent += '銷貨單號,日期,客戶名稱,應收金額,已收金額,未收金額,付款狀態\n';
       
       currentData.forEach(row => {
-        csvContent += `"${row.orderId}","${row.date}","${row.customerName}",${row.total},${row.paid},${row.unpaid},"${row.status}"\n`;
+        csvContent += `"${row.orderId}","${row.date}","${row.customerName}","${row.total.toLocaleString()}","${row.paid.toLocaleString()}","${row.unpaid.toLocaleString()}","${row.status}"\n`;
       });
-      
+
       csvContent += '\n';
-      csvContent += `"","","合計",${currentSummary.total},${currentSummary.paid},${currentSummary.unpaid},""\n`;
+      csvContent += `"","","合計","${currentSummary.total.toLocaleString()}","${currentSummary.paid.toLocaleString()}","${currentSummary.unpaid.toLocaleString()}",""\n`;
       csvContent += `"","","共 ${currentData.length} 筆","","","",""\n`;
       
       const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
