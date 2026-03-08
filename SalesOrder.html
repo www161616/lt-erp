@@ -1387,13 +1387,7 @@ async function exportSavedToExcel(orderId) {
     const buffer = await wb.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `銷貨單_${customerName}_${o.order_date || ''}.xlsx`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    window.open(url, '_blank');
 
     Swal.close();
   } catch (error) {
