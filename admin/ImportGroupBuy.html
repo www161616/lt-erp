@@ -664,13 +664,9 @@
       localStorage.setItem('importedStoreNames', JSON.stringify(STORE_COLUMNS));
       localStorage.setItem('importedPersonalNames', JSON.stringify(PERSONAL_COLUMNS));
 
-      // 同步到雲端（透過父視窗的 cloudSave）
-      try {
-        if (window.parent && window.parent.cloudSave) {
-          window.parent.cloudSave('branchOrderList');
-          window.parent.cloudSave('branchOrders');
-        }
-      } catch(e) { console.warn('cloudSave skipped:', e); }
+      // 同步到雲端
+      _cloudSave('branchOrderList', existingList);
+      _cloudSave('branchOrders', existingOrders);
 
       addLog('————————————————', 'info');
       addLog(`✅ 匯入完成！新增 ${importedCount} 項，更新 ${skippedCount} 項`, 'ok');
@@ -697,6 +693,19 @@
       area.scrollTop = area.scrollHeight;
     }
 
+    // Supabase 連線（供直接清除雲端用）
+    const _SB_URL = 'https://gkuwoandmsgvlsxzmrjj.supabase.co/rest/v1';
+    const _SB_KEY = 'sb_publishable_7K0w9Z8-Wv1dOgLsZkI0rA_WfNei_AS';
+    const _SB_HEADERS = { 'apikey': _SB_KEY, 'Authorization': 'Bearer ' + _SB_KEY, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' };
+
+    function _cloudSave(key, emptyVal) {
+      fetch(_SB_URL + '/shared_kv', {
+        method: 'POST',
+        headers: _SB_HEADERS,
+        body: JSON.stringify({ key: key, value: emptyVal, updated_at: new Date().toISOString() })
+      }).catch(function(e) { console.error('cloudSave error:', e); });
+    }
+
     function clearOldData() {
       var keys = ['branchOrderList', 'branchOrders', 'importedStoreNames', 'importedPersonalNames'];
       var hasData = false;
@@ -708,18 +717,13 @@
         return;
       }
       if (!confirm('確定清除所有匯入的開團資料？\n\n清除後開團總表會回到空白狀態')) return;
-      // 先寫入空值再同步雲端，最後清除
-      localStorage.setItem('branchOrderList', '[]');
-      localStorage.setItem('branchOrders', '{}');
-      try {
-        if (window.parent && window.parent.cloudSave) {
-          window.parent.cloudSave('branchOrderList');
-          window.parent.cloudSave('branchOrders');
-        }
-      } catch(e) {}
+      // 清除 localStorage
       for (var i = 0; i < keys.length; i++) {
         localStorage.removeItem(keys[i]);
       }
+      // 同步清除雲端資料
+      _cloudSave('branchOrderList', []);
+      _cloudSave('branchOrders', {});
       alert('已清除！所有舊匯入資料已刪除');
     }
 
