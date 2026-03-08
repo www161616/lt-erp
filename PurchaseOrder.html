@@ -491,17 +491,13 @@
       
       try {
         // ✨ 改用 fetchAllData 同時抓取成品、原物料與供應商
-        const [rawProducts, rawMaterials, rawSuppliers] = await Promise.all([
-          fetchAllData('products?select=*&status=eq.啟用'),
-          fetchAllData('materials?select=*'), 
+        const [rawMaterials, rawSuppliers] = await Promise.all([
+          fetchAllData('materials?select=*'),
           fetchAllData('suppliers?select=*')
         ]);
 
-        // 轉換 DB 的 snake_case 到前端的 camelCase
-        allP = rawProducts.map(p => ({
-            id: p.id, name: p.name, category: p.category, spec: p.spec, unit: p.unit, 
-            cost: Number(p.cost) || 0
-        }));
+        // 商品不再一次全撈，改用搜尋時即時查詢
+        allP = [];
 
         allM = rawMaterials.map(m => ({
             id: m.id, name: m.name, category: m.category, spec: m.spec, unit: m.unit, 
@@ -575,22 +571,47 @@
 
     function filterProd() {
       clearTimeout(debounceTimer);
-      debounceTimer = setTimeout(function() {
+      debounceTimer = setTimeout(async function() {
         const source = document.querySelector('input[name="sourceType"]:checked').value;
-        const listToSearch = (source === 'PRODUCT') ? allP : allM;
-        
-        updateCategoryOptions(listToSearch);
 
+        if (source === 'MATERIAL') {
+          // 原物料仍用本地過濾（量少）
+          updateCategoryOptions(allM);
+          const cat = document.getElementById('categoryFilter').value;
+          const k = document.getElementById('pSearch').value.toLowerCase();
+          let fb = allM.filter(p => {
+            const mc = cat === "" || p.category === cat;
+            const mk = (p.name && p.name.toLowerCase().includes(k)) || (p.id && p.id.toLowerCase().includes(k));
+            return mc && mk;
+          });
+          renderPList(fb.slice(0, 50));
+          return;
+        }
+
+        // 成品商品：從 Supabase 即時查詢
         const cat = document.getElementById('categoryFilter').value;
-        const k = document.getElementById('pSearch').value.toLowerCase();
-        
-        let fb = listToSearch.filter(p => {
-          const mc = cat === "" || p.category === cat;
-          const mk = (p.name && p.name.toLowerCase().includes(k)) || (p.id && p.id.toLowerCase().includes(k));
-          return mc && mk;
-        });
-        renderPList(fb.slice(0, 50));
-      }, 100);
+        const k = document.getElementById('pSearch').value.trim();
+        let query = `${SB_URL}/products?select=id,name,category,spec,unit,cost&status=eq.啟用`;
+        if (cat) query += `&category=eq.${encodeURIComponent(cat)}`;
+        if (k) query += `&or=(name.ilike.*${encodeURIComponent(k)}*,id.ilike.*${encodeURIComponent(k)}*)`;
+        query += `&order=id.asc&limit=100`;
+
+        try {
+          const res = await fetch(query, { headers: HEADERS });
+          if (!res.ok) return;
+          const raw = await res.json();
+          const fb = raw.map(p => ({ id: p.id, name: p.name, category: p.category, spec: p.spec, unit: p.unit, cost: Number(p.cost) || 0 }));
+          fb.forEach(p => { if (!allP.find(x => x.id === p.id)) allP.push(p); });
+          // 更新類別（從快取）
+          if (!cat) {
+            try {
+              const catRes = await fetch(`${SB_URL}/products?select=category&status=eq.啟用&limit=5000`, { headers: HEADERS });
+              if (catRes.ok) { const cd = await catRes.json(); const cats = [...new Set(cd.map(r=>r.category).filter(Boolean))].sort(); updateCategoryOptions(cats.map(c=>({category:c}))); }
+            } catch(e) {}
+          }
+          renderPList(fb.slice(0, 50));
+        } catch(e) { console.error('filterProd error:', e); }
+      }, 200);
     }
 
     function updateCategoryOptions(currentList) {

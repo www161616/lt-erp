@@ -505,25 +505,13 @@ async function loadAllData() {
   
   try {
     // 呼叫自動分頁，保證資料一滴不漏
-    const [rawProducts, rawCustomers, rawSpecialPrices] = await Promise.all([
-      fetchAllData('products?select=*&status=eq.啟用'),
+    const [rawCustomers, rawSpecialPrices] = await Promise.all([
       fetchAllData('customers?select=*'),
       fetchAllData('special_prices?select=*')
     ]);
 
-    // 🐍 Snake_case 轉 CamelCase 對接原有邏輯
-    allP = rawProducts.map(p => ({
-        id: p.id,
-        name: p.name,
-        category: p.category,
-        spec: p.spec,
-        unit: p.unit,
-        price: Number(p.price),
-        priceBranch: Number(p.price_branch) || 0,
-        priceWholesale: Number(p.price_wholesale) || 0, 
-        priceGroupBuy: Number(p.price_group) || 0,   
-        cost: Number(p.cost) || 0
-    }));
+    // 商品不再一次全撈，改用 searchProducts() 即時查詢
+    allP = [];
 
     allC = rawCustomers.map(c => ({
         id: c.id,
@@ -544,7 +532,7 @@ async function loadAllData() {
 
     // 重繪選單
     renderCustomerSelect(allC);
-    extractCategories();
+    await loadCategories();
     renderCategoryFilter();
     
     // 【新增亮點 3】把剛剛記下來的狀態「自動選回去」
@@ -612,12 +600,33 @@ async function fetchEditOrderData(orderId, isCopy = false) {
         }))
       }
     };
+    // 確保訂單內商品已載入 allP
+    const prodIds = result.data.items.map(i => i.productId).filter(Boolean);
+    await ensureProductsLoaded(prodIds);
     loadEditData(result);
   } catch (err) {
     Swal.fire('錯誤', err.message, 'error');
   } finally {
     document.getElementById('loadingOverlay').classList.add('hidden');
   }
+}
+
+async function ensureProductsLoaded(ids) {
+  const missing = ids.filter(id => !allP.find(p => p.id === id));
+  if (missing.length === 0) return;
+  const idList = missing.map(id => `"${id}"`).join(',');
+  try {
+    const res = await fetch(`${SB_URL}/products?id=in.(${idList})&select=id,name,category,spec,unit,price,price_branch,price_wholesale,price_group,cost`, { headers: HEADERS });
+    if (res.ok) {
+      const raw = await res.json();
+      raw.forEach(p => allP.push({
+        id: p.id, name: p.name, category: p.category, spec: p.spec, unit: p.unit,
+        price: Number(p.price), priceBranch: Number(p.price_branch) || 0,
+        priceWholesale: Number(p.price_wholesale) || 0, priceGroupBuy: Number(p.price_group) || 0,
+        cost: Number(p.cost) || 0
+      }));
+    }
+  } catch(e) {}
 }
 
 function loadEditData(result) {
@@ -752,69 +761,77 @@ function renderCart() {
 // ========== 6. 商品目錄 ==========
 function filterProd() {
   clearTimeout(salesDebounceTimer);
-  salesDebounceTimer = setTimeout(function() {
+  salesDebounceTimer = setTimeout(async function() {
     const cat = document.getElementById('categoryFilter').value;
-    const k = document.getElementById('pSearch').value.toLowerCase();
+    const k = document.getElementById('pSearch').value.trim();
     const cId = document.getElementById('customer').value;
     const cust = allC.find(c => c.id === cId);
-    
-    if (!allP || allP.length === 0) return;
 
-    // 1. 基本過濾 (類別與關鍵字)
-    let fb = allP.filter(p => (cat === "" || p.category === cat) && ((p.name && p.name.toLowerCase().includes(k)) || (p.id && p.id.toLowerCase().includes(k))));
+    // 從 Supabase 即時查詢（不再全撈）
+    let query = `${SB_URL}/products?select=id,name,category,spec,unit,price,price_branch,price_wholesale,price_group,cost&status=eq.啟用`;
+    if (cat) query += `&category=eq.${encodeURIComponent(cat)}`;
+    if (k) query += `&or=(name.ilike.*${encodeURIComponent(k)}*,id.ilike.*${encodeURIComponent(k)}*)`;
+    query += `&order=id.asc&limit=200`;
 
-    // 2. ✨ 如果有選客戶，啟動「特 -> 分/批/團 -> 原價」三層排序 ✨
-    if (cId) {
-      const priceGroup = cust ? cust.priceGroup || '一般' : '一般';
-      const mySpecials = specialPrices.filter(sp => sp.custId === cId);
-      const specialProdIds = mySpecials.map(sp => sp.prodId);
+    try {
+      const res = await fetch(query, { headers: HEADERS });
+      if (!res.ok) return;
+      const raw = await res.json();
+      const fb = raw.map(p => ({
+        id: p.id, name: p.name, category: p.category, spec: p.spec,
+        unit: p.unit, price: Number(p.price), priceBranch: Number(p.price_branch) || 0,
+        priceWholesale: Number(p.price_wholesale) || 0, priceGroupBuy: Number(p.price_group) || 0,
+        cost: Number(p.cost) || 0
+      }));
 
-      fb.sort((a, b) => {
-        // 判斷 A 的層級
-        const aHasSpecial = specialProdIds.includes(a.id);
-        let aIsGroup = false;
-        if (priceGroup.includes("總倉") && a.priceBranch > 0) aIsGroup = true;
-        if ((priceGroup.includes("店家") || priceGroup.includes("批發")) && a.priceWholesale > 0) aIsGroup = true;
-        if ((priceGroup.includes("餐廳") || priceGroup.includes("團購")) && a.priceGroupBuy > 0) aIsGroup = true;
-        const aLevel = aHasSpecial ? 1 : (aIsGroup ? 2 : 3);
+      // 更新 allP 快取（合併，避免其他功能找不到）
+      fb.forEach(p => { if (!allP.find(x => x.id === p.id)) allP.push(p); });
 
-        // 判斷 B 的層級
-        const bHasSpecial = specialProdIds.includes(b.id);
-        let bIsGroup = false;
-        if (priceGroup.includes("總倉") && b.priceBranch > 0) bIsGroup = true;
-        if ((priceGroup.includes("店家") || priceGroup.includes("批發")) && b.priceWholesale > 0) bIsGroup = true;
-        if ((priceGroup.includes("餐廳") || priceGroup.includes("團購")) && b.priceGroupBuy > 0) bIsGroup = true;
-        const bLevel = bHasSpecial ? 1 : (bIsGroup ? 2 : 3);
+      // 如果有選客戶，啟動「特 -> 分/批/團 -> 原價」三層排序
+      if (cId) {
+        const priceGroup = cust ? cust.priceGroup || '一般' : '一般';
+        const mySpecials = specialPrices.filter(sp => sp.custId === cId);
+        const specialProdIds = mySpecials.map(sp => sp.prodId);
 
-        // 第一關：按層級排 (1:特價優先, 2:群組價, 3:原價)
-        if (aLevel !== bLevel) return aLevel - bLevel;
-        
-        // 如果都是特價品，依照當初設定的 sortOrder 排序
-        if (aLevel === 1 && bLevel === 1) {
-          const aSp = mySpecials.find(s => s.prodId === a.id);
-          const bSp = mySpecials.find(s => s.prodId === b.id);
-          return (aSp.sortOrder || 999) - (bSp.sortOrder || 999);
-        }
+        fb.sort((a, b) => {
+          const aHasSpecial = specialProdIds.includes(a.id);
+          let aIsGroup = false;
+          if (priceGroup.includes("總倉") && a.priceBranch > 0) aIsGroup = true;
+          if ((priceGroup.includes("店家") || priceGroup.includes("批發")) && a.priceWholesale > 0) aIsGroup = true;
+          if ((priceGroup.includes("餐廳") || priceGroup.includes("團購")) && a.priceGroupBuy > 0) aIsGroup = true;
+          const aLevel = aHasSpecial ? 1 : (aIsGroup ? 2 : 3);
 
-        // 第二關：按類別排
-        if ((a.category || '') !== (b.category || '')) return (a.category || '').localeCompare(b.category || '');
-        // 第三關：按編號排
-        return a.id.localeCompare(b.id);
-      });
-    }
+          const bHasSpecial = specialProdIds.includes(b.id);
+          let bIsGroup = false;
+          if (priceGroup.includes("總倉") && b.priceBranch > 0) bIsGroup = true;
+          if ((priceGroup.includes("店家") || priceGroup.includes("批發")) && b.priceWholesale > 0) bIsGroup = true;
+          if ((priceGroup.includes("餐廳") || priceGroup.includes("團購")) && b.priceGroupBuy > 0) bIsGroup = true;
+          const bLevel = bHasSpecial ? 1 : (bIsGroup ? 2 : 3);
 
-    // 3. 剛新增的商品強制置頂
-    if (lastAddedProductId) {
+          if (aLevel !== bLevel) return aLevel - bLevel;
+          if (aLevel === 1 && bLevel === 1) {
+            const aSp = mySpecials.find(s => s.prodId === a.id);
+            const bSp = mySpecials.find(s => s.prodId === b.id);
+            return (aSp.sortOrder || 999) - (bSp.sortOrder || 999);
+          }
+          if ((a.category || '') !== (b.category || '')) return (a.category || '').localeCompare(b.category || '');
+          return a.id.localeCompare(b.id);
+        });
+      }
+
+      // 剛新增的商品強制置頂
+      if (lastAddedProductId) {
         const newIdx = fb.findIndex(p => p.id === lastAddedProductId);
         if (newIdx > -1) {
             const newItem = fb.splice(newIdx, 1)[0];
-            fb.unshift(newItem); 
+            fb.unshift(newItem);
         }
     }
 
-    // ✨ 解除 30 筆限制，放寬到 150 筆，確保特價品與群組品都能顯示 ✨
-    renderPList(fb.slice(0, 150));
-  }, 100); 
+      // 顯示前 150 筆
+      renderPList(fb.slice(0, 150));
+    } catch(e) { console.error('filterProd error:', e); }
+  }, 200);
 }
 
 function renderPList(list) {
@@ -1209,6 +1226,17 @@ function addOne(id) {
 
 // ========== 9. UI 輔助與前端列印 ==========
 function extractCategories() { let s = new Set(); allP.forEach(p => { if(p.category) s.add(p.category.trim()); }); categories = Array.from(s).sort(); }
+async function loadCategories() {
+  try {
+    const res = await fetch(`${SB_URL}/rpc/get_product_categories`, { method: 'POST', headers: HEADERS });
+    if (res.ok) { categories = (await res.json()).map(r => r.category).filter(Boolean).sort(); return; }
+  } catch(e) {}
+  // fallback: 直接查 distinct
+  try {
+    const res = await fetch(`${SB_URL}/products?select=category&status=eq.啟用&limit=5000`, { headers: HEADERS });
+    if (res.ok) { const data = await res.json(); categories = [...new Set(data.map(r => r.category).filter(Boolean))].sort(); }
+  } catch(e) {}
+}
 function renderCategoryFilter() { 
   let sel = document.getElementById('categoryFilter'); 
   let html = '<option value="">全部類別</option>'; 
