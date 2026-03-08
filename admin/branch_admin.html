@@ -3737,6 +3737,24 @@
               <button class="btn" style="background:#f0f7ff; color:#2b6cb0; border:1px solid #93c5fd; margin-top: 20px; font-size: 12px; padding: 6px 10px;" onclick="showAllProcData()">顯示全部</button>
             </div>
 
+            <!-- 批次修改採購進度 -->
+            <div style="display:flex; gap:8px; align-items:flex-end; margin-left:auto;">
+              <div style="display:flex; flex-direction:column; gap:4px;">
+                <span style="font-size:12px; font-weight:bold; color:#718096;">批次修改採購進度</span>
+                <div style="display:flex; gap:6px; align-items:center;">
+                  <select id="batchProcStatusSelect" style="padding:6px 8px; border:1px solid var(--border); border-radius:4px; font-size:13px; font-family:inherit; font-weight:bold;">
+                    <option value="pending">⏳ 待處理</option>
+                    <option value="ordered">🚚 已向廠商叫貨</option>
+                    <option value="shipped">📤 已出貨</option>
+                    <option value="arrived">📦 貨已到倉</option>
+                    <option value="out_of_stock">❌ 廠商斷貨</option>
+                    <option value="supplier_shortage">⚠️ 廠商短缺</option>
+                  </select>
+                  <button class="btn" style="background:#2b6cb0; color:white; font-size:12px; padding:6px 14px; font-weight:bold;" onclick="batchUpdateProcStatus()">✅ 套用勾選</button>
+                </div>
+              </div>
+            </div>
+
           </div>
 
           <div style="overflow-y: auto; flex: 1; border: 1px solid var(--border); border-radius: 8px;">
