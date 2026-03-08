@@ -453,8 +453,7 @@
       let sumPurchase = 0, sumPaid = 0, sumUnpaid = 0;
       data.forEach(row => { sumPurchase += row.purchase; sumPaid += row.paid; sumUnpaid += row.unpaid; });
 
-      const w = window.open('', '_blank');
-      w.document.write(`
+      let printContent = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -494,11 +493,11 @@
       <tr><th width="25%">供應商名稱</th><th width="25%">本月總進貨 (含稅)</th><th width="25%">本月已付款</th><th width="25%">結餘未付款</th></tr>
     </thead>
     <tbody>
-      `);
+      `;
       data.forEach(row => {
-        w.document.write(`<tr><td>${row.supplierName}</td><td class="text-right">$${row.purchase.toLocaleString()}</td><td class="text-right paid">$${row.paid.toLocaleString()}</td><td class="text-right unpaid">$${row.unpaid.toLocaleString()}</td></tr>`);
+        printContent += `<tr><td>${row.supplierName}</td><td class="text-right">$${row.purchase.toLocaleString()}</td><td class="text-right paid">$${row.paid.toLocaleString()}</td><td class="text-right unpaid">$${row.unpaid.toLocaleString()}</td></tr>`;
       });
-      w.document.write(`
+      printContent += `
       <tr class="total-row"><td>全體供應商總計</td><td class="text-right">$${sumPurchase.toLocaleString()}</td><td class="text-right paid">$${sumPaid.toLocaleString()}</td><td class="text-right unpaid">$${sumUnpaid.toLocaleString()}</td></tr>
     </tbody>
   </table>
@@ -508,10 +507,14 @@
     <div class="footer-row">本月已付款：$${sumPaid.toLocaleString()}</div>
     <div class="footer-row footer-total">應付總計：$${sumUnpaid.toLocaleString()}</div>
   </div>
-  <script>window.addEventListener('load', function() { setTimeout(function() { window.print(); }, 500); });<\/script>
+  <div class="no-print" style="position:fixed;top:10px;right:10px;z-index:9999;">
+    <button onclick="window.print()" style="padding:10px 24px;font-size:16px;background:#1976d2;color:#fff;border:none;border-radius:6px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.3);">🖨️ 列印</button>
+  </div>
+  <style>@media print{.no-print{display:none!important;}}</style>
 </body>
-</html>`);
-      w.document.close();
+</html>`;
+      const blob = new Blob([printContent], { type: 'text/html; charset=utf-8' });
+      window.open(URL.createObjectURL(blob), '_blank');
     }
 
     // ========== 4. 匯出 Excel 功能 ==========

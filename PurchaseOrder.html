@@ -1165,17 +1165,14 @@
     <div style="text-align:center;"><div class="sign-line"></div>主管</div>
     <div style="text-align:center;"><div class="sign-line"></div>會計</div>
   </div>
-  <script>window.onload=function(){ setTimeout(()=>{ window.print(); }, 500); }<\/script>
+  <div class="no-print" style="position:fixed;top:10px;right:10px;z-index:9999;">
+    <button onclick="window.print()" style="padding:10px 24px;font-size:16px;background:#1976d2;color:#fff;border:none;border-radius:6px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.3);">🖨️ 列印</button>
+  </div>
+  <style>@media print{.no-print{display:none!important;}}<\/style>
 </body></html>`;
 
-      const w = window.open('', '_blank');
-      if (w) {
-        w.document.open();
-        w.document.write(printHTML);
-        w.document.close();
-      } else {
-        Swal.fire('錯誤', '瀏覽器攔截了彈跳視窗，請允許開啟視窗。', 'error');
-      }
+      const blob = new Blob([printHTML], { type: 'text/html; charset=utf-8' });
+      window.open(URL.createObjectURL(blob), '_blank');
     }
   </script>
 </body>

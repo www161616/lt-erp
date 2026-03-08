@@ -522,8 +522,7 @@
       // 全部合計
       tableRows += `<tr class="grand-total"><td colspan="3" style="text-align:center; font-weight:bold;">全部合計（${groupedData.length} 家，${currentData.length} 筆）</td><td class="text-right">${currentSummary.total.toLocaleString()}</td><td></td><td class="text-right" style="font-weight:bold;">${currentSummary.total.toLocaleString()}</td><td class="text-right">${currentSummary.paid.toLocaleString()}</td><td class="text-right" style="font-weight:bold; color:#c00; font-size:14px;">${currentSummary.unpaid.toLocaleString()}</td><td></td></tr>`;
 
-      const w = window.open('', '_blank');
-      w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>應收帳款彙總表</title>
+      const printContent = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>應收帳款彙總表</title>
 <style>
   * { margin:0; padding:0; box-sizing:border-box; }
   body { font-family:'Noto Sans TC','Microsoft JhengHei',sans-serif; padding:20px 30px; font-size:13px; color:#333; margin:0; }
@@ -561,9 +560,13 @@
     </tr></thead>
     <tbody>${tableRows}</tbody>
   </table>
-  <script>window.onload=function(){ setTimeout(()=>{ window.print(); }, 600); }<\/script>
-</body></html>`);
-      w.document.close();
+  <div class="no-print" style="position:fixed;top:10px;right:10px;z-index:9999;">
+    <button onclick="window.print()" style="padding:10px 24px;font-size:16px;background:#1976d2;color:#fff;border:none;border-radius:6px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.3);">🖨️ 列印</button>
+  </div>
+  <style>@media print{.no-print{display:none!important;}}</style>
+</body></html>`;
+      const blob = new Blob([printContent], { type: 'text/html; charset=utf-8' });
+      window.open(URL.createObjectURL(blob), '_blank');
     }
 
     // ========== 6. 匯出 Excel（分組格式） ==========

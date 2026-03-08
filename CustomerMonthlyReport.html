@@ -466,8 +466,7 @@
       totalGrand += o.grandTotal;
     });
 
-    const w = window.open('', '_blank');
-    w.document.write(`
+    const printContent = `
 <!DOCTYPE html>
 <html>
 <head>
@@ -540,13 +539,15 @@
       <div class="total-row">本期應收總計： $${totalGrand.toLocaleString()}</div>
     </div>
   </div>
-  <script>
-    window.onload = function() { setTimeout(function(){ window.print(); }, 800); }
-  <\/script>
+  <div class="no-print" style="position:fixed;top:10px;right:10px;z-index:9999;">
+    <button onclick="window.print()" style="padding:10px 24px;font-size:16px;background:#1976d2;color:#fff;border:none;border-radius:6px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.3);">🖨️ 列印</button>
+  </div>
+  <style>@media print{.no-print{display:none!important;}}</style>
 </body>
 </html>
-    `);
-    w.document.close();
+    `;
+    const blob = new Blob([printContent], { type: 'text/html; charset=utf-8' });
+    window.open(URL.createObjectURL(blob), '_blank');
   }
 </script>
 </body>
