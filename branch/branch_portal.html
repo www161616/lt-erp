@@ -4294,6 +4294,25 @@ function renderAidBoard() {
     var cancelBtn = (post.posterStore === myName && post.status === 'open')
       ? "<button onclick=\"cancelAidPost('" + post.id + "')\" style=\"padding:4px 10px; background:white; color:#ef4444; border:1px solid #ef4444; border-radius:6px; font-size:12px; cursor:pointer; font-family:inherit;\">取消</button>"
       : '';
+    var replyBtn = "<button onclick=\"openAidReplyModal('" + post.id + "')\" style=\"padding:4px 10px; background:#fff0f6; color:#be185d; border:1px solid #be185d; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit;\">💬 回覆</button>";
+
+    // 留言區
+    var replies = post.replies || [];
+    var repliesHtml = '';
+    if (replies.length > 0) {
+      repliesHtml = '<div style="margin-top:10px; border-top:1px solid #f3f4f6; padding-top:8px;">' +
+        '<div style="font-size:12px; font-weight:700; color:#6b7280; margin-bottom:6px;">💬 留言 (' + replies.length + ')</div>' +
+        replies.map(function(rp) {
+          var isSelf = rp.store === myName;
+          return '<div style="padding:6px 10px; margin-bottom:4px; background:' + (isSelf ? '#fff0f6' : '#f9fafb') + '; border-radius:6px; font-size:12px;">' +
+            '<span style="font-weight:700; color:' + (isSelf ? '#be185d' : '#374151') + ';">' + rp.store + '</span>' +
+            (rp.employee ? ' <span style="color:#9ca3af;">' + rp.employee + '</span>' : '') +
+            ' <span style="color:#d1d5db;">|</span> <span style="color:#9ca3af;">' + rp.time + '</span>' +
+            '<div style="margin-top:2px; color:#374151; line-height:1.5;">' + rp.text.replace(/</g, '&lt;').replace(/>/g, '&gt;') + '</div>' +
+          '</div>';
+        }).join('') +
+      '</div>';
+    }
 
     return '<div style="background:white; border-radius:8px; border:1px solid var(--border); padding:16px 20px; margin-bottom:12px; box-shadow:0 2px 4px rgba(0,0,0,0.04);">' +
       '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">' +
@@ -4304,11 +4323,13 @@ function renderAidBoard() {
         '</div>' +
         '<div style="display:flex; align-items:center; gap:8px;">' +
           '<span style="font-size:12px; color:#9ca3af;">' + post.createdAt + '</span>' +
+          replyBtn +
           cancelBtn +
         '</div>' +
       '</div>' +
       (post.note ? '<div style="margin:6px 0 4px; padding:8px 12px; background:#fefce8; border-radius:6px; font-size:13px; color:#92400e; border-left:3px solid #f59e0b;">💬 ' + post.note + '</div>' : '') +
       itemsHtml +
+      repliesHtml +
     '</div>';
   }).join('');
 }
@@ -4552,6 +4573,41 @@ function createAidTransfer(postId, itemIdx, respIdx) {
 
   Swal.fire({ icon: 'success', title: '店轉店單已建立！', html: '<b>' + tfId + '</b><br>' + fromStore + ' → ' + toStore, confirmButtonColor: '#be185d' });
   renderAidBoard();
+}
+
+function openAidReplyModal(postId) {
+  const post = aidBoard.find(a => a.id === postId);
+  if (!post) return;
+  Swal.fire({
+    title: '💬 回覆 ' + post.posterStore,
+    html: '<div style="text-align:left; font-size:13px; color:#6b7280; margin-bottom:10px;">' +
+      '貼文 ' + post.id + '（' + (post.type === 'need' ? '需求' : '釋出') + '）</div>' +
+      '<textarea id="aidReplyText" rows="3" placeholder="輸入留言內容…" style="width:100%; padding:10px 12px; border:1.5px solid #e2e8f0; border-radius:6px; font-size:14px; font-family:inherit; resize:vertical; box-sizing:border-box;"></textarea>',
+    showCancelButton: true,
+    confirmButtonText: '送出留言',
+    cancelButtonText: '取消',
+    confirmButtonColor: '#be185d',
+    preConfirm: () => {
+      const text = (document.getElementById('aidReplyText').value || '').trim();
+      if (!text) { Swal.showValidationMessage('請輸入留言內容'); return false; }
+      return text;
+    }
+  }).then(result => {
+    if (result.isConfirmed) {
+      const now = new Date();
+      const ts = now.getFullYear() + '/' + String(now.getMonth()+1).padStart(2,'0') + '/' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+      if (!post.replies) post.replies = [];
+      post.replies.push({
+        store: currentStore?.name || '',
+        employee: currentStore?.employee || '',
+        text: result.value,
+        time: ts
+      });
+      localStorage.setItem('portalMutualAidBoard', JSON.stringify(aidBoard));
+      cloudSave('portalMutualAidBoard');
+      renderAidBoard();
+    }
+  });
 }
 
 function cancelAidPost(postId) {
