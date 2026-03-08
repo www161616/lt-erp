@@ -544,11 +544,13 @@ async function loadAllData() {
     document.getElementById('pSearch').disabled = false;
     document.getElementById('prodLoading').classList.add('hidden');
     
-    // 【新增亮點 4】如果原本有選客戶，要重新計算專屬價格；如果沒有，就單純過濾商品
+    // 【新增亮點 4】如果原本有選客戶，要重新計算專屬價格；如果沒有，顯示提示
     if (currentCustId) {
-        updateCustomerPrices(); 
-    } else {
+        updateCustomerPrices();
+    } else if (currentSearch) {
         filterProd();
+    } else {
+        document.getElementById('pList').innerHTML = '<div style="text-align:center; color:var(--text2); padding:30px;">輸入商品名稱或編號搜尋</div>';
     }
 
     // 如果從網址參數帶入需要編輯或複製的 OrderID
@@ -1227,14 +1229,14 @@ function addOne(id) {
 // ========== 9. UI 輔助與前端列印 ==========
 function extractCategories() { let s = new Set(); allP.forEach(p => { if(p.category) s.add(p.category.trim()); }); categories = Array.from(s).sort(); }
 async function loadCategories() {
+  // 用 Supabase 的 Prefer: count=exact 搭配 distinct-on 或直接撈 category
+  // 只取 category，量小速度快
   try {
-    const res = await fetch(`${SB_URL}/rpc/get_product_categories`, { method: 'POST', headers: HEADERS });
-    if (res.ok) { categories = (await res.json()).map(r => r.category).filter(Boolean).sort(); return; }
-  } catch(e) {}
-  // fallback: 直接查 distinct
-  try {
-    const res = await fetch(`${SB_URL}/products?select=category&status=eq.啟用&limit=5000`, { headers: HEADERS });
-    if (res.ok) { const data = await res.json(); categories = [...new Set(data.map(r => r.category).filter(Boolean))].sort(); }
+    const res = await fetch(`${SB_URL}/products?select=category&status=eq.啟用&order=category`, { headers: {...HEADERS, 'Range': '0-29999'} });
+    if (res.ok) {
+      const data = await res.json();
+      categories = [...new Set(data.map(r => r.category).filter(Boolean))].sort();
+    }
   } catch(e) {}
 }
 function renderCategoryFilter() { 
