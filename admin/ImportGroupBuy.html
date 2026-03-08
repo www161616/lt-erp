@@ -664,6 +664,14 @@
       localStorage.setItem('importedStoreNames', JSON.stringify(STORE_COLUMNS));
       localStorage.setItem('importedPersonalNames', JSON.stringify(PERSONAL_COLUMNS));
 
+      // 同步到雲端（透過父視窗的 cloudSave）
+      try {
+        if (window.parent && window.parent.cloudSave) {
+          window.parent.cloudSave('branchOrderList');
+          window.parent.cloudSave('branchOrders');
+        }
+      } catch(e) { console.warn('cloudSave skipped:', e); }
+
       addLog('————————————————', 'info');
       addLog(`✅ 匯入完成！新增 ${importedCount} 項，更新 ${skippedCount} 項`, 'ok');
 
@@ -700,6 +708,15 @@
         return;
       }
       if (!confirm('確定清除所有匯入的開團資料？\n\n清除後開團總表會回到空白狀態')) return;
+      // 先寫入空值再同步雲端，最後清除
+      localStorage.setItem('branchOrderList', '[]');
+      localStorage.setItem('branchOrders', '{}');
+      try {
+        if (window.parent && window.parent.cloudSave) {
+          window.parent.cloudSave('branchOrderList');
+          window.parent.cloudSave('branchOrders');
+        }
+      } catch(e) {}
       for (var i = 0; i < keys.length; i++) {
         localStorage.removeItem(keys[i]);
       }
