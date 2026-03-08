@@ -3797,6 +3797,8 @@
           existing.name = item.name || existing.name;
           existing.startDate = item.startDate || existing.startDate;
           existing.endDate = item.endDate || existing.endDate;
+          // 開團總表的 status 為準
+          if (item.status) existing.status = item.status;
           // 商品建檔的 supplier 作為預設，但不覆蓋訂貨追蹤手動修改的值
           if (!existing.supplier && item.supplier) existing.supplier = item.supplier;
           if (item.price !== undefined) existing.price = item.price;
@@ -3817,8 +3819,6 @@
           const allPersonalNames = JSON.parse(localStorage.getItem('importedPersonalNames') || '[]');
           const allNames = [...allStoreNames, ...allPersonalNames];
           const total = allNames.reduce((s, n) => s + ((branchOrders[n] && branchOrders[n][itemKey]) || 0), 0);
-          const today = new Date().toISOString().split('T')[0];
-          const isExpired = item.endDate && item.endDate < today;
           mockConsolidatedOrders.push({
             id: itemKey,
             productId: displayId,
@@ -3828,7 +3828,7 @@
             totalQty: total || 0,
             startDate: item.startDate || '',
             endDate: item.endDate || '',
-            status: isExpired ? 'closed' : 'open',
+            status: item.status || 'open',
             procStatus: item.procStatus || 'pending',
             eta: '',
             supplier: item.supplier || '',
