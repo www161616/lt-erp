@@ -1137,12 +1137,24 @@ async function saveOrder(autoPrint) {
     if (!res.ok) throw new Error(data.message || '資料庫寫入失敗');
 
     hasUnsavedChanges = false;
-    Swal.fire({ icon: 'success', title: '儲存成功', timer: 1500, showConfirmButton: false });
-    
-    const newOrderId = data; 
-    if (!editingOrderId) executeActualReset(); 
-    
-    if(autoPrint) fetchAndPrint(newOrderId || editingOrderId);
+    const newOrderId = data;
+    const savedId = newOrderId || editingOrderId;
+    if (!editingOrderId) executeActualReset();
+
+    if (autoPrint) {
+      fetchAndPrint(savedId);
+    } else {
+      Swal.fire({
+        icon: 'success',
+        title: '儲存成功',
+        html: `<div style="margin-top:12px;">單號：<b>${savedId}</b></div>`,
+        showConfirmButton: true,
+        confirmButtonText: '📊 匯出 Excel',
+        showCancelButton: true,
+        cancelButtonText: '關閉',
+        confirmButtonColor: '#2d6a4f'
+      }).then(r => { if (r.isConfirmed) exportSavedToExcel(savedId); });
+    }
   } catch(error) {
     document.getElementById('loadingOverlay').classList.add('hidden');
     Swal.fire('儲存失敗', error.message, 'error');
@@ -1228,37 +1240,46 @@ function updateListHighlights() { let cartIds = cart.map(i => String(i.id)); doc
 function applyDiscountToAll(rate) { cart.forEach(it => it.price = Math.round((it.basePrice || it.price) * rate)); renderCart(); }
 function resetPriceToBase() { cart.forEach(it => it.price = getActualPrice(it.id)); renderCart(); }
 
-async function exportToExcel() {
-  if (cart.length === 0) { Swal.fire({ icon: 'warning', title: '購物車是空的' }); return; }
+// 頁面上的 Excel 按鈕：若已有單號從 DB 撈，否則提示先存檔
+function exportToExcel() {
+  if (editingOrderId) { exportSavedToExcel(editingOrderId); return; }
+  Swal.fire({ icon: 'info', title: '請先儲存', text: '儲存後即可匯出 Excel（含單號）' });
+}
 
+// 核心：從資料庫撈訂單 → 套範本 → 下載 .xlsx
+async function exportSavedToExcel(orderId) {
   Swal.fire({ title: '⏳ 產生 Excel 中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 
   try {
-    // 1. 收集資料
-    const orderDate = document.getElementById('orderDate').value;
-    const cId = document.getElementById('customer').value;
-    const customerSelect = document.getElementById('customer');
-    const customerName = customerSelect.selectedIndex > 0 ? customerSelect.options[customerSelect.selectedIndex].text.split(' | ')[1] || '未指定' : '未指定';
-    const taxType = currentTaxType || '免稅';
-    const note = document.getElementById('orderNote').value || '';
+    // 1. 從 DB 撈主單 + 明細
+    const [orderRes, detailsRes] = await Promise.all([
+      fetch(`${SB_URL}/sales_orders?id=eq.${orderId}&select=*`, { headers: HEADERS }),
+      fetch(`${SB_URL}/sales_details?order_id=eq.${orderId}&select=*`, { headers: HEADERS })
+    ]);
+    if (!orderRes.ok || !detailsRes.ok) throw new Error('讀取訂單失敗');
+    const orderArr = await orderRes.json();
+    const details = await detailsRes.json();
+    if (orderArr.length === 0) throw new Error('找不到該筆銷貨單');
+    const o = orderArr[0];
 
-    const st = cart.reduce((s, i) => s + (i.price * i.qty), 0);
-    let tx = 0; if (taxType.indexOf('外加') > -1) tx = Math.round(st * 0.05);
-    const ship = Number(document.getElementById('shippingFee').value) || 0;
-    const ded = Number(document.getElementById('otherDeduction').value) || 0;
-    const gt = st + tx + ship - ded;
-
-    // 查客戶電話地址
+    // 2. 查客戶電話地址
     let custPhone = '', custAddr = '';
-    if (cId) {
+    if (o.customer_id) {
       try {
-        const cRes = await fetch(`${SB_URL}/customers?id=eq.${cId}&select=phone,mobile,address`, { headers: HEADERS });
+        const cRes = await fetch(`${SB_URL}/customers?id=eq.${o.customer_id}&select=phone,mobile,address`, { headers: HEADERS });
         const cData = await cRes.json();
         if (cData.length > 0) { custPhone = cData[0].phone || cData[0].mobile || ''; custAddr = cData[0].address || ''; }
       } catch(e) {}
     }
 
-    // 2. 讀取範本
+    const st = Number(o.subtotal || 0);
+    const tx = Number(o.tax_amount || 0);
+    const ship = Number(o.shipping_fee || o.shipping || 0);
+    const ded = Number(o.deduction || 0);
+    const gt = Number(o.grand_total || o.total_amount || 0);
+    const customerName = o.customer_name || o.customer_id || '未指定';
+
+    // 3. 讀取範本
     const tplRes = await fetch('templates/銷貨單.xlsx');
     if (!tplRes.ok) throw new Error('找不到範本檔案 templates/銷貨單.xlsx');
     const tplBuf = await tplRes.arrayBuffer();
@@ -1267,7 +1288,7 @@ async function exportToExcel() {
     await wb.xlsx.load(tplBuf);
     const ws = wb.getWorksheet(1);
 
-    // 3. 替換佔位符的輔助函式
+    // 4. 替換佔位符輔助函式
     function replacePlaceholder(cell, map) {
       if (typeof cell.value !== 'string') return;
       let val = cell.value;
@@ -1282,14 +1303,14 @@ async function exportToExcel() {
     }
 
     const placeholders = {
-      '{{orderId}}': editingOrderId || '新建中',
-      '{{date}}': orderDate,
+      '{{orderId}}': orderId,
+      '{{date}}': o.order_date || '',
       '{{customerName}}': customerName,
       '{{customerPhone}}': custPhone,
       '{{customerAddress}}': custAddr,
-      '{{taxType}}': taxType,
-      '{{note}}': note,
-      '{{shippingDate}}': orderDate,
+      '{{taxType}}': o.tax_type || '免稅',
+      '{{note}}': o.note || '',
+      '{{shippingDate}}': o.shipping_date || o.order_date || '',
       '{{subtotal}}': st.toLocaleString(),
       '{{taxAmount}}': tx.toLocaleString(),
       '{{shipping}}': ship.toLocaleString(),
@@ -1297,7 +1318,7 @@ async function exportToExcel() {
       '{{grandTotal}}': gt.toLocaleString()
     };
 
-    // 4. 找 {{#items}} 行並展開
+    // 5. 找 {{#items}} 行並展開
     let itemsRowNum = null;
     ws.eachRow((row, rowNum) => {
       row.eachCell(cell => {
@@ -1307,8 +1328,7 @@ async function exportToExcel() {
       });
     });
 
-    if (itemsRowNum && cart.length > 0) {
-      // 儲存範本行的樣式
+    if (itemsRowNum && details.length > 0) {
       const templateRow = ws.getRow(itemsRowNum);
       const templateStyles = [];
       for (let c = 1; c <= ws.columnCount; c++) {
@@ -1323,16 +1343,15 @@ async function exportToExcel() {
       }
       const templateHeight = templateRow.height;
 
-      // 需要插入的行數（第一筆用原本的行，其餘插入新行）
-      if (cart.length > 1) {
-        ws.spliceRows(itemsRowNum + 1, 0, ...Array(cart.length - 1).fill([]));
+      if (details.length > 1) {
+        ws.spliceRows(itemsRowNum + 1, 0, ...Array(details.length - 1).fill([]));
       }
 
-      // 填入每筆商品
-      cart.forEach((item, idx) => {
+      details.forEach((it, idx) => {
         const row = ws.getRow(itemsRowNum + idx);
-        const subtotal = item.qty * item.price;
-        const values = [idx + 1, String(item.id), item.name || '', item.unit || '', item.qty, item.price.toLocaleString(), subtotal.toLocaleString()];
+        const price = Number(it.unit_price || it.price || 0);
+        const lineTotal = Number(it.subtotal || (it.qty * price));
+        const values = [idx + 1, String(it.product_id), it.product_name || '', it.unit || '', it.qty, price.toLocaleString(), lineTotal.toLocaleString()];
 
         values.forEach((v, c) => {
           const cell = row.getCell(c + 1);
@@ -1348,29 +1367,29 @@ async function exportToExcel() {
       });
     }
 
-    // 5. 替換所有其他佔位符
+    // 6. 替換所有佔位符
     ws.eachRow(row => {
       row.eachCell(cell => replacePlaceholder(cell, placeholders));
     });
 
-    // 6. 隱藏值為 0 的行（稅額、運費、扣款）
-    ws.eachRow((row, rowNum) => {
+    // 7. 隱藏值為 0 的行
+    ws.eachRow(row => {
       row.eachCell(cell => {
         if (typeof cell.value === 'string') {
-          if ((cell.value.includes('稅額') || cell.value.includes('稅金')) && tx === 0) { row.hidden = true; }
-          if (cell.value.includes('運費') && ship === 0) { row.hidden = true; }
-          if (cell.value.includes('扣款') && ded === 0) { row.hidden = true; }
+          if ((cell.value.includes('稅額') || cell.value.includes('稅金')) && tx === 0) row.hidden = true;
+          if (cell.value.includes('運費') && ship === 0) row.hidden = true;
+          if (cell.value.includes('扣款') && ded === 0) row.hidden = true;
         }
       });
     });
 
-    // 7. 匯出下載
+    // 8. 匯出下載
     const buffer = await wb.xlsx.writeBuffer();
     const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `銷貨單_${customerName}_${orderDate}.xlsx`;
+    link.download = `銷貨單_${customerName}_${o.order_date || ''}.xlsx`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -1401,11 +1420,14 @@ function fetchAndPrint(orderId) {
         <button onclick="promptDeliveryInfoForNewOrder('${orderId}')" style="background:#2E7D32; color:white; border:none; border-radius:6px; width:100%; padding:15px; font-size:16px; font-weight:bold; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
           📦 配送裝箱單<br><small style="font-weight:normal; font-size:13px; opacity:0.9;">僅顯示商品與數量</small>
         </button>
+        <button onclick="Swal.close(); exportSavedToExcel('${orderId}')" style="background:#2d6a4f; color:white; border:none; border-radius:6px; width:100%; padding:15px; font-size:16px; font-weight:bold; cursor:pointer; box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+          📊 匯出 Excel<br><small style="font-weight:normal; font-size:13px; opacity:0.9;">套用範本下載 .xlsx</small>
+        </button>
       </div>
     `,
     showConfirmButton: false,
     showCancelButton: true,
-    cancelButtonText: '暫不列印'
+    cancelButtonText: '關閉'
   });
 }
 
