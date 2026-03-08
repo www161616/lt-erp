@@ -409,6 +409,7 @@
             <input type="date" id="summaryDateTo" onchange="sumCurrentPage=1; renderSummaryPage()" style="padding:6px 8px; border:1.5px solid var(--border); border-radius:6px; font-size:12px; font-family:inherit;">
             <div style="width:1px; height:24px; background:var(--border); margin:0 2px;"></div>
             <input type="text" id="summaryKeyword" oninput="sumCurrentPage=1; renderSummaryPage()" placeholder="搜尋…" style="width:120px; padding:6px 10px; border:1.5px solid var(--border); border-radius:6px; font-size:12px; font-family:inherit;">
+            <button onclick="sumCurrentPage=1; renderSummaryPage()" style="padding:6px 10px; border:1px solid #be185d; border-radius:6px; background:#be185d; color:white; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap;">查詢</button>
             <button onclick="clearSummaryFilters()" style="padding:6px 10px; border:1px solid #d1d5db; border-radius:6px; background:white; font-size:12px; color:#6b7280; cursor:pointer; white-space:nowrap;">清除</button>
             <span id="summaryResultCount" style="font-size:12px; color:#9ca3af; white-space:nowrap;"></span>
             <div style="flex:1;"></div>
@@ -1109,6 +1110,10 @@
       saveQtyCache();
 
       const today = new Date().toISOString().split('T')[0];
+      // 讀取已匯入的各店數量，自動帶入自己店的數量
+      const branchOrders = JSON.parse(localStorage.getItem('branchOrders') || '{}');
+      const myStoreName = currentStore?.name || '';
+      const myStoreOrders = branchOrders[myStoreName] || {};
       let orderList = JSON.parse(localStorage.getItem('branchOrderList') || '[]')
         .sort((a, b) => (b.endDate || '').localeCompare(a.endDate || ''));
 
@@ -1150,7 +1155,8 @@
             ? '<span style="background:#fef3c7; color:#b45309; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:700; margin-left:4px;">已過期</span>'
             : '';
 
-        const cached = orderQtyCache[p.id] || '';
+        const importedQty = myStoreOrders[p.id] || 0;
+        const cached = orderQtyCache[p.id] || (importedQty > 0 ? String(importedQty) : '');
 
         html += `
           <tr style="border-bottom:1px solid #f3f4f6; ${canOrder ? '' : 'background:#fafafa;'}" onmouseenter="this.style.background='${canOrder ? '#fff0f6' : '#fafafa'}'" onmouseleave="this.style.background='${canOrder ? '' : '#fafafa'}'">
