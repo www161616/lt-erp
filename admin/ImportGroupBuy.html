@@ -237,8 +237,9 @@
       }
     }
 
-    // ===== 處理訂貨追蹤（售價 + 廠商） =====
-    let supplierMap = {};  // { '商品編號_結單日': 廠商名 }
+    // ===== 處理訂貨追蹤（售價 + 廠商 + 叫貨 + 狀態） =====
+    let supplierMap = {};    // { '商品編號_結單日': 廠商名 }
+    let procStatusMap = {};  // { '商品編號_結單日': 'ordered'|'shipped' }
 
     function processPriceCSV(text) {
       try {
@@ -247,17 +248,23 @@
         const colIdx = {};
         header.forEach((h, i) => colIdx[h.replace(/\s+/g, '').trim()] = i);
 
-        // 自動偵測廠商欄位名稱（移除空格後比對）
+        // 自動偵測欄位名稱
         const supplierColName = ['廠商', '供應商', '廠商名稱', '供應商名稱', '廠商/備註'].find(n => colIdx[n] !== undefined) || null;
+        const orderColName = ['叫貨', '已訂', '訂貨'].find(n => colIdx[n] !== undefined) || null;
+        const statusColName = ['狀態'].find(n => colIdx[n] !== undefined) || null;
 
         let priceCount = 0;
         let supplierCount = 0;
+        let orderedCount = 0;
+        let shippedCount = 0;
         for (let i = 1; i < rows.length; i++) {
           const r = rows[i];
           const productId = (r[colIdx['商品編號']] || '').trim();
           const closeDate = (r[colIdx['結單日']] || '').trim();
           const price = parseFloat(r[colIdx['售價']]) || 0;
           const supplier = supplierColName ? (r[colIdx[supplierColName]] || '').trim() : '';
+          const orderVal = orderColName ? (r[colIdx[orderColName]] || '').trim() : '';
+          const statusVal = statusColName ? (r[colIdx[statusColName]] || '').trim() : '';
           if (!productId) continue;
 
           if (price) {
@@ -271,13 +278,24 @@
             if (!supplierMap[productId]) supplierMap[productId] = supplier;
             supplierCount++;
           }
+
+          // 狀態欄「已出貨」優先，否則叫貨欄「已訂」
+          const key = `${productId}_${closeDate}`;
+          if (statusVal === '已出貨') {
+            procStatusMap[key] = 'shipped';
+            shippedCount++;
+          } else if (orderVal === '已訂' || orderVal === 'Y' || orderVal === 'y') {
+            procStatusMap[key] = 'ordered';
+            orderedCount++;
+          }
         }
 
-        // 把售價 + 廠商套用到已讀取的資料
+        // 把售價 + 廠商 + 採購進度套用到已讀取的資料
         allRows.forEach(item => {
           const key = `${item.productId}_${item.closeDate}`;
           item.price = priceMap[key] || priceMap[item.productId] || item.price || 0;
           item.supplier = supplierMap[key] || supplierMap[item.productId] || item.supplier || '';
+          if (procStatusMap[key]) item.procStatus = procStatusMap[key];
         });
 
         // 刷新預覽
@@ -286,6 +304,8 @@
         let msg = `已對應 <b>${priceCount}</b> 筆售價`;
         if (supplierCount > 0) msg += `、<b>${supplierCount}</b> 筆廠商`;
         else if (!supplierColName) msg += `<br><span style="font-size:12px; color:#b7791f;">未找到廠商欄位（需有「廠商」標頭）</span>`;
+        if (orderedCount > 0) msg += `、<b>${orderedCount}</b> 筆已訂貨`;
+        if (shippedCount > 0) msg += `、<b>${shippedCount}</b> 筆已出貨`;
 
         Swal.fire({
           icon: 'success',
@@ -625,6 +645,7 @@
             startDate: openDateFull,
             endDate: closeDateFull,
             batchKey: dateKey,
+            procStatus: item.procStatus || 'pending',
             importedAt: new Date().toISOString(),
           };
 

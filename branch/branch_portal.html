@@ -577,7 +577,7 @@
   <!-- 新增店轉店 -->
   <div style="background:white; border-radius:8px; border:1px solid var(--border); padding:20px 24px; margin-bottom:20px; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
     <div style="font-size:15px; font-weight:700; color:var(--primary); margin-bottom:16px;">➕ 新增店轉店登記</div>
-    <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(160px,1fr)); gap:12px; margin-bottom:12px;">
+    <div style="display:grid; grid-template-columns:minmax(160px,1fr) minmax(220px,1fr); gap:12px; margin-bottom:12px;">
       <div>
         <div style="font-size:12px; font-weight:700; color:#6b7280; margin-bottom:5px;">轉出店</div>
         <select id="tfFrom" style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:6px; font-size:14px; font-family:inherit;">
@@ -1781,16 +1781,11 @@
 const MOCK_SUMMARY_DATA = [];
 
 function initSummaryPage() {
-  // 預設日期範圍：本月 1 日 ~ 本月末
+  // 預設不帶日期，顯示全部資料
   const fromEl = document.getElementById('summaryDateFrom');
   const toEl   = document.getElementById('summaryDateTo');
-  if (fromEl && !fromEl.value) {
-    const now = new Date();
-    const y = now.getFullYear(), m = String(now.getMonth()+1).padStart(2,'0');
-    const lastDay = new Date(y, now.getMonth()+1, 0).getDate();
-    fromEl.value = `${y}-${m}-01`;
-    toEl.value   = `${y}-${m}-${String(lastDay).padStart(2,'0')}`;
-  }
+  if (fromEl) fromEl.value = '';
+  if (toEl) toEl.value = '';
   renderSummaryPage();
 }
 
@@ -1801,18 +1796,14 @@ function clearSummaryFilters() {
   const kw = document.getElementById('summaryKeyword');
   const df = document.getElementById('summaryDateFrom');
   const dt = document.getElementById('summaryDateTo');
-  const now = new Date();
-  const y = now.getFullYear(), m = String(now.getMonth()+1).padStart(2,'0');
-  const lastDay = new Date(y, now.getMonth()+1, 0).getDate();
-  const defFrom = `${y}-${m}-01`, defTo = `${y}-${m}-${String(lastDay).padStart(2,'0')}`;
-  if (!kw.value.trim() && df.value === defFrom && dt.value === defTo) return;
+  if (!kw.value.trim() && !df.value && !dt.value) return;
   Swal.fire({
     title: '確認清除篩選？', icon: 'question',
     showCancelButton: true, confirmButtonText: '清除', cancelButtonText: '取消',
     confirmButtonColor: '#be185d'
   }).then(r => {
     if (r.isConfirmed) {
-      df.value = defFrom; dt.value = defTo; kw.value = '';
+      df.value = ''; dt.value = ''; kw.value = '';
       sumCurrentPage = 1; renderSummaryPage();
     }
   });
@@ -2507,6 +2498,7 @@ function submitTransfer() {
   const toStore   = document.getElementById('tfTo').value;
   const note      = document.getElementById('tfNote').value.trim();
   const tempNote  = document.querySelector('input[name="tfTempNote"]:checked')?.value || '';
+  if (!tempNote) { Swal.fire('提醒', '請選擇整單溫層（冷凍／冷藏／常溫）', 'warning'); return; }
   const validItems = tfItems.filter(i => i.name.trim() && parseInt(i.qty) > 0);
   if (validItems.length === 0) { Swal.fire('提醒', '請至少填寫一項商品', 'warning'); return; }
   const newTf = {
@@ -2598,7 +2590,7 @@ function renderTransferPage() {
         <table style="width:100%; border-collapse:collapse; font-size:13px;">
           <thead><tr style="background:#fff0f6;">
             <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">單號</th>
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">轉入店</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; min-width:120px;">轉入店</th>
             <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">商品</th>
             <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">整單溫層</th>
             <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">日期</th>
@@ -2650,19 +2642,20 @@ function renderTransferPage() {
   } else if (currentTfTab === 'history') {
     const related = transferList.filter(t => t.fromStore === myName || t.toStore === myName);
     let html = related.length === 0
-      ? `<tr><td colspan="6" style="padding:24px; text-align:center; color:#9ca3af;">沒有歷史紀錄</td></tr>`
+      ? `<tr><td colspan="7" style="padding:24px; text-align:center; color:#9ca3af;">沒有歷史紀錄</td></tr>`
       : related.map(t => {
           const dateStr = t.date.toLocaleString('zh-TW', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
           const itemSummary = t.items.map(i => `${i.name} x${i.qty}${i.price ? ' ($'+i.price+')' : ''}`).join('、');
           const direction = t.fromStore === myName ? `→ ${t.toStore}` : `← ${t.fromStore}`;
           const st = t.adminStatus || 'pending';
           const statusBadge = `<span style="background:${adminStatusBg[st]||'#f3f4f6'}; color:${adminStatusColor[st]||'#374151'}; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; white-space:nowrap;">${adminStatusLabel[st]||st}</span>`;
+          const noteHtml = t.warehouseNote ? `<div style="font-size:11px; color:#2563eb; margin-top:2px;">總倉：${t.warehouseNote}</div>` : '';
           return `<tr style="border-bottom:1px solid #f3f4f6;">
             <td style="padding:10px 16px; color:#6b7280;">${t.id}</td>
             <td style="padding:10px 16px; font-weight:500;">${direction}</td>
             <td style="padding:10px 16px; font-size:13px;">${itemSummary}</td>
             <td style="padding:10px 16px; color:#6b7280; white-space:nowrap;">${dateStr}</td>
-            <td style="padding:10px 16px; text-align:center;">${statusBadge}</td>
+            <td style="padding:10px 16px; text-align:center;">${statusBadge}${noteHtml}</td>
             <td style="padding:10px 16px; text-align:center;">
               <button onclick="printTransfer('${t.id}')" style="padding:4px 10px; background:#fff0f6; color:#be185d; border:1px solid #be185d; border-radius:4px; font-size:12px; cursor:pointer; font-family:inherit;">🖨️ 列印</button>
             </td>

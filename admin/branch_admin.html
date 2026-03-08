@@ -3720,6 +3720,7 @@
                   <option value="closed">僅顯示：結</option>
                   <option value="pending">僅顯示：待採購叫貨</option>
                   <option value="ordered">僅顯示：已向廠商叫貨</option>
+                  <option value="shipped">僅顯示：已出貨</option>
                   <option value="arrived">僅顯示：貨已到倉</option>
                   <option value="out_of_stock">僅顯示：廠商斷貨</option>
                   <option value="supplier_shortage">僅顯示：廠商短缺</option>
@@ -3934,7 +3935,7 @@
         }
         if (filterStatus === 'open') filtered = filtered.filter(i => i.status === 'open');
         else if (filterStatus === 'closed') filtered = filtered.filter(i => i.status === 'closed');
-        else if (['pending','ordered','arrived','out_of_stock','supplier_shortage'].includes(filterStatus)) filtered = filtered.filter(i => i.procStatus === filterStatus);
+        else if (['pending','ordered','shipped','arrived','out_of_stock','supplier_shortage'].includes(filterStatus)) filtered = filtered.filter(i => i.procStatus === filterStatus);
         if (searchKw) filtered = filtered.filter(i => i.name.toLowerCase().includes(searchKw) || i.id.toLowerCase().includes(searchKw));
       }
 
@@ -3971,6 +3972,7 @@
                 <select onchange="updateProcItem('${item.id}', 'procStatus', this.value)" style="width:100%; padding:6px; border:1px solid var(--border); border-radius:4px; font-size:13px; font-family:inherit;">
                   <option value="pending" ${item.procStatus === 'pending' ? 'selected' : ''}>⏳ 待處理</option>
                   <option value="ordered" ${item.procStatus === 'ordered' ? 'selected' : ''}>🚚 已向廠商叫貨</option>
+                  <option value="shipped" ${item.procStatus === 'shipped' ? 'selected' : ''}>📤 已出貨</option>
                   <option value="arrived" ${item.procStatus === 'arrived' ? 'selected' : ''}>📦 貨已到倉</option>
                   <option value="out_of_stock" ${item.procStatus === 'out_of_stock' ? 'selected' : ''}>❌ 廠商斷貨</option>
                   <option value="supplier_shortage" ${item.procStatus === 'supplier_shortage' ? 'selected' : ''}>⚠️ 廠商短缺</option>
@@ -4062,7 +4064,7 @@
       }
       if (filterStatus === 'open') filtered = filtered.filter(i => i.status === 'open');
       else if (filterStatus === 'closed') filtered = filtered.filter(i => i.status === 'closed');
-      else if (['pending','ordered','arrived','out_of_stock','supplier_shortage'].includes(filterStatus)) filtered = filtered.filter(i => i.procStatus === filterStatus);
+      else if (['pending','ordered','shipped','arrived','out_of_stock','supplier_shortage'].includes(filterStatus)) filtered = filtered.filter(i => i.procStatus === filterStatus);
       if (searchKw) filtered = filtered.filter(i => i.name.toLowerCase().includes(searchKw) || i.id.toLowerCase().includes(searchKw));
       return filtered;
     }
@@ -4070,7 +4072,7 @@
     function batchUpdateProcStatus() {
       const checked = document.querySelectorAll('.proc-checkbox:checked');
       const newStatus = document.getElementById('batchProcStatusSelect').value;
-      const statusMap = { pending: '⏳ 待處理', ordered: '🚚 已向廠商叫貨', arrived: '📦 貨已到倉', out_of_stock: '❌ 廠商斷貨', supplier_shortage: '⚠️ 廠商短缺' };
+      const statusMap = { pending: '⏳ 待處理', ordered: '🚚 已向廠商叫貨', shipped: '📤 已出貨', arrived: '📦 貨已到倉', out_of_stock: '❌ 廠商斷貨', supplier_shortage: '⚠️ 廠商短缺' };
 
       // 有勾選→改勾選的，沒勾選→改當前篩選結果全部
       let targetIds;
@@ -4477,7 +4479,7 @@
       Swal.fire({ title: '產出中...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
 
       const exportData = mockConsolidatedOrders.map(item => {
-        const statusMap = { pending: '⏳ 待處理', ordered: '🚚 已向廠商叫貨', arrived: '📦 貨已到倉', out_of_stock: '❌ 廠商斷貨', supplier_shortage: '⚠️ 廠商短缺' };
+        const statusMap = { pending: '⏳ 待處理', ordered: '🚚 已向廠商叫貨', shipped: '📤 已出貨', arrived: '📦 貨已到倉', out_of_stock: '❌ 廠商斷貨', supplier_shortage: '⚠️ 廠商短缺' };
         return {
           '開團日': item.startDate,
           '結單日': item.endDate,
@@ -6893,7 +6895,7 @@
     const inq = mockInquiries.find(i => i.id === id);
     if (!inq) return;
     const order = mockConsolidatedOrders.find(o => o.id === inq.productId);
-    const procStatusMap = { pending:'待採購叫貨', ordered:'已叫貨', arrived:'已到倉', out_of_stock:'廠商斷貨' };
+    const procStatusMap = { pending:'待採購叫貨', ordered:'已叫貨', shipped:'已出貨', arrived:'已到倉', out_of_stock:'廠商斷貨' };
     const procLabel = order ? (procStatusMap[order.procStatus] || '—') : '—';
     const eta = order && order.eta ? order.eta : '（尚未設定）';
     if (inq.status === 'replied') {
@@ -6995,7 +6997,7 @@
     const inq = mockInquiries.find(i => i.id === id);
     if (!inq) return;
     const order = mockConsolidatedOrders.find(o => o.id === inq.productId);
-    const procStatusMap = { pending:'待採購叫貨', ordered:'已叫貨', arrived:'已到倉', out_of_stock:'廠商斷貨' };
+    const procStatusMap = { pending:'待採購叫貨', ordered:'已叫貨', shipped:'已出貨', arrived:'已到倉', out_of_stock:'廠商斷貨' };
     const procLabel = order ? (procStatusMap[order.procStatus] || '—') : '—';
     const eta = order && order.eta ? order.eta : '';
     const isEdit = inq.status === 'replied';
