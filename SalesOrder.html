@@ -702,8 +702,8 @@ function getActualPrice(pid) {
     if(cust && cust.priceGroup) {
        const grp = cust.priceGroup;
        if(grp.indexOf("總倉") > -1 && p.priceBranch > 0) return p.priceBranch;
-       if(grp.indexOf("店家") > -1 && p.priceWholesale > 0) return p.priceWholesale;
-       if(grp.indexOf("餐廳") > -1 && p.priceGroupBuy > 0) return p.priceGroupBuy;
+       if((grp.indexOf("店家") > -1 || grp.indexOf("批發") > -1) && p.priceWholesale > 0) return p.priceWholesale;
+       if((grp.indexOf("餐廳") > -1 || grp.indexOf("團購") > -1) && p.priceGroupBuy > 0) return p.priceGroupBuy;
     }
   }
   return p.price || 0;
@@ -834,8 +834,8 @@ function renderPList(list) {
         badges += '<span class="badge badge-special">特價</span>';
       } else if (cust && cust.priceGroup) {
         if (cust.priceGroup.indexOf("總倉") > -1 && p.priceBranch > 0) badges += '<span class="badge badge-group">倉</span>';
-        else if (cust.priceGroup.indexOf("店家") > -1 && p.priceWholesale > 0) badges += '<span class="badge badge-group" style="color:#795548; border-color:#d7ccc8; background:#efebe9;">店</span>';
-        else if (cust.priceGroup.indexOf("餐廳") > -1 && p.priceGroupBuy > 0) badges += '<span class="badge badge-group" style="color:#ff5722; border-color:#ffccbc; background:#fbe9e7;">餐</span>';
+        else if ((cust.priceGroup.indexOf("店家") > -1 || cust.priceGroup.indexOf("批發") > -1) && p.priceWholesale > 0) badges += '<span class="badge badge-group" style="color:#795548; border-color:#d7ccc8; background:#efebe9;">' + (cust.priceGroup.indexOf("批發") > -1 ? '批' : '店') + '</span>';
+        else if ((cust.priceGroup.indexOf("餐廳") > -1 || cust.priceGroup.indexOf("團購") > -1) && p.priceGroupBuy > 0) badges += '<span class="badge badge-group" style="color:#ff5722; border-color:#ffccbc; background:#fbe9e7;">' + (cust.priceGroup.indexOf("團購") > -1 ? '團' : '餐') + '</span>';
       }
       const isSelected = cartIds.includes(String(p.id)) ? 'selected-row' : '';
       
