@@ -508,7 +508,7 @@
     <div class="footer-row">本月已付款：$${sumPaid.toLocaleString()}</div>
     <div class="footer-row footer-total">應付總計：$${sumUnpaid.toLocaleString()}</div>
   </div>
-  <script>window.addEventListener('load', function() { setTimeout(function() { window.print(); window.addEventListener('afterprint', function() { window.close(); }); }, 500); });<\/script>
+  <script>window.addEventListener('load', function() { setTimeout(function() { window.print(); }, 500); });<\/script>
 </body>
 </html>`);
       w.document.close();

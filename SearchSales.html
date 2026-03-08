@@ -679,7 +679,7 @@
         `;
       }
 
-      printHTML += '<script>window.onload=function(){ setTimeout(()=>{ window.print(); window.close(); }, 500); }<\/script></body></html>';
+      printHTML += '<script>window.onload=function(){ setTimeout(()=>{ window.print(); }, 500); }<\/script></body></html>';
       const win = window.open('', '_blank');
       win.document.write(printHTML);
       win.document.close();

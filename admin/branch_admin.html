@@ -1183,7 +1183,7 @@
     <div style="text-align:center;"><div class="sign-line"></div>主管</div>
     <div style="text-align:center;"><div class="sign-line"></div>會計</div>
   </div>
-  <script>window.onload=function(){ setTimeout(()=>{ window.print(); window.close(); }, 500); }<\/script>
+  <script>window.onload=function(){ setTimeout(()=>{ window.print(); }, 500); }<\/script>
 </body></html>`;
 
       const w = window.open('', '_blank');
@@ -1634,7 +1634,7 @@
     <div style="text-align:center;"><div class="sign-line"></div>主管</div>
     <div style="text-align:center;"><div class="sign-line"></div>會計</div>
   </div>
-  <script>window.onload=function(){ setTimeout(()=>{ window.print(); window.close(); }, 500); }<\/script>
+  <script>window.onload=function(){ setTimeout(()=>{ window.print(); }, 500); }<\/script>
 </body></html>`;
       const w = window.open('', '_blank');
       if (w) { w.document.open(); w.document.write(html); w.document.close(); }
@@ -6220,7 +6220,7 @@
           </tr>
         </tfoot>
       </table>
-      <script>window.onload=function(){ setTimeout(()=>{ window.print(); window.close(); }, 500); }<\/script>
+      <script>window.onload=function(){ setTimeout(()=>{ window.print(); }, 500); }<\/script>
     </body></html>`;
 
     const win = window.open('', '_blank');
@@ -8363,7 +8363,7 @@
       h2{text-align:center;margin-bottom:10px;}
       table{width:100%;border-collapse:collapse;} th,td{border:1px solid #333;padding:4px 6px;text-align:left;}
       th{background:#eee;} @media print{.no-print{display:none;}}</style>
-      <script>window.onload=function(){setTimeout(function(){window.print();},300);window.onafterprint=function(){window.close();};};<\/script>
+      <script>window.onload=function(){setTimeout(function(){window.print();},300);};<\/script>
     </head><body>
       <h2>陸貨到貨清單</h2>
       <p style="text-align:right;font-size:11px;">列印日期：${new Date().toLocaleDateString('zh-TW')}　共 ${printData.length} 筆</p>
