@@ -283,9 +283,11 @@
           const key = `${productId}_${closeDate}`;
           if (statusVal === '已出貨') {
             procStatusMap[key] = 'shipped';
+            if (!procStatusMap[productId]) procStatusMap[productId] = 'shipped';
             shippedCount++;
           } else if (orderVal === '已訂' || orderVal === 'Y' || orderVal === 'y') {
             procStatusMap[key] = 'ordered';
+            if (!procStatusMap[productId]) procStatusMap[productId] = 'ordered';
             orderedCount++;
           }
         }
@@ -295,7 +297,7 @@
           const key = `${item.productId}_${item.closeDate}`;
           item.price = priceMap[key] || priceMap[item.productId] || item.price || 0;
           item.supplier = supplierMap[key] || supplierMap[item.productId] || item.supplier || '';
-          if (procStatusMap[key]) item.procStatus = procStatusMap[key];
+          item.procStatus = procStatusMap[key] || procStatusMap[item.productId] || '';
         });
 
         // 刷新預覽
