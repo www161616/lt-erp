@@ -2150,7 +2150,7 @@
         status:   ['狀態', 'status']
       };
       for (const [field, aliases] of Object.entries(fieldAliases)) {
-        const idx = header.findIndex(h => aliases.some(a => h.includes(a)));
+        const idx = header.findIndex(h => aliases.some(a => h === a));
         if (idx >= 0) colMap[field] = idx;
       }
 
