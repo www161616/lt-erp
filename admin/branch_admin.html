@@ -44,7 +44,7 @@
     /* 登入介面專屬 */
     #loginOverlay {
       position: fixed; inset: 0; background: linear-gradient(135deg, #1e3a5f 0%, #2b6cb0 60%, #dbeafe 100%); z-index: 9999;
-      display: flex; justify-content: center; align-items: center;
+      display: none; justify-content: center; align-items: center;
     }
     .login-box {
       background: white; padding: 40px; border-radius: 12px; width: 360px;
@@ -138,6 +138,7 @@
     <div class="menu-item" id="menu-demandBackorder" onclick="switchTab('demandBackorder', this)">📋 需求與欠品管理</div>
     <div class="menu-item" id="menu-transfer" onclick="switchTab('transfer', this)">🔄 店轉店與退倉審核</div>
     <div class="menu-item" id="menu-aid" onclick="switchTab('aid', this)">🤝 互助交流板</div>
+    <div class="menu-item" id="menu-bulletin" onclick="switchTab('bulletin', this)">📢 公告欄</div>
 
     <div id="label-accounting" style="padding: 10px 20px; font-size: 11px; color: var(--text2); margin-top: 10px;">帳務</div>
     <div class="menu-item" id="menu-accounting" onclick="switchTab('accounting', this)">💳 銷貨單管理</div>
@@ -193,7 +194,7 @@
 
     async function cloudLoadAll() {
       try {
-        const resp = await fetch(`${SB_URL}/shared_kv?key=in.("branchOrderList","branchOrders","branchDataList","branchTypeMap","portalAllRequests","portalTransferList","portalMutualAidBoard")`, { headers: HEADERS });
+        const resp = await fetch(`${SB_URL}/shared_kv?key=in.("branchOrderList","branchOrders","branchDataList","branchTypeMap","portalAllRequests","portalTransferList","portalMutualAidBoard","portalBulletin")`, { headers: HEADERS });
         if (resp.ok) {
           const rows = await resp.json();
           rows.forEach(r => {
@@ -295,13 +296,17 @@
     async function checkLoginStatus() {
       const saved = sessionStorage.getItem('erp_employee');
       if (saved) {
-        currentUser = JSON.parse(saved);
-        // 恢復 auth token
+        // 先確認 Supabase session 還有效
         const { data: { session } } = await sbClient.auth.getSession();
-        if (session) {
-          HEADERS['Authorization'] = `Bearer ${session.access_token}`;
-          sessionStorage.setItem('sb_auth_token', session.access_token);
+        if (!session) {
+          sessionStorage.removeItem('erp_employee');
+          document.getElementById('loginOverlay').style.display = 'flex';
+          document.getElementById('loginUser').focus();
+          return;
         }
+        currentUser = JSON.parse(saved);
+        HEADERS['Authorization'] = `Bearer ${session.access_token}`;
+        sessionStorage.setItem('sb_auth_token', session.access_token);
         document.getElementById('loginOverlay').style.display = 'none';
         document.getElementById('currentUserLabel').innerText = `👤 ${currentUser.full_name || currentUser.username}`;
         applyRolePermissions();
@@ -421,11 +426,16 @@
         icon: 'question',
         showCancelButton: true,
         confirmButtonText: '確定登出'
-      }).then((result) => {
+      }).then(async (result) => {
         if (result.isConfirmed) {
           logActivity('登出系統', 'USER', '主動登出');
           sessionStorage.removeItem('erp_employee');
-          location.reload();
+          try { await sbClient.auth.signOut(); } catch(e) {}
+          currentUser = null;
+          document.getElementById('loginOverlay').style.display = 'flex';
+          document.getElementById('loginUser').value = '';
+          document.getElementById('loginPass').value = '';
+          document.getElementById('loginUser').focus();
         }
       });
     }
@@ -543,6 +553,9 @@
       } else if (tabId === 'aid') {
         title.innerText = '當前功能：互助交流板';
         renderAdminAidStation();
+      } else if (tabId === 'bulletin') {
+        title.innerText = '當前功能：公告欄';
+        renderBulletinStation();
       } else if (tabId === 'accounting') {
         title.innerText = '當前功能：銷貨單管理';
         renderAccountingStation();
@@ -5902,6 +5915,156 @@
   function isEditable(createdAt) {
     const d = new Date(createdAt.replace(/\//g,'-').replace(' ','T'));
     return (Date.now() - d.getTime()) < 3 * 24 * 60 * 60 * 1000;
+  }
+
+  // ============================
+  // 公告欄
+  // ============================
+  function renderBulletinStation() {
+    const container = document.getElementById('mainContainer');
+    const bulletins = JSON.parse(localStorage.getItem('portalBulletin') || '[]');
+
+    let listHtml = '';
+    if (bulletins.length === 0) {
+      listHtml = '<div style="text-align:center; padding:40px; color:#9ca3af;">目前沒有公告</div>';
+    } else {
+      listHtml = bulletins.map((b, idx) => {
+        const pinBadge = b.pinned ? '<span style="background:#fef3c7; color:#b45309; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;">📌 置頂</span>' : '';
+        const typeBadge = b.type === 'urgent'
+          ? '<span style="background:#fee2e2; color:#dc2626; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;">🔴 緊急</span>'
+          : b.type === 'important'
+          ? '<span style="background:#fef3c7; color:#b45309; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;">🟡 重要</span>'
+          : '<span style="background:#dbeafe; color:#2563eb; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;">🔵 一般</span>';
+        return '<div style="background:white; border-radius:8px; border:1px solid #e2e8f0; padding:16px 20px; margin-bottom:10px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">' +
+          '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">' +
+            '<div style="display:flex; align-items:center; gap:8px;">' + typeBadge + pinBadge +
+              ' <span style="font-size:15px; font-weight:700; color:#1e293b;">' + (b.title || '').replace(/</g,'&lt;') + '</span></div>' +
+            '<div style="display:flex; align-items:center; gap:8px;">' +
+              '<span style="font-size:12px; color:#9ca3af;">' + (b.author || '') + ' · ' + (b.time || '') + '</span>' +
+              '<button onclick="editBulletin(' + idx + ')" style="padding:3px 10px; background:#f0f9ff; color:#2563eb; border:1px solid #93c5fd; border-radius:4px; font-size:12px; cursor:pointer; font-family:inherit;">編輯</button>' +
+              '<button onclick="deleteBulletin(' + idx + ')" style="padding:3px 10px; background:#fff; color:#ef4444; border:1px solid #fca5a5; border-radius:4px; font-size:12px; cursor:pointer; font-family:inherit;">刪除</button>' +
+              '<button onclick="togglePinBulletin(' + idx + ')" style="padding:3px 10px; background:#fffbeb; color:#b45309; border:1px solid #fcd34d; border-radius:4px; font-size:12px; cursor:pointer; font-family:inherit;">' + (b.pinned ? '取消置頂' : '置頂') + '</button>' +
+            '</div>' +
+          '</div>' +
+          '<div style="font-size:14px; color:#374151; line-height:1.7; white-space:pre-wrap;">' + (b.content || '').replace(/</g,'&lt;') + '</div>' +
+        '</div>';
+      }).join('');
+    }
+
+    container.innerHTML = `
+      <div class="panel" style="margin-bottom:16px;">
+        <h3 style="margin-bottom:12px;">📢 發布新公告</h3>
+        <div style="display:flex; gap:10px; align-items:end; flex-wrap:wrap; margin-bottom:10px;">
+          <div style="flex:1; min-width:200px;">
+            <div style="font-size:12px; font-weight:600; color:#64748b; margin-bottom:4px;">標題</div>
+            <input type="text" id="bulletinTitle" placeholder="公告標題" style="width:100%; padding:8px 12px; border:1.5px solid #e2e8f0; border-radius:6px; font-size:14px; font-family:inherit; box-sizing:border-box;">
+          </div>
+          <div>
+            <div style="font-size:12px; font-weight:600; color:#64748b; margin-bottom:4px;">類型</div>
+            <select id="bulletinType" style="padding:8px 12px; border:1.5px solid #e2e8f0; border-radius:6px; font-size:14px; font-family:inherit;">
+              <option value="normal">🔵 一般</option>
+              <option value="important">🟡 重要</option>
+              <option value="urgent">🔴 緊急</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:12px; font-weight:600; color:#64748b; display:flex; align-items:center; gap:4px;">
+              <input type="checkbox" id="bulletinPinned"> 📌 置頂
+            </label>
+          </div>
+        </div>
+        <div style="margin-bottom:10px;">
+          <div style="font-size:12px; font-weight:600; color:#64748b; margin-bottom:4px;">內容</div>
+          <textarea id="bulletinContent" rows="4" placeholder="公告內容…" style="width:100%; padding:10px 12px; border:1.5px solid #e2e8f0; border-radius:6px; font-size:14px; font-family:inherit; resize:vertical; box-sizing:border-box;"></textarea>
+        </div>
+        <button onclick="postBulletin()" style="padding:10px 24px; background:#1e40af; color:white; border:none; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit;">發布公告</button>
+      </div>
+      <div class="panel">
+        <h3 style="margin-bottom:12px;">📋 公告列表 (${bulletins.length} 則)</h3>
+        ${listHtml}
+      </div>
+    `;
+  }
+
+  function postBulletin() {
+    const title = (document.getElementById('bulletinTitle')?.value || '').trim();
+    const content = (document.getElementById('bulletinContent')?.value || '').trim();
+    const type = document.getElementById('bulletinType')?.value || 'normal';
+    const pinned = document.getElementById('bulletinPinned')?.checked || false;
+    if (!title) { Swal.fire('請輸入標題', '', 'warning'); return; }
+    if (!content) { Swal.fire('請輸入內容', '', 'warning'); return; }
+    const now = new Date();
+    const ts = now.getFullYear() + '/' + String(now.getMonth()+1).padStart(2,'0') + '/' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+    const bulletins = JSON.parse(localStorage.getItem('portalBulletin') || '[]');
+    bulletins.unshift({ title, content, type, pinned, author: currentUser?.name || '總倉', time: ts });
+    // 置頂排序：pinned 的排在前面
+    bulletins.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+    localStorage.setItem('portalBulletin', JSON.stringify(bulletins));
+    cloudSave('portalBulletin');
+    Swal.fire({ icon: 'success', title: '公告已發布！', confirmButtonColor: '#1e40af' });
+    renderBulletinStation();
+  }
+
+  function editBulletin(idx) {
+    const bulletins = JSON.parse(localStorage.getItem('portalBulletin') || '[]');
+    const b = bulletins[idx];
+    if (!b) return;
+    Swal.fire({
+      title: '編輯公告',
+      html: '<div style="text-align:left;">' +
+        '<div style="margin-bottom:8px;"><label style="font-size:13px; font-weight:600;">標題</label>' +
+        '<input id="swalBulTitle" value="' + (b.title || '').replace(/"/g,'&quot;') + '" style="width:100%; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px; font-size:14px; font-family:inherit; box-sizing:border-box; margin-top:4px;"></div>' +
+        '<div style="margin-bottom:8px;"><label style="font-size:13px; font-weight:600;">類型</label>' +
+        '<select id="swalBulType" style="width:100%; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px; font-size:14px; font-family:inherit; margin-top:4px;">' +
+          '<option value="normal" ' + (b.type==='normal'?'selected':'') + '>🔵 一般</option>' +
+          '<option value="important" ' + (b.type==='important'?'selected':'') + '>🟡 重要</option>' +
+          '<option value="urgent" ' + (b.type==='urgent'?'selected':'') + '>🔴 緊急</option></select></div>' +
+        '<div><label style="font-size:13px; font-weight:600;">內容</label>' +
+        '<textarea id="swalBulContent" rows="4" style="width:100%; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px; font-size:14px; font-family:inherit; resize:vertical; box-sizing:border-box; margin-top:4px;">' + (b.content || '').replace(/</g,'&lt;') + '</textarea></div></div>',
+      showCancelButton: true, confirmButtonText: '儲存', cancelButtonText: '取消', confirmButtonColor: '#1e40af',
+      preConfirm: () => {
+        const t = (document.getElementById('swalBulTitle').value || '').trim();
+        const c = (document.getElementById('swalBulContent').value || '').trim();
+        if (!t || !c) { Swal.showValidationMessage('標題和內容不可為空'); return false; }
+        return { title: t, content: c, type: document.getElementById('swalBulType').value };
+      }
+    }).then(r => {
+      if (r.isConfirmed) {
+        b.title = r.value.title; b.content = r.value.content; b.type = r.value.type;
+        const now = new Date();
+        b.time = now.getFullYear() + '/' + String(now.getMonth()+1).padStart(2,'0') + '/' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+        b.time += ' (已編輯)';
+        localStorage.setItem('portalBulletin', JSON.stringify(bulletins));
+        cloudSave('portalBulletin');
+        renderBulletinStation();
+      }
+    });
+  }
+
+  function deleteBulletin(idx) {
+    Swal.fire({
+      title: '確定刪除此公告？', icon: 'warning',
+      showCancelButton: true, confirmButtonText: '刪除', cancelButtonText: '取消', confirmButtonColor: '#dc2626'
+    }).then(r => {
+      if (r.isConfirmed) {
+        const bulletins = JSON.parse(localStorage.getItem('portalBulletin') || '[]');
+        bulletins.splice(idx, 1);
+        localStorage.setItem('portalBulletin', JSON.stringify(bulletins));
+        cloudSave('portalBulletin');
+        renderBulletinStation();
+      }
+    });
+  }
+
+  function togglePinBulletin(idx) {
+    const bulletins = JSON.parse(localStorage.getItem('portalBulletin') || '[]');
+    if (bulletins[idx]) {
+      bulletins[idx].pinned = !bulletins[idx].pinned;
+      bulletins.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+      localStorage.setItem('portalBulletin', JSON.stringify(bulletins));
+      cloudSave('portalBulletin');
+      renderBulletinStation();
+    }
   }
 
   function renderAccountingStation() {
