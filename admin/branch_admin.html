@@ -2114,6 +2114,24 @@
         });
       }
 
+      // ②-b 同步到 Google Sheets 訂貨追蹤
+      try {
+        const gsPayload = {
+          items: stagingList.map(item => ({
+            endDate: item.endDate || '',
+            code: item.code,
+            name: item.name,
+            price: Number(item.price) || 0
+          }))
+        };
+        await fetch('https://script.google.com/macros/s/AKfycby9PP2kvnwQycLZRuF_Lk-15iDj1R682KoHgaV7OdbZhZrQnBxsxiW0e11NkKe-HD12/exec', {
+          method: 'POST',
+          mode: 'no-cors',
+          headers: { 'Content-Type': 'text/plain' },
+          body: JSON.stringify(gsPayload)
+        });
+      } catch(e) { console.warn('Google Sheets 同步失敗:', e); }
+
       // ③ 同步至 branch_portal localStorage（結單填表用）
       const saved = JSON.parse(localStorage.getItem('branchOrderList') || '[]');
       stagingList.forEach(item => {
