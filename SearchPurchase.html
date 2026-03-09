@@ -668,7 +668,12 @@
         return;
       }
       sessionStorage.setItem('purchaseEditData', JSON.stringify(currentDetail));
-      window.location.href = `PurchaseOrder.html?edit=${orderId}`;
+      // 在 iframe 內需透過 parent 載入，或直接用 top 跳轉
+      if (window.parent && window.parent.loadPage) {
+        window.parent.loadPage('PurchaseOrder.html?edit=' + orderId, '編輯進貨單');
+      } else {
+        window.location.href = 'PurchaseOrder.html?edit=' + orderId;
+      }
     }
 
     // ========== 複製功能 ==========
@@ -694,7 +699,11 @@
           sessionStorage.setItem('purchaseCopyData', JSON.stringify(copyData));
           
           Swal.close();
-          window.location.href = 'PurchaseOrder.html?copy=true';
+          if (window.parent && window.parent.loadPage) {
+            window.parent.loadPage('PurchaseOrder.html?copy=true', '複製進貨單');
+          } else {
+            window.location.href = 'PurchaseOrder.html?copy=true';
+          }
         }
       } catch (err) {
         Swal.fire('錯誤', '複製失敗: ' + err.message, 'error');
