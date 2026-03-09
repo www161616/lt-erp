@@ -6594,6 +6594,7 @@
             <span style="margin-left:auto;"></span>
             <button onclick="batchSummaryStatus('closed')" style="background:#c53030; color:#fff; border:none; border-radius:6px; padding:5px 14px; font-size:13px; cursor:pointer; font-weight:600;">🔴 批次結單</button>
             <button onclick="batchSummaryStatus('open')" style="background:#2b6cb0; color:#fff; border:none; border-radius:6px; padding:5px 14px; font-size:13px; cursor:pointer; font-weight:600;">🟢 批次開放</button>
+            <button onclick="batchDeleteSummary()" style="background:#7f1d1d; color:#fff; border:none; border-radius:6px; padding:5px 14px; font-size:13px; cursor:pointer; font-weight:600;">🗑️ 批次刪除</button>
           </div>
           <div id="asPagination" style="display:flex; align-items:center; gap:6px; margin-top:8px; flex-wrap:wrap;"></div>
         </div>
@@ -6781,6 +6782,60 @@
 
     // 3. 刷新開團總表（保持當前頁）
     filterAdminSummary(false, asPageNum);
+  }
+
+  // ===== 開團總表：批次刪除 =====
+  async function batchDeleteSummary() {
+    const checked = [...document.querySelectorAll('.as-checkbox:checked')].map(cb => cb.value);
+    if (checked.length === 0) {
+      Swal.fire('請先勾選', '請勾選要刪除的商品', 'info');
+      return;
+    }
+    const r = await Swal.fire({
+      title: '確定刪除？',
+      html: `將刪除 <b>${checked.length}</b> 筆商品<br><span style="color:#c53030; font-size:13px;">同時從開團總表、訂貨追蹤、Supabase products 移除</span>`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: '確定刪除',
+      cancelButtonText: '取消',
+      confirmButtonColor: '#7f1d1d'
+    });
+    if (!r.isConfirmed) return;
+
+    // 1. 從 branchOrderList 移除
+    let saved = JSON.parse(localStorage.getItem('branchOrderList') || '[]');
+    saved = saved.filter(p => !checked.includes(p.id));
+    localStorage.setItem('branchOrderList', JSON.stringify(saved));
+    cloudSave('branchOrderList');
+
+    // 2. 從 branchOrders 移除對應 key
+    const orders = JSON.parse(localStorage.getItem('branchOrders') || '{}');
+    Object.keys(orders).forEach(store => {
+      checked.forEach(id => { delete orders[store][id]; });
+    });
+    localStorage.setItem('branchOrders', JSON.stringify(orders));
+    cloudSave('branchOrders');
+
+    // 3. 從訂貨追蹤 mockConsolidatedOrders 移除
+    checked.forEach(id => {
+      const idx = mockConsolidatedOrders.findIndex(i => i.id === id);
+      if (idx >= 0) mockConsolidatedOrders.splice(idx, 1);
+    });
+
+    // 4. 從 Supabase products 刪除（用 productId，去掉 _dateKey 後綴）
+    const productIds = [...new Set(checked.map(id => id.split('_')[0] || id))];
+    try {
+      for (const pid of productIds) {
+        await fetch(`${SB_URL}/products?id=eq.${encodeURIComponent(pid)}`, {
+          method: 'DELETE', headers: HEADERS
+        });
+      }
+    } catch(e) { console.warn('Supabase 刪除失敗:', e); }
+
+    logActivity('批次刪除商品', 'SUMMARY', { count: checked.length, ids: checked.join(',') });
+    filterAdminSummary(false, asPageNum);
+    syncProcurementToPortal();
+    Swal.fire({ title: '已刪除', text: `共刪除 ${checked.length} 筆`, icon: 'success', timer: 1500, showConfirmButton: false });
   }
 
   // ===== 品名欄拖曳調整寬度 =====
