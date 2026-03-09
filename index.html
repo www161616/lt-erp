@@ -584,6 +584,10 @@
       const displayEl = document.getElementById('loginUserDisplay');
       if (displayEl) displayEl.textContent = '👤 ' + (userInfo.username || userInfo.email || '');
 
+      // 帳號管理僅 www161616 可見
+      const accNav = document.querySelector('.nav-item[data-url="AccountManager.html"]');
+      if (accNav) accNav.style.display = (userInfo.username === 'www161616') ? '' : 'none';
+
       initDateTime();
       refreshDashboard();
       calRender();
