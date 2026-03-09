@@ -2117,12 +2117,11 @@
       // ②-b 同步到 Google Sheets 訂貨追蹤
       try {
         const gsPayload = {
-          items: stagingList.map(item => ({
-            endDate: item.endDate || '',
-            code: item.code,
-            name: item.name,
-            price: Number(item.price) || 0
-          }))
+          items: stagingList.map(item => {
+            let md = item.endDate || '';
+            if (md.includes('-')) { const p = md.split('-'); md = parseInt(p[1]) + '/' + parseInt(p[2]); }
+            return { endDate: md, code: item.code, name: item.name, price: Number(item.price) || 0 };
+          })
         };
         console.log('📤 準備送出 Google Sheets，共 ' + gsPayload.items.length + ' 筆');
         const gsUrl = 'https://script.google.com/macros/s/AKfycbzUmI2a5WQfAtntRPcelzoijBPrwSQ6SGIhKfspKqaD093FuzAIW98JvXovlMrOeCWo/exec';
