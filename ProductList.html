@@ -86,7 +86,7 @@
       <input type="text" id="searchInput" placeholder="搜尋商品編號或名稱..." oninput="filterTable()">
       <button class="btn btn-secondary" onclick="fetchProducts()"><i class="fas fa-sync-alt"></i> 重新整理</button>
     </div>
-    <a href="ProductForm.html" class="btn"><i class="fas fa-plus"></i> 新增商品</a>
+    <a href="ProductForm.html" onclick="event.preventDefault(); if(window.parent&&window.parent.loadPage) window.parent.loadPage('ProductForm.html','新增商品'); else window.location.href='ProductForm.html';" class="btn"><i class="fas fa-plus"></i> 新增商品</a>
   </div>
 
   <!-- 批次操作列（勾選後顯示） -->
@@ -452,7 +452,11 @@
 
   // ========== 8. 單筆編輯 ==========
   function editProduct(id) {
-    window.location.href = `ProductForm.html?id=${id}`;
+    if (window.parent && window.parent.loadPage) {
+      window.parent.loadPage('ProductForm.html?id=' + id, '編輯商品');
+    } else {
+      window.location.href = `ProductForm.html?id=${id}`;
+    }
   }
 
   // ========== 9. 點擊切換啟用/停用 ==========

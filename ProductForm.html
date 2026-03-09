@@ -551,7 +551,11 @@
   }
 
   function closeWindow() {
-    window.location.href = 'ProductList.html';
+    if (window.parent && window.parent.loadPage) {
+      window.parent.loadPage('ProductList.html', '商品管理');
+    } else {
+      window.location.href = 'ProductList.html';
+    }
   }
 </script>
 </body>
