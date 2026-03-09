@@ -82,6 +82,7 @@
 
   function accessTags(role) {
     if (role === 'admin') return '<span class="access-tag" style="background:#dbeafe; color:#1e40af;">ERP</span><span class="access-tag" style="background:#fef3c7; color:#92400e;">管理後台</span>';
+    if (role === 'accountant') return '<span class="access-tag" style="background:#dbeafe; color:#1e40af;">ERP</span><span class="access-tag" style="background:#fef3c7; color:#92400e;">管理後台</span>';
     if (role === 'assistant') return '<span class="access-tag" style="background:#fef3c7; color:#92400e;">管理後台</span>';
     if (role === 'staff') return '<span class="access-tag" style="background:#e2e8f0; color:#475569;">分店前台</span>';
     return '-';
@@ -97,8 +98,8 @@
       return;
     }
 
-    var roleLabel = { admin: '管理員', assistant: '助理', staff: '員工' };
-    var roleBadge = { admin: 'badge-admin', assistant: 'badge-assistant', staff: 'badge-staff' };
+    var roleLabel = { admin: '管理員', accountant: '會計', assistant: '助理', staff: '員工' };
+    var roleBadge = { admin: 'badge-admin', accountant: 'badge-admin', assistant: 'badge-assistant', staff: 'badge-staff' };
 
     tbody.innerHTML = accountList.map(function(a) {
       var role = a.role || 'staff';
@@ -135,6 +136,7 @@
           '<div style="margin-bottom:10px;"><label style="font-weight:bold; color:#718096; font-size:12px;">角色</label>' +
             '<select id="acc-role" onchange="document.getElementById(\'acc-store-row\').style.display=this.value===\'staff\'?\'block\':\'none\';" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;">' +
               '<option value="admin">管理員 → 可登入 ERP + 管理後台</option>' +
+              '<option value="accountant">會計 → 可登入 ERP + 管理後台（無帳號管理）</option>' +
               '<option value="assistant">助理 → 可登入管理後台</option>' +
               '<option value="staff">員工 → 可登入分店前台</option>' +
             '</select></div>' +
@@ -201,6 +203,7 @@
           '<div style="margin-bottom:10px;"><label style="font-weight:bold; color:#718096; font-size:12px;">角色</label>' +
             '<select id="edit-role" onchange="document.getElementById(\'edit-store-row\').style.display=this.value===\'staff\'?\'block\':\'none\';" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;">' +
               '<option value="admin"' + (emp.role === 'admin' ? ' selected' : '') + '>管理員 → ERP + 管理後台</option>' +
+              '<option value="accountant"' + (emp.role === 'accountant' ? ' selected' : '') + '>會計 → ERP + 管理後台</option>' +
               '<option value="assistant"' + (emp.role === 'assistant' ? ' selected' : '') + '>助理 → 管理後台</option>' +
               '<option value="staff"' + (emp.role === 'staff' ? ' selected' : '') + '>員工 → 分店前台</option>' +
             '</select></div>' +

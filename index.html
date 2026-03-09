@@ -532,9 +532,9 @@
         });
         if (error) { Swal.fire('登入失敗', error.message, 'error'); btn.disabled=false; btn.textContent='登入'; return; }
         const meta = data.user.user_metadata || {};
-        if (meta.role !== 'admin') {
+        if (meta.role !== 'admin' && meta.role !== 'accountant') {
           await sbClient.auth.signOut();
-          Swal.fire('權限不足','此帳號非管理員，無法使用 ERP 系統。','error');
+          Swal.fire('權限不足','此帳號無法使用 ERP 系統。','error');
           btn.disabled=false; btn.textContent='登入'; return;
         }
         // Store token
@@ -556,7 +556,7 @@
       const { data: { session } } = await sbClient.auth.getSession();
       if (session) {
         const meta = session.user.user_metadata || {};
-        if (meta.role === 'admin') {
+        if (meta.role === 'admin' || meta.role === 'accountant') {
           sessionStorage.setItem('sb_auth_token', session.access_token);
           sessionStorage.setItem('sb_auth_user', JSON.stringify(meta));
           HEADERS['Authorization'] = `Bearer ${session.access_token}`;

@@ -307,7 +307,7 @@
         }
         // 檢查 role 權限
         const meta = session.user.user_metadata || {};
-        if (meta.role !== 'admin' && meta.role !== 'assistant') {
+        if (meta.role !== 'admin' && meta.role !== 'assistant' && meta.role !== 'accountant') {
           sessionStorage.removeItem('erp_employee');
           try { await sbClient.auth.signOut({ scope: 'local' }); } catch(e) {}
           document.getElementById('loginOverlay').style.display = 'flex';
@@ -398,7 +398,7 @@
         sessionStorage.setItem('sb_auth_token_admin_pass', pass);
 
         const meta = authData.user.user_metadata || {};
-        if (meta.role !== 'admin' && meta.role !== 'assistant') {
+        if (meta.role !== 'admin' && meta.role !== 'assistant' && meta.role !== 'accountant') {
           await sbClient.auth.signOut({ scope: 'local' });
           Swal.fire('權限不足', '此帳號無法使用管理後台。', 'error');
           return;
