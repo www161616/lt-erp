@@ -7915,7 +7915,9 @@
   }
 
   function addGBRows(n) {
-    for (let i = 0; i < n; i++) newGBRows.push({ close_date:'', product_code:'', product_name:'', estimated_cost:0, selling_price:0, url:'', packaging:'', ordered:false });
+    const rows = [];
+    for (let i = 0; i < n; i++) rows.push({ close_date:'', product_code:'', product_name:'', estimated_cost:0, selling_price:0, url:'', packaging:'', ordered:false });
+    newGBRows.unshift(...rows);
     gbPage = 1;
     renderGBGrid();
   }
@@ -8370,7 +8372,9 @@
     }
   }
   function addPPARows(n) {
-    for (let i = 0; i < n; i++) newPPARows.push({ close_date:'', product_id:'', price:0, specs:'', order_status:'', supplier_url:'', done:false, shortage:'', cn_price:0, weight:0, unit_cost:0, order_1688:'', tracking:'', eta:'' });
+    const rows = [];
+    for (let i = 0; i < n; i++) rows.push({ close_date:'', product_id:'', price:0, specs:'', order_status:'', supplier_url:'', done:false, shortage:'', cn_price:0, weight:0, unit_cost:0, order_1688:'', tracking:'', eta:'' });
+    newPPARows.unshift(...rows);
     ppaPage = 1;
     renderPPAGrid();
   }
@@ -8417,13 +8421,10 @@
         updated++;
       }
       if (isAuto) {
-        // 自動儲存：靜默處理，有新增才重載資料（不閃畫面）
+        // 自動儲存：不重新渲染，避免打斷輸入
+        for (const r of toUpdate) delete r._dirty;
         if (saved > 0) {
-          try { ppAssistantRows = await cnFetchAll('xiaolan_piaopiao', 'id.desc'); } catch {}
-          newPPARows = [];
-          renderPPAGrid();
-        } else {
-          ppAssistantRows.forEach(r => delete r._dirty);
+          newPPARows = newPPARows.filter(r => !toInsert.includes(r));
         }
       } else {
         Swal.fire({icon:'success',title:'已儲存',text:`新增 ${saved} 筆，更新 ${updated} 筆`,timer:1500,showConfirmButton:false});
@@ -8828,7 +8829,9 @@
     cnrAutoSaveTimer = setTimeout(() => saveCnReturns(true), 2000);
   }
   function addCnReturnRows(n) {
-    for (let i = 0; i < n; i++) newCnReturnRows.push({ return_date: new Date().toISOString().slice(0,10), product_code:'', product_name:'', content:'', progress:'', process_date:'', order_number:'', tracking_number:'', note:'' });
+    const rows = [];
+    for (let i = 0; i < n; i++) rows.push({ return_date: new Date().toISOString().slice(0,10), product_code:'', product_name:'', content:'', progress:'', process_date:'', order_number:'', tracking_number:'', note:'' });
+    newCnReturnRows.unshift(...rows);
     cnrPage = 1;
     renderCnReturnGrid();
   }
