@@ -177,6 +177,7 @@
         <button class="btn" style="background:#e67e22;color:#fff;" onclick="toggleOrderLinks()">叫貨清單</button>
         <button class="btn btn-outline" onclick="document.getElementById('importExcel').click()">匯入 Excel</button>
         <button class="btn btn-outline" onclick="addPurchaseRows(5)">+5 行</button>
+        <button class="btn" style="background:#2b6cb0;color:#fff;" onclick="openPasteDialog()">📋 貼上</button>
         <button class="btn btn-outline" onclick="exportPurchasesCSV()">匯出</button>
         <button class="btn" style="background:#c53030;" onclick="deleteSelectedPurchases()">刪除勾選</button>
       </div>
@@ -748,7 +749,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 function initNewRows() {
-  // 不自動補空白列，手動按 +5 行
+  // 所有訂單：常駐 3 行空行
+  if (newPurchaseRows.length === 0) addPurchaseRows(3, true);
   if (newArrivalRows.length === 0) addArrivalRows(10, true);
 }
 
@@ -1035,6 +1037,83 @@ function addPurchaseRows(n, silent) {
   if (!silent) { pPage = 1; renderPurchaseGrid(); }
 }
 
+// ===== 📋 貼上模式 =====
+function openPasteDialog() {
+  Swal.fire({
+    title: '📋 貼上資料',
+    width: '700px',
+    html: `
+      <div style="text-align:left; font-size:13px; margin-bottom:8px;">
+        <p style="color:#718096; margin-bottom:6px;">從 Excel / Google Sheets 複製後直接貼上（Tab 分隔）</p>
+        <p style="color:#718096; font-size:12px; margin-bottom:8px;">欄位順序：<b>訂單日　訂單號　運單號　商品名稱　付款RMB　數量　重量kg　團購價　用途　來源　賣家　備註</b></p>
+        <p style="color:#2b6cb0; font-size:12px; margin-bottom:10px;">💡 不用填滿所有欄位，空白會自動跳過。最少只要有「商品名稱」就能新增。</p>
+        <textarea id="pasteArea" style="width:100%; height:260px; padding:10px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; font-family:monospace; line-height:1.6; resize:vertical;" placeholder="在這裡貼上...&#10;&#10;例如：&#10;2026/3/10	ORD001		洗衣精	29.9	2	0.5		團購	1688"></textarea>
+        <div style="margin-top:8px; display:flex; gap:8px; align-items:center;">
+          <span id="pastePreviewCount" style="font-size:12px; color:#718096;"></span>
+        </div>
+      </div>`,
+    showCancelButton: true,
+    confirmButtonText: '確定匯入',
+    cancelButtonText: '取消',
+    confirmButtonColor: '#2b6cb0',
+    didOpen: () => {
+      const ta = document.getElementById('pasteArea');
+      ta.focus();
+      ta.addEventListener('input', () => {
+        const lines = ta.value.split('\\n').filter(l => l.trim());
+        document.getElementById('pastePreviewCount').textContent = '偵測到 ' + lines.length + ' 行資料';
+      });
+    },
+    preConfirm: () => {
+      const text = document.getElementById('pasteArea').value.trim();
+      if (!text) { Swal.showValidationMessage('請貼上資料'); return false; }
+      return text;
+    }
+  }).then(res => {
+    if (!res.isConfirmed) return;
+    const lines = res.value.split('\\n').filter(l => l.trim());
+    const fieldMap = ['order_date','order_number','tracking_number','product_name','payment_rmb','qty','weight_kg','selling_price','category','source','seller','note'];
+    let count = 0;
+    lines.forEach(line => {
+      const cols = line.split('\\t');
+      const row = { order_date: '', order_number: '', tracking_number: '', product_name: '', payment_rmb: 0, qty: 0, weight_kg: 0, total_twd: 0, unit_cost: 0, selling_price: 0, category: '團購', source: '1688', seller: '', offer_id: '', note: '', linked_product: '', used_rate: getRate(), used_ship: getShip() };
+      cols.forEach((val, i) => {
+        if (i < fieldMap.length && val.trim()) {
+          const field = fieldMap[i];
+          const v = val.trim();
+          if (['payment_rmb','qty','weight_kg','selling_price'].includes(field)) {
+            row[field] = parseFloat(v) || 0;
+          } else if (field === 'order_date') {
+            // 支援各種日期格式
+            if (v.includes('/') || v.includes('-')) {
+              const d = new Date(v);
+              if (!isNaN(d)) row[field] = d.toISOString().split('T')[0];
+              else row[field] = v;
+            } else {
+              row[field] = v;
+            }
+          } else {
+            row[field] = v;
+          }
+        }
+      });
+      if (row.product_name) {
+        calcRow(row);
+        newPurchaseRows.push(row);
+        count++;
+      }
+    });
+    if (count > 0) {
+      pPage = 1;
+      renderPurchaseGrid();
+      Swal.fire({ icon: 'success', title: '已匯入 ' + count + ' 筆', timer: 1500, showConfirmButton: false });
+    } else {
+      Swal.fire('無有效資料', '請確認至少有商品名稱欄位', 'warning');
+    }
+  });
+}
+
+
 let autoSaveTimer = null;
 let autoSaveArrTimer = null;
 let autoSaveRetTimer = null;
@@ -1084,6 +1163,7 @@ async function savePurchases(isAuto) {
     }
 
     newPurchaseRows = [];
+    addPurchaseRows(3, true); // 常駐空行
     await loadPurchases();
     renderPurchaseGrid();
     if (isAuto) {
