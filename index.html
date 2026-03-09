@@ -288,6 +288,10 @@
         <a class="nav-item" data-url="PriceForm.html" data-title="設定客戶特價"><i class="fas fa-tags"></i> 設定客戶特價</a>
       </div>
     </div>
+    <div style="padding:12px 16px; border-top:1px solid var(--border); flex-shrink:0;">
+      <span id="loginUserDisplay" style="display:block; font-size:12px; color:var(--text2); margin-bottom:6px; text-align:center;"></span>
+      <button onclick="erpDoLogout()" style="width:100%; padding:8px; background:var(--danger); color:#fff; border:none; border-radius:6px; font-size:13px; cursor:pointer; font-weight:600;">🚪 登出</button>
+    </div>
   </aside>
 
   <div class="main-wrapper">
@@ -574,11 +578,32 @@
     }, 600000);
 
     function initAfterLogin() {
+      // 顯示登入帳號
+      const userInfo = JSON.parse(sessionStorage.getItem('sb_auth_user') || '{}');
+      const displayEl = document.getElementById('loginUserDisplay');
+      if (displayEl) displayEl.textContent = '👤 ' + (userInfo.username || userInfo.email || '');
+
       initDateTime();
       refreshDashboard();
       calRender();
       renderTodos();
       updateCalBadge();
+    }
+
+    async function erpDoLogout() {
+      const r = await Swal.fire({
+        title: '確定登出？',
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: '登出',
+        cancelButtonText: '取消',
+        confirmButtonColor: '#c53030'
+      });
+      if (!r.isConfirmed) return;
+      await sbClient.auth.signOut({ scope: 'local' });
+      sessionStorage.removeItem('sb_auth_token');
+      sessionStorage.removeItem('sb_auth_user');
+      document.getElementById('loginOverlay').style.display = 'flex';
     }
 
     function fmt(n){ return 'NT$ '+Number(n||0).toLocaleString(); }
