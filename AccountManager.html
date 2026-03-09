@@ -1,0 +1,283 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>帳號管理</title>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { font-family:'Segoe UI','Microsoft JhengHei',sans-serif; background:#f8fafc; color:#1e293b; padding:24px; }
+    .page-title { font-size:18px; font-weight:700; color:#475569; margin-bottom:16px; }
+    .toolbar { display:flex; gap:8px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
+    .btn { padding:8px 16px; border:none; border-radius:6px; font-size:13px; cursor:pointer; font-weight:600; font-family:inherit; }
+    .btn-primary { background:#475569; color:#fff; }
+    .btn-primary:hover { background:#334155; }
+    .btn-danger { background:#c53030; color:#fff; }
+    .btn-danger:hover { background:#9b2c2c; }
+    .btn-sm { padding:5px 10px; font-size:12px; }
+    table { width:100%; border-collapse:collapse; background:#fff; border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.1); }
+    th { background:#f1f5f9; color:#475569; font-size:12px; font-weight:700; padding:10px 12px; text-align:left; border-bottom:2px solid #e2e8f0; }
+    td { padding:10px 12px; font-size:13px; border-bottom:1px solid #f1f5f9; }
+    tr:hover { background:#f8fafc; }
+    .badge { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:600; }
+    .badge-admin { background:#dbeafe; color:#1e40af; }
+    .badge-assistant { background:#fef3c7; color:#92400e; }
+    .badge-staff { background:#e2e8f0; color:#475569; }
+    .badge-active { background:#dcfce7; color:#166534; }
+    .badge-inactive { background:#fef2f2; color:#991b1b; }
+    .empty { text-align:center; padding:60px; color:#94a3b8; font-size:14px; }
+  </style>
+</head>
+<body>
+
+<div class="page-title">👤 帳號管理</div>
+<div class="toolbar">
+  <button class="btn btn-primary" onclick="addAccount()">➕ 新增帳號</button>
+  <button class="btn" style="background:#e2e8f0; color:#374151;" onclick="loadAccounts()">🔄 重新整理</button>
+  <span id="accountCount" style="font-size:12px; color:#94a3b8; margin-left:8px;"></span>
+</div>
+
+<table>
+  <thead>
+    <tr>
+      <th>帳號</th>
+      <th>姓名</th>
+      <th>角色</th>
+      <th>狀態</th>
+      <th>操作</th>
+    </tr>
+  </thead>
+  <tbody id="accountBody">
+    <tr><td colspan="5" class="empty">載入中...</td></tr>
+  </tbody>
+</table>
+
+<script>
+  const SB_URL = 'https://gkuwoandmsgvlsxzmrjj.supabase.co/rest/v1';
+  const SB_KEY = 'sb_publishable_7K0w9Z8-Wv1dOgLsZkI0rA_WfNei_AS';
+  const SB_BASE = 'https://gkuwoandmsgvlsxzmrjj.supabase.co';
+
+  function getToken() { return sessionStorage.getItem('sb_auth_token') || SB_KEY; }
+  function getHeaders() {
+    return { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/json' };
+  }
+
+  let accountList = [];
+
+  async function loadAccounts() {
+    try {
+      const res = await fetch(SB_URL + '/employees?select=*&order=username.asc', { headers: getHeaders() });
+      if (!res.ok) throw new Error('讀取失敗');
+      accountList = await res.json();
+      renderAccounts();
+    } catch(e) {
+      document.getElementById('accountBody').innerHTML = '<tr><td colspan="5" class="empty">讀取失敗: ' + e.message + '</td></tr>';
+    }
+  }
+
+  function renderAccounts() {
+    const tbody = document.getElementById('accountBody');
+    const countEl = document.getElementById('accountCount');
+    if (countEl) countEl.textContent = '共 ' + accountList.length + ' 個帳號';
+
+    if (accountList.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="5" class="empty">尚無帳號</td></tr>';
+      return;
+    }
+
+    const roleLabel = { admin: '管理員', assistant: '助理', staff: '員工' };
+    const roleBadge = { admin: 'badge-admin', assistant: 'badge-assistant', staff: 'badge-staff' };
+
+    tbody.innerHTML = accountList.map(a => {
+      const role = a.role || 'staff';
+      const status = a.status || 'active';
+      return '<tr>' +
+        '<td style="font-weight:600;">' + (a.username || '') + '</td>' +
+        '<td>' + (a.full_name || '-') + '</td>' +
+        '<td><span class="badge ' + (roleBadge[role] || 'badge-staff') + '">' + (roleLabel[role] || role) + '</span></td>' +
+        '<td><span class="badge ' + (status === 'active' ? 'badge-active' : 'badge-inactive') + '">' + (status === 'active' ? '啟用' : '停用') + '</span></td>' +
+        '<td>' +
+          '<button class="btn btn-primary btn-sm" onclick="editAccount(\'' + a.username + '\')">✏️ 編輯</button> ' +
+          '<button class="btn btn-sm" style="background:#fef3c7; color:#92400e;" onclick="resetPassword(\'' + a.username + '\')">🔑 改密碼</button> ' +
+          '<button class="btn btn-danger btn-sm" onclick="deleteAccount(\'' + a.username + '\')">🗑️ 刪除</button>' +
+        '</td>' +
+      '</tr>';
+    }).join('');
+  }
+
+  function addAccount() {
+    Swal.fire({
+      title: '➕ 新增帳號',
+      width: '420px',
+      html:
+        '<div style="text-align:left; font-size:13px;">' +
+          '<div style="margin-bottom:10px;">' +
+            '<label style="font-weight:bold; color:#718096; font-size:12px;">帳號（登入用）</label>' +
+            '<input id="acc-username" type="text" placeholder="例：admin01" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;">' +
+          '</div>' +
+          '<div style="margin-bottom:10px;">' +
+            '<label style="font-weight:bold; color:#718096; font-size:12px;">密碼（至少6碼）</label>' +
+            '<input id="acc-password" type="text" placeholder="設定密碼" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;">' +
+          '</div>' +
+          '<div style="margin-bottom:10px;">' +
+            '<label style="font-weight:bold; color:#718096; font-size:12px;">姓名</label>' +
+            '<input id="acc-fullname" type="text" placeholder="使用者姓名" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;">' +
+          '</div>' +
+          '<div style="margin-bottom:10px;">' +
+            '<label style="font-weight:bold; color:#718096; font-size:12px;">角色</label>' +
+            '<select id="acc-role" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;">' +
+              '<option value="admin" selected>管理員（可登入 ERP）</option>' +
+            '</select>' +
+          '</div>' +
+        '</div>',
+      showCancelButton: true,
+      confirmButtonText: '新增', cancelButtonText: '取消', confirmButtonColor: '#475569',
+      preConfirm: function() {
+        var username = (document.getElementById('acc-username').value || '').trim();
+        var password = (document.getElementById('acc-password').value || '').trim();
+        var full_name = (document.getElementById('acc-fullname').value || '').trim();
+        var role = document.getElementById('acc-role').value || 'admin';
+        if (!username || !password) { Swal.showValidationMessage('帳號和密碼為必填'); return false; }
+        if (password.length < 6) { Swal.showValidationMessage('密碼至少 6 碼'); return false; }
+        return { username: username, password: password, full_name: full_name, role: role };
+      }
+    }).then(async function(res) {
+      if (!res.isConfirmed) return;
+      var v = res.value;
+      try {
+        // 1. Supabase Auth 建帳號
+        var authResp = await fetch(SB_URL + '/rpc/admin_create_auth_user', {
+          method: 'POST', headers: getHeaders(),
+          body: JSON.stringify({ p_username: v.username, p_password: v.password, p_full_name: v.full_name, p_role: v.role, p_store: '' })
+        });
+        if (!authResp.ok) { var err = await authResp.json(); throw new Error(err.message || 'Auth 建立失敗'); }
+
+        // 2. 寫入 employees 表
+        var resp = await fetch(SB_URL + '/employees', {
+          method: 'POST',
+          headers: Object.assign({}, getHeaders(), { 'Prefer': 'return=representation' }),
+          body: JSON.stringify({ username: v.username, password: v.password, full_name: v.full_name, role: v.role, store: '', status: 'active' })
+        });
+        if (!resp.ok) { var err2 = await resp.json(); throw new Error(err2.message || '寫入失敗'); }
+
+        Swal.fire({ icon: 'success', title: '新增成功', text: '帳號 ' + v.username + ' 已建立', timer: 1500, showConfirmButton: false });
+        loadAccounts();
+      } catch(e) {
+        Swal.fire('新增失敗', e.message, 'error');
+      }
+    });
+  }
+
+  function editAccount(username) {
+    var emp = accountList.find(function(a) { return a.username === username; });
+    if (!emp) return;
+    Swal.fire({
+      title: '✏️ 編輯帳號',
+      width: '420px',
+      html:
+        '<div style="text-align:left; font-size:13px;">' +
+          '<div style="margin-bottom:10px;">' +
+            '<label style="font-weight:bold; color:#718096; font-size:12px;">帳號</label>' +
+            '<input type="text" value="' + username + '" disabled style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px; background:#f1f5f9;">' +
+          '</div>' +
+          '<div style="margin-bottom:10px;">' +
+            '<label style="font-weight:bold; color:#718096; font-size:12px;">姓名</label>' +
+            '<input id="edit-fullname" type="text" value="' + (emp.full_name || '') + '" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;">' +
+          '</div>' +
+          '<div style="margin-bottom:10px;">' +
+            '<label style="font-weight:bold; color:#718096; font-size:12px;">狀態</label>' +
+            '<select id="edit-status" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;">' +
+              '<option value="active"' + (emp.status === 'active' ? ' selected' : '') + '>啟用</option>' +
+              '<option value="inactive"' + (emp.status !== 'active' ? ' selected' : '') + '>停用</option>' +
+            '</select>' +
+          '</div>' +
+        '</div>',
+      showCancelButton: true,
+      confirmButtonText: '儲存', cancelButtonText: '取消', confirmButtonColor: '#475569',
+      preConfirm: function() {
+        return {
+          full_name: (document.getElementById('edit-fullname').value || '').trim(),
+          status: document.getElementById('edit-status').value
+        };
+      }
+    }).then(async function(res) {
+      if (!res.isConfirmed) return;
+      try {
+        var resp = await fetch(SB_URL + '/employees?username=eq.' + username, {
+          method: 'PATCH', headers: getHeaders(),
+          body: JSON.stringify({ full_name: res.value.full_name, status: res.value.status })
+        });
+        if (!resp.ok) throw new Error('更新失敗');
+        Swal.fire({ icon: 'success', title: '已更新', timer: 1200, showConfirmButton: false });
+        loadAccounts();
+      } catch(e) {
+        Swal.fire('錯誤', e.message, 'error');
+      }
+    });
+  }
+
+  function resetPassword(username) {
+    Swal.fire({
+      title: '🔑 重設密碼',
+      html: '<p style="font-size:13px; color:#718096;">帳號：<b>' + username + '</b></p>' +
+        '<input id="new-pass" type="text" placeholder="輸入新密碼（至少6碼）" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:8px;">',
+      showCancelButton: true,
+      confirmButtonText: '確定重設', cancelButtonText: '取消', confirmButtonColor: '#475569',
+      preConfirm: function() {
+        var p = (document.getElementById('new-pass').value || '').trim();
+        if (!p || p.length < 6) { Swal.showValidationMessage('密碼至少 6 碼'); return false; }
+        return p;
+      }
+    }).then(async function(res) {
+      if (!res.isConfirmed) return;
+      try {
+        // 重建 Auth 帳號（用 RPC 覆蓋密碼）
+        var emp = accountList.find(function(a) { return a.username === username; });
+        var authResp = await fetch(SB_URL + '/rpc/admin_create_auth_user', {
+          method: 'POST', headers: getHeaders(),
+          body: JSON.stringify({ p_username: username, p_password: res.value, p_full_name: emp ? emp.full_name : '', p_role: emp ? emp.role : 'admin', p_store: emp ? (emp.store || '') : '' })
+        });
+        if (!authResp.ok) { var err = await authResp.json(); throw new Error(err.message || '重設失敗'); }
+
+        // 更新 employees 表密碼
+        await fetch(SB_URL + '/employees?username=eq.' + username, {
+          method: 'PATCH', headers: getHeaders(),
+          body: JSON.stringify({ password: res.value })
+        });
+
+        Swal.fire({ icon: 'success', title: '密碼已重設', timer: 1200, showConfirmButton: false });
+      } catch(e) {
+        Swal.fire('錯誤', e.message, 'error');
+      }
+    });
+  }
+
+  function deleteAccount(username) {
+    Swal.fire({
+      title: '確定刪除？',
+      html: '將刪除帳號 <b>' + username + '</b>',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: '確定刪除', cancelButtonText: '取消',
+      confirmButtonColor: '#c53030'
+    }).then(async function(res) {
+      if (!res.isConfirmed) return;
+      try {
+        var resp = await fetch(SB_URL + '/employees?username=eq.' + username, {
+          method: 'DELETE', headers: getHeaders()
+        });
+        if (!resp.ok) throw new Error('刪除失敗');
+        Swal.fire({ icon: 'success', title: '已刪除', timer: 1200, showConfirmButton: false });
+        loadAccounts();
+      } catch(e) {
+        Swal.fire('錯誤', e.message, 'error');
+      }
+    });
+  }
+
+  // 頁面載入
+  loadAccounts();
+</script>
+</body>
+</html>
