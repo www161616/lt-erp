@@ -2124,12 +2124,12 @@
             price: Number(item.price) || 0
           }))
         };
-        await fetch('https://script.google.com/macros/s/AKfycby9PP2kvnwQycLZRuF_Lk-15iDj1R682KoHgaV7OdbZhZrQnBxsxiW0e11NkKe-HD12/exec', {
+        const gsUrl = 'https://script.google.com/macros/s/AKfycby9PP2kvnwQycLZRuF_Lk-15iDj1R682KoHgaV7OdbZhZrQnBxsxiW0e11NkKe-HD12/exec';
+        const gsRes = await fetch(gsUrl, {
           method: 'POST',
-          mode: 'no-cors',
-          headers: { 'Content-Type': 'text/plain' },
           body: JSON.stringify(gsPayload)
         });
+        if (gsRes.ok) console.log('Google Sheets 同步成功');
       } catch(e) { console.warn('Google Sheets 同步失敗:', e); }
 
       // ③ 同步至 branch_portal localStorage（結單填表用）
