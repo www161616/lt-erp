@@ -453,8 +453,64 @@
     window.onload = function() {
       document.getElementById('orderDate').value = new Date().toISOString().split('T')[0];
       document.getElementById('paymentMethod').addEventListener('change', autoCheckPaymentStatus);
-      loadAllData();
+      loadAllData().then(() => {
+        // 檢查是否為編輯或複製模式
+        const params = new URLSearchParams(window.location.search);
+        if (params.get('edit')) {
+          const data = JSON.parse(sessionStorage.getItem('purchaseEditData') || 'null');
+          if (data) { sessionStorage.removeItem('purchaseEditData'); loadEditData(data, true); }
+        } else if (params.get('copy')) {
+          const data = JSON.parse(sessionStorage.getItem('purchaseCopyData') || 'null');
+          if (data) { sessionStorage.removeItem('purchaseCopyData'); loadEditData(data, false); }
+        }
+      });
     };
+
+    function loadEditData(data, isEdit) {
+      // 設定表單欄位
+      if (data.date) document.getElementById('orderDate').value = data.date;
+      if (data.supplierId) {
+        const sel = document.getElementById('supplier');
+        for (let i = 0; i < sel.options.length; i++) {
+          if (sel.options[i].value === String(data.supplierId)) { sel.selectedIndex = i; break; }
+        }
+        updateSupplierInfo();
+      }
+      if (data.note) document.getElementById('note').value = data.note;
+      if (data.paymentMethod) {
+        const pmSel = document.getElementById('paymentMethod');
+        for (let i = 0; i < pmSel.options.length; i++) {
+          if (pmSel.options[i].value === data.paymentMethod) { pmSel.selectedIndex = i; break; }
+        }
+      }
+      if (data.status) {
+        const radioVal = data.status === '已付款' ? '已付款' : '未付款';
+        const radio = document.querySelector(`input[name="paymentStatus"][value="${radioVal}"]`);
+        if (radio) radio.checked = true;
+      }
+
+      // 載入明細到購物車
+      if (data.items && data.items.length > 0) {
+        cart = data.items.map(it => ({
+          id: it.productId,
+          name: it.productName,
+          spec: it.note || '',
+          cost: it.cost,
+          unit: it.unit || '個',
+          qty: it.qty,
+          itemType: 'PRODUCT'
+        }));
+        renderCart();
+      }
+
+      if (isEdit) {
+        editingOrderId = data.orderId;
+        document.getElementById('mainHeaderTitle').innerHTML = `📥 編輯進貨單 <span style="color:#e53e3e;">修改模式 - ${data.orderId}</span>`;
+        document.getElementById('btnSaveOrder').innerText = '💾 更新進貨單';
+      } else {
+        document.getElementById('mainHeaderTitle').innerHTML = '📥 開立進貨單 <span style="color:#38a169;">複製模式</span>';
+      }
+    }
 
     function autoCheckPaymentStatus() {
       var method = document.getElementById('paymentMethod').value;
@@ -775,34 +831,72 @@
        
        const loader = document.getElementById('loadingOverlay');
        if(loader) loader.classList.remove('hidden');
-       
+
        try {
-         const res = await fetch(`${SB_URL}/rpc/web_save_purchase_order`, {
-           method: 'POST',
-           headers: HEADERS,
-           body: JSON.stringify({ p_order_data: odata }) 
-         });
+         let resultOrderId;
 
-         const data = await res.json();
+         if (editingOrderId) {
+           // ===== 編輯模式：更新主單 + 刪除舊明細 + 新增明細 =====
+           const updateHeaders = { ...HEADERS, 'Prefer': 'return=minimal' };
+           // 1. 更新主單
+           const mainRes = await fetch(`${SB_URL}/purchase_orders?id=eq.${editingOrderId}`, {
+             method: 'PATCH', headers: updateHeaders,
+             body: JSON.stringify({
+               order_date: odata.order_date, supplier_id: odata.supplier_id, supplier_name: odata.supplier_name,
+               subtotal: odata.total_amount, tax_amount: odata.tax_amount, grand_total: odata.grand_total,
+               payment_status: odata.payment_status, note: odata.note, handler: odata.handler
+             })
+           });
+           if (!mainRes.ok) throw new Error('更新主單失敗');
+
+           // 2. 刪除舊明細
+           const delRes = await fetch(`${SB_URL}/purchase_details?order_id=eq.${editingOrderId}`, {
+             method: 'DELETE', headers: updateHeaders
+           });
+           if (!delRes.ok) throw new Error('刪除舊明細失敗');
+
+           // 3. 新增新明細
+           const detailRows = odata.items.map(it => ({
+             order_id: editingOrderId, product_id: it.product_id, product_name: it.product_name,
+             qty: it.qty, unit: it.unit, cost: it.unit_cost, subtotal: it.qty * it.unit_cost, note: it.note
+           }));
+           const insRes = await fetch(`${SB_URL}/purchase_details`, {
+             method: 'POST', headers: { ...HEADERS, 'Prefer': 'return=minimal' },
+             body: JSON.stringify(detailRows)
+           });
+           if (!insRes.ok) throw new Error('新增明細失敗');
+
+           resultOrderId = editingOrderId;
+         } else {
+           // ===== 新增模式：呼叫 RPC =====
+           const res = await fetch(`${SB_URL}/rpc/web_save_purchase_order`, {
+             method: 'POST', headers: HEADERS,
+             body: JSON.stringify({ p_order_data: odata })
+           });
+           const data = await res.json();
+           if (!res.ok) throw new Error(data.message || '資料庫寫入失敗');
+           resultOrderId = data;
+         }
+
          if(loader) loader.classList.add('hidden');
-         if (!res.ok) throw new Error(data.message || '資料庫寫入失敗');
-
          hasUnsavedChanges = false;
-         const newOrderId = data; // SQL 函式會回傳單號字串
-         
+         const wasEdit = !!editingOrderId;
+
          resetForm();
          Swal.fire({
-             title: '儲存成功！',
-             html: `<b>單號：${newOrderId}</b><br><span style="color:var(--text2);font-size:13px;">畫面已自動清空，可直接開下一張</span>`,
+             title: wasEdit ? '更新成功！' : '儲存成功！',
+             html: `<b>單號：${resultOrderId}</b><br><span style="color:var(--text2);font-size:13px;">${wasEdit ? '已更新進貨單' : '畫面已自動清空，可直接開下一張'}</span>`,
              icon: 'success',
              showDenyButton: true,
              confirmButtonText: '🖨️ 列印此單',
-             denyButtonText: '👌 確定',
+             denyButtonText: wasEdit ? '↩️ 回查詢頁' : '👌 確定',
              reverseButtons: true,
              allowOutsideClick: false
          }).then((result) => {
              if (result.isConfirmed) {
-                 fetchAndPrint(newOrderId);
+                 fetchAndPrint(resultOrderId);
+             } else if (wasEdit && result.isDenied) {
+                 window.location.href = 'SearchPurchase.html';
              }
          });
 

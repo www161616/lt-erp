@@ -663,17 +663,12 @@
 
     // ========== 編輯功能 ==========
     function editOrder(orderId) {
-      // 跳轉至編輯頁面 (帶參數)
-      Swal.fire({
-        title: '即將跳轉...',
-        text: '正在載入編輯頁面',
-        didOpen: () => Swal.showLoading()
-      });
-      
-      // 假設編輯頁面為 purchase_form.html
-      setTimeout(() => {
-        window.location.href = `purchase_form.html?edit=${orderId}`;
-      }, 500);
+      if (!currentDetail || currentDetail.orderId !== orderId) {
+        Swal.fire('提示', '請先點選要編輯的單據', 'warning');
+        return;
+      }
+      sessionStorage.setItem('purchaseEditData', JSON.stringify(currentDetail));
+      window.location.href = `PurchaseOrder.html?edit=${orderId}`;
     }
 
     // ========== 複製功能 ==========
@@ -699,7 +694,7 @@
           sessionStorage.setItem('purchaseCopyData', JSON.stringify(copyData));
           
           Swal.close();
-          window.location.href = 'purchase_form.html?copy=true';
+          window.location.href = 'PurchaseOrder.html?copy=true';
         }
       } catch (err) {
         Swal.fire('錯誤', '複製失敗: ' + err.message, 'error');
