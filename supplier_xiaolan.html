@@ -1704,9 +1704,11 @@ async function deleteSelectedArrivals() {
 }
 
 function addArrivalRows(n, silent) {
+  const rows = [];
   for (let i = 0; i < n; i++) {
-    newArrivalRows.push({ offer_id: '', arrived: false, tracking_number: '', product_name: '', product_id: '', selling_price: 0, qty: 0, unit_cost: 0, note: '', ship_date: '', ship_order: '', ship_to: '直寄龍潭' });
+    rows.push({ offer_id: '', arrived: false, tracking_number: '', product_name: '', product_id: '', selling_price: 0, qty: 0, unit_cost: 0, note: '', ship_date: '', ship_order: '', ship_to: '直寄龍潭' });
   }
+  newArrivalRows.unshift(...rows);
   if (!silent) renderArrivalGrid();
 }
 
@@ -1729,14 +1731,19 @@ async function saveArrivals(isAuto) {
       await fetch(`${SB_URL}/xiaolan_arrivals?id=eq.${id}`, { method: 'PATCH', headers: JSON_H, body: JSON.stringify(rest) });
       updated++;
     }
-    newArrivalRows = [];
-    await loadArrivals();
-    addArrivalRows(10, true);
-    renderArrivalGrid();
     if (isAuto) {
+      for (const r of toUpdate) r._dirty = false;
+      if (saved > 0) {
+        newArrivalRows = newArrivalRows.filter(r => !allNewRows.includes(r));
+        if (newArrivalRows.length < 3) addArrivalRows(3 - newArrivalRows.length, true);
+      }
       const info = document.getElementById('aInfo');
       if (info) info.textContent = `已自動儲存（新增 ${saved}，更新 ${updated}）`;
     } else {
+      newArrivalRows = [];
+      await loadArrivals();
+      addArrivalRows(10, true);
+      renderArrivalGrid();
       Swal.fire({ icon: 'success', title: `已儲存`, text: `新增 ${saved} 筆，更新 ${updated} 筆`, timer: 1500, showConfirmButton: false });
     }
   } catch (e) {
@@ -2005,9 +2012,11 @@ async function deleteSelectedReturns() {
 }
 
 function addReturnRows(n) {
+  const rows = [];
   for (let i = 0; i < n; i++) {
-    newReturnRows.push({ return_date: new Date().toISOString().slice(0,10), product_code: '', product_name: '', content: '', progress: '待處理', process_date: '', order_number: '', tracking_number: '', note: '' });
+    rows.push({ return_date: new Date().toISOString().slice(0,10), product_code: '', product_name: '', content: '', progress: '待處理', process_date: '', order_number: '', tracking_number: '', note: '' });
   }
+  newReturnRows.unshift(...rows);
   renderReturnGrid();
 }
 
@@ -2035,13 +2044,18 @@ async function saveReturns(isAuto) {
       await fetch(`${SB_URL}/xiaolan_returns?id=eq.${id}`, { method: 'PATCH', headers: JSON_H, body: JSON.stringify(rest) });
       updated++;
     }
-    newReturnRows = [];
-    await loadReturns();
-    renderReturnGrid();
     if (isAuto) {
+      for (const r of toUpdate) r._dirty = false;
+      if (saved > 0) {
+        newReturnRows = newReturnRows.filter(r => !toInsert.includes(r));
+        if (newReturnRows.length < 3) addReturnRows(3 - newReturnRows.length);
+      }
       const info = document.getElementById('rtInfo');
       if (info) info.textContent = `已自動儲存（新增 ${saved}，更新 ${updated}）`;
     } else {
+      newReturnRows = [];
+      await loadReturns();
+      renderReturnGrid();
       Swal.fire({ icon: 'success', title: '已儲存', text: `新增 ${saved} 筆，更新 ${updated} 筆`, timer: 1500, showConfirmButton: false });
     }
   } catch (e) {
@@ -2849,10 +2863,12 @@ document.addEventListener('click', function(e) {
 });
 
 function addPPRows(n) {
+  const rows = [];
+  const pps = getPPSettings();
   for (let i = 0; i < n; i++) {
-    const pps = getPPSettings();
-    newPPRows.push({ close_date:'', product_id:'', price:0, specs:'', order_status:'已訂', supplier_name:'', supplier_url:'', done:false, shortage:'', cn_price:0, weight:0, unit_cost:0, order_1688:'', tracking:'', eta:'', pp_ship_rate: pps.shipRate || 0, pp_ex_rate: pps.exRate || 0 });
+    rows.push({ close_date:'', product_id:'', price:0, specs:'', order_status:'已訂', supplier_name:'', supplier_url:'', done:false, shortage:'', cn_price:0, weight:0, unit_cost:0, order_1688:'', tracking:'', eta:'', pp_ship_rate: pps.shipRate || 0, pp_ex_rate: pps.exRate || 0 });
   }
+  newPPRows.unshift(...rows);
   renderPiaopiao();
 }
 
@@ -2873,13 +2889,18 @@ async function savePiaopiao(isAuto) {
       await fetch(`${SB_URL}/xiaolan_piaopiao?id=eq.${id}`, { method: 'PATCH', headers: JSON_H, body: JSON.stringify(rest) });
       updated++;
     }
-    newPPRows = [];
-    await loadPiaopiao();
-    renderPiaopiao();
     if (isAuto) {
+      for (const r of toUpdate) r._dirty = false;
+      if (saved > 0) {
+        newPPRows = newPPRows.filter(r => !toInsert.includes(r));
+        if (newPPRows.length < 3) addPPRows(3 - newPPRows.length);
+      }
       const info = document.getElementById('ppInfo');
       if (info) info.textContent = `已自動儲存（新增 ${saved}，更新 ${updated}）`;
     } else {
+      newPPRows = [];
+      await loadPiaopiao();
+      renderPiaopiao();
       Swal.fire({ icon: 'success', title: `已儲存`, text: `新增 ${saved} 筆，更新 ${updated} 筆`, timer: 1500, showConfirmButton: false });
     }
   } catch (e) {
