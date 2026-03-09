@@ -868,7 +868,7 @@ function renderPurchaseGrid() {
     return `<tr data-idx="${idx}">
       <td style="text-align:center;"><input type="checkbox" class="p-check" data-idx="${idx}"></td>
       <td class="row-num">${i + 1}</td>
-      <td><input type="date" value="${r.order_date || ''}" data-field="order_date" data-idx="${idx}" oninput="onPCellChange(this)"></td>
+      <td><input type="${isNew ? 'text' : 'date'}" value="${r.order_date || ''}" data-field="order_date" data-idx="${idx}" oninput="onPCellChange(this)" ${isNew ? 'placeholder="例:2026/3/10"' : ''}></td>
       <td><input value="${r.order_number || ''}" data-field="order_number" data-idx="${idx}" oninput="onPCellChange(this)"></td>
       <td><input value="${r.tracking_number || ''}" data-field="tracking_number" data-idx="${idx}" oninput="onPCellChange(this)"></td>
       <td><input value="${r.product_name || ''}" data-field="product_name" data-idx="${idx}" oninput="onPCellChange(this)"></td>
@@ -1135,6 +1135,22 @@ function triggerAutoSavePP() {
   autoSavePPTimer = setTimeout(() => savePiaopiao(true), 2000);
 }
 
+function normDate(v) {
+  if (!v) return null;
+  v = v.trim().replace(/\//g, '-');
+  // YYYY-MM-DD or YYYY-M-D
+  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(v)) {
+    const [y,m,d] = v.split('-');
+    return `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+  }
+  // M/D or M-D → assume current year
+  if (/^\d{1,2}-\d{1,2}$/.test(v)) {
+    const [m,d] = v.split('-');
+    return `${new Date().getFullYear()}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+  }
+  return v; // 原樣回傳，讓 DB 報錯
+}
+
 async function savePurchases(isAuto) {
   const toInsert = newPurchaseRows.filter(r => r.product_name && r.product_name.trim());
   const toUpdate = purchaseRows.filter(r => r._dirty);
@@ -1147,7 +1163,7 @@ async function savePurchases(isAuto) {
       const clean = toInsert.map(r => {
         calcRow(r);
         const { _dirty, ...rest } = r;
-        if (!rest.order_date) rest.order_date = null;
+        rest.order_date = normDate(rest.order_date);
         return rest;
       });
       const res = await fetch(`${SB_URL}/xiaolan_purchases`, { method: 'POST', headers: JSON_H, body: JSON.stringify(clean) });
@@ -1157,20 +1173,26 @@ async function savePurchases(isAuto) {
     for (const r of toUpdate) {
       calcRow(r);
       const { _dirty, id, created_at, ...rest } = r;
-      if (!rest.order_date) rest.order_date = null;
+      rest.order_date = normDate(rest.order_date);
       await fetch(`${SB_URL}/xiaolan_purchases?id=eq.${id}`, { method: 'PATCH', headers: JSON_H, body: JSON.stringify(rest) });
       updated++;
     }
 
-    newPurchaseRows = [];
-    addPurchaseRows(3, true); // 常駐空行
-    await loadPurchases();
-    renderPurchaseGrid();
     if (isAuto) {
-      // 自動儲存：底部小提示，不打斷操作
+      // 自動儲存：不重新渲染，避免打斷使用者輸入
+      for (const r of toUpdate) r._dirty = false;
+      if (saved > 0) {
+        // 已存的新行移出 newPurchaseRows，下次 loadPurchases 會載回
+        newPurchaseRows = newPurchaseRows.filter(r => !toInsert.includes(r));
+        if (newPurchaseRows.length < 3) addPurchaseRows(3 - newPurchaseRows.length, true);
+      }
       const info = document.getElementById('pInfo');
       if (info) info.textContent = `已自動儲存（新增 ${saved}，更新 ${updated}）`;
     } else {
+      newPurchaseRows = [];
+      addPurchaseRows(3, true);
+      await loadPurchases();
+      renderPurchaseGrid();
       Swal.fire({ icon: 'success', title: `已儲存`, text: `新增 ${saved} 筆，更新 ${updated} 筆`, timer: 1500, showConfirmButton: false });
     }
   } catch (e) {
