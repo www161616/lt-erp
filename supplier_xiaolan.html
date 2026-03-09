@@ -1031,9 +1031,11 @@ function onLinkedChange(input) {
 }
 
 function addPurchaseRows(n, silent) {
+  const rows = [];
   for (let i = 0; i < n; i++) {
-    newPurchaseRows.push({ order_date: '', order_number: '', tracking_number: '', product_name: '', payment_rmb: 0, qty: 0, weight_kg: 0, total_twd: 0, unit_cost: 0, selling_price: 0, category: '團購', source: '1688', seller: '', offer_id: '', note: '', linked_product: '', used_rate: getRate(), used_ship: getShip() });
+    rows.push({ order_date: '', order_number: '', tracking_number: '', product_name: '', payment_rmb: 0, qty: 0, weight_kg: 0, total_twd: 0, unit_cost: 0, selling_price: 0, category: '團購', source: '1688', seller: '', offer_id: '', note: '', linked_product: '', used_rate: getRate(), used_ship: getShip() });
   }
+  newPurchaseRows.unshift(...rows); // 插在最前面
   if (!silent) { pPage = 1; renderPurchaseGrid(); }
 }
 
