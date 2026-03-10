@@ -1559,23 +1559,56 @@ function renderArrivalGrid() {
   const start = (aPage - 1) * A_PER_PAGE;
   const pageItems = all.slice(start, start + A_PER_PAGE);
 
+  // 預先建立運單號→訂單的分組對應（同運單多筆依序配對）
+  const arrivalTnCount = {};
   document.getElementById('aBody').innerHTML = pageItems.map((r, pi) => {
     const i = start + pi;
     const isSaved = i < saved.length;
     const idx = isSaved ? `s${r.id}` : `n${i - saved.length}`;
     const arrivedClass = r.arrived ? 'arrived-yes' : '';
-    const offerLink = r.offer_id ? `<span class="shared-link" data-url="https://detail.1688.com/offer/${r.offer_id}.html" style="color:var(--accent);font-size:11px;cursor:pointer;text-decoration:underline;">前往</span>` : '';
+
+    // 即時從所有訂單帶出品名、品編、數量、單個價、商品頁
+    let liveProductName = r.product_name || '';
+    let liveProductId = r.product_id || '';
+    let liveQty = r.qty || 0;
+    let liveUnitCost = r.unit_cost || 0;
+    let liveOfferId = r.offer_id || '';
+    let liveSellingPrice = r.selling_price || 0;
+    if (r.tracking_number) {
+      const tn = r.tracking_number.trim().toLowerCase();
+      if (!arrivalTnCount[tn]) arrivalTnCount[tn] = 0;
+      const pMatches = findAllPurchasesByTracking(tn);
+      const pMatch = pMatches[arrivalTnCount[tn]] || pMatches[0];
+      arrivalTnCount[tn]++;
+      if (pMatch) {
+        liveQty = pMatch.qty || 0;
+        liveUnitCost = pMatch.unit_cost || 0;
+        liveOfferId = pMatch.offer_id || '';
+        if (pMatch.linked_product) {
+          const otItems = getOrderTrackOptions();
+          const otMatch = otItems.find(o => (o.productId || o.name || '') === pMatch.linked_product);
+          if (otMatch) {
+            liveProductName = otMatch.name || '';
+            liveProductId = otMatch.productId || '';
+            liveSellingPrice = parseFloat(otMatch.price) || 0;
+          }
+        }
+        if (!liveProductName) liveProductName = pMatch.product_name || '';
+      }
+    }
+
+    const offerLink = liveOfferId ? `<span class="shared-link" data-url="https://detail.1688.com/offer/${liveOfferId}.html" style="color:var(--accent);font-size:11px;cursor:pointer;text-decoration:underline;">前往</span>` : '';
     return `<tr data-idx="${idx}">
       <td style="text-align:center;"><input type="checkbox" class="a-check" data-idx="${idx}"></td>
       <td class="row-num">${i + 1}</td>
       <td style="text-align:center;">${offerLink}</td>
       <td class="${arrivedClass}" style="text-align:center;"><input type="checkbox" ${r.arrived ? 'checked' : ''} data-field="arrived" data-idx="${idx}" onchange="onACellChange(this)"></td>
       <td><input value="${r.tracking_number || ''}" data-field="tracking_number" data-idx="${idx}" onchange="onACellChange(this);tryAutoMatch(this)"></td>
-      <td><input value="${r.product_name || ''}" data-field="product_name" data-idx="${idx}" onchange="onACellChange(this)"></td>
-      <td><input value="${r.product_id || ''}" data-field="product_id" data-idx="${idx}" onchange="onACellChange(this)"></td>
-      <td><input type="number" value="${r.selling_price || ''}" data-field="selling_price" data-idx="${idx}" onchange="onACellChange(this)"></td>
-      <td><input type="number" value="${r.qty || ''}" data-field="qty" data-idx="${idx}" onchange="onACellChange(this)"></td>
-      <td><input type="number" value="${r.unit_cost || ''}" data-field="unit_cost" data-idx="${idx}" onchange="onACellChange(this)"></td>
+      <td style="background:#f0f7ff;">${liveProductName}</td>
+      <td style="background:#f0f7ff;">${liveProductId}</td>
+      <td><input type="number" value="${liveSellingPrice || ''}" data-field="selling_price" data-idx="${idx}" onchange="onACellChange(this)"></td>
+      <td><input type="number" value="${liveQty || ''}" data-field="qty" data-idx="${idx}" onchange="onACellChange(this)"></td>
+      <td><input type="number" value="${liveUnitCost || ''}" data-field="unit_cost" data-idx="${idx}" onchange="onACellChange(this)"></td>
       <td><input value="${r.note || ''}" data-field="note" data-idx="${idx}" onchange="onACellChange(this)"></td>
       <td><input value="${r.ship_date || ''}" data-field="ship_date" data-idx="${idx}" onchange="onACellChange(this)" placeholder="1/14"></td>
       <td><input value="${r.ship_order || ''}" data-field="ship_order" data-idx="${idx}" onchange="onACellChange(this)" placeholder="SFD..."></td>
