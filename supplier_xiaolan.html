@@ -835,7 +835,7 @@ function getFilteredPurchases() {
   let data = [...purchaseRows];
   if (month) data = data.filter(r => r.order_date && r.order_date.startsWith(month));
   if (source) data = data.filter(r => r.source === source);
-  if (kw) data = data.filter(r => fuzzyMatch(r.product_name, kw) || (r.order_number || '').includes(kw) || (r.tracking_number || '').toLowerCase().includes(kw) || (r.tracking_number || '').split(/[,，、\s]+/).some(t => t.trim().toLowerCase() === kw));
+  if (kw) data = data.filter(r => fuzzyMatch(r.product_name, kw) || (r.order_number || '').includes(kw) || (r.tracking_number || '').toLowerCase().includes(kw) || (r.tracking_number || '').split(/[,，、;；\s]+/).some(t => t.trim().toLowerCase() === kw));
   data.sort((a, b) => (b.order_date || '').localeCompare(a.order_date || ''));
   return data;
 }
@@ -1331,7 +1331,7 @@ function importExcelFile(e) {
       // 收集所有已存在的運單號碼（含逗號分隔的每一個）
       const existingTNs = new Set();
       purchaseRows.forEach(r => {
-        if (r.tracking_number) r.tracking_number.split(/[,，、\s]+/).forEach(t => { if (t) existingTNs.add(t.trim()); });
+        if (r.tracking_number) r.tracking_number.split(/[,，、;；\s]+/).forEach(t => { if (t) existingTNs.add(t.trim()); });
       });
 
       if (is1688) {
@@ -1670,7 +1670,7 @@ function findPurchaseByTracking(tn) {
   const allP = [...purchaseRows, ...newPurchaseRows];
   return allP.find(p => {
     if (!p.tracking_number) return false;
-    return p.tracking_number.split(/[,，、\s]+/).some(t => t.trim().toLowerCase() === needle);
+    return p.tracking_number.split(/[,，、;；\s]+/).some(t => t.trim().toLowerCase() === needle);
   });
 }
 
@@ -1681,7 +1681,7 @@ function findAllPurchasesByTracking(tn) {
   const allP = [...purchaseRows, ...newPurchaseRows];
   return allP.filter(p => {
     if (!p.tracking_number) return false;
-    return p.tracking_number.split(/[,，、\s]+/).some(t => t.trim().toLowerCase() === needle);
+    return p.tracking_number.split(/[,，、;；\s]+/).some(t => t.trim().toLowerCase() === needle);
   });
 }
 
