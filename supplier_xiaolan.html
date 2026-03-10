@@ -1562,11 +1562,11 @@ function renderArrivalGrid() {
       <td style="text-align:center;">${offerLink}</td>
       <td class="${arrivedClass}" style="text-align:center;"><input type="checkbox" ${r.arrived ? 'checked' : ''} data-field="arrived" data-idx="${idx}" onchange="onACellChange(this)"></td>
       <td><input value="${r.tracking_number || ''}" data-field="tracking_number" data-idx="${idx}" onchange="onACellChange(this);tryAutoMatch(this)"></td>
-      <td style="background:#f0f7ff;">${liveProductName}</td>
-      <td style="background:#f0f7ff;">${liveProductId}</td>
-      <td style="background:#f0f7ff;padding:4px 6px;font-size:12px;text-align:right;">${liveSellingPrice || ''}</td>
-      <td style="background:#f0f7ff;padding:4px 6px;font-size:12px;text-align:right;">${liveQty || ''}</td>
-      <td style="background:#f0f7ff;padding:4px 6px;font-size:12px;text-align:right;">${liveUnitCost ? liveUnitCost.toFixed(1) : ''}</td>
+      <td><input value="${liveProductName}" data-field="product_name" data-idx="${idx}" onchange="onACellChange(this)"></td>
+      <td><input value="${liveProductId}" data-field="product_id" data-idx="${idx}" onchange="onACellChange(this)"></td>
+      <td><input type="number" value="${liveSellingPrice || ''}" data-field="selling_price" data-idx="${idx}" onchange="onACellChange(this)"></td>
+      <td><input type="number" value="${liveQty || ''}" data-field="qty" data-idx="${idx}" onchange="onACellChange(this)"></td>
+      <td><input type="number" value="${liveUnitCost || ''}" data-field="unit_cost" data-idx="${idx}" onchange="onACellChange(this)"></td>
       <td><input value="${r.note || ''}" data-field="note" data-idx="${idx}" onchange="onACellChange(this)"></td>
       <td><input value="${r.ship_date || ''}" data-field="ship_date" data-idx="${idx}" onchange="onACellChange(this)" placeholder="1/14"></td>
       <td><input value="${r.ship_order || ''}" data-field="ship_order" data-idx="${idx}" onchange="onACellChange(this)" placeholder="SFD..."></td>
