@@ -178,7 +178,7 @@
         <button class="btn btn-outline" onclick="document.getElementById('importExcel').click()">匯入 Excel</button>
         <button class="btn btn-outline" onclick="addPurchaseRows(5)">+5 行</button>
         <button class="btn" style="background:#2b6cb0;color:#fff;" onclick="openPasteDialog()">📋 貼上</button>
-        <button class="btn btn-outline" onclick="exportPurchasesCSV()">匯出</button>
+        <button class="btn btn-outline" onclick="exportPurchasesExcel()">下載 Excel</button>
         <button class="btn" style="background:#c53030;" onclick="deleteSelectedPurchases()">刪除勾選</button>
       </div>
     </div>
@@ -335,6 +335,7 @@
       <div class="topbar-actions">
         <input type="file" id="importPackage" accept=".xlsx,.xls" style="display:none;" onchange="importPackageExcel(event)">
         <button class="btn btn-outline" onclick="document.getElementById('importPackage').click()">匯入包裹</button>
+        <button class="btn btn-outline" onclick="exportArrivalsExcel()">下載 Excel</button>
         <button class="btn btn-outline" onclick="addArrivalRows(10)">+10 行</button>
         <button class="btn" style="background:#c53030;" onclick="deleteSelectedArrivals()">刪除勾選</button>
       </div>
@@ -1490,16 +1491,38 @@ function importExcelFile(e) {
   reader.readAsBinaryString(file);
 }
 
-function exportPurchasesCSV() {
+function exportPurchasesExcel() {
   const data = getFilteredPurchases();
   if (data.length === 0) return Swal.fire('提示', '沒有資料', 'info');
-  const h = ['訂單日','訂單號碼','運單號碼','商品名稱','付款(RMB)','數量','重量kg','金額(T)','單個價','團購價','用途','下單處','備註'];
-  const rows = data.map(r => [r.order_date,r.order_number,r.tracking_number,r.product_name,r.payment_rmb,r.qty,r.weight_kg,r.total_twd,r.unit_cost,r.selling_price,r.category,r.source,r.note]);
-  const csv = '\uFEFF' + [h,...rows].map(r => r.map(v => `"${String(v||'').replace(/"/g,'""')}"`).join(',')).join('\n');
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
-  a.download = `所有訂單_${new Date().toISOString().slice(0,10)}.csv`;
-  a.click();
+  const h = ['訂單日','訂單號碼','運單號碼','商品名稱','對應商品','付款(RMB)','數量','重量kg','金額(T)','單個價','團購價','用途','下單處','備註'];
+  const rows = data.map(r => [r.order_date,r.order_number,r.tracking_number,r.product_name,r.linked_product||'',r.payment_rmb,r.qty,r.weight_kg,r.total_twd,r.unit_cost,r.selling_price,r.category,r.source,r.note]);
+  const ws = XLSX.utils.aoa_to_sheet([h, ...rows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '所有訂單');
+  XLSX.writeFile(wb, `所有訂單_${new Date().toISOString().slice(0,10)}.xlsx`);
+}
+
+function exportArrivalsExcel() {
+  const saved = getFilteredArrivals();
+  const all = [...saved, ...newArrivalRows.filter(r => r.tracking_number || r.product_name)];
+  if (all.length === 0) return Swal.fire('提示', '沒有資料', 'info');
+  const h = ['1688訂單編號','到貨','快遞單號','商品名稱','商品編號','售價','進貨總數量','進貨價','備註','出貨日期','訂單號','寄至'];
+  // 用 live 資料帶出品名品編
+  const tnCount = {};
+  const rows = all.map(r => {
+    let name = r.product_name || '', pid = r.product_id || '', price = r.selling_price || 0, qty = r.qty || 0, cost = r.unit_cost || 0, oid = r.offer_id || '';
+    if (r.tracking_number) {
+      const tn = r.tracking_number.trim().toLowerCase();
+      if (!tnCount[tn]) tnCount[tn] = 0;
+      const live = getLiveArrivalData(r.tracking_number, tnCount[tn]++);
+      if (live) { name = live.product_name || name; pid = live.product_id || pid; price = live.selling_price || price; qty = live.qty || qty; cost = live.unit_cost || cost; oid = live.offer_id || oid; }
+    }
+    return [oid, r.arrived ? '是' : '否', r.tracking_number||'', name, pid, price, qty, cost, r.note||'', r.ship_date||'', r.ship_order||'', r.ship_to||''];
+  });
+  const ws = XLSX.utils.aoa_to_sheet([h, ...rows]);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '到貨清單');
+  XLSX.writeFile(wb, `到貨清單_${new Date().toISOString().slice(0,10)}.xlsx`);
 }
 
 // ===== Arrival Grid =====
