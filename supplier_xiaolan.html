@@ -343,7 +343,11 @@
       <span style="font-size:12px;color:var(--text2);">匯入包裹Excel自動填入快遞單號並帶出商品資料</span>
       <input type="text" id="aKeyword" placeholder="搜尋商編/品名/快遞單號" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:13px;width:200px;" onkeydown="if(event.key==='Enter'){aPage=1;renderArrivalGrid();}">
       <button class="btn btn-outline" style="padding:5px 10px;font-size:13px;" onclick="aPage=1;renderArrivalGrid();">查詢</button>
-      <button class="btn btn-outline" style="padding:5px 10px;font-size:13px;" onclick="document.getElementById('aKeyword').value='';aPage=1;renderArrivalGrid();">清除</button>
+      <button class="btn btn-outline" style="padding:5px 10px;font-size:13px;" onclick="document.getElementById('aKeyword').value='';document.getElementById('aDateFrom').value='';document.getElementById('aDateTo').value='';aPage=1;renderArrivalGrid();">清除</button>
+      <label style="font-size:12px;color:var(--text2);">到貨日</label>
+      <input type="date" id="aDateFrom" style="padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px;" onchange="aPage=1;renderArrivalGrid();">
+      <span style="font-size:12px;color:var(--text2);">～</span>
+      <input type="date" id="aDateTo" style="padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px;" onchange="aPage=1;renderArrivalGrid();">
       <select id="aShipTo" onchange="aPage=1;renderArrivalGrid();">
         <option value="">全部寄至</option>
         <option value="直寄龍潭">直寄龍潭</option>
@@ -1523,9 +1527,13 @@ const A_PER_PAGE = 50;
 function getFilteredArrivals() {
   const shipTo = document.getElementById('aShipTo').value;
   const kw = (document.getElementById('aKeyword').value || '').trim().toLowerCase();
+  const dateFrom = document.getElementById('aDateFrom').value;
+  const dateTo = document.getElementById('aDateTo').value;
   let data = [...arrivalRows];
   if (shipTo) data = data.filter(r => r.ship_to === shipTo);
   if (kw) data = data.filter(r => fuzzyMatch(r.product_name, kw) || (r.product_id || '').toLowerCase().includes(kw) || (r.tracking_number || '').toLowerCase().includes(kw));
+  if (dateFrom) data = data.filter(r => r.ship_date && r.ship_date >= dateFrom);
+  if (dateTo) data = data.filter(r => r.ship_date && r.ship_date <= dateTo);
   return data;
 }
 
