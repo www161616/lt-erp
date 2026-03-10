@@ -848,7 +848,7 @@ function clearPurchaseFilters() {
 }
 
 let pPage = 1;
-const P_PER_PAGE = 50;
+const P_PER_PAGE = 100;
 
 function renderPurchaseGrid() {
   const saved = getFilteredPurchases();
@@ -1504,7 +1504,7 @@ function exportPurchasesCSV() {
 
 // ===== Arrival Grid =====
 let aPage = 1;
-const A_PER_PAGE = 50;
+const A_PER_PAGE = 100;
 
 function getFilteredArrivals() {
   const shipTo = document.getElementById('aShipTo').value;
@@ -1939,7 +1939,7 @@ function importPackageExcel(e) {
 let returnRows = [];
 let newReturnRows = [];
 let rtPage = 1;
-const RT_PER_PAGE = 50;
+const RT_PER_PAGE = 100;
 
 // 從所有訂單找商品頁連結（offer_id）
 function findOfferByProductCode(code) {
@@ -2149,7 +2149,7 @@ async function saveReturns(isAuto) {
 
 // ===== 團購購買 =====
 let gPage = 1;
-const G_PER_PAGE = 50;
+const G_PER_PAGE = 100;
 
 const GROUP_BUY_CATS = ['團購', '漂漂館', '補寄'];
 function isGroupBuyCat(r) {
@@ -2329,7 +2329,7 @@ function gGoPage(p) {
 
 // ===== 姐姐對帳單 =====
 let sbPage = 1;
-const SB_PER_PAGE = 50;
+const SB_PER_PAGE = 100;
 let currentSister = '大姐';
 
 // 金流紀錄存 localStorage
@@ -2626,7 +2626,7 @@ function printSisterBill() {
 let ppRows = [];      // Supabase: xiaolan_piaopiao
 let newPPRows = [];
 let ppPage = 1;
-const PP_PER_PAGE = 50;
+const PP_PER_PAGE = 100;
 
 async function loadPiaopiao() {
   try { ppRows = await sbFetchAll('xiaolan_piaopiao', 'id.desc'); } catch { ppRows = []; }
@@ -3371,7 +3371,7 @@ async function deleteSelectedPurchases() {
 let orderTrackData = [];
 let otPage = 1;
 const OT_ORDER_URLS = {"160302024":"https://detail.1688.com/offer/936886143725.html","360105025":"https://detail.1688.com/offer/638546677769.html","360105084":"https://detail.1688.com/offer/234892300.html","360105132":"https://detail.1688.com/offer/968598809372.html","360106022":"https://detail.1688.com/offer/554123337709.html","360106081":"https://detail.1688.com/offer/746527736360.html","360106131":"https://detail.1688.com/offer/749375968494.html","360107022":"https://detail.1688.com/offer/1006419389132.html","360107082":"https://detail.1688.com/offer/1009139617775.html","360107132":"https://detail.1688.com/offer/963081011642.html","360108020":"https://detail.1688.com/offer/848190648415.html","360108080":"https://detail.1688.com/offer/805808662201.html","360108130":"https://detail.1688.com/offer/966483639659.html","360109026":"https://detail.1688.com/offer/709977712065.html","360109070":"https://detail.1688.com/offer/834289202228.html","360109133":"https://detail.1688.com/offer/654813206141.html","360112020":"https://detail.1688.com/offer/852096668158.html","360112081":"https://detail.1688.com/offer/997732934564.html","360112120":"https://detail.1688.com/offer/980534956445.html","360113020":"https://detail.1688.com/offer/1008821063454.html","360113080":"https://detail.1688.com/offer/912240267302.html","360113132":"https://detail.1688.com/offer/867062913008.html","360114030":"https://detail.1688.com/offer/1007242267373.html","360114091":"https://detail.1688.com/offer/1008829983422.html","360114130":"https://detail.1688.com/offer/1007698832432.html","360115032":"https://detail.1688.com/offer/967532439032.html","360115090":"https://detail.1688.com/offer/785452835275.html","360115141":"https://detail.1688.com/offer/717344002686.html","360116020":"https://detail.1688.com/offer/934040500645.html","360116080":"https://detail.1688.com/offer/971631595663.html","360116130":"https://detail.1688.com/offer/973010366394.html","360119020":"https://detail.1688.com/offer/875365409511.html","360119240":"https://detail.1688.com/offer/987640504424.html","360120030":"https://detail.1688.com/offer/866791766607.html","360120080":"https://detail.1688.com/offer/889241802857.html","360120130":"https://detail.1688.com/offer/630459660156.html","360121022":"https://detail.1688.com/offer/991603924094.html","360121081":"https://detail.1688.com/offer/973767689417.html","360121180":"https://detail.1688.com/offer/732874867138.html","360122032":"https://detail.1688.com/offer/934816899910.html","360122081":"https://detail.1688.com/offer/738770280735.html","360122133":"https://detail.1688.com/offer/821219919549.html","360123020":"https://detail.1688.com/offer/978942444450.html","360123080":"https://detail.1688.com/offer/926783684174.html","360123130":"https://detail.1688.com/offer/977460636044.html","360126040":"https://detail.1688.com/offer/742257696730.html","360126100":"https://detail.1688.com/offer/847434904148.html","360126140":"https://detail.1688.com/offer/694328780487.html","360127020":"https://detail.1688.com/offer/884715004482.html","360127091":"https://detail.1688.com/offer/686004086170.html","360127141":"https://detail.1688.com/offer/829897554915.html","360128030":"https://detail.1688.com/offer/896463027829.html","360128031":"https://detail.1688.com/offer/896463027829.html","360128080":"https://detail.1688.com/offer/1015852834064.html","360128130":"https://detail.1688.com/offer/1001662690194.html","360129021":"https://detail.1688.com/offer/989983104835.html","360129080":"https://detail.1688.com/offer/614384022200.html","360129131":"https://detail.1688.com/offer/862497747709.html","360130020":"https://detail.1688.com/offer/912274264856.html","360130082":"https://detail.1688.com/offer/962691010902.html","360130130":"https://detail.1688.com/offer/595505249917.html","360202021":"https://detail.1688.com/offer/1009258195984.html","360202090":"https://detail.1688.com/offer/990809409358.html","360202131":"https://detail.1688.com/offer/1014048901764.html","360203020":"https://detail.1688.com/offer/1016520152052.html","360203070":"https://detail.1688.com/offer/1019941676229.html","360203110":"https://detail.1688.com/offer/632081966819.html","360204020":"https://detail.1688.com/offer/951780915676.html","360204080":"https://detail.1688.com/offer/693414460871.html","360204120":"https://detail.1688.com/offer/947027254235.html","360205030":"https://detail.1688.com/offer/931697342814.html","360205090":"https://detail.1688.com/offer/949127165773.html","360205143":"https://detail.1688.com/offer/610355396479.html","360206032":"https://detail.1688.com/offer/774206425753.html","360206091":"https://detail.1688.com/offer/994570181064.html","360206133":"https://detail.1688.com/offer/975693178980.html","360209092":"https://detail.1688.com/offer/930604683270.html","360209130":"https://detail.1688.com/offer/934651313325.html","360210010":"https://detail.1688.com/offer/761747468043.html","360210011":"https://detail.1688.com/offer/761747468043.html","360210083":"https://detail.1688.com/offer/957408132762.html","360210120":"https://detail.1688.com/offer/708382248697.html","360211022":"https://detail.1688.com/offer/975080947534.html","360211080":"https://detail.1688.com/offer/855905869466.html","360211120":"https://detail.1688.com/offer/883917770759.html","360212020":"https://detail.1688.com/offer/1008175651077.html","360212071":"https://detail.1688.com/offer/956672457598.html","360212110":"https://detail.1688.com/offer/894656314511.html","360213020":"https://detail.1688.com/offer/991025445846.html","360213080":"https://detail.1688.com/offer/960966862777.html","360213130":"https://detail.1688.com/offer/782347032565.html","360223022":"https://detail.1688.com/offer/984718625824.html","360224112":"https://detail.1688.com/offer/908162495115.html","360224170":"https://detail.1688.com/offer/991247444611.html","360224222":"https://detail.1688.com/offer/921541009808.html","360225040":"https://detail.1688.com/offer/918218895399.html","360225092":"https://detail.1688.com/offer/864605439555.html","360225134":"https://detail.1688.com/offer/689585308400.html","360225191":"https://detail.1688.com/offer/928493094449.html","360226033":"https://detail.1688.com/offer/990299891816.html","360226120":"https://detail.1688.com/offer/611243397488.html","360226130":"https://detail.1688.com/offer/864793300486.html","360227020":"https://detail.1688.com/offer/923805295466.html","360227071":"https://detail.1688.com/offer/736326316108.html","360227150":"https://detail.1688.com/offer/844584540350.html","360227151":"https://detail.1688.com/offer/844584540350.html","360302083":"https://detail.1688.com/offer/807726988622.html","360302120":"https://detail.1688.com/offer/829001986058.html","360303020":"https://detail.1688.com/offer/956763381156.html","360303090":"https://detail.1688.com/offer/964249880835.html","360303131":"https://detail.1688.com/offer/1020160632393.html","360304021":"https://detail.1688.com/offer/991659711420.html","360304080":"https://detail.1688.com/offer/999404584615.html","360304081":"https://detail.1688.com/offer/999404584615.html","360304130":"https://detail.1688.com/offer/953817358835.html","360305020":"https://detail.1688.com/offer/887498909764.html","360305090":"https://detail.1688.com/offer/739497974506.html","360305142":"https://detail.1688.com/offer/869876329358.html","360306011":"https://detail.1688.com/offer/740371576893.html","360306013":"https://detail.1688.com/offer/1026369979900.html","360306018":"https://detail.1688.com/offer/1005999584549.html"};
-const OT_PER_PAGE = 50;
+const OT_PER_PAGE = 100;
 
 let gbUrlMap = {};
 let otOrderedSet = new Set(JSON.parse(localStorage.getItem('xiaolan_ot_ordered') || '[]'));
