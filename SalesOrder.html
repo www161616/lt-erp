@@ -882,21 +882,32 @@ async function saveNewProduct(stayOpen) {
     return;
   }
 
-  // ===== 防呆：重複檢查 =====
+  // ===== 防呆：重複檢查（查 DB 確保停用商品也能偵測） =====
+  let isUpsert = false;
   if (manualId) {
-    const sameId = allP.find(p => String(p.id) === manualId);
+    // 先查本地，再查 DB（含停用商品）
+    let sameId = allP.find(p => String(p.id) === manualId);
+    if (!sameId) {
+      try {
+        const chkRes = await fetch(`${SB_URL}/products?id=eq.${encodeURIComponent(manualId)}&select=id,name,status`, { headers: HEADERS });
+        const chkData = await chkRes.json();
+        if (chkData && chkData.length > 0) sameId = chkData[0];
+      } catch(e) { /* 查不到就當沒有 */ }
+    }
     if (sameId) {
+      const statusNote = sameId.status && sameId.status !== '啟用' ? `（狀態：${sameId.status}）` : '';
       const r = await Swal.fire({
         title: '編號已存在',
-        html: `編號「${manualId}」已有商品「${sameId.name}」<br>是否覆蓋更新此商品？`,
+        html: `編號「${manualId}」已有商品「${sameId.name}」${statusNote}<br>是否覆蓋更新此商品？`,
         icon: 'warning', showCancelButton: true,
         confirmButtonColor: '#e6a23c', confirmButtonText: '覆蓋更新', cancelButtonText: '取消'
       });
       if (!r.isConfirmed) return;
+      isUpsert = true;
     }
   }
   const sameName = allP.find(p => p.name.trim().toLowerCase() === name.toLowerCase());
-  if (sameName) {
+  if (sameName && !(isUpsert && String(sameName.id) === manualId)) {
     const r = await Swal.fire({
       title: '商品名稱已存在',
       html: `已有同名商品「${sameName.name}」（編號：${sameName.id}）<br>確定要繼續新增嗎？`,
@@ -930,9 +941,13 @@ async function saveNewProduct(stayOpen) {
   document.getElementById('loadingOverlay').classList.remove('hidden');
 
   try {
+    // 覆蓋更新時用 UPSERT，避免 duplicate key 錯誤
+    const postHeaders = isUpsert
+      ? { ...HEADERS, 'Prefer': 'return=representation,resolution=merge-duplicates' }
+      : HEADERS;
     const res = await fetch(`${SB_URL}/products`, {
       method: 'POST',
-      headers: HEADERS,
+      headers: postHeaders,
       body: JSON.stringify(payload)
     });
 
