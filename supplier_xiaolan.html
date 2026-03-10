@@ -1672,6 +1672,16 @@ function findPurchaseByTracking(tn) {
   });
 }
 
+// 找出所有匹配同一運單號的訂單（多筆商品同一包裹）
+function findAllPurchasesByTracking(tn) {
+  if (!tn) return [];
+  const needle = tn.trim().toLowerCase();
+  return purchaseRows.filter(p => {
+    if (!p.tracking_number) return false;
+    return p.tracking_number.split(/[,，、\s]+/).some(t => t.trim().toLowerCase() === needle);
+  });
+}
+
 function tryAutoMatch(input, ctx) {
   const idx = input.dataset.idx;
   const row = ctx === 'rt' ? getRtRowByIdx(idx) : getARowByIdx(idx);
@@ -1695,17 +1705,29 @@ function autoMatchArrivals() {
 
 // 切換到到貨清單時，重新比對所有（含已儲存）的到貨項目
 function autoMatchAllArrivals() {
-  [...arrivalRows, ...newArrivalRows].forEach(row => {
+  const allArrivals = [...arrivalRows, ...newArrivalRows];
+  // 依運單號分組，每組配對多筆訂單
+  const grouped = {};
+  allArrivals.forEach((row, i) => {
     if (!row || !row.tracking_number) return;
-    const match = findPurchaseByTracking(row.tracking_number);
-    if (match && match.linked_product) {
-      const oldName = row.product_name;
-      const oldId = row.product_id;
-      fillArrivalFromPurchase(row, match);
-      if (row.product_name !== oldName || row.product_id !== oldId) {
-        row._dirty = true;
+    const tn = row.tracking_number.trim().toLowerCase();
+    if (!grouped[tn]) grouped[tn] = [];
+    grouped[tn].push(row);
+  });
+  Object.keys(grouped).forEach(tn => {
+    const arrivals = grouped[tn];
+    const purchases = findAllPurchasesByTracking(tn);
+    arrivals.forEach((row, i) => {
+      const match = purchases[i] || purchases[0];
+      if (match && match.linked_product) {
+        const oldName = row.product_name;
+        const oldId = row.product_id;
+        fillArrivalFromPurchase(row, match);
+        if (row.product_name !== oldName || row.product_id !== oldId) {
+          row._dirty = true;
+        }
       }
-    }
+    });
   });
 }
 
@@ -1833,47 +1855,52 @@ function importPackageExcel(e) {
         const shipDate = excelDateToStr(row[1]); // B: 创建时间 → 出貨日期
         if (!trackingNum) continue;
 
-        // 1. 比對所有訂單，填入重量（支援多運單號逗號分隔）
-        const pMatch = findPurchaseByTracking(trackingNum);
-        if (pMatch && weight > 0 && !pMatch.weight_kg) {
-          pMatch.weight_kg = weight;
-          pMatch._dirty = true;
-          calcRow(pMatch);
-          weightFilled++;
-        }
-
-        // 2. 建立到貨清單項目
-        const arrRow = {
-          offer_id: pMatch ? (pMatch.offer_id || '') : '',
-          arrived: false,
-          tracking_number: trackingNum,
-          product_name: '',
-          product_id: '',
-          selling_price: 0,
-          qty: pMatch ? (pMatch.qty || 0) : 0,
-          unit_cost: pMatch ? (pMatch.unit_cost || 0) : 0,
-          note: '',
-          ship_date: shipDate,
-          ship_order: packageOrder,
-          ship_to: '直寄龍潭'
-        };
-
-        // 從陸貨訂購帶入商品名稱、商品編號、售價
-        if (pMatch && pMatch.linked_product) {
-          const otItems = getOrderTrackOptions();
-          const otMatch = otItems.find(o => (o.productId || o.name || '') === pMatch.linked_product);
-          if (otMatch) {
-            arrRow.product_name = otMatch.name || '';
-            arrRow.product_id = otMatch.productId || '';
-            arrRow.selling_price = parseFloat(otMatch.price) || 0;
+        // 1. 比對所有訂單（同一運單可能對應多筆商品）
+        const pMatches = findAllPurchasesByTracking(trackingNum);
+        pMatches.forEach(pm => {
+          if (weight > 0 && !pm.weight_kg) {
+            pm.weight_kg = weight;
+            pm._dirty = true;
+            calcRow(pm);
+            weightFilled++;
           }
-        }
-        if (!arrRow.product_name && pMatch) {
-          arrRow.product_name = pMatch.product_name || '';
-        }
+        });
 
-        newArrivalRows.push(arrRow);
-        arrivalCreated++;
+        // 2. 建立到貨清單項目（每筆匹配的訂單各建一筆）
+        const targets = pMatches.length > 0 ? pMatches : [null];
+        targets.forEach(pMatch => {
+          const arrRow = {
+            offer_id: pMatch ? (pMatch.offer_id || '') : '',
+            arrived: false,
+            tracking_number: trackingNum,
+            product_name: '',
+            product_id: '',
+            selling_price: 0,
+            qty: pMatch ? (pMatch.qty || 0) : 0,
+            unit_cost: pMatch ? (pMatch.unit_cost || 0) : 0,
+            note: '',
+            ship_date: shipDate,
+            ship_order: packageOrder,
+            ship_to: '直寄龍潭'
+          };
+
+          // 從陸貨訂購帶入商品名稱、商品編號、售價
+          if (pMatch && pMatch.linked_product) {
+            const otItems = getOrderTrackOptions();
+            const otMatch = otItems.find(o => (o.productId || o.name || '') === pMatch.linked_product);
+            if (otMatch) {
+              arrRow.product_name = otMatch.name || '';
+              arrRow.product_id = otMatch.productId || '';
+              arrRow.selling_price = parseFloat(otMatch.price) || 0;
+            }
+          }
+          if (!arrRow.product_name && pMatch) {
+            arrRow.product_name = pMatch.product_name || '';
+          }
+
+          newArrivalRows.push(arrRow);
+          arrivalCreated++;
+        });
       }
 
       // 儲存所有訂單的重量更新
