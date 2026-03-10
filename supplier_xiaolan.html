@@ -1629,18 +1629,17 @@ function getARowByIdx(idx) {
   }
 }
 
-// 到貨清單品名搜尋選單（含 datalist）
+// 到貨清單品名搜尋選單（含 datalist，只顯示品名）
 function buildArrivalLinkedSelect(currentName, currentId, idx, trackingNumber) {
   const options = getOrderTrackOptions();
   const listId = `adl_${idx}`;
-  const displayVal = currentId ? currentId + ' ' + currentName : currentName;
-  let html = `<input list="${listId}" value="${displayVal || ''}" data-idx="${idx}" data-tn="${trackingNumber || ''}"
+  let html = `<input list="${listId}" value="${currentName || ''}" data-idx="${idx}" data-tn="${trackingNumber || ''}"
     onchange="onArrivalLinkedChange(this)" placeholder="搜尋商品..."
     style="width:100%;font-size:12px;padding:4px 6px;border:none;background:transparent;outline:none;">`;
   html += `<datalist id="${listId}">`;
   options.forEach(o => {
     const label = (o.productId ? o.productId + ' ' : '') + (o.name || '');
-    html += `<option value="${label}"></option>`;
+    html += `<option value="${label}" label="${o.name || ''}"></option>`;
   });
   html += `</datalist>`;
   return html;
@@ -1652,9 +1651,10 @@ function onArrivalLinkedChange(input) {
   const tn = input.dataset.tn;
   const typedVal = input.value.trim();
   const options = getOrderTrackOptions();
+  // 支援用「商編 品名」或「品名」比對
   const matched = options.find(o => {
     const label = (o.productId ? o.productId + ' ' : '') + (o.name || '');
-    return label === typedVal;
+    return label === typedVal || o.name === typedVal;
   });
   if (!matched) return;
   const linkedVal = matched.productId || matched.name || '';
@@ -1667,7 +1667,7 @@ function onArrivalLinkedChange(input) {
       triggerAutoSave();
     }
   }
-  // 重新渲染到貨清單（live 會自動帶出新值）
+  // 重新渲染到貨清單（live 會自動帶出新值，品名品編分開顯示）
   renderArrivalGrid();
 }
 
