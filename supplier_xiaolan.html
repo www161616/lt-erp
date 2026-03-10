@@ -1562,8 +1562,8 @@ function renderArrivalGrid() {
       <td style="text-align:center;">${offerLink}</td>
       <td class="${arrivedClass}" style="text-align:center;"><input type="checkbox" ${r.arrived ? 'checked' : ''} data-field="arrived" data-idx="${idx}" onchange="onACellChange(this)"></td>
       <td><input value="${r.tracking_number || ''}" data-field="tracking_number" data-idx="${idx}" onchange="onACellChange(this);tryAutoMatch(this)"></td>
-      <td><input value="${liveProductName}" data-field="product_name" data-idx="${idx}" onchange="onACellChange(this)"></td>
-      <td><input value="${liveProductId}" data-field="product_id" data-idx="${idx}" onchange="onACellChange(this)"></td>
+      <td>${buildArrivalLinkedSelect(liveProductName, liveProductId, idx, r.tracking_number)}</td>
+      <td style="padding:4px 6px;font-size:12px;">${liveProductId}</td>
       <td><input type="number" value="${liveSellingPrice || ''}" data-field="selling_price" data-idx="${idx}" onchange="onACellChange(this)"></td>
       <td><input type="number" value="${liveQty || ''}" data-field="qty" data-idx="${idx}" onchange="onACellChange(this)"></td>
       <td><input type="number" value="${liveUnitCost || ''}" data-field="unit_cost" data-idx="${idx}" onchange="onACellChange(this)"></td>
@@ -1627,6 +1627,48 @@ function getARowByIdx(idx) {
   } else {
     return newArrivalRows[parseInt(idx.slice(1))];
   }
+}
+
+// 到貨清單品名搜尋選單（含 datalist）
+function buildArrivalLinkedSelect(currentName, currentId, idx, trackingNumber) {
+  const options = getOrderTrackOptions();
+  const listId = `adl_${idx}`;
+  const displayVal = currentId ? currentId + ' ' + currentName : currentName;
+  let html = `<input list="${listId}" value="${displayVal || ''}" data-idx="${idx}" data-tn="${trackingNumber || ''}"
+    onchange="onArrivalLinkedChange(this)" placeholder="搜尋商品..."
+    style="width:100%;font-size:12px;padding:4px 6px;border:none;background:transparent;outline:none;">`;
+  html += `<datalist id="${listId}">`;
+  options.forEach(o => {
+    const label = (o.productId ? o.productId + ' ' : '') + (o.name || '');
+    html += `<option value="${label}"></option>`;
+  });
+  html += `</datalist>`;
+  return html;
+}
+
+// 到貨清單選了商品 → 反向回寫所有訂單的 linked_product
+function onArrivalLinkedChange(input) {
+  const idx = input.dataset.idx;
+  const tn = input.dataset.tn;
+  const typedVal = input.value.trim();
+  const options = getOrderTrackOptions();
+  const matched = options.find(o => {
+    const label = (o.productId ? o.productId + ' ' : '') + (o.name || '');
+    return label === typedVal;
+  });
+  if (!matched) return;
+  const linkedVal = matched.productId || matched.name || '';
+  // 找到對應的所有訂單，回寫 linked_product
+  if (tn) {
+    const pMatch = findPurchaseByTracking(tn);
+    if (pMatch) {
+      pMatch.linked_product = linkedVal;
+      pMatch._dirty = true;
+      triggerAutoSave();
+    }
+  }
+  // 重新渲染到貨清單（live 會自動帶出新值）
+  renderArrivalGrid();
 }
 
 function onACellChange(input) {
