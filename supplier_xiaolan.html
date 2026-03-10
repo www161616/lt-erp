@@ -1786,6 +1786,7 @@ function importPackageExcel(e) {
         const trackingNum = row[12] ? String(row[12]).trim() : ''; // M: 快递单号
         const weight = parseFloat(row[14]) || 0; // O: 包裹重量
         const packageOrder = row[0] ? String(row[0]).trim() : ''; // A: 订单编号（集運單號）
+        const shipDate = excelDateToStr(row[1]); // B: 创建时间 → 出貨日期
         if (!trackingNum) continue;
 
         // 1. 比對所有訂單，填入重量
@@ -1808,7 +1809,7 @@ function importPackageExcel(e) {
           qty: pMatch ? (pMatch.qty || 0) : 0,
           unit_cost: pMatch ? (pMatch.unit_cost || 0) : 0,
           note: '',
-          ship_date: '',
+          ship_date: shipDate,
           ship_order: packageOrder,
           ship_to: '直寄龍潭'
         };
