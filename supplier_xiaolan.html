@@ -835,7 +835,7 @@ function getFilteredPurchases() {
   let data = [...purchaseRows];
   if (month) data = data.filter(r => r.order_date && r.order_date.startsWith(month));
   if (source) data = data.filter(r => r.source === source);
-  if (kw) data = data.filter(r => fuzzyMatch(r.product_name, kw) || (r.order_number || '').includes(kw) || (r.tracking_number || '').toLowerCase().includes(kw));
+  if (kw) data = data.filter(r => fuzzyMatch(r.product_name, kw) || (r.order_number || '').includes(kw) || (r.tracking_number || '').toLowerCase().includes(kw) || (r.tracking_number || '').split(/[,，、\s]+/).some(t => t.trim().toLowerCase() === kw));
   data.sort((a, b) => (b.order_date || '').localeCompare(a.order_date || ''));
   return data;
 }
@@ -1833,8 +1833,8 @@ function importPackageExcel(e) {
         const shipDate = excelDateToStr(row[1]); // B: 创建时间 → 出貨日期
         if (!trackingNum) continue;
 
-        // 1. 比對所有訂單，填入重量
-        const pMatch = purchaseRows.find(p => p.tracking_number && p.tracking_number.trim() === trackingNum);
+        // 1. 比對所有訂單，填入重量（支援多運單號逗號分隔）
+        const pMatch = findPurchaseByTracking(trackingNum);
         if (pMatch && weight > 0 && !pMatch.weight_kg) {
           pMatch.weight_kg = weight;
           pMatch._dirty = true;
