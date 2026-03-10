@@ -257,35 +257,29 @@
       if (el) el.innerText = new Date().toLocaleString('zh-TW', { hour12:false, month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
     }
 
-    // role: admin=全部, assistant=只看陸貨專區, staff=基本功能
+    // ===== 權限架構（5 角色）=====
+    // admin(www161616) 最高管理員 = 全部功能（index + admin 全部）
+    // accountant 會計 = 只能登入 index（不能登入此頁）
+    // assistant 助理 = admin 全部功能（無帳號管理）
+    // staff 員工 = admin 但無漂漂館、團購叫貨（無帳號管理）
+    // store 分店 = 只能登入 branch_portal（不能登入此頁）
 
     function applyRolePermissions() {
       const role = currentUser?.role || 'staff';
       const isAdmin = role === 'admin';
       const isAssistant = role === 'assistant';
-      const isMainAdmin = isAdmin && (currentUser?.username === 'www161616');
+      const isStaff = role === 'staff';
+      const isMainAdmin = currentUser?.username === 'www161616';
 
-      // 系統管理：僅 www161616
-      document.getElementById('menu-employees').style.display = isMainAdmin ? '' : 'none';
-      document.getElementById('menu-employees-section').style.display = isMainAdmin ? '' : 'none';
-      document.getElementById('menu-branches').style.display = isMainAdmin ? '' : 'none';
+      // 帳號管理已移至 index.html (AccountManager.html)，此頁不顯示
+      document.getElementById('menu-employees').style.display = 'none';
+      document.getElementById('menu-employees-section').style.display = 'none';
+      document.getElementById('menu-branches').style.display = 'none';
 
-      // 陸貨專區（漂漂館+團購叫貨）：僅 assistant 和 www161616
-      const showPP = isMainAdmin || isAssistant;
+      // 漂漂館 + 團購叫貨：admin（含www161616）和 assistant 可見，staff 不可見
+      const showPP = isAdmin || isAssistant;
       document.getElementById('menu-ppAssistant').style.display = showPP ? '' : 'none';
       document.getElementById('menu-gbOrder').style.display = showPP ? '' : 'none';
-
-      // assistant 只看陸貨專區，隱藏其他所有區塊
-      const hideForAssistant = [
-        'menu-home','label-product','menu-campaign','menu-purchase','menu-searchPurchase','menu-adminSummary','menu-importGroupBuy','menu-orders',
-        'menu-cnArrivals','menu-cnReturns',
-        'label-warehouse','menu-picking','menu-pickingHistory','menu-demandBackorder','menu-transfer','menu-aid',
-        'label-accounting','menu-accounting'
-      ];
-      hideForAssistant.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.style.display = isAssistant ? 'none' : '';
-      });
 
       // assistant 登入直接跳到團購叫貨區
       if (isAssistant && !sessionStorage.getItem('assistant_loaded')) {
@@ -307,7 +301,7 @@
         }
         // 檢查 role 權限
         const meta = session.user.user_metadata || {};
-        if (meta.role !== 'admin' && meta.role !== 'assistant' && meta.role !== 'accountant') {
+        if (meta.role !== 'admin' && meta.role !== 'assistant' && meta.role !== 'staff') {
           sessionStorage.removeItem('erp_employee');
           try { await sbClient.auth.signOut({ scope: 'local' }); } catch(e) {}
           document.getElementById('loginOverlay').style.display = 'flex';
@@ -328,7 +322,7 @@
           const { data: { session } } = await sbClient.auth.getSession();
           if (session) {
             const meta = session.user.user_metadata || {};
-            if (meta.role === 'admin' || meta.role === 'assistant') {
+            if (meta.role === 'admin' || meta.role === 'assistant' || meta.role === 'staff') {
               HEADERS['Authorization'] = `Bearer ${session.access_token}`;
               sessionStorage.setItem('sb_auth_token', session.access_token);
               sessionStorage.setItem('sb_auth_token_admin_email', session.user.email);
@@ -398,7 +392,7 @@
         sessionStorage.setItem('sb_auth_token_admin_pass', pass);
 
         const meta = authData.user.user_metadata || {};
-        if (meta.role !== 'admin' && meta.role !== 'assistant' && meta.role !== 'accountant') {
+        if (meta.role !== 'admin' && meta.role !== 'assistant' && meta.role !== 'staff') {
           await sbClient.auth.signOut({ scope: 'local' });
           Swal.fire('權限不足', '此帳號無法使用管理後台。', 'error');
           return;

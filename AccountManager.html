@@ -81,10 +81,11 @@
   }
 
   function accessTags(role) {
-    if (role === 'admin') return '<span class="access-tag" style="background:#dbeafe; color:#1e40af;">ERP</span><span class="access-tag" style="background:#fef3c7; color:#92400e;">管理後台</span>';
-    if (role === 'accountant') return '<span class="access-tag" style="background:#dbeafe; color:#1e40af;">ERP</span><span class="access-tag" style="background:#fef3c7; color:#92400e;">管理後台</span>';
-    if (role === 'assistant') return '<span class="access-tag" style="background:#fef3c7; color:#92400e;">管理後台</span>';
-    if (role === 'staff') return '<span class="access-tag" style="background:#e2e8f0; color:#475569;">分店前台</span>';
+    if (role === 'admin') return '<span class="access-tag" style="background:#dbeafe; color:#1e40af;">ERP</span><span class="access-tag" style="background:#fef3c7; color:#92400e;">管理後台（全部）</span>';
+    if (role === 'accountant') return '<span class="access-tag" style="background:#dbeafe; color:#1e40af;">ERP（無帳號管理）</span>';
+    if (role === 'assistant') return '<span class="access-tag" style="background:#fef3c7; color:#92400e;">管理後台（全部）</span>';
+    if (role === 'staff') return '<span class="access-tag" style="background:#fef3c7; color:#92400e;">管理後台（無漂漂館/團購）</span>';
+    if (role === 'store') return '<span class="access-tag" style="background:#e2e8f0; color:#475569;">分店前台</span>';
     return '-';
   }
 
@@ -98,8 +99,8 @@
       return;
     }
 
-    var roleLabel = { admin: '管理員', accountant: '會計', assistant: '助理', staff: '員工' };
-    var roleBadge = { admin: 'badge-admin', accountant: 'badge-admin', assistant: 'badge-assistant', staff: 'badge-staff' };
+    var roleLabel = { admin: '最高管理員', accountant: '會計', assistant: '助理', staff: '員工', store: '分店' };
+    var roleBadge = { admin: 'badge-admin', accountant: 'badge-admin', assistant: 'badge-assistant', staff: 'badge-staff', store: 'badge-staff' };
 
     tbody.innerHTML = accountList.map(function(a) {
       var role = a.role || 'staff';
@@ -134,13 +135,13 @@
           '<div style="margin-bottom:10px;"><label style="font-weight:bold; color:#718096; font-size:12px;">姓名</label>' +
             '<input id="acc-fullname" type="text" placeholder="使用者姓名" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;"></div>' +
           '<div style="margin-bottom:10px;"><label style="font-weight:bold; color:#718096; font-size:12px;">角色</label>' +
-            '<select id="acc-role" onchange="document.getElementById(\'acc-store-row\').style.display=this.value===\'staff\'?\'block\':\'none\';" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;">' +
-              '<option value="admin">管理員 → 可登入 ERP + 管理後台</option>' +
-              '<option value="accountant">會計 → 可登入 ERP + 管理後台（無帳號管理）</option>' +
-              '<option value="assistant">助理 → 可登入管理後台</option>' +
-              '<option value="staff">員工 → 可登入分店前台</option>' +
+            '<select id="acc-role" onchange="document.getElementById(\'acc-store-row\').style.display=this.value===\'store\'?\'block\':\'none\';" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;">' +
+              '<option value="accountant">會計 → ERP（無帳號管理）</option>' +
+              '<option value="assistant">助理 → 管理後台（全部功能）</option>' +
+              '<option value="staff">員工 → 管理後台（無漂漂館/團購叫貨）</option>' +
+              '<option value="store">分店 → 分店前台（需指定分店）</option>' +
             '</select></div>' +
-          '<div id="acc-store-row" style="margin-bottom:10px; display:none;"><label style="font-weight:bold; color:#718096; font-size:12px;">所屬分店（員工必填）</label>' +
+          '<div id="acc-store-row" style="margin-bottom:10px; display:none;"><label style="font-weight:bold; color:#718096; font-size:12px;">所屬分店（分店帳號必填）</label>' +
             '<input id="acc-store" type="text" placeholder="例：龍潭店" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;"></div>' +
         '</div>',
       showCancelButton: true,
@@ -153,7 +154,7 @@
         var store = (document.getElementById('acc-store').value || '').trim();
         if (!username || !password) { Swal.showValidationMessage('帳號和密碼為必填'); return false; }
         if (password.length < 6) { Swal.showValidationMessage('密碼至少 6 碼'); return false; }
-        if (role === 'staff' && !store) { Swal.showValidationMessage('員工必須指定所屬分店'); return false; }
+        if (role === 'store' && !store) { Swal.showValidationMessage('分店帳號必須指定所屬分店'); return false; }
         return { username: username, password: password, full_name: full_name, role: role, store: store };
       }
     }).then(async function(res) {
@@ -201,13 +202,14 @@
           '<div style="margin-bottom:10px;"><label style="font-weight:bold; color:#718096; font-size:12px;">姓名</label>' +
             '<input id="edit-fullname" type="text" value="' + (emp.full_name || '') + '" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;"></div>' +
           '<div style="margin-bottom:10px;"><label style="font-weight:bold; color:#718096; font-size:12px;">角色</label>' +
-            '<select id="edit-role" onchange="document.getElementById(\'edit-store-row\').style.display=this.value===\'staff\'?\'block\':\'none\';" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;">' +
-              '<option value="admin"' + (emp.role === 'admin' ? ' selected' : '') + '>管理員 → ERP + 管理後台</option>' +
-              '<option value="accountant"' + (emp.role === 'accountant' ? ' selected' : '') + '>會計 → ERP + 管理後台</option>' +
-              '<option value="assistant"' + (emp.role === 'assistant' ? ' selected' : '') + '>助理 → 管理後台</option>' +
-              '<option value="staff"' + (emp.role === 'staff' ? ' selected' : '') + '>員工 → 分店前台</option>' +
+            '<select id="edit-role" onchange="document.getElementById(\'edit-store-row\').style.display=this.value===\'store\'?\'block\':\'none\';" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;">' +
+              '<option value="admin"' + (emp.role === 'admin' ? ' selected' : '') + '>最高管理員 → 全部系統</option>' +
+              '<option value="accountant"' + (emp.role === 'accountant' ? ' selected' : '') + '>會計 → ERP（無帳號管理）</option>' +
+              '<option value="assistant"' + (emp.role === 'assistant' ? ' selected' : '') + '>助理 → 管理後台（全部功能）</option>' +
+              '<option value="staff"' + (emp.role === 'staff' ? ' selected' : '') + '>員工 → 管理後台（無漂漂館/團購）</option>' +
+              '<option value="store"' + (emp.role === 'store' ? ' selected' : '') + '>分店 → 分店前台</option>' +
             '</select></div>' +
-          '<div id="edit-store-row" style="margin-bottom:10px;' + (emp.role === 'staff' ? '' : ' display:none;') + '"><label style="font-weight:bold; color:#718096; font-size:12px;">所屬分店</label>' +
+          '<div id="edit-store-row" style="margin-bottom:10px;' + (emp.role === 'store' ? '' : ' display:none;') + '"><label style="font-weight:bold; color:#718096; font-size:12px;">所屬分店</label>' +
             '<input id="edit-store" type="text" value="' + (emp.store || '') + '" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;"></div>' +
           '<div style="margin-bottom:10px;"><label style="font-weight:bold; color:#718096; font-size:12px;">狀態</label>' +
             '<select id="edit-status" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;">' +
