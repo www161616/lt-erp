@@ -1690,18 +1690,32 @@ function getLiveArrivalData(trackingNumber, seqIndex) {
   const pMatches = findAllPurchasesByTracking(trackingNumber);
   const pMatch = pMatches[seqIndex] || pMatches[0];
   const result = { product_name: '', product_id: '', qty: 0, unit_cost: 0, offer_id: '', selling_price: 0 };
-  if (!pMatch) return result;
+  if (!pMatch) {
+    console.log('[到貨比對] 運單', trackingNumber, '→ 找不到匹配的所有訂單');
+    return result;
+  }
+  console.log('[到貨比對] 運單', trackingNumber, '→ 匹配訂單:', {
+    tracking: pMatch.tracking_number,
+    linked_product: pMatch.linked_product,
+    product_name: pMatch.product_name
+  });
   result.qty = pMatch.qty || 0;
   result.unit_cost = pMatch.unit_cost || 0;
   result.offer_id = pMatch.offer_id || '';
   if (pMatch.linked_product) {
     const otItems = getOrderTrackOptions();
+    console.log('[到貨比對] 陸貨訂購資料筆數:', otItems.length, '比對 linked_product:', pMatch.linked_product);
     const otMatch = otItems.find(o => (o.productId || o.name || '') === pMatch.linked_product);
     if (otMatch) {
       result.product_name = otMatch.name || '';
       result.product_id = otMatch.productId || '';
       result.selling_price = parseFloat(otMatch.price) || 0;
+      console.log('[到貨比對] ✓ 找到對應商品:', result.product_name, result.product_id);
+    } else {
+      console.log('[到貨比對] ✗ 陸貨訂購找不到 linked_product:', pMatch.linked_product);
     }
+  } else {
+    console.log('[到貨比對] 該訂單沒有設定對應商品(linked_product)');
   }
   if (!result.product_name) result.product_name = pMatch.product_name || '';
   return result;
