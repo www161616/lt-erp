@@ -762,6 +762,7 @@ function switchTab(name, el) {
   if (el) el.classList.add('active');
   if (name === 'orderTrack') loadOrderTrack();
   if (name === 'group') renderGroupBuy();
+  if (name === 'arrivals') { autoMatchAllArrivals(); renderArrivalGrid(); }
   if (name === 'returns') renderReturnGrid();
   if (name === 'sisterBill') renderSisterBill();
   if (name === 'piaopiao') { loadPPSettings(); renderPiaopiao(); }
@@ -1027,7 +1028,26 @@ function onLinkedChange(input) {
     row.linked_product = '';
     row._dirty = true;
   }
+  // 同步更新到貨清單：用 tracking_number 比對
+  syncArrivalFromPurchase(row);
   triggerAutoSave();
+}
+
+// 當所有訂單的 linked_product 變更時，同步更新到貨清單的商編、品名、售價
+function syncArrivalFromPurchase(purchaseRow) {
+  if (!purchaseRow.tracking_number) return;
+  const tns = purchaseRow.tracking_number.split(/[,，、\s]+/).map(t => t.trim().toLowerCase()).filter(Boolean);
+  if (tns.length === 0) return;
+  let changed = false;
+  const allArrivals = [...arrivalRows, ...newArrivalRows];
+  allArrivals.forEach(a => {
+    if (!a || !a.tracking_number) return;
+    if (!tns.includes(a.tracking_number.trim().toLowerCase())) return;
+    fillArrivalFromPurchase(a, purchaseRow);
+    a._dirty = true;
+    changed = true;
+  });
+  if (changed) renderArrivalGrid();
 }
 
 function addPurchaseRows(n, silent) {
@@ -1663,6 +1683,22 @@ function autoMatchArrivals() {
     if (match) fillArrivalFromPurchase(row, match);
   });
   renderArrivalGrid();
+}
+
+// 切換到到貨清單時，重新比對所有（含已儲存）的到貨項目
+function autoMatchAllArrivals() {
+  [...arrivalRows, ...newArrivalRows].forEach(row => {
+    if (!row || !row.tracking_number) return;
+    const match = findPurchaseByTracking(row.tracking_number);
+    if (match && match.linked_product) {
+      const oldName = row.product_name;
+      const oldId = row.product_id;
+      fillArrivalFromPurchase(row, match);
+      if (row.product_name !== oldName || row.product_id !== oldId) {
+        row._dirty = true;
+      }
+    }
+  });
 }
 
 function toggleAllArrivalCheck(master) {
