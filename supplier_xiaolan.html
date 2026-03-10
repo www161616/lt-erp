@@ -766,7 +766,7 @@ function switchTab(name, el) {
   if (el) el.classList.add('active');
   if (name === 'orderTrack') loadOrderTrack();
   if (name === 'group') renderGroupBuy();
-  if (name === 'arrivals') { autoMatchAllArrivals(); renderArrivalGrid(); }
+  if (name === 'arrivals') renderArrivalGrid();
   if (name === 'returns') renderReturnGrid();
   if (name === 'sisterBill') renderSisterBill();
   if (name === 'piaopiao') { loadPPSettings(); renderPiaopiao(); }
@@ -1002,10 +1002,6 @@ function onPCellChange(input) {
     cells[0].textContent = row.total_twd ? row.total_twd.toFixed(0) : '';
     cells[1].textContent = row.unit_cost ? row.unit_cost.toFixed(1) : '';
   }
-  // 即時同步到貨清單（數量、單個價、商品頁、運單號等變更）
-  if (['qty', 'payment_rmb', 'weight_kg', 'offer_id', 'tracking_number'].includes(field)) {
-    syncArrivalFromPurchase(row);
-  }
   triggerAutoSave();
 }
 
@@ -1036,33 +1032,9 @@ function onLinkedChange(input) {
     row.linked_product = '';
     row._dirty = true;
   }
-  // 同步更新到貨清單：用 tracking_number 比對
-  syncArrivalFromPurchase(row);
   triggerAutoSave();
 }
 
-// 所有訂單任何欄位變更時，同步更新到貨清單
-function syncArrivalFromPurchase(purchaseRow) {
-  if (!purchaseRow.tracking_number) return;
-  const tns = purchaseRow.tracking_number.split(/[,，、\s]+/).map(t => t.trim().toLowerCase()).filter(Boolean);
-  if (tns.length === 0) return;
-  let changed = false;
-  const allArrivals = [...arrivalRows, ...newArrivalRows];
-  // 找出同運單號的到貨項目，依序配對同運單的多筆訂單
-  tns.forEach(tn => {
-    const matchedArrivals = allArrivals.filter(a => a && a.tracking_number && a.tracking_number.trim().toLowerCase() === tn);
-    const matchedPurchases = findAllPurchasesByTracking(tn);
-    matchedArrivals.forEach((a, i) => {
-      const p = matchedPurchases[i] || null;
-      if (p) {
-        fillArrivalFromPurchase(a, p);
-        a._dirty = true;
-        changed = true;
-      }
-    });
-  });
-  if (changed) renderArrivalGrid();
-}
 
 function addPurchaseRows(n, silent) {
   const rows = [];
@@ -1559,8 +1531,15 @@ function renderArrivalGrid() {
   const start = (aPage - 1) * A_PER_PAGE;
   const pageItems = all.slice(start, start + A_PER_PAGE);
 
-  // 預先建立運單號→訂單的分組對應（同運單多筆依序配對）
+  // 計算每筆到貨在同運單號中的序號（跨頁也正確）
   const arrivalTnCount = {};
+  all.forEach((r, idx) => {
+    if (!r || !r.tracking_number) return;
+    const tn = r.tracking_number.trim().toLowerCase();
+    if (!arrivalTnCount[tn]) arrivalTnCount[tn] = 0;
+    r._tnSeq = arrivalTnCount[tn]++;
+  });
+
   document.getElementById('aBody').innerHTML = pageItems.map((r, pi) => {
     const i = start + pi;
     const isSaved = i < saved.length;
@@ -1568,34 +1547,13 @@ function renderArrivalGrid() {
     const arrivedClass = r.arrived ? 'arrived-yes' : '';
 
     // 即時從所有訂單帶出品名、品編、數量、單個價、商品頁
-    let liveProductName = r.product_name || '';
-    let liveProductId = r.product_id || '';
-    let liveQty = r.qty || 0;
-    let liveUnitCost = r.unit_cost || 0;
-    let liveOfferId = r.offer_id || '';
-    let liveSellingPrice = r.selling_price || 0;
-    if (r.tracking_number) {
-      const tn = r.tracking_number.trim().toLowerCase();
-      if (!arrivalTnCount[tn]) arrivalTnCount[tn] = 0;
-      const pMatches = findAllPurchasesByTracking(tn);
-      const pMatch = pMatches[arrivalTnCount[tn]] || pMatches[0];
-      arrivalTnCount[tn]++;
-      if (pMatch) {
-        liveQty = pMatch.qty || 0;
-        liveUnitCost = pMatch.unit_cost || 0;
-        liveOfferId = pMatch.offer_id || '';
-        if (pMatch.linked_product) {
-          const otItems = getOrderTrackOptions();
-          const otMatch = otItems.find(o => (o.productId || o.name || '') === pMatch.linked_product);
-          if (otMatch) {
-            liveProductName = otMatch.name || '';
-            liveProductId = otMatch.productId || '';
-            liveSellingPrice = parseFloat(otMatch.price) || 0;
-          }
-        }
-        if (!liveProductName) liveProductName = pMatch.product_name || '';
-      }
-    }
+    const live = r.tracking_number ? getLiveArrivalData(r.tracking_number, r._tnSeq || 0) : null;
+    const liveProductName = live ? live.product_name : (r.product_name || '');
+    const liveProductId = live ? live.product_id : (r.product_id || '');
+    const liveQty = live ? live.qty : (r.qty || 0);
+    const liveUnitCost = live ? live.unit_cost : (r.unit_cost || 0);
+    const liveOfferId = live ? live.offer_id : (r.offer_id || '');
+    const liveSellingPrice = live ? live.selling_price : (r.selling_price || 0);
 
     const offerLink = liveOfferId ? `<span class="shared-link" data-url="https://detail.1688.com/offer/${liveOfferId}.html" style="color:var(--accent);font-size:11px;cursor:pointer;text-decoration:underline;">前往</span>` : '';
     return `<tr data-idx="${idx}">
@@ -1606,9 +1564,9 @@ function renderArrivalGrid() {
       <td><input value="${r.tracking_number || ''}" data-field="tracking_number" data-idx="${idx}" onchange="onACellChange(this);tryAutoMatch(this)"></td>
       <td style="background:#f0f7ff;">${liveProductName}</td>
       <td style="background:#f0f7ff;">${liveProductId}</td>
-      <td><input type="number" value="${liveSellingPrice || ''}" data-field="selling_price" data-idx="${idx}" onchange="onACellChange(this)"></td>
-      <td><input type="number" value="${liveQty || ''}" data-field="qty" data-idx="${idx}" onchange="onACellChange(this)"></td>
-      <td><input type="number" value="${liveUnitCost || ''}" data-field="unit_cost" data-idx="${idx}" onchange="onACellChange(this)"></td>
+      <td style="background:#f0f7ff;padding:4px 6px;font-size:12px;text-align:right;">${liveSellingPrice || ''}</td>
+      <td style="background:#f0f7ff;padding:4px 6px;font-size:12px;text-align:right;">${liveQty || ''}</td>
+      <td style="background:#f0f7ff;padding:4px 6px;font-size:12px;text-align:right;">${liveUnitCost ? liveUnitCost.toFixed(1) : ''}</td>
       <td><input value="${r.note || ''}" data-field="note" data-idx="${idx}" onchange="onACellChange(this)"></td>
       <td><input value="${r.ship_date || ''}" data-field="ship_date" data-idx="${idx}" onchange="onACellChange(this)" placeholder="1/14"></td>
       <td><input value="${r.ship_order || ''}" data-field="ship_order" data-idx="${idx}" onchange="onACellChange(this)" placeholder="SFD..."></td>
@@ -1705,24 +1663,48 @@ function fillArrivalFromPurchase(row, match) {
   if (!row.product_name) row.product_name = match.product_name || '';
 }
 
-// 比對運單：支援所有訂單的逗號分隔多運單
+// 比對運單：支援所有訂單的逗號分隔多運單（含未儲存的新增列）
 function findPurchaseByTracking(tn) {
   if (!tn) return null;
   const needle = tn.trim().toLowerCase();
-  return purchaseRows.find(p => {
+  const allP = [...purchaseRows, ...newPurchaseRows];
+  return allP.find(p => {
     if (!p.tracking_number) return false;
     return p.tracking_number.split(/[,，、\s]+/).some(t => t.trim().toLowerCase() === needle);
   });
 }
 
-// 找出所有匹配同一運單號的訂單（多筆商品同一包裹）
+// 找出所有匹配同一運單號的訂單（多筆商品同一包裹，含未儲存）
 function findAllPurchasesByTracking(tn) {
   if (!tn) return [];
   const needle = tn.trim().toLowerCase();
-  return purchaseRows.filter(p => {
+  const allP = [...purchaseRows, ...newPurchaseRows];
+  return allP.filter(p => {
     if (!p.tracking_number) return false;
     return p.tracking_number.split(/[,，、\s]+/).some(t => t.trim().toLowerCase() === needle);
   });
+}
+
+// 從所有訂單即時取得到貨清單的顯示值
+function getLiveArrivalData(trackingNumber, seqIndex) {
+  const pMatches = findAllPurchasesByTracking(trackingNumber);
+  const pMatch = pMatches[seqIndex] || pMatches[0];
+  const result = { product_name: '', product_id: '', qty: 0, unit_cost: 0, offer_id: '', selling_price: 0 };
+  if (!pMatch) return result;
+  result.qty = pMatch.qty || 0;
+  result.unit_cost = pMatch.unit_cost || 0;
+  result.offer_id = pMatch.offer_id || '';
+  if (pMatch.linked_product) {
+    const otItems = getOrderTrackOptions();
+    const otMatch = otItems.find(o => (o.productId || o.name || '') === pMatch.linked_product);
+    if (otMatch) {
+      result.product_name = otMatch.name || '';
+      result.product_id = otMatch.productId || '';
+      result.selling_price = parseFloat(otMatch.price) || 0;
+    }
+  }
+  if (!result.product_name) result.product_name = pMatch.product_name || '';
+  return result;
 }
 
 function tryAutoMatch(input, ctx) {
@@ -1746,33 +1728,6 @@ function autoMatchArrivals() {
   renderArrivalGrid();
 }
 
-// 切換到到貨清單時，重新比對所有（含已儲存）的到貨項目
-function autoMatchAllArrivals() {
-  const allArrivals = [...arrivalRows, ...newArrivalRows];
-  // 依運單號分組，每組配對多筆訂單
-  const grouped = {};
-  allArrivals.forEach((row, i) => {
-    if (!row || !row.tracking_number) return;
-    const tn = row.tracking_number.trim().toLowerCase();
-    if (!grouped[tn]) grouped[tn] = [];
-    grouped[tn].push(row);
-  });
-  Object.keys(grouped).forEach(tn => {
-    const arrivals = grouped[tn];
-    const purchases = findAllPurchasesByTracking(tn);
-    arrivals.forEach((row, i) => {
-      const match = purchases[i] || purchases[0];
-      if (match && match.linked_product) {
-        const oldName = row.product_name;
-        const oldId = row.product_id;
-        fillArrivalFromPurchase(row, match);
-        if (row.product_name !== oldName || row.product_id !== oldId) {
-          row._dirty = true;
-        }
-      }
-    });
-  });
-}
 
 function toggleAllArrivalCheck(master) {
   document.querySelectorAll('.a-check').forEach(cb => cb.checked = master.checked);
