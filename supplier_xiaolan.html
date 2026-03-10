@@ -1784,13 +1784,13 @@ async function saveArrivals(isAuto) {
   let saved = 0, updated = 0;
   try {
     if (allNewRows.length > 0) {
-      const clean = allNewRows.map(r => { const { _dirty, ...rest } = r; if (rest.ship_date === '') rest.ship_date = null; return rest; });
+      const clean = allNewRows.map(r => { const { _dirty, _tnSeq, ...rest } = r; if (rest.ship_date === '') rest.ship_date = null; return rest; });
       const res = await fetch(`${SB_URL}/xiaolan_arrivals`, { method: 'POST', headers: JSON_H, body: JSON.stringify(clean) });
       if (!res.ok) throw new Error(await res.text());
       saved = allNewRows.length;
     }
     for (const r of toUpdate) {
-      const { _dirty, id, created_at, ...rest } = r;
+      const { _dirty, _tnSeq, id, created_at, ...rest } = r;
       if (rest.ship_date === '') rest.ship_date = null;
       await fetch(`${SB_URL}/xiaolan_arrivals?id=eq.${id}`, { method: 'PATCH', headers: JSON_H, body: JSON.stringify(rest) });
       updated++;
