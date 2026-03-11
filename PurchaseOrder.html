@@ -856,7 +856,8 @@
            if (!delRes.ok) throw new Error('刪除舊明細失敗');
 
            // 3. 新增新明細
-           const detailRows = odata.items.map(it => ({
+           const detailRows = odata.items.map((it, idx) => ({
+             id: `${editingOrderId}-${String(idx + 1).padStart(2, '0')}`,
              order_id: editingOrderId, product_id: it.product_id, product_name: it.product_name,
              qty: it.qty, unit: it.unit, cost: it.unit_cost, subtotal: it.qty * it.unit_cost, note: it.note
            }));
