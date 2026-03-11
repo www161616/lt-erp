@@ -44,7 +44,7 @@
     /* 登入介面專屬 */
     #loginOverlay {
       position: fixed; inset: 0; background: linear-gradient(135deg, #1e3a5f 0%, #2b6cb0 60%, #dbeafe 100%); z-index: 9999;
-      display: none; justify-content: center; align-items: center;
+      display: flex; justify-content: center; align-items: center;
     }
     .login-box {
       background: white; padding: 40px; border-radius: 12px; width: 360px;
@@ -117,8 +117,7 @@
   <div class="sidebar">
     <div class="sidebar-header">📦 總倉調度中心</div>
     <div class="menu-item active" id="menu-home" onclick="switchTab('home', this)">🏠 總倉儀表板</div>
-    <div class="menu-item" id="menu-bulletin" onclick="switchTab('bulletin', this)">📢 公告欄</div>
-
+    
     <div id="label-product" style="padding: 10px 20px; font-size: 11px; color: var(--text2); margin-top: 10px;">商品與採購</div>
     <div class="menu-item" id="menu-campaign" onclick="switchTab('campaign', this)">📅 商品建檔</div>
     <div class="menu-item" id="menu-purchase" onclick="switchTab('purchase', this)">📝 新增採購單</div>
@@ -194,7 +193,7 @@
 
     async function cloudLoadAll() {
       try {
-        const resp = await fetch(`${SB_URL}/shared_kv?key=in.("branchOrderList","branchOrders","branchDataList","branchTypeMap","portalAllRequests","portalTransferList","portalMutualAidBoard","portalBulletin")`, { headers: HEADERS });
+        const resp = await fetch(`${SB_URL}/shared_kv?key=in.("branchOrderList","branchOrders","branchDataList","branchTypeMap","portalAllRequests","portalTransferList","portalMutualAidBoard")`, { headers: HEADERS });
         if (resp.ok) {
           const rows = await resp.json();
           rows.forEach(r => {
@@ -257,60 +256,47 @@
       if (el) el.innerText = new Date().toLocaleString('zh-TW', { hour12:false, month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
     }
 
-    // ===== 權限架構（5 角色）=====
-    // admin(www161616) 最高管理員 = 全部功能（index + admin 全部）
-    // accountant 會計 = 只能登入 index（不能登入此頁）
-    // assistant 助理 = admin 全部功能（無帳號管理）
-    // staff 員工 = admin 但無漂漂館、團購叫貨（無帳號管理）
-    // store 分店 = 只能登入 branch_portal（不能登入此頁）
+    // role: admin=全部, assistant=只看陸貨專區, staff=基本功能
 
     function applyRolePermissions() {
       const role = currentUser?.role || 'staff';
       const isAdmin = role === 'admin';
       const isAssistant = role === 'assistant';
-      const isStaff = role === 'staff';
-      const isMainAdmin = currentUser?.username === 'www161616';
+      const isStaff = !isAdmin && !isAssistant;
 
-      // 帳號管理已移至 index.html (AccountManager.html)，此頁不顯示
-      document.getElementById('menu-employees').style.display = 'none';
-      document.getElementById('menu-employees-section').style.display = 'none';
-      document.getElementById('menu-branches').style.display = 'none';
+      // 系統管理：僅 admin
+      document.getElementById('menu-employees').style.display = isAdmin ? '' : 'none';
+      document.getElementById('menu-employees-section').style.display = isAdmin ? '' : 'none';
+      document.getElementById('menu-branches').style.display = isAdmin ? '' : 'none';
 
-      // 漂漂館 + 團購叫貨：admin（含www161616）和 assistant 可見，staff 不可見
+      // 陸貨專區（漂漂館+團購叫貨）：assistant + admin，其他帳號隱藏
       const showPP = isAdmin || isAssistant;
       document.getElementById('menu-ppAssistant').style.display = showPP ? '' : 'none';
       document.getElementById('menu-gbOrder').style.display = showPP ? '' : 'none';
 
-      // assistant 登入直接跳到團購叫貨區
-      if (isAssistant && !sessionStorage.getItem('assistant_loaded')) {
-        sessionStorage.setItem('assistant_loaded', '1');
-        switchTab('gbOrder', document.getElementById('menu-gbOrder'));
-      }
+      // staff 隱藏所有主要區塊（僅看基本功能）
+      const hideForStaff = [
+        'menu-home','label-product','menu-campaign','menu-purchase','menu-searchPurchase','menu-adminSummary','menu-importGroupBuy','menu-orders',
+        'menu-cnArrivals','menu-cnReturns',
+        'label-warehouse','menu-picking','menu-pickingHistory','menu-demandBackorder','menu-transfer','menu-aid',
+        'label-accounting','menu-accounting'
+      ];
+      hideForStaff.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) el.style.display = isStaff ? 'none' : '';
+      });
     }
 
     async function checkLoginStatus() {
       const saved = sessionStorage.getItem('erp_employee');
       if (saved) {
-        // 先確認 Supabase session 還有效
-        const { data: { session } } = await sbClient.auth.getSession();
-        if (!session) {
-          sessionStorage.removeItem('erp_employee');
-          document.getElementById('loginOverlay').style.display = 'flex';
-          document.getElementById('loginUser').focus();
-          return;
-        }
-        // 檢查 role 權限
-        const meta = session.user.user_metadata || {};
-        if (meta.role !== 'admin' && meta.role !== 'assistant' && meta.role !== 'staff') {
-          sessionStorage.removeItem('erp_employee');
-          try { await sbClient.auth.signOut({ scope: 'local' }); } catch(e) {}
-          document.getElementById('loginOverlay').style.display = 'flex';
-          document.getElementById('loginUser').focus();
-          return;
-        }
         currentUser = JSON.parse(saved);
-        HEADERS['Authorization'] = `Bearer ${session.access_token}`;
-        sessionStorage.setItem('sb_auth_token', session.access_token);
+        // 恢復 auth token
+        const { data: { session } } = await sbClient.auth.getSession();
+        if (session) {
+          HEADERS['Authorization'] = `Bearer ${session.access_token}`;
+          sessionStorage.setItem('sb_auth_token', session.access_token);
+        }
         document.getElementById('loginOverlay').style.display = 'none';
         document.getElementById('currentUserLabel').innerText = `👤 ${currentUser.full_name || currentUser.username}`;
         applyRolePermissions();
@@ -322,7 +308,7 @@
           const { data: { session } } = await sbClient.auth.getSession();
           if (session) {
             const meta = session.user.user_metadata || {};
-            if (meta.role === 'admin' || meta.role === 'assistant' || meta.role === 'staff') {
+            if (meta.role === 'admin' || meta.role === 'assistant') {
               HEADERS['Authorization'] = `Bearer ${session.access_token}`;
               sessionStorage.setItem('sb_auth_token', session.access_token);
               sessionStorage.setItem('sb_auth_token_admin_email', session.user.email);
@@ -392,8 +378,8 @@
         sessionStorage.setItem('sb_auth_token_admin_pass', pass);
 
         const meta = authData.user.user_metadata || {};
-        if (meta.role !== 'admin' && meta.role !== 'assistant' && meta.role !== 'staff') {
-          await sbClient.auth.signOut({ scope: 'local' });
+        if (meta.role !== 'admin' && meta.role !== 'assistant') {
+          await sbClient.auth.signOut();
           Swal.fire('權限不足', '此帳號無法使用管理後台。', 'error');
           return;
         }
@@ -430,16 +416,11 @@
         icon: 'question',
         showCancelButton: true,
         confirmButtonText: '確定登出'
-      }).then(async (result) => {
+      }).then((result) => {
         if (result.isConfirmed) {
           logActivity('登出系統', 'USER', '主動登出');
           sessionStorage.removeItem('erp_employee');
-          try { await sbClient.auth.signOut({ scope: 'local' }); } catch(e) {}
-          currentUser = null;
-          document.getElementById('loginOverlay').style.display = 'flex';
-          document.getElementById('loginUser').value = '';
-          document.getElementById('loginPass').value = '';
-          document.getElementById('loginUser').focus();
+          location.reload();
         }
       });
     }
@@ -557,9 +538,6 @@
       } else if (tabId === 'aid') {
         title.innerText = '當前功能：互助交流板';
         renderAdminAidStation();
-      } else if (tabId === 'bulletin') {
-        title.innerText = '當前功能：公告欄';
-        renderBulletinStation();
       } else if (tabId === 'accounting') {
         title.innerText = '當前功能：銷貨單管理';
         renderAccountingStation();
@@ -1200,15 +1178,12 @@
     <div style="text-align:center;"><div class="sign-line"></div>主管</div>
     <div style="text-align:center;"><div class="sign-line"></div>會計</div>
   </div>
-  <div class="no-print" style="position:fixed;top:10px;right:10px;z-index:9999;">
-    <button onclick="window.print()" style="padding:10px 24px;font-size:16px;background:#1976d2;color:#fff;border:none;border-radius:6px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.3);">🖨️ 列印</button>
-    <button onclick="window.close()" style="padding:10px 24px;font-size:16px;background:#757575;color:#fff;border:none;border-radius:6px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.3);margin-left:8px;">✕ 關閉</button>
-  </div>
-  <style>@media print{.no-print{display:none!important;}}<\/style>
+  <script>window.onload=function(){ setTimeout(()=>{ window.print(); window.close(); }, 500); }<\/script>
 </body></html>`;
 
-      const blob1 = new Blob([html], { type: 'text/html; charset=utf-8' });
-      window.open(URL.createObjectURL(blob1), '_blank');
+      const w = window.open('', '_blank');
+      if (w) { w.document.open(); w.document.write(html); w.document.close(); }
+      else Swal.fire('錯誤', '瀏覽器攔截了彈跳視窗，請允許開啟。', 'error');
     }
 
     async function ipSaveOrder(status) {
@@ -1654,14 +1629,11 @@
     <div style="text-align:center;"><div class="sign-line"></div>主管</div>
     <div style="text-align:center;"><div class="sign-line"></div>會計</div>
   </div>
-  <div class="no-print" style="position:fixed;top:10px;right:10px;z-index:9999;">
-    <button onclick="window.print()" style="padding:10px 24px;font-size:16px;background:#1976d2;color:#fff;border:none;border-radius:6px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.3);">🖨️ 列印</button>
-    <button onclick="window.close()" style="padding:10px 24px;font-size:16px;background:#757575;color:#fff;border:none;border-radius:6px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.3);margin-left:8px;">✕ 關閉</button>
-  </div>
-  <style>@media print{.no-print{display:none!important;}}<\/style>
+  <script>window.onload=function(){ setTimeout(()=>{ window.print(); window.close(); }, 500); }<\/script>
 </body></html>`;
-      const blob2 = new Blob([html], { type: 'text/html; charset=utf-8' });
-      window.open(URL.createObjectURL(blob2), '_blank');
+      const w = window.open('', '_blank');
+      if (w) { w.document.open(); w.document.write(html); w.document.close(); }
+      else Swal.fire('錯誤', '瀏覽器攔截了彈跳視窗，請允許開啟。', 'error');
     }
 
     function ipExportDetail() {
@@ -2111,22 +2083,20 @@
       // ②-b 同步到 Google Sheets 訂貨追蹤
       try {
         const gsPayload = {
-          items: stagingList.map(item => {
-            let md = item.endDate || '';
-            if (md.includes('-')) { const p = md.split('-'); md = parseInt(p[1]) + '/' + parseInt(p[2]); }
-            return { endDate: md, code: item.code, name: item.name, price: Number(item.price) || 0 };
-          })
+          items: stagingList.map(item => ({
+            endDate: item.endDate || '',
+            code: item.code,
+            name: item.name,
+            price: Number(item.price) || 0
+          }))
         };
-        console.log('📤 準備送出 Google Sheets，共 ' + gsPayload.items.length + ' 筆');
-        const gsUrl = 'https://script.google.com/macros/s/AKfycbzUmI2a5WQfAtntRPcelzoijBPrwSQ6SGIhKfspKqaD093FuzAIW98JvXovlMrOeCWo/exec';
-        await fetch(gsUrl, {
+        await fetch('https://script.google.com/macros/s/AKfycby9PP2kvnwQycLZRuF_Lk-15iDj1R682KoHgaV7OdbZhZrQnBxsxiW0e11NkKe-HD12/exec', {
           method: 'POST',
           mode: 'no-cors',
           headers: { 'Content-Type': 'text/plain' },
           body: JSON.stringify(gsPayload)
         });
-        console.log('✅ Google Sheets 同步已送出');
-      } catch(e) { console.error('❌ Google Sheets 同步失敗:', e); }
+      } catch(e) { console.warn('Google Sheets 同步失敗:', e); }
 
       // ③ 同步至 branch_portal localStorage（結單填表用）
       const saved = JSON.parse(localStorage.getItem('branchOrderList') || '[]');
@@ -3734,7 +3704,6 @@
                   <option value="closed">僅顯示：結</option>
                   <option value="pending">僅顯示：待採購叫貨</option>
                   <option value="ordered">僅顯示：已向廠商叫貨</option>
-                  <option value="shipped">僅顯示：已出貨</option>
                   <option value="arrived">僅顯示：貨已到倉</option>
                   <option value="out_of_stock">僅顯示：廠商斷貨</option>
                   <option value="supplier_shortage">僅顯示：廠商短缺</option>
@@ -3749,24 +3718,6 @@
               <button class="btn" style="background:#3182ce; color:white; border:1px solid #2b6cb0; margin-top: 20px; font-size: 12px; padding: 6px 12px; font-weight:bold;" onclick="renderProcurementTable(1)">🔍 篩選</button>
               <button class="btn" style="background:#f1f5f9; color:#718096; border:1px solid #718096; margin-top: 20px; font-size: 12px; padding: 6px 10px;" onclick="clearProcFilters()">清除篩選</button>
               <button class="btn" style="background:#f0f7ff; color:#2b6cb0; border:1px solid #93c5fd; margin-top: 20px; font-size: 12px; padding: 6px 10px;" onclick="showAllProcData()">顯示全部</button>
-            </div>
-
-            <!-- 批次修改採購進度 -->
-            <div style="display:flex; gap:8px; align-items:flex-end; margin-left:auto;">
-              <div style="display:flex; flex-direction:column; gap:4px;">
-                <span style="font-size:12px; font-weight:bold; color:#718096;">批次修改採購進度</span>
-                <div style="display:flex; gap:6px; align-items:center;">
-                  <select id="batchProcStatusSelect" style="padding:6px 8px; border:1px solid var(--border); border-radius:4px; font-size:13px; font-family:inherit; font-weight:bold;">
-                    <option value="pending">⏳ 待處理</option>
-                    <option value="ordered">🚚 已向廠商叫貨</option>
-                    <option value="shipped">📤 已出貨</option>
-                    <option value="arrived">📦 貨已到倉</option>
-                    <option value="out_of_stock">❌ 廠商斷貨</option>
-                    <option value="supplier_shortage">⚠️ 廠商短缺</option>
-                  </select>
-                  <button class="btn" style="background:#2b6cb0; color:white; font-size:12px; padding:6px 14px; font-weight:bold;" onclick="batchUpdateProcStatus()">✅ 套用勾選</button>
-                </div>
-              </div>
             </div>
 
           </div>
@@ -3829,15 +3780,9 @@
           existing.name = item.name || existing.name;
           existing.startDate = item.startDate || existing.startDate;
           existing.endDate = item.endDate || existing.endDate;
-          // 開團總表的 status 為準
-          if (item.status) existing.status = item.status;
           // 商品建檔的 supplier 作為預設，但不覆蓋訂貨追蹤手動修改的值
           if (!existing.supplier && item.supplier) existing.supplier = item.supplier;
           if (item.price !== undefined) existing.price = item.price;
-          // 匯入的 procStatus 優先（除非手動已改過非 pending）
-          if (item.procStatus && item.procStatus !== 'pending' && existing.procStatus === 'pending') {
-            existing.procStatus = item.procStatus;
-          }
           // 重算總需求量
           const allStoreNames = JSON.parse(localStorage.getItem('importedStoreNames') || '[]');
           const allPersonalNames = JSON.parse(localStorage.getItem('importedPersonalNames') || '[]');
@@ -3851,6 +3796,8 @@
           const allPersonalNames = JSON.parse(localStorage.getItem('importedPersonalNames') || '[]');
           const allNames = [...allStoreNames, ...allPersonalNames];
           const total = allNames.reduce((s, n) => s + ((branchOrders[n] && branchOrders[n][itemKey]) || 0), 0);
+          const today = new Date().toISOString().split('T')[0];
+          const isExpired = item.endDate && item.endDate < today;
           mockConsolidatedOrders.push({
             id: itemKey,
             productId: displayId,
@@ -3860,8 +3807,8 @@
             totalQty: total || 0,
             startDate: item.startDate || '',
             endDate: item.endDate || '',
-            status: item.status || 'open',
-            procStatus: item.procStatus || 'pending',
+            status: isExpired ? 'closed' : 'open',
+            procStatus: 'pending',
             eta: '',
             supplier: item.supplier || '',
             price: item.price || ''
@@ -3971,7 +3918,7 @@
         }
         if (filterStatus === 'open') filtered = filtered.filter(i => i.status === 'open');
         else if (filterStatus === 'closed') filtered = filtered.filter(i => i.status === 'closed');
-        else if (['pending','ordered','shipped','arrived','out_of_stock','supplier_shortage'].includes(filterStatus)) filtered = filtered.filter(i => i.procStatus === filterStatus);
+        else if (['pending','ordered','arrived','out_of_stock','supplier_shortage'].includes(filterStatus)) filtered = filtered.filter(i => i.procStatus === filterStatus);
         if (searchKw) filtered = filtered.filter(i => i.name.toLowerCase().includes(searchKw) || i.id.toLowerCase().includes(searchKw));
       }
 
@@ -4008,7 +3955,6 @@
                 <select onchange="updateProcItem('${item.id}', 'procStatus', this.value)" style="width:100%; padding:6px; border:1px solid var(--border); border-radius:4px; font-size:13px; font-family:inherit;">
                   <option value="pending" ${item.procStatus === 'pending' ? 'selected' : ''}>⏳ 待處理</option>
                   <option value="ordered" ${item.procStatus === 'ordered' ? 'selected' : ''}>🚚 已向廠商叫貨</option>
-                  <option value="shipped" ${item.procStatus === 'shipped' ? 'selected' : ''}>📤 已出貨</option>
                   <option value="arrived" ${item.procStatus === 'arrived' ? 'selected' : ''}>📦 貨已到倉</option>
                   <option value="out_of_stock" ${item.procStatus === 'out_of_stock' ? 'selected' : ''}>❌ 廠商斷貨</option>
                   <option value="supplier_shortage" ${item.procStatus === 'supplier_shortage' ? 'selected' : ''}>⚠️ 廠商短缺</option>
@@ -4100,7 +4046,7 @@
       }
       if (filterStatus === 'open') filtered = filtered.filter(i => i.status === 'open');
       else if (filterStatus === 'closed') filtered = filtered.filter(i => i.status === 'closed');
-      else if (['pending','ordered','shipped','arrived','out_of_stock','supplier_shortage'].includes(filterStatus)) filtered = filtered.filter(i => i.procStatus === filterStatus);
+      else if (['pending','ordered','arrived','out_of_stock','supplier_shortage'].includes(filterStatus)) filtered = filtered.filter(i => i.procStatus === filterStatus);
       if (searchKw) filtered = filtered.filter(i => i.name.toLowerCase().includes(searchKw) || i.id.toLowerCase().includes(searchKw));
       return filtered;
     }
@@ -4108,7 +4054,7 @@
     function batchUpdateProcStatus() {
       const checked = document.querySelectorAll('.proc-checkbox:checked');
       const newStatus = document.getElementById('batchProcStatusSelect').value;
-      const statusMap = { pending: '⏳ 待處理', ordered: '🚚 已向廠商叫貨', shipped: '📤 已出貨', arrived: '📦 貨已到倉', out_of_stock: '❌ 廠商斷貨', supplier_shortage: '⚠️ 廠商短缺' };
+      const statusMap = { pending: '⏳ 待處理', ordered: '🚚 已向廠商叫貨', arrived: '📦 貨已到倉', out_of_stock: '❌ 廠商斷貨', supplier_shortage: '⚠️ 廠商短缺' };
 
       // 有勾選→改勾選的，沒勾選→改當前篩選結果全部
       let targetIds;
@@ -4515,7 +4461,7 @@
       Swal.fire({ title: '產出中...', allowOutsideClick: false, didOpen: () => { Swal.showLoading(); } });
 
       const exportData = mockConsolidatedOrders.map(item => {
-        const statusMap = { pending: '⏳ 待處理', ordered: '🚚 已向廠商叫貨', shipped: '📤 已出貨', arrived: '📦 貨已到倉', out_of_stock: '❌ 廠商斷貨', supplier_shortage: '⚠️ 廠商短缺' };
+        const statusMap = { pending: '⏳ 待處理', ordered: '🚚 已向廠商叫貨', arrived: '📦 貨已到倉', out_of_stock: '❌ 廠商斷貨', supplier_shortage: '⚠️ 廠商短缺' };
         return {
           '開團日': item.startDate,
           '結單日': item.endDate,
@@ -5965,156 +5911,6 @@
     return (Date.now() - d.getTime()) < 3 * 24 * 60 * 60 * 1000;
   }
 
-  // ============================
-  // 公告欄
-  // ============================
-  function renderBulletinStation() {
-    const container = document.getElementById('mainContainer');
-    const bulletins = JSON.parse(localStorage.getItem('portalBulletin') || '[]');
-
-    let listHtml = '';
-    if (bulletins.length === 0) {
-      listHtml = '<div style="text-align:center; padding:40px; color:#9ca3af;">目前沒有公告</div>';
-    } else {
-      listHtml = bulletins.map((b, idx) => {
-        const pinBadge = b.pinned ? '<span style="background:#fef3c7; color:#b45309; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;">📌 置頂</span>' : '';
-        const typeBadge = b.type === 'urgent'
-          ? '<span style="background:#fee2e2; color:#dc2626; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;">🔴 緊急</span>'
-          : b.type === 'important'
-          ? '<span style="background:#fef3c7; color:#b45309; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;">🟡 重要</span>'
-          : '<span style="background:#dbeafe; color:#2563eb; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;">🔵 一般</span>';
-        return '<div style="background:white; border-radius:8px; border:1px solid #e2e8f0; padding:16px 20px; margin-bottom:10px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">' +
-          '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">' +
-            '<div style="display:flex; align-items:center; gap:8px;">' + typeBadge + pinBadge +
-              ' <span style="font-size:15px; font-weight:700; color:#1e293b;">' + (b.title || '').replace(/</g,'&lt;') + '</span></div>' +
-            '<div style="display:flex; align-items:center; gap:8px;">' +
-              '<span style="font-size:12px; color:#9ca3af;">' + (b.author || '') + ' · ' + (b.time || '') + '</span>' +
-              '<button onclick="editBulletin(' + idx + ')" style="padding:3px 10px; background:#f0f9ff; color:#2563eb; border:1px solid #93c5fd; border-radius:4px; font-size:12px; cursor:pointer; font-family:inherit;">編輯</button>' +
-              '<button onclick="deleteBulletin(' + idx + ')" style="padding:3px 10px; background:#fff; color:#ef4444; border:1px solid #fca5a5; border-radius:4px; font-size:12px; cursor:pointer; font-family:inherit;">刪除</button>' +
-              '<button onclick="togglePinBulletin(' + idx + ')" style="padding:3px 10px; background:#fffbeb; color:#b45309; border:1px solid #fcd34d; border-radius:4px; font-size:12px; cursor:pointer; font-family:inherit;">' + (b.pinned ? '取消置頂' : '置頂') + '</button>' +
-            '</div>' +
-          '</div>' +
-          '<div style="font-size:14px; color:#374151; line-height:1.7; white-space:pre-wrap;">' + (b.content || '').replace(/</g,'&lt;') + '</div>' +
-        '</div>';
-      }).join('');
-    }
-
-    container.innerHTML = `
-      <div class="panel" style="margin-bottom:16px;">
-        <h3 style="margin-bottom:12px;">📢 發布新公告</h3>
-        <div style="display:flex; gap:10px; align-items:end; flex-wrap:wrap; margin-bottom:10px;">
-          <div style="flex:1; min-width:200px;">
-            <div style="font-size:12px; font-weight:600; color:#64748b; margin-bottom:4px;">標題</div>
-            <input type="text" id="bulletinTitle" placeholder="公告標題" style="width:100%; padding:8px 12px; border:1.5px solid #e2e8f0; border-radius:6px; font-size:14px; font-family:inherit; box-sizing:border-box;">
-          </div>
-          <div>
-            <div style="font-size:12px; font-weight:600; color:#64748b; margin-bottom:4px;">類型</div>
-            <select id="bulletinType" style="padding:8px 12px; border:1.5px solid #e2e8f0; border-radius:6px; font-size:14px; font-family:inherit;">
-              <option value="normal">🔵 一般</option>
-              <option value="important">🟡 重要</option>
-              <option value="urgent">🔴 緊急</option>
-            </select>
-          </div>
-          <div>
-            <label style="font-size:12px; font-weight:600; color:#64748b; display:flex; align-items:center; gap:4px;">
-              <input type="checkbox" id="bulletinPinned"> 📌 置頂
-            </label>
-          </div>
-        </div>
-        <div style="margin-bottom:10px;">
-          <div style="font-size:12px; font-weight:600; color:#64748b; margin-bottom:4px;">內容</div>
-          <textarea id="bulletinContent" rows="4" placeholder="公告內容…" style="width:100%; padding:10px 12px; border:1.5px solid #e2e8f0; border-radius:6px; font-size:14px; font-family:inherit; resize:vertical; box-sizing:border-box;"></textarea>
-        </div>
-        <button onclick="postBulletin()" style="padding:10px 24px; background:#1e40af; color:white; border:none; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit;">發布公告</button>
-      </div>
-      <div class="panel">
-        <h3 style="margin-bottom:12px;">📋 公告列表 (${bulletins.length} 則)</h3>
-        ${listHtml}
-      </div>
-    `;
-  }
-
-  function postBulletin() {
-    const title = (document.getElementById('bulletinTitle')?.value || '').trim();
-    const content = (document.getElementById('bulletinContent')?.value || '').trim();
-    const type = document.getElementById('bulletinType')?.value || 'normal';
-    const pinned = document.getElementById('bulletinPinned')?.checked || false;
-    if (!title) { Swal.fire('請輸入標題', '', 'warning'); return; }
-    if (!content) { Swal.fire('請輸入內容', '', 'warning'); return; }
-    const now = new Date();
-    const ts = now.getFullYear() + '/' + String(now.getMonth()+1).padStart(2,'0') + '/' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
-    const bulletins = JSON.parse(localStorage.getItem('portalBulletin') || '[]');
-    bulletins.unshift({ title, content, type, pinned, author: currentUser?.name || '總倉', time: ts });
-    // 置頂排序：pinned 的排在前面
-    bulletins.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
-    localStorage.setItem('portalBulletin', JSON.stringify(bulletins));
-    cloudSave('portalBulletin');
-    Swal.fire({ icon: 'success', title: '公告已發布！', confirmButtonColor: '#1e40af' });
-    renderBulletinStation();
-  }
-
-  function editBulletin(idx) {
-    const bulletins = JSON.parse(localStorage.getItem('portalBulletin') || '[]');
-    const b = bulletins[idx];
-    if (!b) return;
-    Swal.fire({
-      title: '編輯公告',
-      html: '<div style="text-align:left;">' +
-        '<div style="margin-bottom:8px;"><label style="font-size:13px; font-weight:600;">標題</label>' +
-        '<input id="swalBulTitle" value="' + (b.title || '').replace(/"/g,'&quot;') + '" style="width:100%; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px; font-size:14px; font-family:inherit; box-sizing:border-box; margin-top:4px;"></div>' +
-        '<div style="margin-bottom:8px;"><label style="font-size:13px; font-weight:600;">類型</label>' +
-        '<select id="swalBulType" style="width:100%; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px; font-size:14px; font-family:inherit; margin-top:4px;">' +
-          '<option value="normal" ' + (b.type==='normal'?'selected':'') + '>🔵 一般</option>' +
-          '<option value="important" ' + (b.type==='important'?'selected':'') + '>🟡 重要</option>' +
-          '<option value="urgent" ' + (b.type==='urgent'?'selected':'') + '>🔴 緊急</option></select></div>' +
-        '<div><label style="font-size:13px; font-weight:600;">內容</label>' +
-        '<textarea id="swalBulContent" rows="4" style="width:100%; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px; font-size:14px; font-family:inherit; resize:vertical; box-sizing:border-box; margin-top:4px;">' + (b.content || '').replace(/</g,'&lt;') + '</textarea></div></div>',
-      showCancelButton: true, confirmButtonText: '儲存', cancelButtonText: '取消', confirmButtonColor: '#1e40af',
-      preConfirm: () => {
-        const t = (document.getElementById('swalBulTitle').value || '').trim();
-        const c = (document.getElementById('swalBulContent').value || '').trim();
-        if (!t || !c) { Swal.showValidationMessage('標題和內容不可為空'); return false; }
-        return { title: t, content: c, type: document.getElementById('swalBulType').value };
-      }
-    }).then(r => {
-      if (r.isConfirmed) {
-        b.title = r.value.title; b.content = r.value.content; b.type = r.value.type;
-        const now = new Date();
-        b.time = now.getFullYear() + '/' + String(now.getMonth()+1).padStart(2,'0') + '/' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
-        b.time += ' (已編輯)';
-        localStorage.setItem('portalBulletin', JSON.stringify(bulletins));
-        cloudSave('portalBulletin');
-        renderBulletinStation();
-      }
-    });
-  }
-
-  function deleteBulletin(idx) {
-    Swal.fire({
-      title: '確定刪除此公告？', icon: 'warning',
-      showCancelButton: true, confirmButtonText: '刪除', cancelButtonText: '取消', confirmButtonColor: '#dc2626'
-    }).then(r => {
-      if (r.isConfirmed) {
-        const bulletins = JSON.parse(localStorage.getItem('portalBulletin') || '[]');
-        bulletins.splice(idx, 1);
-        localStorage.setItem('portalBulletin', JSON.stringify(bulletins));
-        cloudSave('portalBulletin');
-        renderBulletinStation();
-      }
-    });
-  }
-
-  function togglePinBulletin(idx) {
-    const bulletins = JSON.parse(localStorage.getItem('portalBulletin') || '[]');
-    if (bulletins[idx]) {
-      bulletins[idx].pinned = !bulletins[idx].pinned;
-      bulletins.sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
-      localStorage.setItem('portalBulletin', JSON.stringify(bulletins));
-      cloudSave('portalBulletin');
-      renderBulletinStation();
-    }
-  }
-
   function renderAccountingStation() {
     syncSalesOrdersFromPortal();
     // 取得有銷貨單的揀貨單ID（按日期排序）
@@ -6437,15 +6233,12 @@
           </tr>
         </tfoot>
       </table>
-      <div class="no-print" style="position:fixed;top:10px;right:10px;z-index:9999;">
-        <button onclick="window.print()" style="padding:10px 24px;font-size:16px;background:#1976d2;color:#fff;border:none;border-radius:6px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.3);">🖨️ 列印</button>
-    <button onclick="window.close()" style="padding:10px 24px;font-size:16px;background:#757575;color:#fff;border:none;border-radius:6px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.3);margin-left:8px;">✕ 關閉</button>
-      </div>
-      <style>@media print{.no-print{display:none!important;}}<\/style>
+      <script>window.onload=function(){ setTimeout(()=>{ window.print(); window.close(); }, 500); }<\/script>
     </body></html>`;
 
-    const blob3 = new Blob([html], { type: 'text/html; charset=utf-8' });
-    window.open(URL.createObjectURL(blob3), '_blank');
+    const win = window.open('', '_blank');
+    win.document.write(html);
+    win.document.close();
   }
 
   function adminAcceptReturn(orderId, itemIdx) {
@@ -6588,7 +6381,6 @@
             <span style="margin-left:auto;"></span>
             <button onclick="batchSummaryStatus('closed')" style="background:#c53030; color:#fff; border:none; border-radius:6px; padding:5px 14px; font-size:13px; cursor:pointer; font-weight:600;">🔴 批次結單</button>
             <button onclick="batchSummaryStatus('open')" style="background:#2b6cb0; color:#fff; border:none; border-radius:6px; padding:5px 14px; font-size:13px; cursor:pointer; font-weight:600;">🟢 批次開放</button>
-            <button onclick="batchDeleteSummary()" style="background:#7f1d1d; color:#fff; border:none; border-radius:6px; padding:5px 14px; font-size:13px; cursor:pointer; font-weight:600;">🗑️ 批次刪除</button>
           </div>
           <div id="asPagination" style="display:flex; align-items:center; gap:6px; margin-top:8px; flex-wrap:wrap;"></div>
         </div>
@@ -6778,60 +6570,6 @@
     filterAdminSummary(false, asPageNum);
   }
 
-  // ===== 開團總表：批次刪除 =====
-  async function batchDeleteSummary() {
-    const checked = [...document.querySelectorAll('.as-checkbox:checked')].map(cb => cb.value);
-    if (checked.length === 0) {
-      Swal.fire('請先勾選', '請勾選要刪除的商品', 'info');
-      return;
-    }
-    const r = await Swal.fire({
-      title: '確定刪除？',
-      html: `將刪除 <b>${checked.length}</b> 筆商品<br><span style="color:#c53030; font-size:13px;">同時從開團總表、訂貨追蹤、Supabase products 移除</span>`,
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: '確定刪除',
-      cancelButtonText: '取消',
-      confirmButtonColor: '#7f1d1d'
-    });
-    if (!r.isConfirmed) return;
-
-    // 1. 從 branchOrderList 移除
-    let saved = JSON.parse(localStorage.getItem('branchOrderList') || '[]');
-    saved = saved.filter(p => !checked.includes(p.id));
-    localStorage.setItem('branchOrderList', JSON.stringify(saved));
-    cloudSave('branchOrderList');
-
-    // 2. 從 branchOrders 移除對應 key
-    const orders = JSON.parse(localStorage.getItem('branchOrders') || '{}');
-    Object.keys(orders).forEach(store => {
-      checked.forEach(id => { delete orders[store][id]; });
-    });
-    localStorage.setItem('branchOrders', JSON.stringify(orders));
-    cloudSave('branchOrders');
-
-    // 3. 從訂貨追蹤 mockConsolidatedOrders 移除
-    checked.forEach(id => {
-      const idx = mockConsolidatedOrders.findIndex(i => i.id === id);
-      if (idx >= 0) mockConsolidatedOrders.splice(idx, 1);
-    });
-
-    // 4. 從 Supabase products 刪除（用 productId，去掉 _dateKey 後綴）
-    const productIds = [...new Set(checked.map(id => id.split('_')[0] || id))];
-    try {
-      for (const pid of productIds) {
-        await fetch(`${SB_URL}/products?id=eq.${encodeURIComponent(pid)}`, {
-          method: 'DELETE', headers: HEADERS
-        });
-      }
-    } catch(e) { console.warn('Supabase 刪除失敗:', e); }
-
-    logActivity('批次刪除商品', 'SUMMARY', { count: checked.length, ids: checked.join(',') });
-    filterAdminSummary(false, asPageNum);
-    syncProcurementToPortal();
-    Swal.fire({ title: '已刪除', text: `共刪除 ${checked.length} 筆`, icon: 'success', timer: 1500, showConfirmButton: false });
-  }
-
   // ===== 品名欄拖曳調整寬度 =====
   let _resizing = false, _startX = 0, _startW = 0;
   function startResizeName(e) {
@@ -6986,7 +6724,7 @@
     const inq = mockInquiries.find(i => i.id === id);
     if (!inq) return;
     const order = mockConsolidatedOrders.find(o => o.id === inq.productId);
-    const procStatusMap = { pending:'待採購叫貨', ordered:'已叫貨', shipped:'已出貨', arrived:'已到倉', out_of_stock:'廠商斷貨' };
+    const procStatusMap = { pending:'待採購叫貨', ordered:'已叫貨', arrived:'已到倉', out_of_stock:'廠商斷貨' };
     const procLabel = order ? (procStatusMap[order.procStatus] || '—') : '—';
     const eta = order && order.eta ? order.eta : '（尚未設定）';
     if (inq.status === 'replied') {
@@ -7088,7 +6826,7 @@
     const inq = mockInquiries.find(i => i.id === id);
     if (!inq) return;
     const order = mockConsolidatedOrders.find(o => o.id === inq.productId);
-    const procStatusMap = { pending:'待採購叫貨', ordered:'已叫貨', shipped:'已出貨', arrived:'已到倉', out_of_stock:'廠商斷貨' };
+    const procStatusMap = { pending:'待採購叫貨', ordered:'已叫貨', arrived:'已到倉', out_of_stock:'廠商斷貨' };
     const procLabel = order ? (procStatusMap[order.procStatus] || '—') : '—';
     const eta = order && order.eta ? order.eta : '';
     const isEdit = inq.status === 'replied';
@@ -7909,9 +7647,7 @@
   }
 
   function addGBRows(n) {
-    const rows = [];
-    for (let i = 0; i < n; i++) rows.push({ close_date:'', product_code:'', product_name:'', estimated_cost:0, selling_price:0, url:'', packaging:'', ordered:false });
-    newGBRows.unshift(...rows);
+    for (let i = 0; i < n; i++) newGBRows.push({ close_date:'', product_code:'', product_name:'', estimated_cost:0, selling_price:0, url:'', packaging:'', ordered:false });
     gbPage = 1;
     renderGBGrid();
   }
@@ -8366,9 +8102,7 @@
     }
   }
   function addPPARows(n) {
-    const rows = [];
-    for (let i = 0; i < n; i++) rows.push({ close_date:'', product_id:'', price:0, specs:'', order_status:'', supplier_url:'', done:false, shortage:'', cn_price:0, weight:0, unit_cost:0, order_1688:'', tracking:'', eta:'' });
-    newPPARows.unshift(...rows);
+    for (let i = 0; i < n; i++) newPPARows.push({ close_date:'', product_id:'', price:0, specs:'', order_status:'', supplier_url:'', done:false, shortage:'', cn_price:0, weight:0, unit_cost:0, order_1688:'', tracking:'', eta:'' });
     ppaPage = 1;
     renderPPAGrid();
   }
@@ -8415,10 +8149,13 @@
         updated++;
       }
       if (isAuto) {
-        // 自動儲存：不重新渲染，避免打斷輸入
-        for (const r of toUpdate) delete r._dirty;
+        // 自動儲存：靜默處理，有新增才重載資料（不閃畫面）
         if (saved > 0) {
-          newPPARows = newPPARows.filter(r => !toInsert.includes(r));
+          try { ppAssistantRows = await cnFetchAll('xiaolan_piaopiao', 'id.desc'); } catch {}
+          newPPARows = [];
+          renderPPAGrid();
+        } else {
+          ppAssistantRows.forEach(r => delete r._dirty);
         }
       } else {
         Swal.fire({icon:'success',title:'已儲存',text:`新增 ${saved} 筆，更新 ${updated} 筆`,timer:1500,showConfirmButton:false});
@@ -8632,23 +8369,21 @@
       <td style="text-align:right;">${r.selling_price||''}</td><td style="text-align:right;">${r.unit_cost||''}</td>
     </tr>`).join('');
 
-    const printContent4 = `<!DOCTYPE html><html><head><title>陸貨到貨清單</title>
+    const w = window.open('','_blank');
+    if (!w) return Swal.fire('提示','請允許彈出視窗','warning');
+    w.document.write(`<!DOCTYPE html><html><head><title>陸貨到貨清單</title>
       <style>body{font-family:sans-serif;padding:20px;font-size:12px;}
       h2{text-align:center;margin-bottom:10px;}
       table{width:100%;border-collapse:collapse;} th,td{border:1px solid #333;padding:4px 6px;text-align:left;}
-      th{background:#eee;} @media print{.no-print{display:none!important;}}</style>
+      th{background:#eee;} @media print{.no-print{display:none;}}</style>
+      <script>window.onload=function(){setTimeout(function(){window.print();},300);window.onafterprint=function(){window.close();};};<\/script>
     </head><body>
-      <div class="no-print" style="position:fixed;top:10px;right:10px;z-index:9999;">
-        <button onclick="window.print()" style="padding:10px 24px;font-size:16px;background:#1976d2;color:#fff;border:none;border-radius:6px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.3);">🖨️ 列印</button>
-    <button onclick="window.close()" style="padding:10px 24px;font-size:16px;background:#757575;color:#fff;border:none;border-radius:6px;cursor:pointer;box-shadow:0 2px 8px rgba(0,0,0,.3);margin-left:8px;">✕ 關閉</button>
-      </div>
       <h2>陸貨到貨清單</h2>
       <p style="text-align:right;font-size:11px;">列印日期：${new Date().toLocaleDateString('zh-TW')}　共 ${printData.length} 筆</p>
       <table><thead><tr><th>#</th><th>到貨</th><th>快遞單號</th><th>商品編號</th><th>商品名稱</th><th>售價</th><th>進貨價</th></tr></thead>
       <tbody>${rows}</tbody></table>
-    </body></html>`;
-    const blob4 = new Blob([printContent4], { type: 'text/html; charset=utf-8' });
-    window.open(URL.createObjectURL(blob4), '_blank');
+    </body></html>`);
+    w.document.close();
   }
 
   // ============================
@@ -8823,9 +8558,7 @@
     cnrAutoSaveTimer = setTimeout(() => saveCnReturns(true), 2000);
   }
   function addCnReturnRows(n) {
-    const rows = [];
-    for (let i = 0; i < n; i++) rows.push({ return_date: new Date().toISOString().slice(0,10), product_code:'', product_name:'', content:'', progress:'', process_date:'', order_number:'', tracking_number:'', note:'' });
-    newCnReturnRows.unshift(...rows);
+    for (let i = 0; i < n; i++) newCnReturnRows.push({ return_date: new Date().toISOString().slice(0,10), product_code:'', product_name:'', content:'', progress:'', process_date:'', order_number:'', tracking_number:'', note:'' });
     cnrPage = 1;
     renderCnReturnGrid();
   }
