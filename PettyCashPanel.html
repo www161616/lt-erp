@@ -199,11 +199,8 @@
     </div>
 
     <div class="right-panel">
-      <div class="table-header-wrap" style="display:flex; justify-content:space-between; align-items:center;">
+      <div class="table-header-wrap">
         <h3><i class="fas fa-list-ul"></i> 最近交易紀錄</h3>
-        <button onclick="recalcBalances()" style="background:var(--blue); color:white; border:none; padding:6px 14px; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer;" title="重新計算所有結餘">
-          <i class="fas fa-calculator"></i> 重算結餘
-        </button>
       </div>
       <div class="table-wrapper">
         <table id="logTable">
@@ -368,39 +365,7 @@
       }).then((result) => { if (result.isConfirmed) { window.location.href = 'AddExpense.html'; } });
     }
 
-    // ========== 重新計算所有結餘 ==========
-    async function recalcBalances() {
-      const result = await Swal.fire({
-        title: '重新計算所有結餘？',
-        text: '系統將依照時間順序，從第一筆開始重新計算每一筆的結餘金額。',
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonColor: '#0e7490',
-        confirmButtonText: '確認重算',
-        cancelButtonText: '取消'
-      });
-      if (!result.isConfirmed) return;
-
-      Swal.fire({ title: '計算中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-
-      try {
-        const res = await fetch(`${SB_URL}/rpc/recalc_petty_cash_balances`, {
-          method: 'POST',
-          headers: HEADERS,
-          body: JSON.stringify({})
-        });
-        if (!res.ok) throw new Error('呼叫失敗');
-        const data = await res.json();
-        if (data && data.success === false) throw new Error(data.message);
-
-        Swal.fire({ icon: 'success', title: '重算完成', text: `已更新結餘`, timer: 1500, showConfirmButton: false });
-        loadData();
-      } catch (err) {
-        Swal.fire('重算失敗', err.message, 'error');
-      }
-    }
-
-    // ========== 刪除零用金功能 (並重算結餘) ==========
+    // ========== ✨ 新增：刪除零用金功能 (並重算結餘) ==========
     function deletePettyCash(id) {
       Swal.fire({
         title: '確定要刪除這筆紀錄嗎？',
