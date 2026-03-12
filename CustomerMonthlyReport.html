@@ -333,6 +333,7 @@
           taxAmount: Number(o.tax_amount || 0),
           grandTotal: Number(o.grand_total || o.total || 0),
           paymentStatus: o.payment_status || '未收款',
+          note: o.note || '',
           items: details
         };
       });
@@ -414,6 +415,7 @@
           <td class="text-right" style="font-weight:900; font-size:14px; color:var(--accent);">$${o.grandTotal.toLocaleString()}</td>
           <td style="text-align:center;"><span class="status-badge" style="background:${statusColor};">${o.paymentStatus}</span></td>
         </tr>
+        ${o.note ? `<tr><td colspan="8" style="padding:2px 12px 6px; font-size:12px; color:#b45309; border-top:none;">📝 ${o.note}</td></tr>` : ''}
       `;
     });
     
@@ -430,17 +432,27 @@
     let csv = '\uFEFF';
     csv += `客戶月結對帳單 - ${reportData.customer.name}\n`;
     csv += `查詢期間,${reportData.dateRange.from} ~ ${reportData.dateRange.to}\n\n`;
-    csv += '單號,日期,未稅小計,稅額,運費,扣款,含稅總額,收款狀態\n';
+    csv += '單號,日期,品名,數量,單位,單價,小計,未稅小計,稅額,運費,扣款,含稅總額,收款狀態,備註\n';
 
     sorted.forEach(o => {
-      csv += `"${o.orderId}","${o.date}","${o.subtotal.toLocaleString()}","${o.taxAmount.toLocaleString()}","${o.shipping.toLocaleString()}","${o.deduction.toLocaleString()}","${o.grandTotal.toLocaleString()}","${o.paymentStatus}"\n`;
+      if (o.items.length > 0) {
+        o.items.forEach((item, idx) => {
+          if (idx === 0) {
+            csv += `"${o.orderId}","${o.date}","${item.productName}","${item.qty}","${item.unit}","${item.unitPrice.toLocaleString()}","${item.subtotal.toLocaleString()}","${o.subtotal.toLocaleString()}","${o.taxAmount.toLocaleString()}","${o.shipping.toLocaleString()}","${o.deduction.toLocaleString()}","${o.grandTotal.toLocaleString()}","${o.paymentStatus}","${(o.note || '').replace(/"/g, '""')}"\n`;
+          } else {
+            csv += `"","","${item.productName}","${item.qty}","${item.unit}","${item.unitPrice.toLocaleString()}","${item.subtotal.toLocaleString()}","","","","","","",""\n`;
+          }
+        });
+      } else {
+        csv += `"${o.orderId}","${o.date}","","","","","","${o.subtotal.toLocaleString()}","${o.taxAmount.toLocaleString()}","${o.shipping.toLocaleString()}","${o.deduction.toLocaleString()}","${o.grandTotal.toLocaleString()}","${o.paymentStatus}","${(o.note || '').replace(/"/g, '""')}"\n`;
+      }
     });
 
     csv += '\n';
-    csv += `"","","","","","合計","${reportData.summary.totalSales.toLocaleString()}",""\n`;
-    csv += `"","","","","","已收","${reportData.summary.totalPaid.toLocaleString()}",""\n`;
-    csv += `"","","","","","未收","${reportData.summary.totalUnpaid.toLocaleString()}",""\n`;
-    csv += `"","","","","","共 ${sorted.length} 筆","",""\n`;
+    csv += `"","","","","","","","","","","合計","${reportData.summary.totalSales.toLocaleString()}","",""\n`;
+    csv += `"","","","","","","","","","","已收","${reportData.summary.totalPaid.toLocaleString()}","",""\n`;
+    csv += `"","","","","","","","","","","未收","${reportData.summary.totalUnpaid.toLocaleString()}","",""\n`;
+    csv += `"","","","","","","","","","","共 ${sorted.length} 筆","","",""\n`;
 
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
@@ -522,6 +534,7 @@
               <div style="margin-top:4px; padding-top:3px; border-top:1px dashed #ccc; font-size:9px; color:#666;">
                 金額構成: ${struct} = <b>$${order.grandTotal.toLocaleString()}</b>
               </div>
+              ${order.note ? `<div style="margin-top:3px; font-size:10px; color:#b45309;">📝 ${order.note}</div>` : ''}
             </td>
           </tr>
         `;
