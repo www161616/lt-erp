@@ -286,12 +286,7 @@
         <a class="nav-item" data-url="CustomerList.html" data-title="客戶管理"><i class="fas fa-user-friends"></i> 所有客戶</a>
         <a class="nav-item" data-url="SupplierList.html" data-title="供應商管理"><i class="fas fa-industry"></i> 所有供應商</a>
         <a class="nav-item" data-url="PriceForm.html" data-title="設定客戶特價"><i class="fas fa-tags"></i> 設定客戶特價</a>
-        <a class="nav-item" data-url="AccountManager.html" data-title="帳號管理"><i class="fas fa-user-cog"></i> 帳號管理</a>
       </div>
-    </div>
-    <div style="padding:12px 16px; border-top:1px solid var(--border); flex-shrink:0;">
-      <span id="loginUserDisplay" style="display:block; font-size:12px; color:var(--text2); margin-bottom:6px; text-align:center;"></span>
-      <button onclick="erpDoLogout()" style="width:100%; padding:8px; background:var(--danger); color:#fff; border:none; border-radius:6px; font-size:13px; cursor:pointer; font-weight:600;">🚪 登出</button>
     </div>
   </aside>
 
@@ -532,9 +527,9 @@
         });
         if (error) { Swal.fire('登入失敗', error.message, 'error'); btn.disabled=false; btn.textContent='登入'; return; }
         const meta = data.user.user_metadata || {};
-        if (meta.role !== 'admin' && meta.role !== 'accountant') {
+        if (meta.role !== 'admin') {
           await sbClient.auth.signOut();
-          Swal.fire('權限不足','此帳號無法使用 ERP 系統。','error');
+          Swal.fire('權限不足','此帳號非管理員，無法使用 ERP 系統。','error');
           btn.disabled=false; btn.textContent='登入'; return;
         }
         // Store token
@@ -556,7 +551,7 @@
       const { data: { session } } = await sbClient.auth.getSession();
       if (session) {
         const meta = session.user.user_metadata || {};
-        if (meta.role === 'admin' || meta.role === 'accountant') {
+        if (meta.role === 'admin') {
           sessionStorage.setItem('sb_auth_token', session.access_token);
           sessionStorage.setItem('sb_auth_user', JSON.stringify(meta));
           HEADERS['Authorization'] = `Bearer ${session.access_token}`;
@@ -578,39 +573,12 @@
       }
     }, 600000);
 
-    async function initAfterLogin() {
-      // 顯示登入帳號
-      const userInfo = JSON.parse(sessionStorage.getItem('sb_auth_user') || '{}');
-      const displayEl = document.getElementById('loginUserDisplay');
-      if (displayEl) displayEl.textContent = '👤 ' + (userInfo.username || userInfo.email || '');
-
-      // 帳號管理僅 www161616 可見
-      const accNav = document.querySelector('.nav-item[data-url="AccountManager.html"]');
-      if (accNav) accNav.style.display = (userInfo.username === 'www161616') ? '' : 'none';
-
+    function initAfterLogin() {
       initDateTime();
       refreshDashboard();
-      // 從 Supabase 載入記事與待辦
-      await loadCalEvents();
-      await loadTodos();
       calRender();
+      renderTodos();
       updateCalBadge();
-    }
-
-    async function erpDoLogout() {
-      const r = await Swal.fire({
-        title: '確定登出？',
-        icon: 'question',
-        showCancelButton: true,
-        confirmButtonText: '登出',
-        cancelButtonText: '取消',
-        confirmButtonColor: '#c53030'
-      });
-      if (!r.isConfirmed) return;
-      await sbClient.auth.signOut({ scope: 'local' });
-      sessionStorage.removeItem('sb_auth_token');
-      sessionStorage.removeItem('sb_auth_user');
-      document.getElementById('loginOverlay').style.display = 'flex';
     }
 
     function fmt(n){ return 'NT$ '+Number(n||0).toLocaleString(); }
@@ -805,22 +773,8 @@
     calYear=calToday.getFullYear();
     calMonth=calToday.getMonth();
 
-    // 記事/提醒 & 待辦：改用 Supabase 同步
-    let calEventsCache = [];
-    let todosCache = [];
-
-    async function loadCalEvents() {
-      try {
-        const res = await fetch(`${SB_URL}/calendar_events?order=created_at.desc`, { headers: getHeaders() });
-        if (res.ok) calEventsCache = await res.json();
-      } catch(e) { console.error('載入記事失敗', e); }
-      updateCalBadge();
-    }
-    function getCalEvents() { return calEventsCache; }
-    async function saveCalEvents(list) {
-      calEventsCache = list;
-      updateCalBadge();
-    }
+    function getCalEvents(){return JSON.parse(localStorage.getItem('lt_calendarEvents')||'[]');}
+    function saveCalEvents(list){localStorage.setItem('lt_calendarEvents',JSON.stringify(list));updateCalBadge();}
 
     function updateCalBadge(){
       const events=getCalEvents();
@@ -898,41 +852,25 @@
         </div>`).join('');
     }
 
-    async function addCalEvent(){
+    function addCalEvent(){
       const text=document.getElementById('calNewText').value.trim();
       if(!text||!calSelectedDate)return;
       const type=document.getElementById('calNewType').value;
-      try {
-        const res = await fetch(`${SB_URL}/calendar_events`, {
-          method: 'POST', headers: { ...getHeaders(), 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
-          body: JSON.stringify({ date: calSelectedDate, text, type })
-        });
-        if (!res.ok) throw new Error('新增失敗');
-        await loadCalEvents();
-        calRender(); showDayEvents(calSelectedDate);
-        document.getElementById('calNewText').value='';
-      } catch(e) { console.error('新增記事失敗', e); Swal.fire('錯誤', '新增失敗', 'error'); }
+      const events=getCalEvents();
+      events.push({id:Date.now(),date:calSelectedDate,text,type,createdAt:new Date().toISOString()});
+      saveCalEvents(events);calRender();showDayEvents(calSelectedDate);
+      document.getElementById('calNewText').value='';
     }
 
-    async function delCalEvent(id){
-      try {
-        await fetch(`${SB_URL}/calendar_events?id=eq.${id}`, { method: 'DELETE', headers: getHeaders() });
-        await loadCalEvents();
-        calRender();
-        if(calSelectedDate)showDayEvents(calSelectedDate);
-      } catch(e) { console.error('刪除記事失敗', e); }
+    function delCalEvent(id){
+      let events=getCalEvents();events=events.filter(e=>e.id!==id);
+      saveCalEvents(events);calRender();
+      if(calSelectedDate)showDayEvents(calSelectedDate);
     }
 
     // ===== Todos =====
-    async function loadTodos() {
-      try {
-        const res = await fetch(`${SB_URL}/todos?order=created_at.desc`, { headers: getHeaders() });
-        if (res.ok) todosCache = await res.json();
-      } catch(e) { console.error('載入待辦失敗', e); }
-      renderTodos();
-    }
-    function getTodos() { return todosCache; }
-    function saveTodos(list) { todosCache = list; renderTodos(); }
+    function getTodos(){return JSON.parse(localStorage.getItem('lt_calendarTodos')||'[]');}
+    function saveTodos(list){localStorage.setItem('lt_calendarTodos',JSON.stringify(list));renderTodos();}
 
     function renderTodos(){
       const todos=getTodos();
@@ -946,34 +884,15 @@
         </div>`).join('');
     }
 
-    async function addTodo(){
+    function addTodo(){
       const input=document.getElementById('todoNewText');
       const text=input.value.trim();if(!text)return;
-      try {
-        await fetch(`${SB_URL}/todos`, {
-          method: 'POST', headers: { ...getHeaders(), 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-          body: JSON.stringify({ text, done: false })
-        });
-        await loadTodos();
-        input.value='';
-      } catch(e) { console.error('新增待辦失敗', e); }
+      const todos=getTodos();
+      todos.push({id:Date.now(),text,done:false,createdAt:new Date().toISOString()});
+      saveTodos(todos);input.value='';
     }
-    async function toggleTodo(id){
-      const t=todosCache.find(x=>x.id===id);if(!t)return;
-      try {
-        await fetch(`${SB_URL}/todos?id=eq.${id}`, {
-          method: 'PATCH', headers: { ...getHeaders(), 'Content-Type': 'application/json' },
-          body: JSON.stringify({ done: !t.done })
-        });
-        await loadTodos();
-      } catch(e) { console.error('更新待辦失敗', e); }
-    }
-    async function delTodo(id){
-      try {
-        await fetch(`${SB_URL}/todos?id=eq.${id}`, { method: 'DELETE', headers: getHeaders() });
-        await loadTodos();
-      } catch(e) { console.error('刪除待辦失敗', e); }
-    }
+    function toggleTodo(id){const todos=getTodos();const t=todos.find(x=>x.id===id);if(t)t.done=!t.done;saveTodos(todos);}
+    function delTodo(id){saveTodos(getTodos().filter(x=>x.id!==id));}
 
     // ===== Init =====
     window.onload = function(){

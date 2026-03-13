@@ -1234,14 +1234,12 @@
           return;
         }
         const meta = authData.user.user_metadata || {};
-        // www161616（最高管理員）可登入任何頁面，其他 admin/assistant 不行
-        const isMainAdmin = meta.username === 'www161616';
-        if (!isMainAdmin && (meta.role === 'admin' || meta.role === 'assistant' || meta.role === 'accountant' || meta.role === 'staff')) {
+        if (meta.role === 'admin' || meta.role === 'assistant') {
           await sbClient.auth.signOut({ scope: 'local' });
-          Swal.fire('權限錯誤', '此帳號無法使用分店前台，請使用對應的系統登入。', 'error');
+          Swal.fire('權限錯誤', '管理員請使用管理後台登入。', 'error');
           return;
         }
-        if (!isMainAdmin && !meta.store) {
+        if (!meta.store) {
           await sbClient.auth.signOut({ scope: 'local' });
           Swal.fire('登入失敗', '此帳號尚未指定所屬分店，請聯繫總倉管理員。', 'error');
           return;
@@ -1249,7 +1247,7 @@
         // Update headers with auth token
         SB_HEADERS['Authorization'] = `Bearer ${authData.session.access_token}`;
 
-        const storeName = meta.store || '總倉管理';
+        const storeName = meta.store;
         const fullName = meta.full_name || meta.username;
         currentStore = { id: meta.username, name: matchBranchName(storeName), employee: fullName };
         sessionStorage.setItem('branch_employee', JSON.stringify(currentStore));
@@ -1298,11 +1296,9 @@
         const { data: { session } } = await sbClient.auth.getSession();
         if (!session) { showLogin(); return; }
         const meta = session.user.user_metadata || {};
-        const isMainAdmin = meta.username === 'www161616';
-        if (!isMainAdmin && meta.role !== 'store') { showLogin(); return; }
-        if (!isMainAdmin && !meta.store) { showLogin(); return; }
+        if (meta.role === 'admin' || meta.role === 'assistant' || !meta.store) { showLogin(); return; }
         SB_HEADERS['Authorization'] = `Bearer ${session.access_token}`;
-        const storeName = meta.store || '總倉管理';
+        const storeName = meta.store;
         const fullName = meta.full_name || meta.username;
         currentStore = { id: meta.username, name: matchBranchName(storeName), employee: fullName };
         sessionStorage.setItem('branch_employee', JSON.stringify(currentStore));

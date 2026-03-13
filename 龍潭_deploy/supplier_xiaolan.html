@@ -177,8 +177,7 @@
         <button class="btn" style="background:#e67e22;color:#fff;" onclick="toggleOrderLinks()">叫貨清單</button>
         <button class="btn btn-outline" onclick="document.getElementById('importExcel').click()">匯入 Excel</button>
         <button class="btn btn-outline" onclick="addPurchaseRows(5)">+5 行</button>
-        <button class="btn" style="background:#2b6cb0;color:#fff;" onclick="openPasteDialog()">📋 貼上</button>
-        <button class="btn btn-outline" onclick="exportPurchasesExcel()">下載 Excel</button>
+        <button class="btn btn-outline" onclick="exportPurchasesCSV()">匯出</button>
         <button class="btn" style="background:#c53030;" onclick="deleteSelectedPurchases()">刪除勾選</button>
       </div>
     </div>
@@ -335,7 +334,6 @@
       <div class="topbar-actions">
         <input type="file" id="importPackage" accept=".xlsx,.xls" style="display:none;" onchange="importPackageExcel(event)">
         <button class="btn btn-outline" onclick="document.getElementById('importPackage').click()">匯入包裹</button>
-        <button class="btn btn-outline" onclick="exportArrivalsExcel()">下載 Excel</button>
         <button class="btn btn-outline" onclick="addArrivalRows(10)">+10 行</button>
         <button class="btn" style="background:#c53030;" onclick="deleteSelectedArrivals()">刪除勾選</button>
       </div>
@@ -344,11 +342,7 @@
       <span style="font-size:12px;color:var(--text2);">匯入包裹Excel自動填入快遞單號並帶出商品資料</span>
       <input type="text" id="aKeyword" placeholder="搜尋商編/品名/快遞單號" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:13px;width:200px;" onkeydown="if(event.key==='Enter'){aPage=1;renderArrivalGrid();}">
       <button class="btn btn-outline" style="padding:5px 10px;font-size:13px;" onclick="aPage=1;renderArrivalGrid();">查詢</button>
-      <button class="btn btn-outline" style="padding:5px 10px;font-size:13px;" onclick="document.getElementById('aKeyword').value='';document.getElementById('aDateFrom').value='';document.getElementById('aDateTo').value='';aPage=1;renderArrivalGrid();">清除</button>
-      <label style="font-size:12px;color:var(--text2);">到貨日</label>
-      <input type="date" id="aDateFrom" style="padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px;" onchange="aPage=1;renderArrivalGrid();">
-      <span style="font-size:12px;color:var(--text2);">～</span>
-      <input type="date" id="aDateTo" style="padding:4px 6px;border:1px solid var(--border);border-radius:4px;font-size:12px;" onchange="aPage=1;renderArrivalGrid();">
+      <button class="btn btn-outline" style="padding:5px 10px;font-size:13px;" onclick="document.getElementById('aKeyword').value='';aPage=1;renderArrivalGrid();">清除</button>
       <select id="aShipTo" onchange="aPage=1;renderArrivalGrid();">
         <option value="">全部寄至</option>
         <option value="直寄龍潭">直寄龍潭</option>
@@ -754,8 +748,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 });
 
 function initNewRows() {
-  // 所有訂單：常駐 3 行空行
-  if (newPurchaseRows.length === 0) addPurchaseRows(3, true);
+  // 不自動補空白列，手動按 +5 行
   if (newArrivalRows.length === 0) addArrivalRows(10, true);
 }
 
@@ -767,7 +760,6 @@ function switchTab(name, el) {
   if (el) el.classList.add('active');
   if (name === 'orderTrack') loadOrderTrack();
   if (name === 'group') renderGroupBuy();
-  if (name === 'arrivals') renderArrivalGrid();
   if (name === 'returns') renderReturnGrid();
   if (name === 'sisterBill') renderSisterBill();
   if (name === 'piaopiao') { loadPPSettings(); renderPiaopiao(); }
@@ -836,7 +828,7 @@ function getFilteredPurchases() {
   let data = [...purchaseRows];
   if (month) data = data.filter(r => r.order_date && r.order_date.startsWith(month));
   if (source) data = data.filter(r => r.source === source);
-  if (kw) data = data.filter(r => fuzzyMatch(r.product_name, kw) || (r.order_number || '').includes(kw) || (r.tracking_number || '').toLowerCase().includes(kw) || (r.tracking_number || '').split(/[,，、;；\s]+/).some(t => t.trim().toLowerCase() === kw));
+  if (kw) data = data.filter(r => fuzzyMatch(r.product_name, kw) || (r.order_number || '').includes(kw) || (r.tracking_number || '').toLowerCase().includes(kw));
   data.sort((a, b) => (b.order_date || '').localeCompare(a.order_date || ''));
   return data;
 }
@@ -849,7 +841,7 @@ function clearPurchaseFilters() {
 }
 
 let pPage = 1;
-const P_PER_PAGE = 100;
+const P_PER_PAGE = 50;
 
 function renderPurchaseGrid() {
   const saved = getFilteredPurchases();
@@ -874,7 +866,7 @@ function renderPurchaseGrid() {
     return `<tr data-idx="${idx}">
       <td style="text-align:center;"><input type="checkbox" class="p-check" data-idx="${idx}"></td>
       <td class="row-num">${i + 1}</td>
-      <td><input type="${isNew ? 'text' : 'date'}" value="${r.order_date || ''}" data-field="order_date" data-idx="${idx}" oninput="onPCellChange(this)" ${isNew ? 'placeholder="例:2026/3/10"' : ''}></td>
+      <td><input type="date" value="${r.order_date || ''}" data-field="order_date" data-idx="${idx}" oninput="onPCellChange(this)"></td>
       <td><input value="${r.order_number || ''}" data-field="order_number" data-idx="${idx}" oninput="onPCellChange(this)"></td>
       <td><input value="${r.tracking_number || ''}" data-field="tracking_number" data-idx="${idx}" oninput="onPCellChange(this)"></td>
       <td><input value="${r.product_name || ''}" data-field="product_name" data-idx="${idx}" oninput="onPCellChange(this)"></td>
@@ -1036,92 +1028,12 @@ function onLinkedChange(input) {
   triggerAutoSave();
 }
 
-
 function addPurchaseRows(n, silent) {
-  const rows = [];
   for (let i = 0; i < n; i++) {
-    rows.push({ order_date: '', order_number: '', tracking_number: '', product_name: '', payment_rmb: 0, qty: 0, weight_kg: 0, total_twd: 0, unit_cost: 0, selling_price: 0, category: '團購', source: '1688', seller: '', offer_id: '', note: '', linked_product: '', used_rate: getRate(), used_ship: getShip() });
+    newPurchaseRows.push({ order_date: '', order_number: '', tracking_number: '', product_name: '', payment_rmb: 0, qty: 0, weight_kg: 0, total_twd: 0, unit_cost: 0, selling_price: 0, category: '團購', source: '1688', seller: '', offer_id: '', note: '', linked_product: '', used_rate: getRate(), used_ship: getShip() });
   }
-  newPurchaseRows.unshift(...rows); // 插在最前面
   if (!silent) { pPage = 1; renderPurchaseGrid(); }
 }
-
-// ===== 📋 貼上模式 =====
-function openPasteDialog() {
-  Swal.fire({
-    title: '📋 貼上資料',
-    width: '700px',
-    html: `
-      <div style="text-align:left; font-size:13px; margin-bottom:8px;">
-        <p style="color:#718096; margin-bottom:6px;">從 Excel / Google Sheets 複製後直接貼上（Tab 分隔）</p>
-        <p style="color:#718096; font-size:12px; margin-bottom:8px;">欄位順序：<b>訂單日　訂單號　運單號　商品名稱　付款RMB　數量　重量kg　團購價　用途　來源　賣家　備註</b></p>
-        <p style="color:#2b6cb0; font-size:12px; margin-bottom:10px;">💡 不用填滿所有欄位，空白會自動跳過。最少只要有「商品名稱」就能新增。</p>
-        <textarea id="pasteArea" style="width:100%; height:260px; padding:10px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; font-family:monospace; line-height:1.6; resize:vertical;" placeholder="在這裡貼上...&#10;&#10;例如：&#10;2026/3/10	ORD001		洗衣精	29.9	2	0.5		團購	1688"></textarea>
-        <div style="margin-top:8px; display:flex; gap:8px; align-items:center;">
-          <span id="pastePreviewCount" style="font-size:12px; color:#718096;"></span>
-        </div>
-      </div>`,
-    showCancelButton: true,
-    confirmButtonText: '確定匯入',
-    cancelButtonText: '取消',
-    confirmButtonColor: '#2b6cb0',
-    didOpen: () => {
-      const ta = document.getElementById('pasteArea');
-      ta.focus();
-      ta.addEventListener('input', () => {
-        const lines = ta.value.split('\\n').filter(l => l.trim());
-        document.getElementById('pastePreviewCount').textContent = '偵測到 ' + lines.length + ' 行資料';
-      });
-    },
-    preConfirm: () => {
-      const text = document.getElementById('pasteArea').value.trim();
-      if (!text) { Swal.showValidationMessage('請貼上資料'); return false; }
-      return text;
-    }
-  }).then(res => {
-    if (!res.isConfirmed) return;
-    const lines = res.value.split('\\n').filter(l => l.trim());
-    const fieldMap = ['order_date','order_number','tracking_number','product_name','payment_rmb','qty','weight_kg','selling_price','category','source','seller','note'];
-    let count = 0;
-    lines.forEach(line => {
-      const cols = line.split('\\t');
-      const row = { order_date: '', order_number: '', tracking_number: '', product_name: '', payment_rmb: 0, qty: 0, weight_kg: 0, total_twd: 0, unit_cost: 0, selling_price: 0, category: '團購', source: '1688', seller: '', offer_id: '', note: '', linked_product: '', used_rate: getRate(), used_ship: getShip() };
-      cols.forEach((val, i) => {
-        if (i < fieldMap.length && val.trim()) {
-          const field = fieldMap[i];
-          const v = val.trim();
-          if (['payment_rmb','qty','weight_kg','selling_price'].includes(field)) {
-            row[field] = parseFloat(v) || 0;
-          } else if (field === 'order_date') {
-            // 支援各種日期格式
-            if (v.includes('/') || v.includes('-')) {
-              const d = new Date(v);
-              if (!isNaN(d)) row[field] = d.toISOString().split('T')[0];
-              else row[field] = v;
-            } else {
-              row[field] = v;
-            }
-          } else {
-            row[field] = v;
-          }
-        }
-      });
-      if (row.product_name) {
-        calcRow(row);
-        newPurchaseRows.push(row);
-        count++;
-      }
-    });
-    if (count > 0) {
-      pPage = 1;
-      renderPurchaseGrid();
-      Swal.fire({ icon: 'success', title: '已匯入 ' + count + ' 筆', timer: 1500, showConfirmButton: false });
-    } else {
-      Swal.fire('無有效資料', '請確認至少有商品名稱欄位', 'warning');
-    }
-  });
-}
-
 
 let autoSaveTimer = null;
 let autoSaveArrTimer = null;
@@ -1144,22 +1056,6 @@ function triggerAutoSavePP() {
   autoSavePPTimer = setTimeout(() => savePiaopiao(true), 2000);
 }
 
-function normDate(v) {
-  if (!v) return null;
-  v = v.trim().replace(/\//g, '-');
-  // YYYY-MM-DD or YYYY-M-D
-  if (/^\d{4}-\d{1,2}-\d{1,2}$/.test(v)) {
-    const [y,m,d] = v.split('-');
-    return `${y}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
-  }
-  // M/D or M-D → assume current year
-  if (/^\d{1,2}-\d{1,2}$/.test(v)) {
-    const [m,d] = v.split('-');
-    return `${new Date().getFullYear()}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
-  }
-  return v; // 原樣回傳，讓 DB 報錯
-}
-
 async function savePurchases(isAuto) {
   const toInsert = newPurchaseRows.filter(r => r.product_name && r.product_name.trim());
   const toUpdate = purchaseRows.filter(r => r._dirty);
@@ -1172,7 +1068,7 @@ async function savePurchases(isAuto) {
       const clean = toInsert.map(r => {
         calcRow(r);
         const { _dirty, ...rest } = r;
-        rest.order_date = normDate(rest.order_date);
+        if (!rest.order_date) rest.order_date = null;
         return rest;
       });
       const res = await fetch(`${SB_URL}/xiaolan_purchases`, { method: 'POST', headers: JSON_H, body: JSON.stringify(clean) });
@@ -1182,26 +1078,19 @@ async function savePurchases(isAuto) {
     for (const r of toUpdate) {
       calcRow(r);
       const { _dirty, id, created_at, ...rest } = r;
-      rest.order_date = normDate(rest.order_date);
+      if (!rest.order_date) rest.order_date = null;
       await fetch(`${SB_URL}/xiaolan_purchases?id=eq.${id}`, { method: 'PATCH', headers: JSON_H, body: JSON.stringify(rest) });
       updated++;
     }
 
+    newPurchaseRows = [];
+    await loadPurchases();
+    renderPurchaseGrid();
     if (isAuto) {
-      // 自動儲存：不重新渲染，避免打斷使用者輸入
-      for (const r of toUpdate) r._dirty = false;
-      if (saved > 0) {
-        // 已存的新行移出 newPurchaseRows，下次 loadPurchases 會載回
-        newPurchaseRows = newPurchaseRows.filter(r => !toInsert.includes(r));
-        if (newPurchaseRows.length < 3) addPurchaseRows(3 - newPurchaseRows.length, true);
-      }
+      // 自動儲存：底部小提示，不打斷操作
       const info = document.getElementById('pInfo');
       if (info) info.textContent = `已自動儲存（新增 ${saved}，更新 ${updated}）`;
     } else {
-      newPurchaseRows = [];
-      addPurchaseRows(3, true);
-      await loadPurchases();
-      renderPurchaseGrid();
       Swal.fire({ icon: 'success', title: `已儲存`, text: `新增 ${saved} 筆，更新 ${updated} 筆`, timer: 1500, showConfirmButton: false });
     }
   } catch (e) {
@@ -1332,7 +1221,7 @@ function importExcelFile(e) {
       // 收集所有已存在的運單號碼（含逗號分隔的每一個）
       const existingTNs = new Set();
       purchaseRows.forEach(r => {
-        if (r.tracking_number) r.tracking_number.split(/[,，、;；\s]+/).forEach(t => { if (t) existingTNs.add(t.trim()); });
+        if (r.tracking_number) r.tracking_number.split(/[,，、\s]+/).forEach(t => { if (t) existingTNs.add(t.trim()); });
       });
 
       if (is1688) {
@@ -1491,54 +1380,28 @@ function importExcelFile(e) {
   reader.readAsBinaryString(file);
 }
 
-function exportPurchasesExcel() {
+function exportPurchasesCSV() {
   const data = getFilteredPurchases();
   if (data.length === 0) return Swal.fire('提示', '沒有資料', 'info');
-  const h = ['訂單日','訂單號碼','運單號碼','商品名稱','對應商品','付款(RMB)','數量','重量kg','金額(T)','單個價','團購價','用途','下單處','備註'];
-  const rows = data.map(r => [r.order_date,r.order_number,r.tracking_number,r.product_name,r.linked_product||'',r.payment_rmb,r.qty,r.weight_kg,r.total_twd,r.unit_cost,r.selling_price,r.category,r.source,r.note]);
-  const ws = XLSX.utils.aoa_to_sheet([h, ...rows]);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, '所有訂單');
-  XLSX.writeFile(wb, `所有訂單_${new Date().toISOString().slice(0,10)}.xlsx`);
-}
-
-function exportArrivalsExcel() {
-  const saved = getFilteredArrivals();
-  const all = [...saved, ...newArrivalRows.filter(r => r.tracking_number || r.product_name)];
-  if (all.length === 0) return Swal.fire('提示', '沒有資料', 'info');
-  const h = ['1688訂單編號','到貨','快遞單號','商品名稱','商品編號','售價','進貨總數量','進貨價','備註','出貨日期','訂單號','寄至'];
-  // 用 live 資料帶出品名品編
-  const tnCount = {};
-  const rows = all.map(r => {
-    let name = r.product_name || '', pid = r.product_id || '', price = r.selling_price || 0, qty = r.qty || 0, cost = r.unit_cost || 0, oid = r.offer_id || '';
-    if (r.tracking_number) {
-      const tn = r.tracking_number.trim().toLowerCase();
-      if (!tnCount[tn]) tnCount[tn] = 0;
-      const live = getLiveArrivalData(r.tracking_number, tnCount[tn]++);
-      if (live) { name = live.product_name || name; pid = live.product_id || pid; price = live.selling_price || price; qty = live.qty || qty; cost = live.unit_cost || cost; oid = live.offer_id || oid; }
-    }
-    return [oid, r.arrived ? '是' : '否', r.tracking_number||'', name, pid, price, qty, cost, r.note||'', r.ship_date||'', r.ship_order||'', r.ship_to||''];
-  });
-  const ws = XLSX.utils.aoa_to_sheet([h, ...rows]);
-  const wb = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(wb, ws, '到貨清單');
-  XLSX.writeFile(wb, `到貨清單_${new Date().toISOString().slice(0,10)}.xlsx`);
+  const h = ['訂單日','訂單號碼','運單號碼','商品名稱','付款(RMB)','數量','重量kg','金額(T)','單個價','團購價','用途','下單處','備註'];
+  const rows = data.map(r => [r.order_date,r.order_number,r.tracking_number,r.product_name,r.payment_rmb,r.qty,r.weight_kg,r.total_twd,r.unit_cost,r.selling_price,r.category,r.source,r.note]);
+  const csv = '\uFEFF' + [h,...rows].map(r => r.map(v => `"${String(v||'').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([csv], { type: 'text/csv;charset=utf-8' }));
+  a.download = `所有訂單_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click();
 }
 
 // ===== Arrival Grid =====
 let aPage = 1;
-const A_PER_PAGE = 100;
+const A_PER_PAGE = 50;
 
 function getFilteredArrivals() {
   const shipTo = document.getElementById('aShipTo').value;
   const kw = (document.getElementById('aKeyword').value || '').trim().toLowerCase();
-  const dateFrom = document.getElementById('aDateFrom').value;
-  const dateTo = document.getElementById('aDateTo').value;
   let data = [...arrivalRows];
   if (shipTo) data = data.filter(r => r.ship_to === shipTo);
   if (kw) data = data.filter(r => fuzzyMatch(r.product_name, kw) || (r.product_id || '').toLowerCase().includes(kw) || (r.tracking_number || '').toLowerCase().includes(kw));
-  if (dateFrom) data = data.filter(r => r.ship_date && r.ship_date >= dateFrom);
-  if (dateTo) data = data.filter(r => r.ship_date && r.ship_date <= dateTo);
   return data;
 }
 
@@ -1554,42 +1417,23 @@ function renderArrivalGrid() {
   const start = (aPage - 1) * A_PER_PAGE;
   const pageItems = all.slice(start, start + A_PER_PAGE);
 
-  // 計算每筆到貨在同運單號中的序號（跨頁也正確）
-  const arrivalTnCount = {};
-  all.forEach((r, idx) => {
-    if (!r || !r.tracking_number) return;
-    const tn = r.tracking_number.trim().toLowerCase();
-    if (!arrivalTnCount[tn]) arrivalTnCount[tn] = 0;
-    r._tnSeq = arrivalTnCount[tn]++;
-  });
-
   document.getElementById('aBody').innerHTML = pageItems.map((r, pi) => {
     const i = start + pi;
     const isSaved = i < saved.length;
     const idx = isSaved ? `s${r.id}` : `n${i - saved.length}`;
     const arrivedClass = r.arrived ? 'arrived-yes' : '';
-
-    // 即時從所有訂單帶出品名、品編、數量、單個價、商品頁
-    const live = r.tracking_number ? getLiveArrivalData(r.tracking_number, r._tnSeq || 0) : null;
-    const liveProductName = live ? live.product_name : (r.product_name || '');
-    const liveProductId = live ? live.product_id : (r.product_id || '');
-    const liveQty = live ? live.qty : (r.qty || 0);
-    const liveUnitCost = live ? live.unit_cost : (r.unit_cost || 0);
-    const liveOfferId = live ? live.offer_id : (r.offer_id || '');
-    const liveSellingPrice = live ? live.selling_price : (r.selling_price || 0);
-
-    const offerLink = liveOfferId ? `<span class="shared-link" data-url="https://detail.1688.com/offer/${liveOfferId}.html" style="color:var(--accent);font-size:11px;cursor:pointer;text-decoration:underline;">前往</span>` : '';
+    const offerLink = r.offer_id ? `<span class="shared-link" data-url="https://detail.1688.com/offer/${r.offer_id}.html" style="color:var(--accent);font-size:11px;cursor:pointer;text-decoration:underline;">前往</span>` : '';
     return `<tr data-idx="${idx}">
       <td style="text-align:center;"><input type="checkbox" class="a-check" data-idx="${idx}"></td>
       <td class="row-num">${i + 1}</td>
       <td style="text-align:center;">${offerLink}</td>
       <td class="${arrivedClass}" style="text-align:center;"><input type="checkbox" ${r.arrived ? 'checked' : ''} data-field="arrived" data-idx="${idx}" onchange="onACellChange(this)"></td>
       <td><input value="${r.tracking_number || ''}" data-field="tracking_number" data-idx="${idx}" onchange="onACellChange(this);tryAutoMatch(this)"></td>
-      <td>${buildArrivalLinkedSelect(liveProductName, liveProductId, idx, r.tracking_number)}</td>
-      <td style="padding:4px 6px;font-size:12px;">${liveProductId}</td>
-      <td><input type="number" value="${liveSellingPrice || ''}" data-field="selling_price" data-idx="${idx}" onchange="onACellChange(this)"></td>
-      <td><input type="number" value="${liveQty || ''}" data-field="qty" data-idx="${idx}" onchange="onACellChange(this)"></td>
-      <td><input type="number" value="${liveUnitCost || ''}" data-field="unit_cost" data-idx="${idx}" onchange="onACellChange(this)"></td>
+      <td><input value="${r.product_name || ''}" data-field="product_name" data-idx="${idx}" onchange="onACellChange(this)"></td>
+      <td><input value="${r.product_id || ''}" data-field="product_id" data-idx="${idx}" onchange="onACellChange(this)"></td>
+      <td><input type="number" value="${r.selling_price || ''}" data-field="selling_price" data-idx="${idx}" onchange="onACellChange(this)"></td>
+      <td><input type="number" value="${r.qty || ''}" data-field="qty" data-idx="${idx}" onchange="onACellChange(this)"></td>
+      <td><input type="number" value="${r.unit_cost || ''}" data-field="unit_cost" data-idx="${idx}" onchange="onACellChange(this)"></td>
       <td><input value="${r.note || ''}" data-field="note" data-idx="${idx}" onchange="onACellChange(this)"></td>
       <td><input value="${r.ship_date || ''}" data-field="ship_date" data-idx="${idx}" onchange="onACellChange(this)" placeholder="1/14"></td>
       <td><input value="${r.ship_order || ''}" data-field="ship_order" data-idx="${idx}" onchange="onACellChange(this)" placeholder="SFD..."></td>
@@ -1652,48 +1496,6 @@ function getARowByIdx(idx) {
   }
 }
 
-// 到貨清單品名搜尋選單（含 datalist，只顯示品名）
-function buildArrivalLinkedSelect(currentName, currentId, idx, trackingNumber) {
-  const options = getOrderTrackOptions();
-  const listId = `adl_${idx}`;
-  let html = `<input list="${listId}" value="${currentName || ''}" data-idx="${idx}" data-tn="${trackingNumber || ''}"
-    onchange="onArrivalLinkedChange(this)" placeholder="搜尋商品..."
-    style="width:100%;font-size:12px;padding:4px 6px;border:none;background:transparent;outline:none;">`;
-  html += `<datalist id="${listId}">`;
-  options.forEach(o => {
-    const label = (o.productId ? o.productId + ' ' : '') + (o.name || '');
-    html += `<option value="${label}" label="${o.name || ''}"></option>`;
-  });
-  html += `</datalist>`;
-  return html;
-}
-
-// 到貨清單選了商品 → 反向回寫所有訂單的 linked_product
-function onArrivalLinkedChange(input) {
-  const idx = input.dataset.idx;
-  const tn = input.dataset.tn;
-  const typedVal = input.value.trim();
-  const options = getOrderTrackOptions();
-  // 支援用「商編 品名」或「品名」比對
-  const matched = options.find(o => {
-    const label = (o.productId ? o.productId + ' ' : '') + (o.name || '');
-    return label === typedVal || o.name === typedVal;
-  });
-  if (!matched) return;
-  const linkedVal = matched.productId || matched.name || '';
-  // 找到對應的所有訂單，回寫 linked_product
-  if (tn) {
-    const pMatch = findPurchaseByTracking(tn);
-    if (pMatch) {
-      pMatch.linked_product = linkedVal;
-      pMatch._dirty = true;
-      triggerAutoSave();
-    }
-  }
-  // 重新渲染到貨清單（live 會自動帶出新值，品名品編分開顯示）
-  renderArrivalGrid();
-}
-
 function onACellChange(input) {
   const idx = input.dataset.idx;
   const field = input.dataset.field;
@@ -1728,62 +1530,14 @@ function fillArrivalFromPurchase(row, match) {
   if (!row.product_name) row.product_name = match.product_name || '';
 }
 
-// 比對運單：支援所有訂單的逗號分隔多運單（含未儲存的新增列）
+// 比對運單：支援所有訂單的逗號分隔多運單
 function findPurchaseByTracking(tn) {
   if (!tn) return null;
   const needle = tn.trim().toLowerCase();
-  const allP = [...purchaseRows, ...newPurchaseRows];
-  return allP.find(p => {
+  return purchaseRows.find(p => {
     if (!p.tracking_number) return false;
-    return p.tracking_number.split(/[,，、;；\s]+/).some(t => t.trim().toLowerCase() === needle);
+    return p.tracking_number.split(/[,，、\s]+/).some(t => t.trim().toLowerCase() === needle);
   });
-}
-
-// 找出所有匹配同一運單號的訂單（多筆商品同一包裹，含未儲存）
-function findAllPurchasesByTracking(tn) {
-  if (!tn) return [];
-  const needle = tn.trim().toLowerCase();
-  const allP = [...purchaseRows, ...newPurchaseRows];
-  return allP.filter(p => {
-    if (!p.tracking_number) return false;
-    return p.tracking_number.split(/[,，、;；\s]+/).some(t => t.trim().toLowerCase() === needle);
-  });
-}
-
-// 從所有訂單即時取得到貨清單的顯示值
-function getLiveArrivalData(trackingNumber, seqIndex) {
-  const pMatches = findAllPurchasesByTracking(trackingNumber);
-  const pMatch = pMatches[seqIndex] || pMatches[0];
-  const result = { product_name: '', product_id: '', qty: 0, unit_cost: 0, offer_id: '', selling_price: 0 };
-  if (!pMatch) {
-    console.log('[到貨比對] 運單', trackingNumber, '→ 找不到匹配的所有訂單');
-    return result;
-  }
-  console.log('[到貨比對] 運單', trackingNumber, '→ 匹配訂單:', {
-    tracking: pMatch.tracking_number,
-    linked_product: pMatch.linked_product,
-    product_name: pMatch.product_name
-  });
-  result.qty = pMatch.qty || 0;
-  result.unit_cost = pMatch.unit_cost || 0;
-  result.offer_id = pMatch.offer_id || '';
-  if (pMatch.linked_product) {
-    const otItems = getOrderTrackOptions();
-    console.log('[到貨比對] 陸貨訂購資料筆數:', otItems.length, '比對 linked_product:', pMatch.linked_product);
-    const otMatch = otItems.find(o => (o.productId || o.name || '') === pMatch.linked_product);
-    if (otMatch) {
-      result.product_name = otMatch.name || '';
-      result.product_id = otMatch.productId || '';
-      result.selling_price = parseFloat(otMatch.price) || 0;
-      console.log('[到貨比對] ✓ 找到對應商品:', result.product_name, result.product_id);
-    } else {
-      console.log('[到貨比對] ✗ 陸貨訂購找不到 linked_product:', pMatch.linked_product);
-    }
-  } else {
-    console.log('[到貨比對] 該訂單沒有設定對應商品(linked_product)');
-  }
-  if (!result.product_name) result.product_name = pMatch.product_name || '';
-  return result;
 }
 
 function tryAutoMatch(input, ctx) {
@@ -1806,7 +1560,6 @@ function autoMatchArrivals() {
   });
   renderArrivalGrid();
 }
-
 
 function toggleAllArrivalCheck(master) {
   document.querySelectorAll('.a-check').forEach(cb => cb.checked = master.checked);
@@ -1847,11 +1600,9 @@ async function deleteSelectedArrivals() {
 }
 
 function addArrivalRows(n, silent) {
-  const rows = [];
   for (let i = 0; i < n; i++) {
-    rows.push({ offer_id: '', arrived: false, tracking_number: '', product_name: '', product_id: '', selling_price: 0, qty: 0, unit_cost: 0, note: '', ship_date: '', ship_order: '', ship_to: '直寄龍潭' });
+    newArrivalRows.push({ offer_id: '', arrived: false, tracking_number: '', product_name: '', product_id: '', selling_price: 0, qty: 0, unit_cost: 0, note: '', ship_date: '', ship_order: '', ship_to: '直寄龍潭' });
   }
-  newArrivalRows.unshift(...rows);
   if (!silent) renderArrivalGrid();
 }
 
@@ -1863,30 +1614,25 @@ async function saveArrivals(isAuto) {
   let saved = 0, updated = 0;
   try {
     if (allNewRows.length > 0) {
-      const clean = allNewRows.map(r => { const { _dirty, _tnSeq, ...rest } = r; if (rest.ship_date === '') rest.ship_date = null; return rest; });
+      const clean = allNewRows.map(r => { const { _dirty, ...rest } = r; if (rest.ship_date === '') rest.ship_date = null; return rest; });
       const res = await fetch(`${SB_URL}/xiaolan_arrivals`, { method: 'POST', headers: JSON_H, body: JSON.stringify(clean) });
       if (!res.ok) throw new Error(await res.text());
       saved = allNewRows.length;
     }
     for (const r of toUpdate) {
-      const { _dirty, _tnSeq, id, created_at, ...rest } = r;
+      const { _dirty, id, created_at, ...rest } = r;
       if (rest.ship_date === '') rest.ship_date = null;
       await fetch(`${SB_URL}/xiaolan_arrivals?id=eq.${id}`, { method: 'PATCH', headers: JSON_H, body: JSON.stringify(rest) });
       updated++;
     }
+    newArrivalRows = [];
+    await loadArrivals();
+    addArrivalRows(10, true);
+    renderArrivalGrid();
     if (isAuto) {
-      for (const r of toUpdate) r._dirty = false;
-      if (saved > 0) {
-        newArrivalRows = newArrivalRows.filter(r => !allNewRows.includes(r));
-        if (newArrivalRows.length < 3) addArrivalRows(3 - newArrivalRows.length, true);
-      }
       const info = document.getElementById('aInfo');
       if (info) info.textContent = `已自動儲存（新增 ${saved}，更新 ${updated}）`;
     } else {
-      newArrivalRows = [];
-      await loadArrivals();
-      addArrivalRows(10, true);
-      renderArrivalGrid();
       Swal.fire({ icon: 'success', title: `已儲存`, text: `新增 ${saved} 筆，更新 ${updated} 筆`, timer: 1500, showConfirmButton: false });
     }
   } catch (e) {
@@ -1929,55 +1675,49 @@ function importPackageExcel(e) {
         const trackingNum = row[12] ? String(row[12]).trim() : ''; // M: 快递单号
         const weight = parseFloat(row[14]) || 0; // O: 包裹重量
         const packageOrder = row[0] ? String(row[0]).trim() : ''; // A: 订单编号（集運單號）
-        const shipDate = excelDateToStr(row[1]); // B: 创建时间 → 出貨日期
         if (!trackingNum) continue;
 
-        // 1. 比對所有訂單（同一運單可能對應多筆商品）
-        const pMatches = findAllPurchasesByTracking(trackingNum);
-        pMatches.forEach(pm => {
-          if (weight > 0 && !pm.weight_kg) {
-            pm.weight_kg = weight;
-            pm._dirty = true;
-            calcRow(pm);
-            weightFilled++;
-          }
-        });
+        // 1. 比對所有訂單，填入重量
+        const pMatch = purchaseRows.find(p => p.tracking_number && p.tracking_number.trim() === trackingNum);
+        if (pMatch && weight > 0 && !pMatch.weight_kg) {
+          pMatch.weight_kg = weight;
+          pMatch._dirty = true;
+          calcRow(pMatch);
+          weightFilled++;
+        }
 
-        // 2. 建立到貨清單項目（每筆匹配的訂單各建一筆）
-        const targets = pMatches.length > 0 ? pMatches : [null];
-        targets.forEach(pMatch => {
-          const arrRow = {
-            offer_id: pMatch ? (pMatch.offer_id || '') : '',
-            arrived: false,
-            tracking_number: trackingNum,
-            product_name: '',
-            product_id: '',
-            selling_price: 0,
-            qty: pMatch ? (pMatch.qty || 0) : 0,
-            unit_cost: pMatch ? (pMatch.unit_cost || 0) : 0,
-            note: '',
-            ship_date: shipDate,
-            ship_order: packageOrder,
-            ship_to: '直寄龍潭'
-          };
+        // 2. 建立到貨清單項目
+        const arrRow = {
+          offer_id: pMatch ? (pMatch.offer_id || '') : '',
+          arrived: false,
+          tracking_number: trackingNum,
+          product_name: '',
+          product_id: '',
+          selling_price: 0,
+          qty: pMatch ? (pMatch.qty || 0) : 0,
+          unit_cost: pMatch ? (pMatch.unit_cost || 0) : 0,
+          note: '',
+          ship_date: '',
+          ship_order: packageOrder,
+          ship_to: '直寄龍潭'
+        };
 
-          // 從陸貨訂購帶入商品名稱、商品編號、售價
-          if (pMatch && pMatch.linked_product) {
-            const otItems = getOrderTrackOptions();
-            const otMatch = otItems.find(o => (o.productId || o.name || '') === pMatch.linked_product);
-            if (otMatch) {
-              arrRow.product_name = otMatch.name || '';
-              arrRow.product_id = otMatch.productId || '';
-              arrRow.selling_price = parseFloat(otMatch.price) || 0;
-            }
+        // 從陸貨訂購帶入商品名稱、商品編號、售價
+        if (pMatch && pMatch.linked_product) {
+          const otItems = getOrderTrackOptions();
+          const otMatch = otItems.find(o => (o.productId || o.name || '') === pMatch.linked_product);
+          if (otMatch) {
+            arrRow.product_name = otMatch.name || '';
+            arrRow.product_id = otMatch.productId || '';
+            arrRow.selling_price = parseFloat(otMatch.price) || 0;
           }
-          if (!arrRow.product_name && pMatch) {
-            arrRow.product_name = pMatch.product_name || '';
-          }
+        }
+        if (!arrRow.product_name && pMatch) {
+          arrRow.product_name = pMatch.product_name || '';
+        }
 
-          newArrivalRows.push(arrRow);
-          arrivalCreated++;
-        });
+        newArrivalRows.push(arrRow);
+        arrivalCreated++;
       }
 
       // 儲存所有訂單的重量更新
@@ -2004,7 +1744,7 @@ function importPackageExcel(e) {
 let returnRows = [];
 let newReturnRows = [];
 let rtPage = 1;
-const RT_PER_PAGE = 100;
+const RT_PER_PAGE = 50;
 
 // 從所有訂單找商品頁連結（offer_id）
 function findOfferByProductCode(code) {
@@ -2161,11 +1901,9 @@ async function deleteSelectedReturns() {
 }
 
 function addReturnRows(n) {
-  const rows = [];
   for (let i = 0; i < n; i++) {
-    rows.push({ return_date: new Date().toISOString().slice(0,10), product_code: '', product_name: '', content: '', progress: '待處理', process_date: '', order_number: '', tracking_number: '', note: '' });
+    newReturnRows.push({ return_date: new Date().toISOString().slice(0,10), product_code: '', product_name: '', content: '', progress: '待處理', process_date: '', order_number: '', tracking_number: '', note: '' });
   }
-  newReturnRows.unshift(...rows);
   renderReturnGrid();
 }
 
@@ -2193,18 +1931,13 @@ async function saveReturns(isAuto) {
       await fetch(`${SB_URL}/xiaolan_returns?id=eq.${id}`, { method: 'PATCH', headers: JSON_H, body: JSON.stringify(rest) });
       updated++;
     }
+    newReturnRows = [];
+    await loadReturns();
+    renderReturnGrid();
     if (isAuto) {
-      for (const r of toUpdate) r._dirty = false;
-      if (saved > 0) {
-        newReturnRows = newReturnRows.filter(r => !toInsert.includes(r));
-        if (newReturnRows.length < 3) addReturnRows(3 - newReturnRows.length);
-      }
       const info = document.getElementById('rtInfo');
       if (info) info.textContent = `已自動儲存（新增 ${saved}，更新 ${updated}）`;
     } else {
-      newReturnRows = [];
-      await loadReturns();
-      renderReturnGrid();
       Swal.fire({ icon: 'success', title: '已儲存', text: `新增 ${saved} 筆，更新 ${updated} 筆`, timer: 1500, showConfirmButton: false });
     }
   } catch (e) {
@@ -2214,7 +1947,7 @@ async function saveReturns(isAuto) {
 
 // ===== 團購購買 =====
 let gPage = 1;
-const G_PER_PAGE = 100;
+const G_PER_PAGE = 50;
 
 const GROUP_BUY_CATS = ['團購', '漂漂館', '補寄'];
 function isGroupBuyCat(r) {
@@ -2394,7 +2127,7 @@ function gGoPage(p) {
 
 // ===== 姐姐對帳單 =====
 let sbPage = 1;
-const SB_PER_PAGE = 100;
+const SB_PER_PAGE = 50;
 let currentSister = '大姐';
 
 // 金流紀錄存 localStorage
@@ -2691,7 +2424,7 @@ function printSisterBill() {
 let ppRows = [];      // Supabase: xiaolan_piaopiao
 let newPPRows = [];
 let ppPage = 1;
-const PP_PER_PAGE = 100;
+const PP_PER_PAGE = 50;
 
 async function loadPiaopiao() {
   try { ppRows = await sbFetchAll('xiaolan_piaopiao', 'id.desc'); } catch { ppRows = []; }
@@ -3012,12 +2745,10 @@ document.addEventListener('click', function(e) {
 });
 
 function addPPRows(n) {
-  const rows = [];
-  const pps = getPPSettings();
   for (let i = 0; i < n; i++) {
-    rows.push({ close_date:'', product_id:'', price:0, specs:'', order_status:'已訂', supplier_name:'', supplier_url:'', done:false, shortage:'', cn_price:0, weight:0, unit_cost:0, order_1688:'', tracking:'', eta:'', pp_ship_rate: pps.shipRate || 0, pp_ex_rate: pps.exRate || 0 });
+    const pps = getPPSettings();
+    newPPRows.push({ close_date:'', product_id:'', price:0, specs:'', order_status:'已訂', supplier_name:'', supplier_url:'', done:false, shortage:'', cn_price:0, weight:0, unit_cost:0, order_1688:'', tracking:'', eta:'', pp_ship_rate: pps.shipRate || 0, pp_ex_rate: pps.exRate || 0 });
   }
-  newPPRows.unshift(...rows);
   renderPiaopiao();
 }
 
@@ -3038,18 +2769,13 @@ async function savePiaopiao(isAuto) {
       await fetch(`${SB_URL}/xiaolan_piaopiao?id=eq.${id}`, { method: 'PATCH', headers: JSON_H, body: JSON.stringify(rest) });
       updated++;
     }
+    newPPRows = [];
+    await loadPiaopiao();
+    renderPiaopiao();
     if (isAuto) {
-      for (const r of toUpdate) r._dirty = false;
-      if (saved > 0) {
-        newPPRows = newPPRows.filter(r => !toInsert.includes(r));
-        if (newPPRows.length < 3) addPPRows(3 - newPPRows.length);
-      }
       const info = document.getElementById('ppInfo');
       if (info) info.textContent = `已自動儲存（新增 ${saved}，更新 ${updated}）`;
     } else {
-      newPPRows = [];
-      await loadPiaopiao();
-      renderPiaopiao();
       Swal.fire({ icon: 'success', title: `已儲存`, text: `新增 ${saved} 筆，更新 ${updated} 筆`, timer: 1500, showConfirmButton: false });
     }
   } catch (e) {
@@ -3436,7 +3162,7 @@ async function deleteSelectedPurchases() {
 let orderTrackData = [];
 let otPage = 1;
 const OT_ORDER_URLS = {"160302024":"https://detail.1688.com/offer/936886143725.html","360105025":"https://detail.1688.com/offer/638546677769.html","360105084":"https://detail.1688.com/offer/234892300.html","360105132":"https://detail.1688.com/offer/968598809372.html","360106022":"https://detail.1688.com/offer/554123337709.html","360106081":"https://detail.1688.com/offer/746527736360.html","360106131":"https://detail.1688.com/offer/749375968494.html","360107022":"https://detail.1688.com/offer/1006419389132.html","360107082":"https://detail.1688.com/offer/1009139617775.html","360107132":"https://detail.1688.com/offer/963081011642.html","360108020":"https://detail.1688.com/offer/848190648415.html","360108080":"https://detail.1688.com/offer/805808662201.html","360108130":"https://detail.1688.com/offer/966483639659.html","360109026":"https://detail.1688.com/offer/709977712065.html","360109070":"https://detail.1688.com/offer/834289202228.html","360109133":"https://detail.1688.com/offer/654813206141.html","360112020":"https://detail.1688.com/offer/852096668158.html","360112081":"https://detail.1688.com/offer/997732934564.html","360112120":"https://detail.1688.com/offer/980534956445.html","360113020":"https://detail.1688.com/offer/1008821063454.html","360113080":"https://detail.1688.com/offer/912240267302.html","360113132":"https://detail.1688.com/offer/867062913008.html","360114030":"https://detail.1688.com/offer/1007242267373.html","360114091":"https://detail.1688.com/offer/1008829983422.html","360114130":"https://detail.1688.com/offer/1007698832432.html","360115032":"https://detail.1688.com/offer/967532439032.html","360115090":"https://detail.1688.com/offer/785452835275.html","360115141":"https://detail.1688.com/offer/717344002686.html","360116020":"https://detail.1688.com/offer/934040500645.html","360116080":"https://detail.1688.com/offer/971631595663.html","360116130":"https://detail.1688.com/offer/973010366394.html","360119020":"https://detail.1688.com/offer/875365409511.html","360119240":"https://detail.1688.com/offer/987640504424.html","360120030":"https://detail.1688.com/offer/866791766607.html","360120080":"https://detail.1688.com/offer/889241802857.html","360120130":"https://detail.1688.com/offer/630459660156.html","360121022":"https://detail.1688.com/offer/991603924094.html","360121081":"https://detail.1688.com/offer/973767689417.html","360121180":"https://detail.1688.com/offer/732874867138.html","360122032":"https://detail.1688.com/offer/934816899910.html","360122081":"https://detail.1688.com/offer/738770280735.html","360122133":"https://detail.1688.com/offer/821219919549.html","360123020":"https://detail.1688.com/offer/978942444450.html","360123080":"https://detail.1688.com/offer/926783684174.html","360123130":"https://detail.1688.com/offer/977460636044.html","360126040":"https://detail.1688.com/offer/742257696730.html","360126100":"https://detail.1688.com/offer/847434904148.html","360126140":"https://detail.1688.com/offer/694328780487.html","360127020":"https://detail.1688.com/offer/884715004482.html","360127091":"https://detail.1688.com/offer/686004086170.html","360127141":"https://detail.1688.com/offer/829897554915.html","360128030":"https://detail.1688.com/offer/896463027829.html","360128031":"https://detail.1688.com/offer/896463027829.html","360128080":"https://detail.1688.com/offer/1015852834064.html","360128130":"https://detail.1688.com/offer/1001662690194.html","360129021":"https://detail.1688.com/offer/989983104835.html","360129080":"https://detail.1688.com/offer/614384022200.html","360129131":"https://detail.1688.com/offer/862497747709.html","360130020":"https://detail.1688.com/offer/912274264856.html","360130082":"https://detail.1688.com/offer/962691010902.html","360130130":"https://detail.1688.com/offer/595505249917.html","360202021":"https://detail.1688.com/offer/1009258195984.html","360202090":"https://detail.1688.com/offer/990809409358.html","360202131":"https://detail.1688.com/offer/1014048901764.html","360203020":"https://detail.1688.com/offer/1016520152052.html","360203070":"https://detail.1688.com/offer/1019941676229.html","360203110":"https://detail.1688.com/offer/632081966819.html","360204020":"https://detail.1688.com/offer/951780915676.html","360204080":"https://detail.1688.com/offer/693414460871.html","360204120":"https://detail.1688.com/offer/947027254235.html","360205030":"https://detail.1688.com/offer/931697342814.html","360205090":"https://detail.1688.com/offer/949127165773.html","360205143":"https://detail.1688.com/offer/610355396479.html","360206032":"https://detail.1688.com/offer/774206425753.html","360206091":"https://detail.1688.com/offer/994570181064.html","360206133":"https://detail.1688.com/offer/975693178980.html","360209092":"https://detail.1688.com/offer/930604683270.html","360209130":"https://detail.1688.com/offer/934651313325.html","360210010":"https://detail.1688.com/offer/761747468043.html","360210011":"https://detail.1688.com/offer/761747468043.html","360210083":"https://detail.1688.com/offer/957408132762.html","360210120":"https://detail.1688.com/offer/708382248697.html","360211022":"https://detail.1688.com/offer/975080947534.html","360211080":"https://detail.1688.com/offer/855905869466.html","360211120":"https://detail.1688.com/offer/883917770759.html","360212020":"https://detail.1688.com/offer/1008175651077.html","360212071":"https://detail.1688.com/offer/956672457598.html","360212110":"https://detail.1688.com/offer/894656314511.html","360213020":"https://detail.1688.com/offer/991025445846.html","360213080":"https://detail.1688.com/offer/960966862777.html","360213130":"https://detail.1688.com/offer/782347032565.html","360223022":"https://detail.1688.com/offer/984718625824.html","360224112":"https://detail.1688.com/offer/908162495115.html","360224170":"https://detail.1688.com/offer/991247444611.html","360224222":"https://detail.1688.com/offer/921541009808.html","360225040":"https://detail.1688.com/offer/918218895399.html","360225092":"https://detail.1688.com/offer/864605439555.html","360225134":"https://detail.1688.com/offer/689585308400.html","360225191":"https://detail.1688.com/offer/928493094449.html","360226033":"https://detail.1688.com/offer/990299891816.html","360226120":"https://detail.1688.com/offer/611243397488.html","360226130":"https://detail.1688.com/offer/864793300486.html","360227020":"https://detail.1688.com/offer/923805295466.html","360227071":"https://detail.1688.com/offer/736326316108.html","360227150":"https://detail.1688.com/offer/844584540350.html","360227151":"https://detail.1688.com/offer/844584540350.html","360302083":"https://detail.1688.com/offer/807726988622.html","360302120":"https://detail.1688.com/offer/829001986058.html","360303020":"https://detail.1688.com/offer/956763381156.html","360303090":"https://detail.1688.com/offer/964249880835.html","360303131":"https://detail.1688.com/offer/1020160632393.html","360304021":"https://detail.1688.com/offer/991659711420.html","360304080":"https://detail.1688.com/offer/999404584615.html","360304081":"https://detail.1688.com/offer/999404584615.html","360304130":"https://detail.1688.com/offer/953817358835.html","360305020":"https://detail.1688.com/offer/887498909764.html","360305090":"https://detail.1688.com/offer/739497974506.html","360305142":"https://detail.1688.com/offer/869876329358.html","360306011":"https://detail.1688.com/offer/740371576893.html","360306013":"https://detail.1688.com/offer/1026369979900.html","360306018":"https://detail.1688.com/offer/1005999584549.html"};
-const OT_PER_PAGE = 100;
+const OT_PER_PAGE = 50;
 
 let gbUrlMap = {};
 let otOrderedSet = new Set(JSON.parse(localStorage.getItem('xiaolan_ot_ordered') || '[]'));

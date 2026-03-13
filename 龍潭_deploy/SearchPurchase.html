@@ -663,17 +663,17 @@
 
     // ========== 編輯功能 ==========
     function editOrder(orderId) {
-      if (!currentDetail || currentDetail.orderId !== orderId) {
-        Swal.fire('提示', '請先點選要編輯的單據', 'warning');
-        return;
-      }
-      sessionStorage.setItem('purchaseEditData', JSON.stringify(currentDetail));
-      // 在 iframe 內需透過 parent 載入，或直接用 top 跳轉
-      if (window.parent && window.parent.loadPage) {
-        window.parent.loadPage('PurchaseOrder.html?edit=' + orderId, '編輯進貨單');
-      } else {
-        window.location.href = 'PurchaseOrder.html?edit=' + orderId;
-      }
+      // 跳轉至編輯頁面 (帶參數)
+      Swal.fire({
+        title: '即將跳轉...',
+        text: '正在載入編輯頁面',
+        didOpen: () => Swal.showLoading()
+      });
+      
+      // 假設編輯頁面為 purchase_form.html
+      setTimeout(() => {
+        window.location.href = `purchase_form.html?edit=${orderId}`;
+      }, 500);
     }
 
     // ========== 複製功能 ==========
@@ -699,11 +699,7 @@
           sessionStorage.setItem('purchaseCopyData', JSON.stringify(copyData));
           
           Swal.close();
-          if (window.parent && window.parent.loadPage) {
-            window.parent.loadPage('PurchaseOrder.html?copy=true', '複製進貨單');
-          } else {
-            window.location.href = 'PurchaseOrder.html?copy=true';
-          }
+          window.location.href = 'purchase_form.html?copy=true';
         }
       } catch (err) {
         Swal.fire('錯誤', '複製失敗: ' + err.message, 'error');

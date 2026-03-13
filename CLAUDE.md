@@ -41,8 +41,8 @@
 - **branch_portal.html**：玫瑰粉護眼主題
 
 ## Supabase
-- URL: `https://gkuwoandmsgvlsxzmrjj.supabase.co/rest/v1`
-- KEY: `sb_publishable_7K0w9Z8-Wv1dOgLsZkI0rA_WfNei_AS`
+- URL: `https://asugjynpocwygggttxyo.supabase.co/rest/v1`
+- KEY: `sb_publishable_cG0dslg6JnSwOtPSBko2Eg_VB0NtbTW`
 - 變數名稱：`SB_URL`, `SB_KEY`, `HEADERS`
 - 預設只回傳 1000 筆，大量資料需分頁 while loop
 
