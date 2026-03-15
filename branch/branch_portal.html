@@ -295,9 +295,9 @@
       <div class="menu-item" id="menuRequest" onclick="switchPage('pageRequest', this)">📋 需求表<span id="notifyRequest" style="display:none; margin-left:6px; background:#dc2626; color:white; font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px; min-width:16px; text-align:center;">0</span></div>
       <div class="menu-item" id="menuTransfer" onclick="switchPage('pageTransfer', this)">🔄 店轉店登記<span id="notifyTransfer" style="display:none; margin-left:6px; background:#dc2626; color:white; font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px; min-width:16px; text-align:center;">0</span></div>
       <div class="menu-item" id="menuAid" onclick="switchPage('pageAid', this)">🤝 互助交流<span id="notifyAid" style="display:none; margin-left:6px; background:#dc2626; color:white; font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px; min-width:16px; text-align:center;">0</span></div>
-      <div class="menu-item" onclick="switchPage('pageBilling', this)">💳 待結貨款</div>
+      <div class="menu-item" onclick="switchPage('pageBilling', this)">📦 今日進貨單</div>
       <div class="menu-item" onclick="switchPage('pageHistory', this)">📜 所有進貨單</div>
-      <div class="menu-item" id="menuLedger" onclick="switchPage('pageLedger', this)">💰 簡易流水帳</div>
+      <div class="menu-item" id="menuLedger" onclick="switchPage('pageLedger', this)">💰 流水帳/訂包管理</div>
       <div class="menu-item" id="menuCommon" onclick="switchPage('pageCommon', this)">⭐ 常用功能</div>
 
       <div class="sidebar-footer">
@@ -338,6 +338,10 @@
                 style="background:#6b7280; color:white; border:none; padding:10px 16px; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit;">
                 🗑️ 清除數量
               </button>
+              <button onclick="submitOrder()"
+                style="background:#059669; color:white; border:none; padding:10px 20px; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit;">
+                🚀 送出資料
+              </button>
             </div>
           </div>
           <div id="importReport" style="display:none; margin-top:8px; border-radius:8px; font-size:13px; line-height:1.7; border:1px solid #fecaca; overflow:hidden;">
@@ -376,16 +380,16 @@
             <span id="orderPaginationTop" style="margin-left:auto; display:flex; align-items:center; gap:6px; flex-wrap:wrap;"></span>
           </div>
 
-          <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow-x:auto; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
+          <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:auto; max-height:65vh; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
             <table style="width:100%; border-collapse:collapse; min-width:650px;">
-              <thead>
+              <thead style="position:sticky; top:0; z-index:1;">
                 <tr style="background:#fff0f6;">
-                  <th style="padding:6px 10px; text-align:left; font-size:13px; color:#6b7280; font-weight:600; border-bottom:1px solid var(--border); white-space:nowrap;">開團日期</th>
-                  <th style="padding:6px 10px; text-align:left; font-size:13px; color:#6b7280; font-weight:600; border-bottom:1px solid var(--border); white-space:nowrap;">結單日期</th>
-                  <th style="padding:6px 10px; text-align:left; font-size:13px; color:#6b7280; font-weight:600; border-bottom:1px solid var(--border); white-space:nowrap;">商品編號</th>
-                  <th style="padding:6px 10px; text-align:left; font-size:13px; color:#6b7280; font-weight:600; border-bottom:1px solid var(--border); white-space:nowrap;">商品名稱</th>
-                  <th style="padding:6px 10px; text-align:right; font-size:13px; color:#6b7280; font-weight:600; border-bottom:1px solid var(--border); white-space:nowrap;">售價</th>
-                  <th style="padding:6px 10px; text-align:center; font-size:13px; color:#6b7280; font-weight:600; border-bottom:1px solid var(--border); white-space:nowrap; width:100px;">訂購數量</th>
+                  <th style="padding:6px 10px; text-align:left; font-size:13px; color:#6b7280; font-weight:600; border-bottom:1px solid var(--border); white-space:nowrap; background:#fff0f6;">開團日期</th>
+                  <th style="padding:6px 10px; text-align:left; font-size:13px; color:#6b7280; font-weight:600; border-bottom:1px solid var(--border); white-space:nowrap; background:#fff0f6;">結單日期</th>
+                  <th style="padding:6px 10px; text-align:left; font-size:13px; color:#6b7280; font-weight:600; border-bottom:1px solid var(--border); white-space:nowrap; background:#fff0f6;">商品編號</th>
+                  <th style="padding:6px 10px; text-align:left; font-size:13px; color:#6b7280; font-weight:600; border-bottom:1px solid var(--border); white-space:nowrap; background:#fff0f6;">商品名稱</th>
+                  <th style="padding:6px 10px; text-align:right; font-size:13px; color:#6b7280; font-weight:600; border-bottom:1px solid var(--border); white-space:nowrap; background:#fff0f6;">售價</th>
+                  <th style="padding:6px 10px; text-align:center; font-size:13px; color:#6b7280; font-weight:600; border-bottom:1px solid var(--border); white-space:nowrap; width:100px; background:#fff0f6;">訂購數量</th>
                 </tr>
               </thead>
               <tbody id="orderTableBody"></tbody>
@@ -488,19 +492,19 @@
 
   <!-- 待處理 -->
   <div id="reqPanel-pending">
-    <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:hidden; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
+    <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:auto; max-height:60vh; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
       <table style="width:100%; border-collapse:collapse; font-size:13px;">
-        <thead>
+        <thead style="position:sticky; top:0; z-index:1;">
           <tr style="background:#fce7f3;">
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">單號</th>
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">分店</th>
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">商品編號</th>
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">商品名稱</th>
-            <th style="padding:10px 16px; text-align:right; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">分店價</th>
-            <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">數量</th>
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">備註</th>
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">建立時間</th>
-            <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">操作</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fce7f3;">單號</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fce7f3;">分店</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fce7f3;">商品編號</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fce7f3;">商品名稱</th>
+            <th style="padding:10px 16px; text-align:right; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fce7f3;">分店價</th>
+            <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fce7f3;">數量</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fce7f3;">備註</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fce7f3;">建立時間</th>
+            <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fce7f3;">操作</th>
           </tr>
         </thead>
         <tbody id="reqPendingBody"></tbody>
@@ -515,19 +519,19 @@
       <select id="doneMonthFilter" onchange="renderRequestPage()" style="padding:6px 10px; border:1.5px solid var(--border); border-radius:6px; font-size:13px; font-family:inherit;">
       </select>
     </div>
-    <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:hidden; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
+    <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:auto; max-height:60vh; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
       <table style="width:100%; border-collapse:collapse; font-size:13px;">
-        <thead>
+        <thead style="position:sticky; top:0; z-index:1;">
           <tr style="background:#fff0f6;">
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">單號</th>
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">分店</th>
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">商品編號</th>
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">商品名稱</th>
-            <th style="padding:10px 16px; text-align:right; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">分店價</th>
-            <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">數量</th>
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">備註</th>
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">建立時間</th>
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">總倉回覆</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fff0f6;">單號</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fff0f6;">分店</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fff0f6;">商品編號</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fff0f6;">商品名稱</th>
+            <th style="padding:10px 16px; text-align:right; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fff0f6;">分店價</th>
+            <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fff0f6;">數量</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fff0f6;">備註</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fff0f6;">建立時間</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fff0f6;">總倉回覆</th>
           </tr>
         </thead>
         <tbody id="reqDoneBody"></tbody>
@@ -547,20 +551,20 @@
         <option value="done">已處理</option>
       </select>
     </div>
-    <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:hidden; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
+    <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:auto; max-height:60vh; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
       <table style="width:100%; border-collapse:collapse; font-size:13px;">
-        <thead>
+        <thead style="position:sticky; top:0; z-index:1;">
           <tr style="background:#f8f9fa;">
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">單號</th>
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">分店</th>
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">商品編號</th>
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">商品名稱</th>
-            <th style="padding:10px 16px; text-align:right; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">分店價</th>
-            <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">數量</th>
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">備註</th>
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">建立時間</th>
-            <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">狀態</th>
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">總倉回覆</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#f8f9fa;">單號</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#f8f9fa;">分店</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#f8f9fa;">商品編號</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#f8f9fa;">商品名稱</th>
+            <th style="padding:10px 16px; text-align:right; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#f8f9fa;">分店價</th>
+            <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#f8f9fa;">數量</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#f8f9fa;">備註</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#f8f9fa;">建立時間</th>
+            <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#f8f9fa;">狀態</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#f8f9fa;">總倉回覆</th>
           </tr>
         </thead>
         <tbody id="reqHistoryBody"></tbody>
@@ -675,7 +679,15 @@
 </div>
 
         <div id="pageLedger" class="page">
-          
+
+          <!-- 流水帳 / 包子饅頭 Tab 切換 -->
+          <div style="display:flex; gap:0; margin-bottom:20px;">
+            <button id="ledgerTabBtnLedger" onclick="switchLedgerTab('ledger')" style="flex:1; padding:12px 0; font-size:15px; font-weight:700; font-family:inherit; border:1px solid var(--border); border-radius:8px 0 0 8px; cursor:pointer; background:var(--accent); color:white; transition:0.2s;">💰 流水帳</button>
+            <button id="ledgerTabBtnBun" onclick="switchLedgerTab('bun')" style="flex:1; padding:12px 0; font-size:15px; font-weight:700; font-family:inherit; border:1px solid var(--border); border-left:none; border-radius:0 8px 8px 0; cursor:pointer; background:white; color:var(--text2); transition:0.2s;">🥟 包子饅頭叫貨</button>
+          </div>
+
+          <!-- ===== 流水帳 Tab ===== -->
+          <div id="ledgerTabLedger">
           <div style="background:white; border-radius:8px; border:1px solid var(--border); padding:20px 24px; margin-bottom:20px; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
             <div style="font-size:15px; font-weight:700; color:var(--primary); margin-bottom:16px;">➕ 記一筆 (本店獨立記帳本)</div>
             <div style="display:grid; grid-template-columns:1.5fr 1fr 1.5fr 1.5fr 2fr auto; gap:10px; align-items:end;">
@@ -735,9 +747,64 @@
             </table>
           </div>
 
+          </div><!-- /ledgerTabLedger -->
+
+          <!-- ===== 包子饅頭叫貨 Tab ===== -->
+          <div id="ledgerTabBun" style="display:none;">
+
+            <!-- 新增叫貨單 -->
+            <div style="background:white; border-radius:8px; border:1px solid var(--border); padding:20px 24px; margin-bottom:20px; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                <div style="font-size:15px; font-weight:700; color:var(--primary);">🥟 包子饅頭叫貨（供應商：包子爸）</div>
+                <div style="display:flex; gap:8px; align-items:center;">
+                  <span style="font-size:12px; color:#6b7280;">叫貨日期</span>
+                  <input type="date" id="bunOrderDate" style="padding:7px 12px; border:1.5px solid var(--border); border-radius:6px; font-size:14px; font-family:inherit;">
+                </div>
+              </div>
+
+              <div id="bunMenuGrid"></div>
+
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-top:16px; padding-top:14px; border-top:1px solid var(--border);">
+                <div style="font-size:16px; font-weight:700; color:var(--primary);">本單金額：<span id="bunOrderTotal" style="font-size:20px;">$0</span></div>
+                <div style="display:flex; gap:10px;">
+                  <button onclick="clearBunQty()" style="padding:9px 18px; background:white; color:#ef4444; border:1px solid #ef4444; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;">🗑️ 清除數量</button>
+                  <button onclick="copyBunToLine()" style="padding:9px 18px; background:#25D366; color:white; border:none; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;">📋 複製到 LINE</button>
+                  <button onclick="saveBunOrder()" style="padding:9px 18px; background:var(--primary); color:white; border:none; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;">💾 儲存叫貨單</button>
+                </div>
+              </div>
+            </div>
+
+            <!-- 月結統計 -->
+            <div style="background:white; border-radius:8px; border:1px solid var(--border); padding:16px 24px; margin-bottom:20px; display:flex; align-items:center; gap:16px; box-shadow:0 2px 4px rgba(0,0,0,0.04); flex-wrap:wrap;">
+              <span style="font-size:14px; font-weight:700; color:#6b7280;">查詢月份：</span>
+              <select id="bunMonthSelect" onchange="renderBunRecords()" style="padding:8px 14px; border:1.5px solid var(--border); border-radius:6px; font-size:14px; font-family:inherit; min-width:150px;"></select>
+              <div style="font-size:16px; font-weight:700; color:var(--primary); margin-left:12px;">月結總金額：<span id="bunMonthTotal" style="font-size:20px;">$0</span></div>
+              <div style="margin-left:auto; display:flex; gap:10px;">
+                <button onclick="exportBunExcel()" style="padding:8px 16px; background:#fff0f6; color:#be185d; border:1px solid #be185d; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;">📊 匯出 Excel</button>
+                <button onclick="printBunReport()" style="padding:8px 16px; background:white; color:#1f2937; border:1px solid var(--border); border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;">🖨️ 列印報表</button>
+              </div>
+            </div>
+
+            <!-- 歷史叫貨紀錄表格 -->
+            <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow-x:auto; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
+              <table style="width:100%; border-collapse:collapse; font-size:13px; min-width:600px;">
+                <thead>
+                  <tr style="background:#f8f9fa;">
+                    <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">叫貨日期</th>
+                    <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">品項摘要</th>
+                    <th style="padding:10px 16px; text-align:right; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">金額</th>
+                    <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">操作</th>
+                  </tr>
+                </thead>
+                <tbody id="bunTableBody"></tbody>
+              </table>
+            </div>
+
+          </div><!-- /ledgerTabBun -->
+
         </div>
 
-        
+
         <div id="pageBulletin" class="page">
           <div id="bulletinBoardArea"></div>
         </div>
@@ -798,7 +865,7 @@
     <select id="billingMonthSelect" onchange="renderBillingPage()"
       style="padding:8px 14px; border:1.5px solid var(--border); border-radius:6px; font-size:14px; font-family:inherit; min-width:150px;">
     </select>
-    <div style="margin-left:auto; font-size:13px; color:#9ca3af;">總倉出貨帳款查詢</div>
+    <div style="margin-left:auto; font-size:13px; color:#9ca3af;">總倉出貨查詢</div>
   </div>
 
   <!-- 帳款總覽卡片 -->
@@ -854,30 +921,23 @@
             </div>
           </div>
 
-          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px,1fr)); gap:16px; align-items:start;">
+          <!-- 月費橫條（非批發店才顯示）-->
+          <div id="historyFeeBar" style="background:white; border-radius:8px; border:1px solid var(--border); padding:12px 24px; margin-bottom:16px; display:flex; align-items:center; gap:24px; box-shadow:0 2px 4px rgba(0,0,0,0.04);"></div>
 
-            <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:hidden; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
-              <div style="padding:14px 20px; border-bottom:1px solid var(--border); font-size:15px; font-weight:700; color:var(--primary);">🚚 進貨單據</div>
-              <table style="width:100%; border-collapse:collapse; font-size:13px;">
-                <thead>
-                  <tr style="background:#fff0f6;">
-                    <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">單號</th>
-                    <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">日期</th>
-                    <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">商品摘要</th>
-                    <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">操作</th>
-                  </tr>
-                </thead>
-                <tbody id="historyTableBody"></tbody>
-              </table>
-            </div>
-
-            <div id="historyDetailArea" style="background:white; border-radius:8px; border:1px solid var(--border); overflow:hidden; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
-              <div style="padding:14px 20px; border-bottom:1px solid var(--border);">
-                <div style="font-size:14px; font-weight:700; color:var(--primary);" id="historyDetailTitle">點單號查看進貨明細</div>
-              </div>
-              <div id="historyDetailInner" style="padding:24px; text-align:center; color:#9ca3af; font-size:14px;">請點選單據以檢視到貨商品清單</div>
-            </div>
-
+          <!-- 全寬單據表格 -->
+          <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:hidden; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
+            <table style="width:100%; border-collapse:collapse; font-size:13px;">
+              <thead>
+                <tr style="background:#fff0f6;">
+                  <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">單號</th>
+                  <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">日期</th>
+                  <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">商品摘要</th>
+                  <th style="padding:10px 16px; text-align:right; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">金額</th>
+                  <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">操作</th>
+                </tr>
+              </thead>
+              <tbody id="historyTableBody"></tbody>
+            </table>
           </div>
         </div>
 
@@ -980,6 +1040,9 @@
 
       // 進貨紀錄（各店自己的）
       portalHistory = loadStoreData('history', []);
+
+      // 包子饅頭叫貨（各店自己的）
+      bunRecords = loadStoreData('bunRecords', []);
     }
 
     // ============================
@@ -1658,13 +1721,13 @@
     function updateSubmitBar() {
       const bar = document.getElementById('submitBar');
       if (!bar) return;
-      let html = '';
       if (isQtyLocked) {
-        html += '<div style="display:flex; align-items:center; gap:10px; padding:8px 14px; background:#fef3c7; border:1px solid #fcd34d; border-radius:8px; font-size:13px; color:#92400e;">🔒 數量已鎖定，避免誤按　<button onclick="unlockQtyInputs()" style="background:#b45309; color:white; border:none; padding:5px 14px; border-radius:5px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;">🔓 解鎖修改</button></div>';
+        bar.style.display = '';
+        bar.innerHTML = '<div style="display:flex; align-items:center; gap:10px; padding:8px 14px; background:#fef3c7; border:1px solid #fcd34d; border-radius:8px; font-size:13px; color:#92400e;">🔒 數量已鎖定，避免誤按　<button onclick="unlockQtyInputs()" style="background:#b45309; color:white; border:none; padding:5px 14px; border-radius:5px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;">🔓 解鎖修改</button></div>';
+      } else {
+        bar.style.display = 'none';
+        bar.innerHTML = '';
       }
-      html += '<button onclick="submitOrder()" style="background:#be185d; color:white; border:none; padding:10px 20px; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit;">🚀 送出資料</button>';
-      bar.innerHTML = html;
-
     }
 
     // ============================
@@ -1762,9 +1825,9 @@
       pageSummary: '📊 開團總表',
       pageRequest:  '📋 需求表',
       pageTransfer: '🔄 店轉店登記',
-      pageLedger:   '💰 分店小流水帳',
+      pageLedger:   '💰 流水帳/訂包管理',
       pageHistory:  '📜 所有進貨單',
-      pageBilling:  '💳 待結貨款',
+      pageBilling:  '📦 今日進貨單',
       pageCommon:   '⭐ 常用功能',
       pageAid:      '🤝 互助交流板',
       pageBulletin: '📢 公告欄',
@@ -1916,23 +1979,23 @@ function renderSummaryPage() {
 
   // 表格標頭
   let html = `
-    <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow-x:auto; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
-      <table style="border-collapse:collapse; font-size:13px; table-layout:auto;">
-        <thead>
+    <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:auto; max-height:65vh; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
+      <table style="border-collapse:collapse; font-size:13px; table-layout:auto; width:100%;">
+        <thead style="position:sticky; top:0; z-index:1;">
           <tr style="background:#fff0f6; vertical-align:bottom;">
-            <th style="padding:8px 10px; text-align:left; border-bottom:2px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap; min-width:52px;">開團</th>
-            <th style="padding:8px 10px; text-align:left; border-bottom:2px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap; min-width:52px;">結單</th>
-            <th style="padding:8px 10px; text-align:left; border-bottom:2px solid var(--border); color:#6b7280; font-weight:600; min-width:200px; max-width:300px;">商品名稱</th>
-            <th style="padding:8px 10px; text-align:right; border-bottom:2px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap;">售價</th>
+            <th style="padding:8px 10px; text-align:left; border-bottom:2px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap; min-width:52px; background:#fff0f6;">開團</th>
+            <th style="padding:8px 10px; text-align:left; border-bottom:2px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap; min-width:52px; background:#fff0f6;">結單</th>
+            <th style="padding:8px 10px; text-align:left; border-bottom:2px solid var(--border); color:#6b7280; font-weight:600; min-width:200px; max-width:300px; background:#fff0f6;">商品名稱</th>
+            <th style="padding:8px 10px; text-align:right; border-bottom:2px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap; background:#fff0f6;">售價</th>
   `;
 
   stores.forEach(s => {
     const isSelf = currentStore && currentStore.name === s.name;
     const shortName = s.name.replace('店', '');
-    html += `<th style="padding:6px 8px; border-bottom:2px solid var(--border); color:${isSelf ? '#be185d' : '#6b7280'}; font-weight:${isSelf ? '700' : '600'}; text-align:center; white-space:nowrap; font-size:12px;">${shortName}${isSelf ? '✦' : ''}</th>`;
+    html += `<th style="padding:6px 8px; border-bottom:2px solid var(--border); color:${isSelf ? '#be185d' : '#6b7280'}; font-weight:${isSelf ? '700' : '600'}; text-align:center; white-space:nowrap; font-size:12px; background:#fff0f6;">${shortName}${isSelf ? '✦' : ''}</th>`;
   });
 
-  html += `<th style="padding:8px 6px; text-align:center; border-bottom:2px solid var(--border); color:#1f2937; font-weight:700; white-space:nowrap; min-width:48px;">總計</th></tr></thead><tbody>`;
+  html += `<th style="padding:8px 6px; text-align:center; border-bottom:2px solid var(--border); color:#1f2937; font-weight:700; white-space:nowrap; min-width:48px; background:#fff0f6;">總計</th></tr></thead><tbody>`;
 
   // 表格資料列
   if (pageData.length === 0) {
@@ -2825,29 +2888,21 @@ function initBillingPage() {
 function renderBillingPage() {
   const month = document.getElementById('billingMonthSelect').value;
   const filtered = portalOrders.filter(r => r.createdAt.startsWith(month));
-  const isWholesale = currentStore?.type === 'wholesale';
-  const monthlyFee = isWholesale ? 0 : MONTHLY_FEE;
-
-  const salesTotal = filtered.filter(r => r.status === 'issued').reduce((s, r) => s + (r.finalAmount || 0), 0);
-  const grandTotal = salesTotal + monthlyFee;
 
   const statusMap = {
-    pending:  { label: '待確認',     bg: '#fce7f3', text: '#be185d' },
-    disputed: { label: '爭議處理中', bg: '#fee2e2', text: '#ef4444' },
-    issued:   { label: '已開立',     bg: '#d1fae5', text: '#047857' },
+    pending:   { label: '待確認到貨', bg: '#fffbeb', text: '#92400e' },
+    confirmed: { label: '已確認到貨', bg: '#dbeafe', text: '#1d4ed8' },
+    disputed:  { label: '退貨處理中', bg: '#fee2e2', text: '#ef4444' },
+    issued:    { label: '已開立',     bg: '#d1fae5', text: '#047857' },
+    closed:    { label: '已結案',     bg: '#f3f4f6', text: '#718096' },
   };
 
-  const cards = isWholesale
-    ? [
+  const pendingCount = filtered.filter(r => r.status === 'pending').length;
+  const salesTotal = filtered.filter(r => r.status === 'issued' || r.status === 'closed').reduce((s, r) => s + (r.finalAmount || 0), 0);
+
+  const cards = [
         { label: '已開立銷貨合計', value: `$${salesTotal.toLocaleString()}`,   color: '#be185d', bg: '#fff0f6' },
-        { label: '本月應付合計', value: `$${grandTotal.toLocaleString()}`,     color: '#1f2937', bg: '#fff0f6' },
-        { label: '待確認筆數',   value: `${filtered.filter(r=>r.status==='pending').length} 筆`, color: '#be185d', bg: '#fce7f3' },
-      ]
-    : [
-        { label: '固定月費',     value: `$${MONTHLY_FEE.toLocaleString()}`,   color: '#6b7280', bg: '#f3f4f6' },
-        { label: '已開立銷貨合計', value: `$${salesTotal.toLocaleString()}`,   color: '#be185d', bg: '#fff0f6' },
-        { label: '本月應付合計', value: `$${grandTotal.toLocaleString()}`,     color: '#1f2937', bg: '#fff0f6' },
-        { label: '待確認筆數',   value: `${filtered.filter(r=>r.status==='pending').length} 筆`, color: '#be185d', bg: '#fce7f3' },
+        { label: '待確認到貨',   value: `${pendingCount} 筆`, color: pendingCount > 0 ? '#92400e' : '#9ca3af', bg: pendingCount > 0 ? '#fffbeb' : '#f3f4f6' },
       ];
   document.getElementById('billingCards').innerHTML = cards.map(c => `
     <div style="background:${c.bg}; border-radius:8px; border:1px solid var(--border); padding:16px 20px; box-shadow:0 1px 3px rgba(0,0,0,0.04);">
@@ -2856,17 +2911,6 @@ function renderBillingPage() {
     </div>`).join('');
 
   let html = '';
-  if (!isWholesale) {
-    html += `
-    <tr style="background:#fafafa; border-bottom:1px solid #f3f4f6;">
-      <td style="padding:10px 16px;"><span style="background:#e5e7eb; color:#6b7280; padding:2px 8px; border-radius:8px; font-size:11px; font-weight:700;">固定月費</span></td>
-      <td style="padding:10px 16px; color:#6b7280;">—</td>
-      <td style="padding:10px 16px; color:#6b7280;">${month.replace('/', '年')}月</td>
-      <td style="padding:10px 16px; text-align:right; font-weight:700;">$${MONTHLY_FEE.toLocaleString()}</td>
-      <td style="padding:10px 16px; text-align:center;"><span style="background:#fff0f6; color:#be185d; padding:2px 8px; border-radius:8px; font-size:11px; font-weight:700;">固定收費</span></td>
-      <td style="padding:10px 16px; text-align:center; color:#d1d5db;">—</td>
-    </tr>`;
-  }
 
   if (filtered.length === 0) {
     html += `<tr><td colspan="6" style="padding:24px; text-align:center; color:#9ca3af;">本月無銷貨紀錄</td></tr>`;
@@ -2879,10 +2923,13 @@ function renderBillingPage() {
           <td style="padding:10px 16px;"><span style="background:#dbeafe; color:#1d4ed8; padding:2px 8px; border-radius:8px; font-size:11px; font-weight:700;">銷貨單</span></td>
           <td style="padding:10px 16px; font-weight:600; color:var(--primary); cursor:pointer;" onclick="showBillingDetail('${r.id}')">${r.id}</td>
           <td style="padding:10px 16px; color:#6b7280;">${r.createdAt.substring(0,10).replace(/\//g,'-')}</td>
-          <td style="padding:10px 16px; text-align:right; font-weight:700; color:${r.status==='issued'?'#047857':'#9ca3af'};">${r.status==='issued'?'$'+amt.toLocaleString():'—'}</td>
+          <td style="padding:10px 16px; text-align:right; font-weight:700; color:${r.status==='issued'||r.status==='closed'?'#047857':'#6b7280'};">$${amt.toLocaleString()}</td>
           <td style="padding:10px 16px; text-align:center;"><span style="background:${sc.bg}; color:${sc.text}; padding:2px 8px; border-radius:8px; font-size:11px; font-weight:700;">${sc.label}</span></td>
           <td style="padding:10px 16px; text-align:center;">
-            <button onclick="showBillingDetail('${r.id}')" style="padding:4px 10px; background:#fff0f6; color:#be185d; border:1px solid #be185d; border-radius:4px; font-size:12px; cursor:pointer; font-family:inherit;">查看</button>
+            <div style="display:flex; gap:4px; justify-content:center;">
+              ${r.status === 'pending' ? `<button onclick="confirmReceived('${r.id}')" style="padding:4px 10px; background:#d1fae5; color:#047857; border:1px solid #047857; border-radius:4px; font-size:12px; cursor:pointer; font-family:inherit; font-weight:700;">✅ 確認收貨</button>` : ''}
+              <button onclick="showBillingDetail('${r.id}')" style="padding:4px 10px; background:#fff0f6; color:#be185d; border:1px solid #be185d; border-radius:4px; font-size:12px; cursor:pointer; font-family:inherit;">查看</button>
+            </div>
           </td>
         </tr>`;
     });
@@ -2890,8 +2937,8 @@ function renderBillingPage() {
 
   html += `
     <tr style="background:#fff0f6; font-weight:700; border-top:2px solid var(--border);">
-      <td colspan="3" style="padding:12px 16px; color:#1f2937;">本月已開立合計${isWholesale ? '' : '（含月費）'}</td>
-      <td style="padding:12px 16px; text-align:right; font-size:15px; color:#be185d;">$${grandTotal.toLocaleString()}</td>
+      <td colspan="3" style="padding:12px 16px; color:#1f2937;">本月已開立合計</td>
+      <td style="padding:12px 16px; text-align:right; font-size:15px; color:#be185d;">$${salesTotal.toLocaleString()}</td>
       <td colspan="2"></td>
     </tr>`;
 
@@ -2909,9 +2956,11 @@ function showBillingDetail(orderId) {
   document.getElementById('billingDetailTitle').textContent = `${r.id}`;
   const amt = calcPortalOrderAmount(r);
   const statusMap = {
-    pending:  { label: '待確認',     bg: '#fce7f3', text: '#be185d' },
-    disputed: { label: '爭議處理中', bg: '#fee2e2', text: '#ef4444' },
-    issued:   { label: '已開立',     bg: '#d1fae5', text: '#047857' },
+    pending:   { label: '待確認到貨', bg: '#fffbeb', text: '#92400e' },
+    confirmed: { label: '已確認到貨', bg: '#dbeafe', text: '#1d4ed8' },
+    disputed:  { label: '退貨處理中', bg: '#fee2e2', text: '#ef4444' },
+    issued:    { label: '已開立',     bg: '#d1fae5', text: '#047857' },
+    closed:    { label: '已結案',     bg: '#f3f4f6', text: '#718096' },
   };
   const sc = statusMap[r.status] || { label: r.status, bg: '#f3f4f6', text: '#6b7280' };
 
@@ -2933,9 +2982,9 @@ function showBillingDetail(orderId) {
                        : item.qty;
     const subtotal = effectiveQty * item.unitPrice;
     const hasReturn = item.returnQty > 0;
-    // 回報操作欄
+    // 回報操作欄（只有 closed 不可操作，其他狀態都可回報）
     let actionHtml = '';
-    if (r.status === 'issued') {
+    if (r.status === 'closed') {
       actionHtml = '<span style="font-size:11px; color:#9ca3af;">—</span>';
     } else if (!item.returnStatus || item.returnStatus === 'none') {
       actionHtml = `<div style="display:flex; flex-direction:column; gap:3px; align-items:center;">
@@ -2969,8 +3018,11 @@ function showBillingDetail(orderId) {
       </tr>
       </tbody></table>
     <div style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
-      <div style="font-size:12px; color:#6b7280;">建立時間：${r.createdAt}${r.issuedAt?'　開立時間：'+r.issuedAt:''}</div>
-      <span style="background:${sc.bg}; color:${sc.text}; padding:3px 12px; border-radius:8px; font-size:12px; font-weight:700;">${sc.label}</span>
+      <div style="font-size:12px; color:#6b7280;">建立時間：${r.createdAt}${r.issuedAt?'　開立時間：'+r.issuedAt:''}${r.storeConfirmedAt?'　確認到貨：'+r.storeConfirmedAt:''}</div>
+      <div style="display:flex; align-items:center; gap:8px;">
+        ${r.status === 'pending' ? `<button onclick="confirmReceived('${r.id}')" style="padding:6px 16px; background:#047857; color:white; border:none; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;">✅ 確認收貨</button>` : ''}
+        <span style="background:${sc.bg}; color:${sc.text}; padding:3px 12px; border-radius:8px; font-size:12px; font-weight:700;">${sc.label}</span>
+      </div>
     </div>`;
 
   document.getElementById('billingDetailInner').innerHTML = html;
@@ -3018,6 +3070,32 @@ function openReturnReport(orderId, itemIdx, type) {
   });
 }
 
+function confirmReceived(orderId) {
+  Swal.fire({
+    title: '確認收貨？',
+    html: '請確認已收到此批貨物。<br><span style="font-size:12px; color:#6b7280;">如有缺少或問題，可在確認後點「查看」回報。</span>',
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonText: '✅ 確認收貨',
+    cancelButtonText: '取消',
+    confirmButtonColor: '#047857'
+  }).then(result => {
+    if (!result.isConfirmed) return;
+    const allSO = JSON.parse(localStorage.getItem('portalSalesOrders') || '[]');
+    const order = allSO.find(o => o.id === orderId);
+    if (!order) return;
+    const now = new Date();
+    const ts = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    order.status = 'confirmed';
+    order.storeConfirmedAt = ts;
+    localStorage.setItem('portalSalesOrders', JSON.stringify(allSO));
+    // 更新本地
+    portalOrders = allSO.filter(o => o.storeName === currentStore?.name);
+    Swal.fire({ title: '已確認收貨！', text: '總倉將會開立正式銷貨單', icon: 'success', timer: 1500, showConfirmButton: false });
+    renderBillingPage();
+  });
+}
+
 function submitReturnReport(orderId, itemIdx, data) {
   const allSO = JSON.parse(localStorage.getItem('portalSalesOrders') || '[]');
   const order = allSO.find(o => o.id === orderId);
@@ -3042,7 +3120,16 @@ function submitReturnReport(orderId, itemIdx, data) {
 let portalHistory = [];
 
 function initHistoryPage() {
-  setHistoryRange(30); // 預設顯示近 30 天
+  // 預設本月1號～月底
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = now.getMonth();
+  const firstDay = `${y}-${String(m+1).padStart(2,'0')}-01`;
+  const lastDay = new Date(y, m+1, 0); // 月底
+  const lastDayStr = `${y}-${String(m+1).padStart(2,'0')}-${String(lastDay.getDate()).padStart(2,'0')}`;
+  document.getElementById('historyDateStart').value = firstDay;
+  document.getElementById('historyDateEnd').value = lastDayStr;
+  renderHistoryPage();
 }
 
 function setHistoryRange(days) {
@@ -3071,83 +3158,96 @@ function renderHistoryPage() {
   });
 
   let html = '';
+  let historyTotal = 0;
+
   if (filtered.length === 0) {
-    html = `<tr><td colspan="4" style="padding:24px; text-align:center; color:#9ca3af;">查無符合條件的進貨單據 😅</td></tr>`;
+    html = `<tr><td colspan="5" style="padding:24px; text-align:center; color:#9ca3af;">查無符合條件的進貨單據</td></tr>`;
   } else {
     filtered.forEach(r => {
-      // 只顯示第1項，超過1項加「等N樣」
+      const amt = (r.items || []).reduce((s, i) => s + (i.qty || 0) * ((i.unitPrice || i.price) || 0), 0);
+      historyTotal += amt;
       const first = r.items[0];
       let summary = first ? `${first.name} x${first.qty}` : '—';
       if (r.items.length > 1) summary += ` <span style="color:#9ca3af; font-size:12px;">等 ${r.items.length} 樣</span>`;
 
       html += `
-        <tr style="border-bottom:1px solid #f3f4f6;" id="historyRow-${r.id}">
-          <td style="padding:10px 16px; font-weight:600; color:var(--primary); cursor:pointer;" onclick="showHistoryDetail('${r.id}')">${r.id}</td>
+        <tr style="border-bottom:1px solid #f3f4f6; cursor:pointer;" onclick="showHistoryDetail('${r.id}')">
+          <td style="padding:10px 16px; font-weight:600; color:var(--primary);">${r.id}</td>
           <td style="padding:10px 16px; color:#6b7280;">${r.date}</td>
           <td style="padding:10px 16px; font-size:13px; color:#4b5563;">${summary}</td>
+          <td style="padding:10px 16px; text-align:right; font-weight:700; color:#1f2937;">$${amt.toLocaleString()}</td>
           <td style="padding:10px 16px; text-align:center;">
-            <button onclick="showHistoryDetail('${r.id}')" style="padding:4px 10px; background:#fff0f6; color:#be185d; border:1px solid #be185d; border-radius:4px; font-size:12px; cursor:pointer; font-family:inherit;">查看</button>
+            <button onclick="event.stopPropagation(); showHistoryDetail('${r.id}')" style="padding:4px 10px; background:#fff0f6; color:#be185d; border:1px solid #be185d; border-radius:4px; font-size:12px; cursor:pointer; font-family:inherit;">查看</button>
           </td>
-        </tr>
-      `;
+        </tr>`;
     });
   }
 
   document.getElementById('historyTableBody').innerHTML = html;
-  document.getElementById('historyDetailInner').innerHTML = '<div style="padding:24px; text-align:center; color:#9ca3af; font-size:14px;">請點選左側單據以檢視到貨商品清單</div>';
-  document.getElementById('historyDetailTitle').textContent = '← 點左側單號查看進貨明細';
+
+  // 月費橫條
+  const isWH = currentStore?.type === 'wholesale';
+  const feeBar = document.getElementById('historyFeeBar');
+  if (isWH) {
+    feeBar.style.display = 'none';
+  } else {
+    feeBar.style.display = '';
+    const grandTotal = historyTotal + MONTHLY_FEE;
+    feeBar.innerHTML = `
+      <span style="font-size:13px; color:#6b7280;">固定月費</span>
+      <span style="font-size:15px; font-weight:700; color:#6b7280;">$${MONTHLY_FEE.toLocaleString()}</span>
+      <span style="color:var(--border);">│</span>
+      <span style="font-size:13px; color:#6b7280;">進貨合計</span>
+      <span style="font-size:15px; font-weight:700; color:#be185d;">$${historyTotal.toLocaleString()}</span>
+      <span style="color:var(--border);">│</span>
+      <span style="font-size:13px; color:#6b7280;">含月費總計</span>
+      <span style="font-size:17px; font-weight:700; color:#1f2937;">$${grandTotal.toLocaleString()}</span>`;
+  }
 }
 
 function showHistoryDetail(orderId) {
   const r = portalHistory.find(x => x.id === orderId);
   if (!r) return;
 
-  document.querySelectorAll('#historyTableBody tr').forEach(tr => tr.style.background = '');
-  const activeRow = document.getElementById('historyRow-' + orderId);
-  if (activeRow) activeRow.style.background = '#fff0f6';
-
-  document.getElementById('historyDetailTitle').textContent = `單號：${r.id}　進貨日期：${r.date}`;
-
-  let html = `
-    <table style="width:100%; border-collapse:collapse; font-size:13px;">
-      <thead>
-        <tr style="background:#f8f9fa;">
-          <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">商品編號</th>
-          <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">商品名稱</th>
-          <th style="padding:10px 16px; text-align:right; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">單價</th>
-          <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">到貨數量</th>
-          <th style="padding:10px 16px; text-align:right; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">小計</th>
-        </tr>
-      </thead><tbody>`;
-
-  let totalQty = 0;
-  let totalAmount = 0;
-
+  let rows = '';
+  let totalQty = 0, totalAmount = 0;
   r.items.forEach(item => {
-    const subtotal = item.price * item.qty;
-    totalQty += item.qty;
+    const subtotal = (item.price || 0) * (item.qty || 0);
+    totalQty += item.qty || 0;
     totalAmount += subtotal;
-
-    html += `
-      <tr style="border-bottom:1px solid #f3f4f6;">
-        <td style="padding:10px 16px; color:#6b7280;">${item.code}</td>
-        <td style="padding:10px 16px; font-weight:500;">${item.name}</td>
-        <td style="padding:10px 16px; text-align:right; color:#6b7280;">$${item.price.toLocaleString()}</td>
-        <td style="padding:10px 16px; text-align:center; font-weight:700; color:#be185d;">${item.qty}</td>
-        <td style="padding:10px 16px; text-align:right; font-weight:700; color:#1f2937;">$${subtotal.toLocaleString()}</td>
-      </tr>`;
+    rows += `<tr style="border-bottom:1px solid #f3f4f6;">
+      <td style="padding:8px 12px; color:#6b7280;">${item.code}</td>
+      <td style="padding:8px 12px; font-weight:500;">${item.name}</td>
+      <td style="padding:8px 12px; text-align:right; color:#6b7280;">$${(item.price||0).toLocaleString()}</td>
+      <td style="padding:8px 12px; text-align:center; font-weight:700; color:#be185d;">${item.qty}</td>
+      <td style="padding:8px 12px; text-align:right; font-weight:700;">$${subtotal.toLocaleString()}</td>
+    </tr>`;
   });
 
-  html += `
-    <tr style="background:#fff0f6; font-weight:700; border-top:2px solid var(--border);">
-      <td colspan="3" style="padding:10px 16px; text-align:right; color:#1f2937;">總計</td>
-      <td style="padding:10px 16px; text-align:center; color:#be185d; font-size:15px;">${totalQty}</td>
-      <td style="padding:10px 16px; text-align:right; color:#be185d; font-size:15px;">$${totalAmount.toLocaleString()}</td>
-    </tr>
-    </tbody></table>
-  `;
-
-  document.getElementById('historyDetailInner').innerHTML = html;
+  Swal.fire({
+    title: `📋 ${r.id}`,
+    html: `<div style="text-align:left; font-size:13px; color:#6b7280; margin-bottom:10px;">進貨日期：${r.date}</div>
+      <div style="max-height:50vh; overflow-y:auto;">
+      <table style="width:100%; border-collapse:collapse; font-size:13px;">
+        <thead><tr style="background:#f8f9fa;">
+          <th style="padding:8px 12px; text-align:left; border-bottom:2px solid #d1d5db;">編號</th>
+          <th style="padding:8px 12px; text-align:left; border-bottom:2px solid #d1d5db;">品名</th>
+          <th style="padding:8px 12px; text-align:right; border-bottom:2px solid #d1d5db;">單價</th>
+          <th style="padding:8px 12px; text-align:center; border-bottom:2px solid #d1d5db;">數量</th>
+          <th style="padding:8px 12px; text-align:right; border-bottom:2px solid #d1d5db;">小計</th>
+        </tr></thead>
+        <tbody>${rows}
+          <tr style="background:#fff0f6; font-weight:700; border-top:2px solid #d1d5db;">
+            <td colspan="3" style="padding:8px 12px; text-align:right;">總計</td>
+            <td style="padding:8px 12px; text-align:center; color:#be185d;">${totalQty}</td>
+            <td style="padding:8px 12px; text-align:right; color:#be185d;">$${totalAmount.toLocaleString()}</td>
+          </tr>
+        </tbody>
+      </table></div>`,
+    width: '650px',
+    showCloseButton: true,
+    showConfirmButton: false,
+  });
 }
 
 
@@ -3391,6 +3491,393 @@ function printLedger() {
       <\\/script> </body>
     </html>
   `);
+  win.document.close();
+}
+
+// ============================
+// 包子饅頭叫貨
+// ============================
+const BUN_MENU = [
+  { no:1,  name:'山東饅頭',   price:10,   cat:'饅頭' },
+  { no:2,  name:'微甜饅頭',   price:10,   cat:'饅頭' },
+  { no:3,  name:'芋頭饅頭',   price:10,   cat:'饅頭' },
+  { no:4,  name:'紅糖饅頭',   price:10,   cat:'饅頭' },
+  { no:5,  name:'全麥饅頭',   price:10,   cat:'饅頭' },
+  { no:6,  name:'綜合小起司', price:60,   cat:'起司' },
+  { no:7,  name:'小牛奶起司', price:60,   cat:'起司' },
+  { no:8,  name:'小南瓜起司', price:60,   cat:'起司' },
+  { no:9,  name:'小桂圓起司', price:60,   cat:'起司' },
+  { no:10, name:'竹筍包',     price:14,   cat:'包子' },
+  { no:11, name:'高麗菜',     price:14,   cat:'包子' },
+  { no:12, name:'雪裡紅',     price:14,   cat:'包子' },
+  { no:13, name:'鮮肉包',     price:14,   cat:'包子' },
+  { no:14, name:'蔥花捲',     price:14,   cat:'包子' },
+  { no:15, name:'紅豆包',     price:14,   cat:'包子' },
+  { no:16, name:'芝麻包',     price:14,   cat:'包子' },
+  { no:17, name:'梅干菜肉',   price:14,   cat:'包子' },
+  { no:18, name:'芋頭地瓜',   price:15,   cat:'包子' },
+  { no:19, name:'五穀雜糧',   price:14.5, cat:'包子' },
+  { no:20, name:'德國香腸',   price:18,   cat:'其他' },
+  { no:21, name:'剝皮辣椒',   price:18.5, cat:'其他' },
+  { no:22, name:'紅糖起司',   price:17,   cat:'其他' },
+  { no:23, name:'牛奶起司',   price:17,   cat:'其他' },
+  { no:24, name:'寶寶小饅頭', price:77,   cat:'其他' },
+  { no:25, name:'鮮奶小饅頭', price:77,   cat:'其他' },
+  { no:26, name:'養生五行饅', price:77,   cat:'其他' }
+];
+const BUN_FOOTER = '熱熱直接放保麗龍(不用包裝)謝謝';
+let bunRecords = [];
+let bunGridRendered = false; // 格子只建一次，避免重建導致數量消失
+
+function switchLedgerTab(tab) {
+  const btnL = document.getElementById('ledgerTabBtnLedger');
+  const btnB = document.getElementById('ledgerTabBtnBun');
+  const divL = document.getElementById('ledgerTabLedger');
+  const divB = document.getElementById('ledgerTabBun');
+  if (tab === 'ledger') {
+    divL.style.display = ''; divB.style.display = 'none';
+    btnL.style.background = 'var(--accent)'; btnL.style.color = 'white';
+    btnB.style.background = 'white'; btnB.style.color = 'var(--text2)';
+  } else {
+    divL.style.display = 'none'; divB.style.display = '';
+    btnB.style.background = 'var(--accent)'; btnB.style.color = 'white';
+    btnL.style.background = 'white'; btnL.style.color = 'var(--text2)';
+    initBunPage();
+  }
+}
+
+function initBunPage() {
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  document.getElementById('bunOrderDate').value = todayStr;
+  // 格子只建一次
+  if (!bunGridRendered) { renderBunMenuGrid(); bunGridRendered = true; }
+  refreshBunMonthAndRecords();
+}
+
+function renderBunMenuGrid() {
+  const cats = ['饅頭','起司','包子','其他'];
+  const catColors = { '饅頭':'#be185d', '起司':'#d97706', '包子':'#059669', '其他':'#7c3aed' };
+  const catBgs   = { '饅頭':'#fff0f6', '起司':'#fffbeb', '包子':'#ecfdf5', '其他':'#f5f3ff' };
+  let html = '';
+  cats.forEach(cat => {
+    const items = BUN_MENU.filter(b => b.cat === cat);
+    html += `<div style="margin-bottom:14px;">
+      <div style="font-size:13px; font-weight:700; color:${catColors[cat]}; margin-bottom:8px; padding:4px 10px; background:${catBgs[cat]}; border-radius:4px; display:inline-block;">${cat}</div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(170px, 1fr)); gap:8px;">`;
+    items.forEach(item => {
+      html += `
+        <div style="display:flex; align-items:center; gap:6px; background:${catBgs[cat]}; border:1px solid #e5e7eb; border-radius:6px; padding:6px 10px;">
+          <span style="font-size:12px; color:#9ca3af; min-width:22px;">${item.no}.</span>
+          <span style="font-size:13px; font-weight:500; flex:1; white-space:nowrap;">${item.name}</span>
+          <span style="font-size:11px; color:#9ca3af;">$${item.price}</span>
+          <input type="text" inputmode="numeric" id="bunQty_${item.no}" value="0" oninput="sanitizeQty(this); calcBunTotal()"
+            style="width:46px; padding:5px 4px; border:1.5px solid var(--border); border-radius:4px; font-size:14px; font-family:inherit; text-align:center; font-weight:700;">
+        </div>`;
+    });
+    html += `</div></div>`;
+  });
+  document.getElementById('bunMenuGrid').innerHTML = html;
+}
+
+function calcBunTotal() {
+  let total = 0;
+  BUN_MENU.forEach(item => {
+    const qty = parseInt(document.getElementById('bunQty_' + item.no)?.value) || 0;
+    total += qty * item.price;
+  });
+  document.getElementById('bunOrderTotal').textContent = '$' + total.toLocaleString();
+  return total;
+}
+
+function clearBunQty() {
+  BUN_MENU.forEach(item => {
+    const el = document.getElementById('bunQty_' + item.no);
+    if (el) el.value = '0';
+  });
+  calcBunTotal();
+}
+
+function getBunQtyMap(prefix) {
+  prefix = prefix || 'bunQty_';
+  const map = {};
+  BUN_MENU.forEach(item => {
+    map[item.no] = parseInt(document.getElementById(prefix + item.no)?.value) || 0;
+  });
+  return map;
+}
+
+function buildBunLineText(date, qtyMap) {
+  let lines = [];
+  lines.push(`叫貨日期：${date}`);
+  BUN_MENU.forEach(item => {
+    const qty = qtyMap[item.no] || 0;
+    lines.push(`${item.no}、${item.name}${qty > 0 ? qty : ''}`);
+  });
+  lines.push(BUN_FOOTER);
+  return lines.join('\n');
+}
+
+function copyBunToLine() {
+  const date = document.getElementById('bunOrderDate').value;
+  if (!date) { Swal.fire('提醒','請選擇叫貨日期','warning'); return; }
+  const qtyMap = getBunQtyMap();
+  const text = buildBunLineText(date, qtyMap);
+  bunCopyText(text);
+}
+
+function bunCopyText(text) {
+  navigator.clipboard.writeText(text).then(() => {
+    Swal.fire({ icon:'success', title:'已複製到剪貼簿', text:'可以直接貼到 LINE 囉！', showConfirmButton:false, timer:1500, width:'320px' });
+  }).catch(() => {
+    const ta = document.createElement('textarea');
+    ta.value = text; document.body.appendChild(ta); ta.select(); document.execCommand('copy'); document.body.removeChild(ta);
+    Swal.fire({ icon:'success', title:'已複製', showConfirmButton:false, timer:1000, width:'250px' });
+  });
+}
+
+function bunMakeSummary(qtyMap) {
+  return BUN_MENU.filter(b => qtyMap[b.no] > 0).map(b => `${b.name}×${qtyMap[b.no]}`).join('、');
+}
+
+function bunCalcTotal(qtyMap) {
+  let t = 0;
+  BUN_MENU.forEach(item => { t += (qtyMap[item.no] || 0) * item.price; });
+  return t;
+}
+
+function saveBunOrder() {
+  const date = document.getElementById('bunOrderDate').value;
+  if (!date) { Swal.fire('提醒','請選擇叫貨日期','warning'); return; }
+  const qtyMap = getBunQtyMap();
+  const hasAny = Object.values(qtyMap).some(q => q > 0);
+  if (!hasAny) { Swal.fire('提醒','至少填一個品項的數量','warning'); return; }
+
+  const total = bunCalcTotal(qtyMap);
+  const summary = bunMakeSummary(qtyMap);
+
+  bunRecords.push({ id: 'B' + Date.now(), date, qtyMap, total, summary });
+  saveBunData();
+  clearBunQty();
+  refreshBunMonthAndRecords(date.substring(0,7));
+  Swal.fire({ icon:'success', title:'已儲存叫貨單！', showConfirmButton:false, timer:1000 });
+}
+
+function saveBunData() {
+  saveStoreData('bunRecords', bunRecords);
+}
+
+function refreshBunMonthAndRecords(keepMonth) {
+  const months = [...new Set(bunRecords.map(r => r.date.substring(0,7)))].sort().reverse();
+  const today = new Date();
+  const thisMonth = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}`;
+  if (!months.includes(thisMonth)) months.unshift(thisMonth);
+  const sel = document.getElementById('bunMonthSelect');
+  const prevMonth = sel.value;
+  sel.innerHTML = months.map(m => `<option value="${m}">${m.replace('-','年')}月</option>`).join('');
+  // 優先保持指定月份 > 原本選的月份 > 預設第一個
+  if (keepMonth && months.includes(keepMonth)) sel.value = keepMonth;
+  else if (prevMonth && months.includes(prevMonth)) sel.value = prevMonth;
+  renderBunRecords();
+}
+
+function renderBunRecords() {
+  const month = document.getElementById('bunMonthSelect')?.value;
+  if (!month) return;
+  const filtered = bunRecords.filter(r => r.date.startsWith(month)).sort((a,b) => b.date.localeCompare(a.date) || b.id.localeCompare(a.id));
+
+  let monthTotal = 0;
+  let html = '';
+  if (filtered.length === 0) {
+    html = `<tr><td colspan="4" style="padding:24px; text-align:center; color:#9ca3af;">這個月還沒有叫貨紀錄</td></tr>`;
+  } else {
+    filtered.forEach(r => {
+      monthTotal += r.total;
+      html += `
+        <tr style="border-bottom:1px solid #f3f4f6;">
+          <td style="padding:10px 16px; color:#6b7280; font-family:monospace; font-size:14px;">${r.date}</td>
+          <td style="padding:10px 16px; font-size:12px; color:#374151; max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${r.summary}</td>
+          <td style="padding:10px 16px; text-align:right; font-weight:700; color:#be185d; font-family:monospace; font-size:15px;">$${r.total.toLocaleString()}</td>
+          <td style="padding:10px 16px; text-align:center; white-space:nowrap;">
+            <button onclick="editBunOrder('${r.id}')" style="padding:4px 10px; background:#fff0f6; color:#be185d; border:1px solid #be185d; border-radius:4px; font-size:12px; cursor:pointer; font-family:inherit; margin-right:4px;">修改</button>
+            <button onclick="copyBunRecord('${r.id}')" style="padding:4px 10px; background:#f0fdf4; color:#059669; border:1px solid #059669; border-radius:4px; font-size:12px; cursor:pointer; font-family:inherit; margin-right:4px;">複製</button>
+            <button onclick="deleteBunOrder('${r.id}')" style="padding:4px 10px; background:#fff; color:#ef4444; border:1px solid #ef4444; border-radius:4px; font-size:12px; cursor:pointer; font-family:inherit;">刪除</button>
+          </td>
+        </tr>`;
+    });
+  }
+  document.getElementById('bunTableBody').innerHTML = html;
+  document.getElementById('bunMonthTotal').textContent = '$' + monthTotal.toLocaleString();
+}
+
+// ---- 修改叫貨單（Swal 彈窗，不影響上方新增表單）----
+function editBunOrder(id) {
+  const rec = bunRecords.find(r => r.id === id);
+  if (!rec) return;
+
+  // 建彈窗內的品項格子 HTML
+  const cats = ['饅頭','起司','包子','其他'];
+  const catColors = { '饅頭':'#be185d', '起司':'#d97706', '包子':'#059669', '其他':'#7c3aed' };
+  const catBgs   = { '饅頭':'#fff0f6', '起司':'#fffbeb', '包子':'#ecfdf5', '其他':'#f5f3ff' };
+  let gridHtml = `<div style="margin-bottom:10px;"><label style="font-size:13px; font-weight:700; color:#6b7280;">叫貨日期</label>
+    <input type="date" id="editBunDate" value="${rec.date}" style="margin-left:8px; padding:6px 10px; border:1.5px solid #d1d5db; border-radius:6px; font-size:14px; font-family:inherit;"></div>`;
+  cats.forEach(cat => {
+    const items = BUN_MENU.filter(b => b.cat === cat);
+    gridHtml += `<div style="margin-bottom:10px;">
+      <div style="font-size:12px; font-weight:700; color:${catColors[cat]}; margin-bottom:6px; padding:3px 8px; background:${catBgs[cat]}; border-radius:4px; display:inline-block;">${cat}</div>
+      <div style="display:grid; grid-template-columns:repeat(auto-fill, minmax(155px, 1fr)); gap:6px;">`;
+    items.forEach(item => {
+      const qty = rec.qtyMap[item.no] || 0;
+      gridHtml += `<div style="display:flex; align-items:center; gap:4px; background:${catBgs[cat]}; border:1px solid #e5e7eb; border-radius:5px; padding:4px 8px;">
+        <span style="font-size:11px; color:#9ca3af; min-width:20px;">${item.no}.</span>
+        <span style="font-size:12px; flex:1; white-space:nowrap;">${item.name}</span>
+        <input type="text" inputmode="numeric" id="editBunQty_${item.no}" value="${qty}"
+          oninput="this.value=this.value.replace(/[^0-9]/g,'')"
+          style="width:42px; padding:4px 2px; border:1.5px solid #d1d5db; border-radius:4px; font-size:13px; text-align:center; font-weight:700;">
+      </div>`;
+    });
+    gridHtml += `</div></div>`;
+  });
+
+  Swal.fire({
+    title: `✏️ 修改叫貨單`,
+    html: `<div style="text-align:left; max-height:60vh; overflow-y:auto; padding:4px;">${gridHtml}</div>`,
+    width: '700px',
+    showCancelButton: true,
+    confirmButtonText: '💾 儲存修改',
+    cancelButtonText: '取消',
+    confirmButtonColor: '#be185d',
+    preConfirm: () => {
+      const newDate = document.getElementById('editBunDate').value;
+      if (!newDate) { Swal.showValidationMessage('請選擇日期'); return false; }
+      const newQtyMap = getBunQtyMap('editBunQty_');
+      const hasAny = Object.values(newQtyMap).some(q => q > 0);
+      if (!hasAny) { Swal.showValidationMessage('至少填一個品項的數量'); return false; }
+      return { date: newDate, qtyMap: newQtyMap };
+    }
+  }).then(result => {
+    if (result.isConfirmed) {
+      const { date, qtyMap } = result.value;
+      rec.date = date;
+      rec.qtyMap = qtyMap;
+      rec.total = bunCalcTotal(qtyMap);
+      rec.summary = bunMakeSummary(qtyMap);
+      saveBunData();
+      refreshBunMonthAndRecords(date.substring(0,7));
+      Swal.fire({ icon:'success', title:'已更新！', showConfirmButton:false, timer:1000 });
+    }
+  });
+}
+
+function copyBunRecord(id) {
+  const rec = bunRecords.find(r => r.id === id);
+  if (!rec) return;
+  bunCopyText(buildBunLineText(rec.date, rec.qtyMap));
+}
+
+function deleteBunOrder(id) {
+  Swal.fire({ title:'確定刪除這筆叫貨單？', icon:'warning', showCancelButton:true, confirmButtonText:'刪除', cancelButtonText:'取消', confirmButtonColor:'#ef4444' })
+    .then(result => {
+      if (result.isConfirmed) {
+        bunRecords = bunRecords.filter(r => r.id !== id);
+        saveBunData();
+        refreshBunMonthAndRecords();
+      }
+    });
+}
+
+function exportBunExcel() {
+  const month = document.getElementById('bunMonthSelect').value;
+  const filtered = bunRecords.filter(r => r.date.startsWith(month)).sort((a,b) => a.date.localeCompare(b.date));
+  if (filtered.length === 0) { Swal.fire('提醒','該月份無資料可匯出','warning'); return; }
+
+  // 每筆訂單展開成品項明細
+  const rows = [];
+  let grandTotal = 0;
+  filtered.forEach(rec => {
+    BUN_MENU.forEach(item => {
+      const qty = rec.qtyMap[item.no] || 0;
+      if (qty > 0) {
+        rows.push({
+          '叫貨日期': rec.date,
+          '編號': item.no,
+          '品名': item.name,
+          '單價': item.price,
+          '數量': qty,
+          '小計': qty * item.price
+        });
+      }
+    });
+    grandTotal += rec.total;
+  });
+  // 加總行
+  rows.push({ '叫貨日期':'', '編號':'', '品名':'合計', '單價':'', '數量':'', '小計': grandTotal });
+
+  const ws = XLSX.utils.json_to_sheet(rows);
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, `${month}包子饅頭`);
+  const storeName = currentStore?.name || '本店';
+  XLSX.writeFile(wb, `${storeName}_${month}_包子饅頭叫貨.xlsx`);
+}
+
+function printBunReport() {
+  const month = document.getElementById('bunMonthSelect').value;
+  const filtered = bunRecords.filter(r => r.date.startsWith(month)).sort((a,b) => a.date.localeCompare(b.date));
+  if (filtered.length === 0) { Swal.fire('提醒','該月份無資料可列印','warning'); return; }
+
+  let grandTotal = 0;
+  // 每筆訂單一個表格
+  let tables = '';
+  filtered.forEach(rec => {
+    grandTotal += rec.total;
+    let itemRows = '';
+    BUN_MENU.forEach(item => {
+      const qty = rec.qtyMap[item.no] || 0;
+      if (qty > 0) {
+        itemRows += `<tr>
+          <td style="padding:4px 8px; border-bottom:1px solid #e5e7eb; font-size:12px; color:#9ca3af;">${item.no}</td>
+          <td style="padding:4px 8px; border-bottom:1px solid #e5e7eb;">${item.name}</td>
+          <td style="padding:4px 8px; border-bottom:1px solid #e5e7eb; text-align:right;">$${item.price}</td>
+          <td style="padding:4px 8px; border-bottom:1px solid #e5e7eb; text-align:right;">${qty}</td>
+          <td style="padding:4px 8px; border-bottom:1px solid #e5e7eb; text-align:right; font-weight:700;">$${(qty * item.price).toLocaleString()}</td>
+        </tr>`;
+      }
+    });
+    tables += `
+      <div style="margin-bottom:20px;">
+        <div style="font-weight:700; margin-bottom:6px;">📅 ${rec.date}　小計：$${rec.total.toLocaleString()}</div>
+        <table style="width:100%; border-collapse:collapse; font-size:13px;">
+          <thead><tr style="background:#f8f9fa;">
+            <th style="padding:4px 8px; text-align:left; border-bottom:2px solid #1f2937; width:40px;">#</th>
+            <th style="padding:4px 8px; text-align:left; border-bottom:2px solid #1f2937;">品名</th>
+            <th style="padding:4px 8px; text-align:right; border-bottom:2px solid #1f2937;">單價</th>
+            <th style="padding:4px 8px; text-align:right; border-bottom:2px solid #1f2937;">數量</th>
+            <th style="padding:4px 8px; text-align:right; border-bottom:2px solid #1f2937;">小計</th>
+          </tr></thead>
+          <tbody>${itemRows}</tbody>
+        </table>
+      </div>`;
+  });
+
+  const storeName = currentStore?.name || '本店';
+  const win = window.open('', '_blank');
+  win.document.write(`<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8">
+    <title>${storeName} ${month} 包子饅頭叫貨報表</title>
+    <style>
+      body { font-family:'Noto Sans TC',sans-serif; color:#1f2937; padding:20px; max-width:800px; margin:0 auto; }
+      h2 { text-align:center; margin:0 0 5px 0; font-size:22px; }
+      .subtitle { text-align:center; font-size:14px; color:#6b7280; margin-bottom:8px; }
+      .grand { text-align:center; font-size:18px; font-weight:700; color:#be185d; margin-bottom:24px; padding-bottom:12px; border-bottom:2px solid #1f2937; }
+      @media print { @page { margin:1cm; } body { -webkit-print-color-adjust:exact; print-color-adjust:exact; } }
+    </style></head><body>
+    <h2>${storeName} - 包子饅頭叫貨報表</h2>
+    <div class="subtitle">供應商：包子爸　｜　報表月份：${month}</div>
+    <div class="grand">月結總金額：$${grandTotal.toLocaleString()}</div>
+    ${tables}
+    <div style="margin-top:40px; text-align:right; font-size:14px;">
+      <span style="margin-right:100px;">店長簽名：____________________</span>
+    </div>
+    <script>window.onload=function(){window.print();}<\/script></body></html>`);
   win.document.close();
 }
 
@@ -3935,18 +4422,18 @@ function renderTrackingPage() {
       <!-- 追蹤表格 -->
       <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:hidden; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
         <div style="padding:14px 20px; border-bottom:1px solid var(--border); font-size:15px; font-weight:700; color:var(--primary);">📦 採購進度一覽</div>
-        <div style="overflow-x:auto;">
+        <div style="overflow:auto; max-height:60vh;">
           <table style="width:100%; border-collapse:collapse; font-size:13px; min-width:700px;">
-            <thead>
+            <thead style="position:sticky; top:0; z-index:1;">
               <tr style="background:#fff0f6;">
-                <th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap;">開團日</th>
-                <th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap;">結單日</th>
-                <th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap;">商品編號</th>
-                <th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">商品名稱</th>
-                <th style="padding:10px 14px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap;">本店訂購</th>
-                <th style="padding:10px 14px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap;">採購狀態</th>
-                <th style="padding:10px 14px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap;">預計到貨日</th>
-                <th style="padding:10px 14px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap;">操作</th>
+                <th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap; background:#fff0f6;">開團日</th>
+                <th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap; background:#fff0f6;">結單日</th>
+                <th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap; background:#fff0f6;">商品編號</th>
+                <th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fff0f6;">商品名稱</th>
+                <th style="padding:10px 14px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap; background:#fff0f6;">本店訂購</th>
+                <th style="padding:10px 14px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap; background:#fff0f6;">採購狀態</th>
+                <th style="padding:10px 14px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap; background:#fff0f6;">預計到貨日</th>
+                <th style="padding:10px 14px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap; background:#fff0f6;">操作</th>
               </tr>
             </thead>
             <tbody>${tableRows}</tbody>

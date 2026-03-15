@@ -414,7 +414,7 @@
             <th style="width:100px;">商品編號</th>
             <th style="width:340px;">商品名稱</th>
             <th style="width:40px; text-align:center;">已叫</th>
-            <th style="width:80px; text-align:center;">總需求量</th>
+            <th style="width:80px; text-align:center;">叫貨量</th>
             <th style="width:70px; text-align:right;">售價</th>
             <th style="width:160px; text-align:center;">採購進度</th>
             <th style="width:70px; text-align:right;">單個價</th>
@@ -3511,7 +3511,7 @@ function renderOrderTrackTable() {
     const st = statusMap[effectiveStatus] || statusMap.pending;
     const badge = `<span style="background:${st.bg}; color:${st.color}; padding:2px 10px; border-radius:10px; font-size:12px; white-space:nowrap;">${st.label}</span>`;
     const offerLink = lp && lp.offer_id ? `<span class="shared-link" data-url="https://detail.1688.com/offer/${lp.offer_id}.html" style="color:var(--accent);font-size:11px;cursor:pointer;text-decoration:underline;">前往</span>` : '';
-    const orderUrl = gbUrlMap[pid] || OT_ORDER_URLS[pid] || '';
+    const orderUrl = item.url || gbUrlMap[pid] || OT_ORDER_URLS[pid] || '';
     const orderLink = orderUrl ? `<span class="shared-link" data-url="${orderUrl}" style="color:#e67e22;font-size:11px;cursor:pointer;text-decoration:underline;">下單</span>` : '';
     const isOrdered = otOrderedSet.has(pid);
     const rowBg = isOrdered ? 'background:#e6ffed;' : '';
@@ -3520,7 +3520,7 @@ function renderOrderTrackTable() {
       <td>${pid}</td>
       <td>${item.name || ''}</td>
       <td style="text-align:center;"><input type="checkbox" ${isOrdered?'checked':''} onchange="otToggleOrdered('${pid}')"></td>
-      <td style="text-align:center; font-weight:bold;">${item.totalQty || 0}</td>
+      <td style="text-align:center; font-weight:bold;" title="總量${item.totalQty||0} - 庫存${item.stock||0}">${item.orderQty != null ? item.orderQty : item.totalQty || 0}</td>
       <td style="text-align:right;">${item.price ? '$' + Number(item.price).toLocaleString() : ''}</td>
       <td style="text-align:center;">${badge}</td>
       <td style="text-align:right; color:var(--accent); font-weight:bold;">${uc ? '$' + Number(uc).toFixed(1) : ''}</td>
