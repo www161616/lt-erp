@@ -992,7 +992,7 @@
 
     async function cloudLoadAll() {
       try {
-        const resp = await fetch(`${SB_URL}/shared_kv?key=in.("branchOrderList","branchOrders","branchDataList","branchTypeMap","portalAllRequests","portalTransferList","portalMutualAidBoard","portalTrackingData","portalBulletin")`, { headers: SB_HEADERS });
+        const resp = await fetch(`${SB_URL}/shared_kv?key=in.("branchOrderList","branchOrders","branchDataList","branchTypeMap","portalAllRequests","portalTransferList","portalMutualAidBoard","portalTrackingData","portalBulletin","portalSalesOrders")`, { headers: SB_HEADERS });
         if (resp.ok) {
           const rows = await resp.json();
           rows.forEach(r => {
@@ -3089,6 +3089,7 @@ function confirmReceived(orderId) {
     order.status = 'confirmed';
     order.storeConfirmedAt = ts;
     localStorage.setItem('portalSalesOrders', JSON.stringify(allSO));
+    cloudSave('portalSalesOrders');
     // 更新本地
     portalOrders = allSO.filter(o => o.storeName === currentStore?.name);
     Swal.fire({ title: '已確認收貨！', text: '總倉將會開立正式銷貨單', icon: 'success', timer: 1500, showConfirmButton: false });
@@ -3108,6 +3109,7 @@ function submitReturnReport(orderId, itemIdx, data) {
   item.reportType = data.type;
 
   localStorage.setItem('portalSalesOrders', JSON.stringify(allSO));
+  cloudSave('portalSalesOrders');
 
   // 同步更新本地 portalOrders
   portalOrders = allSO.filter(o => o.storeName === currentStore?.name);

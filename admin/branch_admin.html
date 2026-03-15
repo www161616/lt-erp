@@ -191,7 +191,7 @@
 
     async function cloudLoadAll() {
       try {
-        const resp = await fetch(`${SB_URL}/shared_kv?key=in.("branchOrderList","branchOrders","branchDataList","branchTypeMap","portalAllRequests","portalTransferList","portalMutualAidBoard")`, { headers: HEADERS });
+        const resp = await fetch(`${SB_URL}/shared_kv?key=in.("branchOrderList","branchOrders","branchDataList","branchTypeMap","portalAllRequests","portalTransferList","portalMutualAidBoard","portalSalesOrders")`, { headers: HEADERS });
         if (resp.ok) {
           const rows = await resp.json();
           rows.forEach(r => {
@@ -4872,7 +4872,7 @@
         '<td style="padding:5px 4px; text-align:center; width:28px;" onclick="event.stopPropagation();"><input type="checkbox" class="db-check" value="' + inq.id + '" onchange="updateDBSelectCount()" style="width:15px; height:15px; cursor:pointer;"></td>' +
         '<td style="padding:5px 6px; color:#718096; white-space:nowrap; font-size:11px;">' + inq.createdAt + '</td>' +
         '<td style="padding:5px 4px; text-align:center; font-size:11px; font-weight:bold; color:#2d3748;">' + inq.storeId + '</td>' +
-        '<td style="padding:5px 4px; text-align:center;">' + catBadge + '</td>' +
+        '<td style="padding:5px 4px; text-align:center; white-space:nowrap;">' + catBadge + '</td>' +
         '<td style="padding:5px 6px; font-family:monospace; font-size:11px; color:#2b6cb0;">' + (inq.productId || '—') + '</td>' +
         '<td style="padding:5px 6px;">' + nameHtml + '</td>' +
         '<td style="padding:5px 4px; text-align:center; font-weight:bold; font-size:13px; color:' + (isAddon && inq.qty>0?'#b7791f':'#718096') + ';">' + (isAddon && inq.qty>0? inq.qty : '—') + '</td>' +
@@ -4888,15 +4888,16 @@
     container.innerHTML = `
       <table style="width:100%; border-collapse:collapse; font-size:13px; table-layout:fixed;">
         <colgroup>
-          <col style="width:175px;">
-          <col style="width:96px;">
-          <col style="width:68px;">
-          <col style="width:88px;">
+          <col style="width:35px;">
+          <col style="width:120px;">
+          <col style="width:65px;">
+          <col style="width:110px;">
+          <col style="width:100px;">
           <col>
-          <col style="width:58px;">
-          <col style="width:68px;">
-          <col style="width:115px;">
-          <col style="width:185px;">
+          <col style="width:80px;">
+          <col style="width:65px;">
+          <col style="width:102px;">
+          <col style="width:210px;">
         </colgroup>
         <thead style="position:sticky; top:0; z-index:1; background:#eef1f5; box-shadow:0 1px 2px rgba(0,0,0,0.1);">
           <tr>
@@ -5934,6 +5935,7 @@
 
   function syncSalesOrdersToPortal() {
     localStorage.setItem('portalSalesOrders', JSON.stringify(mockSalesOrders));
+    cloudSave('portalSalesOrders');
   }
 
   function syncSalesOrdersFromPortal() {
@@ -5991,7 +5993,7 @@
           message: r.note || '（需求單）',
           status: r.status === 'done' ? 'replied' : 'pending',
           reply: r.reply || '',
-          createdAt: createdDate.toLocaleString('zh-TW', {year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}),
+          createdAt: (createdDate.getMonth()+1).toString().padStart(2,'0') + '/' + createdDate.getDate().toString().padStart(2,'0') + ' ' + createdDate.getHours().toString().padStart(2,'0') + ':' + createdDate.getMinutes().toString().padStart(2,'0'),
           repliedAt: r.repliedAt || '',
           newEta: r.newEta || ''
         };
@@ -6171,6 +6173,7 @@
               <option value="disputed">退貨處理中</option>
               <option value="closed">已結案</option>
             </select>
+            <button class="btn" style="padding:5px 12px; font-size:12px; background:#b7791f;" onclick="manualCreateSO()">➕ 手動新增</button>
             <span style="color:#e2e8f0;">│</span>
             <button class="btn" style="padding:5px 12px; font-size:12px; background:#718096;" onclick="toggleSelectAllSO()">☑ 全選</button>
             <button class="btn" style="padding:5px 12px; font-size:12px; background:#047857;" onclick="batchIssueSO()">✅ 批次開立</button>
@@ -6184,6 +6187,195 @@
       </div>`;
     document.getElementById('mainContainer').innerHTML = html;
     refreshAccountingTable();
+  }
+
+  // ===== 手動新增銷貨單 =====
+  let _manualItems = [];
+
+  async function manualCreateSO() {
+    // 確保商品資料已載入
+    if (!ipAllProducts || ipAllProducts.length === 0) {
+      Swal.fire({ title: '載入商品資料...', allowOutsideClick: false });
+      Swal.showLoading();
+      await ipLoadProducts();
+      Swal.close();
+    }
+    _manualItems = [{ productId: '', name: '', qty: 1, unitPrice: 0 }];
+    const storeOpts = branchNames.map(b => `<option value="${b}">${b}</option>`).join('');
+    const today = new Date().toISOString().split('T')[0];
+
+    Swal.fire({
+      title: '手動新增銷貨單',
+      width: 720,
+      html: `
+        <div style="text-align:left; font-size:13px;">
+          <div style="display:flex; gap:12px; margin-bottom:12px;">
+            <div style="flex:1;">
+              <label style="font-weight:bold; display:block; margin-bottom:4px;">分店</label>
+              <select id="mcso-store" style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:13px;">
+                <option value="">-- 選擇分店 --</option>
+                ${storeOpts}
+              </select>
+            </div>
+            <div style="flex:1;">
+              <label style="font-weight:bold; display:block; margin-bottom:4px;">日期</label>
+              <input type="date" id="mcso-date" value="${today}" style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:13px;">
+            </div>
+          </div>
+          <div style="margin-bottom:8px;">
+            <label style="font-weight:bold; display:block; margin-bottom:4px;">備註</label>
+            <input type="text" id="mcso-note" placeholder="選填" style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:13px;">
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span style="font-weight:bold;">商品明細</span>
+            <button type="button" onclick="_mcsoAddRow()" style="padding:4px 10px; background:#2b6cb0; color:#fff; border:none; border-radius:4px; font-size:12px; cursor:pointer;">＋ 加一列</button>
+          </div>
+          <div id="mcso-items" style="max-height:300px; overflow:auto;"></div>
+          <div id="mcso-total" style="text-align:right; font-weight:bold; margin-top:8px; font-size:14px; color:#2b6cb0;"></div>
+        </div>`,
+      didOpen: () => { _mcsoRenderItems(); },
+      showCancelButton: true,
+      confirmButtonText: '建立銷貨單',
+      cancelButtonText: '取消',
+      confirmButtonColor: '#047857',
+      preConfirm: () => {
+        const store = document.getElementById('mcso-store').value;
+        const date = document.getElementById('mcso-date').value;
+        const note = document.getElementById('mcso-note').value.trim();
+        if (!store) { Swal.showValidationMessage('請選擇分店'); return false; }
+        if (!date) { Swal.showValidationMessage('請選擇日期'); return false; }
+        // 讀取所有明細行
+        const items = [];
+        document.querySelectorAll('.mcso-row').forEach(row => {
+          const pid = row.querySelector('.mcso-pid')?.value.trim() || '';
+          const nm = row.querySelector('.mcso-nm')?.value.trim() || '';
+          const q = parseFloat(row.querySelector('.mcso-qty')?.value) || 0;
+          const p = parseFloat(row.querySelector('.mcso-price')?.value) || 0;
+          if (nm && q > 0) items.push({ productId: pid, name: nm, qty: q, unitPrice: p });
+        });
+        if (items.length === 0) { Swal.showValidationMessage('至少需要一項商品'); return false; }
+        return { store, date, note, items };
+      }
+    }).then(result => {
+      if (!result.isConfirmed) return;
+      const { store, date, note, items } = result.value;
+      const now = new Date();
+      const dateNum = date.replace(/-/g, '');
+      const soId = `SO-${dateNum}-${String(mockSalesOrders.length + 1).padStart(3, '0')}`;
+      const timeStr = `${date.replace(/-/g, '/')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      const total = items.reduce((s, i) => s + i.qty * i.unitPrice, 0);
+
+      mockSalesOrders.push({
+        id: soId,
+        waveId: 'MANUAL',
+        storeName: store,
+        createdAt: timeStr,
+        storeConfirmedAt: null,
+        status: 'pending',
+        issuedAt: timeStr,
+        finalAmount: total,
+        note: note || '手動新增',
+        items: items.map(it => ({
+          productId: it.productId,
+          name: it.name,
+          expectedQty: it.qty,
+          qty: it.qty,
+          unitPrice: it.unitPrice,
+          returnQty: 0,
+          returnStatus: 'none',
+          returnReason: '',
+          returnDate: '',
+          damaged: false,
+          note: ''
+        }))
+      });
+
+      syncSalesOrdersToPortal();
+      renderAccountingStation();
+      Swal.fire({ title: '已建立！', text: `銷貨單 ${soId}（${store}）`, icon: 'success', timer: 1800, showConfirmButton: false });
+    });
+  }
+
+  function _mcsoAddRow() {
+    _manualItems.push({ productId: '', name: '', qty: 1, unitPrice: 0 });
+    _mcsoRenderItems();
+  }
+
+  function _mcsoRenderItems() {
+    const box = document.getElementById('mcso-items');
+    if (!box) return;
+    box.innerHTML = `
+      <table style="width:100%; border-collapse:collapse; font-size:12px;">
+        <thead><tr style="background:#f1f5f9;">
+          <th style="padding:5px 4px; text-align:left; width:140px;">商品編號/搜尋</th>
+          <th style="padding:5px 4px; text-align:left;">商品名稱</th>
+          <th style="padding:5px 4px; text-align:center; width:65px;">數量</th>
+          <th style="padding:5px 4px; text-align:center; width:80px;">單價</th>
+          <th style="padding:5px 4px; text-align:center; width:80px;">小計</th>
+          <th style="padding:5px 4px; width:36px;"></th>
+        </tr></thead>
+        <tbody>${_manualItems.map((it, i) => `
+          <tr class="mcso-row" style="border-bottom:1px solid #e2e8f0;">
+            <td style="padding:4px; position:relative;">
+              <input class="mcso-pid" value="${it.productId}" style="width:100%; padding:4px; border:1px solid #ddd; border-radius:3px; font-size:12px;" placeholder="輸入編號或名稱" oninput="_mcsoSearch(this,${i})" onfocus="_mcsoSearch(this,${i})">
+              <div class="mcso-dropdown" style="display:none; position:absolute; left:4px; right:4px; top:100%; background:#fff; border:1px solid #ddd; border-radius:4px; max-height:180px; overflow:auto; z-index:9999; box-shadow:0 4px 12px rgba(0,0,0,0.15);"></div>
+            </td>
+            <td style="padding:4px;"><input class="mcso-nm" value="${it.name}" style="width:100%; padding:4px; border:1px solid #ddd; border-radius:3px; font-size:12px;" placeholder="商品名稱"></td>
+            <td style="padding:4px;"><input class="mcso-qty" type="number" min="1" value="${it.qty}" style="width:100%; padding:4px; border:1px solid #ddd; border-radius:3px; font-size:12px; text-align:center;" onchange="_mcsoCalcTotal()"></td>
+            <td style="padding:4px;"><input class="mcso-price" type="number" min="0" value="${it.unitPrice}" style="width:100%; padding:4px; border:1px solid #ddd; border-radius:3px; font-size:12px; text-align:right;" onchange="_mcsoCalcTotal()"></td>
+            <td style="padding:4px; text-align:right; color:#2b6cb0; font-weight:bold;">$${(it.qty * it.unitPrice).toLocaleString()}</td>
+            <td style="padding:4px; text-align:center;"><button type="button" onclick="_mcsoDelRow(${i})" style="background:#c53030; color:#fff; border:none; border-radius:3px; padding:2px 6px; font-size:11px; cursor:pointer;">✕</button></td>
+          </tr>`).join('')}
+        </tbody>
+      </table>`;
+    _mcsoCalcTotal();
+  }
+
+  function _mcsoSearch(inputEl, rowIdx) {
+    const kw = inputEl.value.trim().toLowerCase();
+    const dropdown = inputEl.parentElement.querySelector('.mcso-dropdown');
+    if (!kw || kw.length < 1) { dropdown.style.display = 'none'; return; }
+    const matches = (ipAllProducts || []).filter(p =>
+      (p.id && p.id.toLowerCase().includes(kw)) || (p.name && p.name.toLowerCase().includes(kw))
+    ).slice(0, 20);
+    if (matches.length === 0) { dropdown.style.display = 'none'; return; }
+    dropdown.innerHTML = matches.map(p =>
+      `<div style="padding:6px 8px; cursor:pointer; font-size:12px; border-bottom:1px solid #f0f0f0; display:flex; gap:6px;" onmousedown="_mcsoSelect(${rowIdx},'${p.id}',\`${(p.name||'').replace(/`/g,"'")}\`,${p.price_branch || p.price || 0})">
+        <span style="color:#2b6cb0; font-weight:bold; white-space:nowrap;">${p.id}</span>
+        <span style="color:#333; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${p.name}</span>
+        <span style="color:#718096; white-space:nowrap;">$${p.price_branch || p.price || 0}</span>
+      </div>`
+    ).join('');
+    dropdown.style.display = 'block';
+    // 點擊外面關閉
+    setTimeout(() => {
+      inputEl.addEventListener('blur', () => { setTimeout(() => { dropdown.style.display = 'none'; }, 150); }, { once: true });
+    }, 0);
+  }
+
+  function _mcsoSelect(rowIdx, pid, name, price) {
+    _manualItems[rowIdx].productId = pid;
+    _manualItems[rowIdx].name = name;
+    _manualItems[rowIdx].unitPrice = price;
+    _mcsoRenderItems();
+  }
+
+  function _mcsoDelRow(idx) {
+    if (_manualItems.length <= 1) return;
+    _manualItems.splice(idx, 1);
+    _mcsoRenderItems();
+  }
+
+  function _mcsoCalcTotal() {
+    let total = 0;
+    document.querySelectorAll('.mcso-row').forEach((row, i) => {
+      const q = parseFloat(row.querySelector('.mcso-qty')?.value) || 0;
+      const p = parseFloat(row.querySelector('.mcso-price')?.value) || 0;
+      if (_manualItems[i]) { _manualItems[i].qty = q; _manualItems[i].unitPrice = p; }
+      total += q * p;
+    });
+    const el = document.getElementById('mcso-total');
+    if (el) el.textContent = `合計：$${total.toLocaleString()}`;
   }
 
   function renderAccountingSummary() {
@@ -6924,7 +7116,7 @@
   }
 
   let asPageNum = 1;
-  const AS_PER_PAGE = 30;
+  const AS_PER_PAGE = 100;
 
   function filterAdminSummary(showAll, page) {
     const publishedList = JSON.parse(localStorage.getItem('branchOrderList') || '[]');
