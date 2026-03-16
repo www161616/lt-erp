@@ -1709,24 +1709,43 @@
         return;
       }
 
-      // 產生確認清單 HTML
+      // 比對上次送出的資料，找出異動項目
+      const storeName = currentStore?.name || '未知';
+      const lastSaved = JSON.parse(localStorage.getItem('branchOrders') || '{}');
+      const lastStoreOrders = lastSaved[storeName] || {};
+      const changedItems = items.filter(item => {
+        const oldQty = lastStoreOrders[item.id] || 0;
+        return item.qty !== oldQty;
+      });
+      const newItems = changedItems.filter(item => !lastStoreOrders[item.id]);
+      const modifiedItems = changedItems.filter(item => lastStoreOrders[item.id]);
+
+      // 產生確認清單 HTML（只顯示異動項目）
+      const showItems = changedItems.length > 0 ? changedItems : items;
+      const isFullList = changedItems.length === 0;
       let tableHtml = `
         <div style="text-align:left; margin-top:8px;">
+          ${!isFullList ? `<div style="font-size:13px; color:#059669; margin-bottom:8px; padding:6px 10px; background:#f0fdf4; border-radius:6px;">
+            ${newItems.length > 0 ? `新增 <b>${newItems.length}</b> 項` : ''}${newItems.length > 0 && modifiedItems.length > 0 ? '、' : ''}${modifiedItems.length > 0 ? `修改 <b>${modifiedItems.length}</b> 項` : ''}
+          </div>` : ''}
+          <div style="max-height:50vh; overflow-y:auto;">
           <table style="width:100%; border-collapse:collapse; font-size:14px;">
             <thead>
               <tr style="background:#fff0f6; border-bottom:2px solid #fcd5e0;">
-                <th style="padding:8px 12px; color:#6b7280; font-weight:600; text-align:left;">商品編號</th>
                 <th style="padding:8px 12px; color:#6b7280; font-weight:600; text-align:left;">商品名稱</th>
-                <th style="padding:8px 12px; color:#6b7280; font-weight:600; text-align:center;">數量</th>
+                ${!isFullList ? '<th style="padding:8px 12px; color:#6b7280; font-weight:600; text-align:center;">原數量</th>' : ''}
+                <th style="padding:8px 12px; color:#6b7280; font-weight:600; text-align:center;">${isFullList ? '數量' : '新數量'}</th>
               </tr>
             </thead>
             <tbody>
       `;
-      items.forEach(item => {
+      showItems.forEach(item => {
+        const oldQty = lastStoreOrders[item.id] || 0;
+        const isNew = !lastStoreOrders[item.id];
         tableHtml += `
-          <tr style="border-bottom:1px solid #f3f4f6;">
-            <td style="padding:8px 12px; color:#6b7280;">${item.productId}</td>
-            <td style="padding:8px 12px; font-weight:500;">${item.name}</td>
+          <tr style="border-bottom:1px solid #f3f4f6; ${isNew ? 'background:#f0fdf4;' : ''}">
+            <td style="padding:8px 12px; font-weight:500;">${item.name}${isNew ? ' <span style="color:#059669; font-size:11px;">新增</span>' : ''}</td>
+            ${!isFullList ? `<td style="padding:8px 12px; text-align:center; color:#9ca3af;">${oldQty}</td>` : ''}
             <td style="padding:8px 12px; text-align:center; font-weight:700; color:#be185d;">${item.qty}</td>
           </tr>
         `;
@@ -1734,12 +1753,15 @@
       tableHtml += `
             </tbody>
           </table>
-          <div style="margin-top:12px; font-size:13px; color:#6b7280; text-align:right;">共 ${items.length} 項商品</div>
+          </div>
+          <div style="margin-top:12px; font-size:13px; color:#6b7280; text-align:right;">
+            ${isFullList ? `共 ${items.length} 項商品` : `異動 ${changedItems.length} 項（總計 ${items.length} 項）`}
+          </div>
         </div>
       `;
 
       Swal.fire({
-        title: '請確認訂貨內容',
+        title: isFullList ? '請確認訂貨內容' : '請確認修改內容',
         html: tableHtml,
         icon: 'question',
         showCancelButton: true,
@@ -1751,26 +1773,27 @@
       }).then(result => {
         if (result.isConfirmed) {
           // 儲存訂單至 localStorage（供開團總表讀取）
-          const storeName = currentStore?.name || '未知';
           const saved = JSON.parse(localStorage.getItem('branchOrders') || '{}');
           if (!saved[storeName]) saved[storeName] = {};
           items.forEach(item => { saved[storeName][item.id] = item.qty; });
           localStorage.setItem('branchOrders', JSON.stringify(saved));
           cloudSave('branchOrders');
 
-          // 同步更新 cache，確保切頁再回來數量不會跑掉
+          // 同步更新 cache
           items.forEach(item => { orderQtyCache[item.id] = String(item.qty); });
           saveQtyCache();
 
           orderDirty = false;
+          const msg = isFullList
+            ? `共 <b>${items.length}</b> 項商品已送出`
+            : `${newItems.length > 0 ? '新增 <b>' + newItems.length + '</b> 項' : ''}${newItems.length > 0 && modifiedItems.length > 0 ? '、' : ''}${modifiedItems.length > 0 ? '修改 <b>' + modifiedItems.length + '</b> 項' : ''}`;
           Swal.fire({
             icon: 'success',
             title: '已送出！',
-            html: `共 <b>${items.length}</b> 項商品已更新，龍潭總倉已收到`,
+            html: msg + '，龍潭總倉已收到',
             confirmButtonColor: '#be185d'
           });
         }
-        // 取消就直接關閉，回到表單繼續修改
       });
     }
 
