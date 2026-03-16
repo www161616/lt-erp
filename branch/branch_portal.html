@@ -1244,12 +1244,6 @@
       });
       document.getElementById('orderTableBody').innerHTML = html;
 
-      // 鎖定狀態復原
-      if (isQtyLocked) {
-        document.querySelectorAll('.qty-input:not([disabled])').forEach(el => {
-          el.readOnly = true; el.style.background = '#f3f4f6'; el.style.cursor = 'not-allowed';
-        });
-      }
 
       // Enter 鍵跳下一行
       const allQty = document.querySelectorAll('.qty-input:not([disabled])');
@@ -1469,7 +1463,7 @@
     // ============================
     // 匯入樂樂報表
     // ============================
-    let isQtyLocked = false;
+    let isQtyLocked = false; // 已停用，保留變數避免報錯
 
     function handleExcelUpload(event) {
       const file = event.target.files[0];
@@ -1662,8 +1656,6 @@
             reportDiv.style.background = hasError ? '#fef2f2' : '#f0fdf4';
             reportDiv.style.borderColor = hasError ? '#fecaca' : '#bbf7d0';
 
-            // 6. 鎖定數量
-            lockQtyInputs();
 
             Swal.fire({
               title: matchCount > 0 ? '匯入完成' : '匯入失敗',
@@ -1685,21 +1677,8 @@
     // ============================
     // 鎖定 / 解鎖數量
     // ============================
-    function lockQtyInputs() {
-      isQtyLocked = true;
-      document.querySelectorAll('.qty-input').forEach(el => {
-        if (!el.disabled) { el.readOnly = true; el.style.background = '#f3f4f6'; el.style.cursor = 'not-allowed'; }
-      });
-      updateSubmitBar();
-    }
-
-    function unlockQtyInputs() {
-      isQtyLocked = false;
-      document.querySelectorAll('.qty-input').forEach(el => {
-        if (!el.disabled) { el.readOnly = false; el.style.background = ''; el.style.cursor = ''; }
-      });
-      updateSubmitBar();
-    }
+    function lockQtyInputs() { /* 已停用 */ }
+    function unlockQtyInputs() { /* 已停用 */ }
 
     function showQtyHint(el) {
       hideQtyHint();
@@ -1717,17 +1696,7 @@
       if (h) h.remove();
     }
 
-    function updateSubmitBar() {
-      const bar = document.getElementById('submitBar');
-      if (!bar) return;
-      if (isQtyLocked) {
-        bar.style.display = '';
-        bar.innerHTML = '<div style="display:flex; align-items:center; gap:10px; padding:8px 14px; background:#fef3c7; border:1px solid #fcd34d; border-radius:8px; font-size:13px; color:#92400e;">🔒 數量已鎖定，避免誤按　<button onclick="unlockQtyInputs()" style="background:#b45309; color:white; border:none; padding:5px 14px; border-radius:5px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;">🔓 解鎖修改</button></div>';
-      } else {
-        bar.style.display = 'none';
-        bar.innerHTML = '';
-      }
-    }
+    function updateSubmitBar() { /* 已停用 */ }
 
     // ============================
     // 送出訂單
@@ -1803,7 +1772,6 @@
           cloudSave('branchOrders');
 
           orderDirty = false;
-          lockQtyInputs();
           Swal.fire({
             icon: 'success',
             title: '已填單完成！',
