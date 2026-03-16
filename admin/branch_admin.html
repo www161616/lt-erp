@@ -3565,7 +3565,7 @@
 
       try {
         // 0. 批次查詢分店價（從 products 表）
-        const productIds = wave.matrix.map(r => r.id || r.productId).filter(Boolean);
+        const productIds = [...new Set(wave.matrix.map(r => r.productId || r.id).filter(Boolean))];
         const branchPriceMap = {};
         if (productIds.length > 0) {
           let offset = 0;
@@ -3597,7 +3597,7 @@
                 else if (corrItem && corrItem.action === 'pending') note += `｜少貨 ${corrItem.diff} 待補`;
                 else if (corrItem && corrItem.action === 'noRestock') note += `｜少貨 ${corrItem.diff} 不補`;
                 // 優先用 products 表的分店價
-                const dbPrice = branchPriceMap[row.id] || branchPriceMap[row.productId];
+                const dbPrice = branchPriceMap[row.productId] || branchPriceMap[row.id];
                 const finalPrice = dbPrice ? (dbPrice.price_branch || dbPrice.price || 0) : (row.storePrice || row.price || 0);
                 const finalCost = dbPrice ? (dbPrice.cost || 0) : (row.cost || 0);
                 branchBundles[bName].push({
