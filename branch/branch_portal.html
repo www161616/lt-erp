@@ -3230,13 +3230,19 @@ function showHistoryDetail(orderId) {
   let rows = '';
   let totalQty = 0, totalAmount = 0;
   r.items.forEach(item => {
-    const subtotal = (item.price || 0) * (item.qty || 0);
+    // 優先用 PRODUCT_DB 的分店價
+    let displayPrice = item.price || 0;
+    if (PRODUCT_DB.length > 0) {
+      const dbP = PRODUCT_DB.find(p => p.code === item.code);
+      if (dbP && dbP.price) displayPrice = dbP.price;
+    }
+    const subtotal = displayPrice * (item.qty || 0);
     totalQty += item.qty || 0;
     totalAmount += subtotal;
     rows += `<tr style="border-bottom:1px solid #f3f4f6;">
       <td style="padding:8px 12px; color:#6b7280;">${item.code}</td>
       <td style="padding:8px 12px; font-weight:500;">${item.name}</td>
-      <td style="padding:8px 12px; text-align:right; color:#6b7280;">$${(item.price||0).toLocaleString()}</td>
+      <td style="padding:8px 12px; text-align:right; color:#6b7280;">$${displayPrice.toLocaleString()}</td>
       <td style="padding:8px 12px; text-align:center; font-weight:700; color:#be185d;">${item.qty}</td>
       <td style="padding:8px 12px; text-align:right; font-weight:700;">$${subtotal.toLocaleString()}</td>
     </tr>`;
