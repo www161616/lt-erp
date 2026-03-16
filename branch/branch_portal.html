@@ -1214,9 +1214,7 @@
 
         const statusBadge = isClosed
           ? '<span style="background:#fef2f2; color:#ef4444; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:700; margin-left:4px;">已結單</span>'
-          : (p.endDate < today)
-            ? '<span style="background:#fef3c7; color:#b45309; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:700; margin-left:4px;">已過期</span>'
-            : '';
+          : '';
 
         const importedQty = myStoreOrders[p.id] || 0;
         const cached = orderQtyCache[p.id] || (importedQty > 0 ? String(importedQty) : '');

@@ -1,0 +1,640 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <base target="_top">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>龍潭進銷存系統 - 待審單據</title>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
+
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: "Microsoft JhengHei", "微軟正黑體", sans-serif; font-size: 14px; background: #f8f9fb; height: 100vh; overflow: hidden; padding: 15px; display: flex; flex-direction: column; }
+
+    /* 頂部標題列 */
+    .header-bar { flex: 0 0 auto; display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; background: white; padding: 10px 20px; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); border-left: 5px solid #475569; }
+    .header-title { font-size: 20px; font-weight: bold; color: #475569; }
+    .header-actions { display: flex; gap: 8px; align-items: center; }
+
+    /* 分頁標籤 */
+    .tab-bar { display: flex; gap: 0; margin-bottom: 15px; flex-shrink: 0; }
+    .tab-btn { padding: 10px 24px; font-size: 14px; font-weight: bold; border: 1px solid #e2e8f0; background: #f1f5f9; color: #64748b; cursor: pointer; transition: 0.2s; font-family: inherit; }
+    .tab-btn:first-child { border-radius: 8px 0 0 8px; }
+    .tab-btn:last-child { border-radius: 0 8px 8px 0; }
+    .tab-btn.active { background: #475569; color: white; border-color: #475569; }
+    .tab-btn .badge { display: inline-block; background: #c53030; color: white; font-size: 11px; padding: 1px 7px; border-radius: 10px; margin-left: 6px; font-weight: bold; }
+    .tab-btn.active .badge { background: #fbbf24; color: #1e293b; }
+
+    /* 主內容區 */
+    .content-area { flex: 1; overflow: auto; background: white; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.1); border-top: 4px solid #475569; }
+    .tab-content { display: none; height: 100%; flex-direction: column; }
+    .tab-content.active { display: flex; }
+
+    /* 空狀態 */
+    .empty-state { display: flex; align-items: center; justify-content: center; height: 100%; color: #94a3b8; font-size: 16px; flex-direction: column; gap: 8px; }
+
+    /* 訂單卡片 */
+    .order-card { padding: 14px 18px; border-bottom: 1px solid #f1f5f9; transition: 0.15s; cursor: pointer; }
+    .order-card:hover { background: #f8fafc; }
+    .order-card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+    .order-card-id { font-family: monospace; font-weight: bold; color: #334155; font-size: 14px; }
+    .order-card-date { font-size: 12px; color: #94a3b8; }
+    .order-card-body { display: flex; justify-content: space-between; align-items: center; }
+    .order-card-info { font-size: 13px; color: #475569; }
+    .order-card-info b { color: #1e293b; }
+    .order-card-amount { font-size: 18px; font-weight: bold; color: #c05621; font-family: monospace; }
+    .order-card-meta { display: flex; gap: 8px; margin-top: 6px; font-size: 12px; color: #94a3b8; }
+    .order-card-actions { display: flex; gap: 6px; margin-top: 10px; justify-content: flex-end; }
+
+    /* 狀態標籤 */
+    .status-badge { font-size: 11px; padding: 2px 8px; border-radius: 10px; font-weight: bold; }
+    .status-pending { background: #fef3c7; color: #92400e; }
+    .status-approved { background: #d1fae5; color: #065f46; }
+
+    /* 按鈕 */
+    .btn { padding: 6px 14px; font-size: 13px; font-weight: bold; border: none; border-radius: 6px; cursor: pointer; color: white; display: inline-flex; align-items: center; gap: 4px; transition: 0.2s; font-family: inherit; }
+    .btn:active { transform: translateY(1px); }
+    .btn-approve { background: #047857; }
+    .btn-approve:hover { background: #065f46; }
+    .btn-reject { background: #dc2626; }
+    .btn-reject:hover { background: #b91c1c; }
+    .btn-detail { background: #475569; }
+    .btn-detail:hover { background: #334155; }
+    .btn-refresh { background: #2563eb; }
+    .btn-refresh:hover { background: #1d4ed8; }
+
+    /* 明細表格 */
+    .detail-table { width: 100%; border-collapse: collapse; margin-top: 10px; }
+    .detail-table th { background: #f1f5f9; padding: 8px 10px; text-align: left; font-size: 12px; color: #475569; border-bottom: 1px solid #e2e8f0; }
+    .detail-table td { padding: 8px 10px; border-bottom: 1px solid #f1f5f9; font-size: 13px; }
+    .detail-table tr:hover { background: #f8fafc; }
+
+    /* 統計列 */
+    .summary-bar { display: flex; gap: 15px; padding: 12px 18px; background: #f8fafc; border-bottom: 1px solid #e2e8f0; flex-shrink: 0; flex-wrap: wrap; }
+    .summary-item { font-size: 13px; color: #475569; }
+    .summary-item b { color: #1e293b; font-size: 15px; }
+
+    .list-scroll { flex: 1; overflow-y: auto; }
+  </style>
+</head>
+<body>
+
+  <div class="header-bar">
+    <div class="header-title">📋 待審單據</div>
+    <div class="header-actions">
+      <button class="btn btn-refresh" onclick="loadAllPending()">🔄 重新整理</button>
+    </div>
+  </div>
+
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchTab('sales', this)">🛒 待審銷貨單 <span class="badge" id="badgeSales">0</span></button>
+    <button class="tab-btn" onclick="switchTab('purchase', this)">📥 待審進貨單 <span class="badge" id="badgePurchase">0</span></button>
+  </div>
+
+  <div class="content-area">
+    <div class="tab-content active" id="tabSales">
+      <div class="summary-bar" id="salesSummary"></div>
+      <div class="list-scroll" id="salesList">
+        <div class="empty-state">載入中...</div>
+      </div>
+    </div>
+    <div class="tab-content" id="tabPurchase">
+      <div class="summary-bar" id="purchaseSummary"></div>
+      <div class="list-scroll" id="purchaseList">
+        <div class="empty-state">載入中...</div>
+      </div>
+    </div>
+  </div>
+
+<script>
+  // ============================
+  // Supabase 設定
+  // ============================
+  const SB_URL = 'https://asugjynpocwygggttxyo.supabase.co/rest/v1';
+  const SB_KEY = 'sb_publishable_cG0dslg6JnSwOtPSBko2Eg_VB0NtbTW';
+  const AUTH_TOKEN = sessionStorage.getItem('sb_auth_token') || SB_KEY;
+  const HEADERS = {
+    'apikey': SB_KEY,
+    'Authorization': `Bearer ${AUTH_TOKEN}`,
+    'Content-Type': 'application/json'
+  };
+
+  // ============================
+  // 資料
+  // ============================
+  let pendingSalesOrders = [];
+  let pendingPurchaseOrders = [];
+  let allCustomers = [];
+
+  // ============================
+  // 分頁切換
+  // ============================
+  function switchTab(tab, el) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+    el.classList.add('active');
+    document.getElementById(tab === 'sales' ? 'tabSales' : 'tabPurchase').classList.add('active');
+  }
+
+  // ============================
+  // 載入全部待審資料
+  // ============================
+  async function loadAllPending() {
+    await Promise.all([
+      loadPendingSales(),
+      loadPendingPurchases(),
+      loadCustomers()
+    ]);
+  }
+
+  // 載入客戶清單
+  async function loadCustomers() {
+    try {
+      const res = await fetch(`${SB_URL}/customers?select=id,name,tax_type`, { headers: HEADERS });
+      if (res.ok) allCustomers = await res.json();
+    } catch(e) { console.error('loadCustomers error:', e); }
+  }
+
+  // ============================
+  // 待審銷貨單（從 shared_kv 讀取）
+  // ============================
+  async function loadPendingSales() {
+    try {
+      const res = await fetch(`${SB_URL}/shared_kv?key=eq.portalSalesOrders&select=value`, { headers: HEADERS });
+      if (!res.ok) throw new Error('讀取 shared_kv 失敗');
+      const data = await res.json();
+      const allOrders = data.length > 0 ? (data[0].value || []) : [];
+      // 只顯示 pending 和 confirmed 的
+      pendingSalesOrders = allOrders.filter(o => o.status === 'pending' || o.status === 'confirmed');
+      renderSalesList();
+    } catch(e) {
+      console.error('loadPendingSales error:', e);
+      document.getElementById('salesList').innerHTML = `<div class="empty-state" style="color:#dc2626;">載入失敗: ${e.message}</div>`;
+    }
+  }
+
+  function renderSalesList() {
+    const badge = document.getElementById('badgeSales');
+    badge.textContent = pendingSalesOrders.length;
+
+    const summary = document.getElementById('salesSummary');
+    const totalAmt = pendingSalesOrders.reduce((s, o) => s + (o.finalAmount || o.items.reduce((a, i) => a + i.qty * i.unitPrice, 0)), 0);
+    summary.innerHTML = `
+      <div class="summary-item">待審數量：<b>${pendingSalesOrders.length}</b> 筆</div>
+      <div class="summary-item">待審總額：<b style="color:#c05621;">$${totalAmt.toLocaleString()}</b></div>
+    `;
+
+    const list = document.getElementById('salesList');
+    if (pendingSalesOrders.length === 0) {
+      list.innerHTML = '<div class="empty-state">🎉 目前沒有待審銷貨單</div>';
+      return;
+    }
+
+    list.innerHTML = pendingSalesOrders.map(o => {
+      const amount = o.finalAmount || o.items.reduce((s, i) => s + i.qty * i.unitPrice, 0);
+      const source = o.waveId === 'MANUAL' ? '手動開立' : `揀貨單 ${o.waveId}`;
+      return `
+        <div class="order-card" onclick="showSalesDetail('${o.id}')">
+          <div class="order-card-header">
+            <div>
+              <span class="order-card-id">${o.id}</span>
+              <span class="status-badge status-pending" style="margin-left:8px;">待審核</span>
+            </div>
+            <span class="order-card-date">${o.createdAt || ''}</span>
+          </div>
+          <div class="order-card-body">
+            <div class="order-card-info">
+              客戶：<b>${o.storeName}</b> ｜ 商品 <b>${o.items.length}</b> 項
+            </div>
+            <div class="order-card-amount">$${amount.toLocaleString()}</div>
+          </div>
+          <div class="order-card-meta">
+            <span>來源：${source}</span>
+            <span>備註：${o.note || '無'}</span>
+          </div>
+          <div class="order-card-actions" onclick="event.stopPropagation();">
+            <button class="btn btn-detail" onclick="showSalesDetail('${o.id}')">👁 明細</button>
+            <button class="btn btn-approve" onclick="approveSalesOrder('${o.id}')">✅ 確認開立</button>
+            <button class="btn btn-reject" onclick="rejectSalesOrder('${o.id}')">❌ 退回</button>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  // 顯示銷貨單明細
+  function showSalesDetail(id) {
+    const o = pendingSalesOrders.find(x => x.id === id);
+    if (!o) return;
+    const amount = o.finalAmount || o.items.reduce((s, i) => s + i.qty * i.unitPrice, 0);
+    const source = o.waveId === 'MANUAL' ? '手動開立' : `揀貨單 ${o.waveId}`;
+    const rows = o.items.map((it, i) => `
+      <tr>
+        <td style="text-align:center;">${i + 1}</td>
+        <td>${it.productId || ''}</td>
+        <td style="font-weight:600;">${it.name}</td>
+        <td style="text-align:center;">${it.qty}</td>
+        <td style="text-align:right;">$${(it.unitPrice || 0).toLocaleString()}</td>
+        <td style="text-align:right; font-weight:600;">$${(it.qty * it.unitPrice).toLocaleString()}</td>
+      </tr>`).join('');
+
+    Swal.fire({
+      title: `銷貨單明細 — ${o.id}`,
+      html: `
+        <div style="text-align:left; font-size:13px; margin-bottom:10px;">
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; background:#f1f5f9; padding:10px; border-radius:6px;">
+            <div>客戶：<b>${o.storeName}</b></div>
+            <div>日期：<b>${o.createdAt || ''}</b></div>
+            <div>來源：<b>${source}</b></div>
+            <div>備註：<b>${o.note || '無'}</b></div>
+          </div>
+        </div>
+        <div style="max-height:300px; overflow:auto;">
+          <table class="detail-table">
+            <thead><tr><th>#</th><th>商品編號</th><th>商品名稱</th><th style="text-align:center;">數量</th><th style="text-align:right;">單價</th><th style="text-align:right;">小計</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+        <div style="text-align:right; margin-top:10px; font-size:18px; font-weight:bold; color:#c05621;">
+          合計：$${amount.toLocaleString()}
+        </div>`,
+      width: 700,
+      showCloseButton: true,
+      showConfirmButton: false
+    });
+  }
+
+  // 確認開立銷貨單（寫入 Supabase）
+  async function approveSalesOrder(id) {
+    const o = pendingSalesOrders.find(x => x.id === id);
+    if (!o) return;
+
+    const amount = o.finalAmount || o.items.reduce((s, i) => s + i.qty * i.unitPrice, 0);
+    const confirm = await Swal.fire({
+      title: '確認開立銷貨單？',
+      html: `客戶：<b>${o.storeName}</b><br>商品：<b>${o.items.length}</b> 項<br>金額：<b style="color:#047857; font-size:18px;">$${amount.toLocaleString()}</b>
+        <br><br><span style="color:#047857; font-size:13px;">✅ 將寫入正式銷貨單，進入 ERP 帳務流程。</span>`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: '確認開立',
+      confirmButtonColor: '#047857',
+      cancelButtonText: '再看看'
+    });
+    if (!confirm.isConfirmed) return;
+
+    Swal.fire({ title: '開立中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+    try {
+      // 找客戶
+      const cust = allCustomers.find(c => c.name.includes(o.storeName)) || { id: null, name: o.storeName, tax_type: '免稅' };
+      const now = new Date();
+      const dateStr = now.toISOString().split('T')[0];
+      const subtotal = o.items.reduce((s, i) => s + i.qty * i.unitPrice, 0);
+      const taxRate = cust.tax_type === '外加5%' ? 0.05 : 0;
+      const tax_amount = Math.round(subtotal * taxRate);
+      const grand_total = subtotal + tax_amount;
+
+      const orderData = {
+        order_id: null,
+        order_date: dateStr,
+        customer_id: cust.id,
+        customer_name: cust.name,
+        subtotal: subtotal,
+        tax_amount: tax_amount,
+        grand_total: grand_total,
+        tax_type: cust.tax_type || '免稅',
+        shipping_fee: 0,
+        deduction: 0,
+        note: `來自調度中心 ${o.id}${o.note ? ' | ' + o.note : ''}`,
+        items: o.items.map(it => ({
+          product_id: it.productId,
+          product_name: it.name,
+          qty: it.qty,
+          unit: '件',
+          price: it.unitPrice,
+          cost: it.cost || 0,
+          note: it.note || ''
+        }))
+      };
+
+      const res = await fetch(`${SB_URL}/rpc/web_save_sales_order`, {
+        method: 'POST',
+        headers: HEADERS,
+        body: JSON.stringify({ p_order_data: orderData })
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error('寫入失敗：' + errText);
+      }
+
+      const newSoId = await res.json();
+
+      // 更新 shared_kv：把這張單的狀態改為 issued
+      await updateSharedKvOrderStatus(id, 'issued');
+
+      Swal.fire({
+        title: '開立成功',
+        html: `正式銷貨單號：<b>${newSoId}</b><br>金額：$${grand_total.toLocaleString()}`,
+        icon: 'success',
+        timer: 2500,
+        showConfirmButton: true
+      });
+
+      // 重新載入
+      await loadPendingSales();
+    } catch(e) {
+      console.error('approveSalesOrder error:', e);
+      Swal.fire('開立失敗', e.message, 'error');
+    }
+  }
+
+  // 退回銷貨單
+  async function rejectSalesOrder(id) {
+    const o = pendingSalesOrders.find(x => x.id === id);
+    if (!o) return;
+
+    const result = await Swal.fire({
+      title: '退回銷貨單？',
+      html: `將退回 <b>${o.id}</b>（${o.storeName}），此單不會寫入正式帳務。`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: '確定退回',
+      confirmButtonColor: '#dc2626',
+      cancelButtonText: '取消',
+      input: 'text',
+      inputLabel: '退回原因（選填）',
+      inputPlaceholder: '例如：金額有誤、商品不對...'
+    });
+    if (!result.isConfirmed) return;
+
+    Swal.fire({ title: '處理中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+    try {
+      await updateSharedKvOrderStatus(id, 'rejected', result.value || '');
+      Swal.fire({ title: '已退回', icon: 'success', timer: 1500, showConfirmButton: false });
+      await loadPendingSales();
+    } catch(e) {
+      Swal.fire('操作失敗', e.message, 'error');
+    }
+  }
+
+  // 更新 shared_kv 中的銷貨單狀態
+  async function updateSharedKvOrderStatus(orderId, newStatus, rejectReason) {
+    // 讀取最新的 portalSalesOrders
+    const res = await fetch(`${SB_URL}/shared_kv?key=eq.portalSalesOrders&select=value`, { headers: HEADERS });
+    const data = await res.json();
+    const allOrders = data.length > 0 ? (data[0].value || []) : [];
+
+    const order = allOrders.find(o => o.id === orderId);
+    if (order) {
+      order.status = newStatus;
+      if (rejectReason) order.rejectReason = rejectReason;
+      if (newStatus === 'issued') {
+        order.issuedAt = new Date().toLocaleString('zh-TW', { hour12: false });
+      }
+    }
+
+    // 寫回 shared_kv
+    await fetch(`${SB_URL}/shared_kv`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Prefer': 'resolution=merge-duplicates' },
+      body: JSON.stringify({ key: 'portalSalesOrders', value: allOrders })
+    });
+  }
+
+  // ============================
+  // 待審進貨單（從 Supabase internal_purchases 讀取）
+  // ============================
+  async function loadPendingPurchases() {
+    try {
+      const res = await fetch(`${SB_URL}/internal_purchases?status=eq.待審核&select=*&order=order_date.desc,id.desc`, { headers: HEADERS });
+      if (!res.ok) throw new Error('讀取 internal_purchases 失敗');
+      pendingPurchaseOrders = await res.json();
+      renderPurchaseList();
+    } catch(e) {
+      console.error('loadPendingPurchases error:', e);
+      document.getElementById('purchaseList').innerHTML = `<div class="empty-state" style="color:#dc2626;">載入失敗: ${e.message}</div>`;
+    }
+  }
+
+  function renderPurchaseList() {
+    const badge = document.getElementById('badgePurchase');
+    badge.textContent = pendingPurchaseOrders.length;
+
+    const summary = document.getElementById('purchaseSummary');
+    const totalAmt = pendingPurchaseOrders.reduce((s, o) => s + Number(o.grand_total || o.subtotal || 0), 0);
+    summary.innerHTML = `
+      <div class="summary-item">待審數量：<b>${pendingPurchaseOrders.length}</b> 筆</div>
+      <div class="summary-item">待審總額：<b style="color:#047857;">$${totalAmt.toLocaleString()}</b></div>
+    `;
+
+    const list = document.getElementById('purchaseList');
+    if (pendingPurchaseOrders.length === 0) {
+      list.innerHTML = '<div class="empty-state">🎉 目前沒有待審進貨單</div>';
+      return;
+    }
+
+    list.innerHTML = pendingPurchaseOrders.map(o => {
+      const amount = Number(o.grand_total || o.subtotal || 0);
+      return `
+        <div class="order-card" onclick="showPurchaseDetail('${o.id}')">
+          <div class="order-card-header">
+            <div>
+              <span class="order-card-id">${o.id}</span>
+              <span class="status-badge status-pending" style="margin-left:8px;">待審核</span>
+            </div>
+            <span class="order-card-date">${o.order_date || ''}</span>
+          </div>
+          <div class="order-card-body">
+            <div class="order-card-info">
+              供應商：<b>${o.supplier_name || '未填'}</b> ｜ 經手人：<b>${o.handler || ''}</b>
+            </div>
+            <div class="order-card-amount">$${amount.toLocaleString()}</div>
+          </div>
+          <div class="order-card-meta">
+            <span>備註：${o.note || '無'}</span>
+          </div>
+          <div class="order-card-actions" onclick="event.stopPropagation();">
+            <button class="btn btn-detail" onclick="showPurchaseDetail('${o.id}')">👁 明細</button>
+            <button class="btn btn-approve" onclick="approvePurchaseOrder('${o.id}')">✅ 確認轉入進貨單</button>
+            <button class="btn btn-reject" onclick="rejectPurchaseOrder('${o.id}')">❌ 駁回</button>
+          </div>
+        </div>`;
+    }).join('');
+  }
+
+  // 顯示進貨單明細
+  async function showPurchaseDetail(id) {
+    try {
+      const res = await fetch(`${SB_URL}/internal_purchase_details?order_id=eq.${id}&select=*&order=id.asc`, { headers: HEADERS });
+      if (!res.ok) throw new Error('讀取明細失敗');
+      const details = await res.json();
+      const o = pendingPurchaseOrders.find(x => x.id === id);
+      if (!o) return;
+
+      const rows = details.map((it, i) => `
+        <tr>
+          <td style="text-align:center;">${i + 1}</td>
+          <td>${it.product_id || ''}</td>
+          <td style="font-weight:600;">${it.product_name || ''}</td>
+          <td style="text-align:center;">${it.qty}</td>
+          <td style="text-align:center;">${it.unit || '個'}</td>
+          <td style="text-align:right;">$${(Number(it.cost) || 0).toLocaleString()}</td>
+          <td style="text-align:right; font-weight:600;">$${(Number(it.subtotal) || 0).toLocaleString()}</td>
+        </tr>`).join('');
+
+      Swal.fire({
+        title: `進貨單明細 — ${o.id}`,
+        html: `
+          <div style="text-align:left; font-size:13px; margin-bottom:10px;">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; background:#f1f5f9; padding:10px; border-radius:6px;">
+              <div>供應商：<b>${o.supplier_name || '未填'}</b></div>
+              <div>日期：<b>${o.order_date || ''}</b></div>
+              <div>經手人：<b>${o.handler || ''}</b></div>
+              <div>備註：<b>${o.note || '無'}</b></div>
+            </div>
+          </div>
+          <div style="max-height:300px; overflow:auto;">
+            <table class="detail-table">
+              <thead><tr><th>#</th><th>商品編號</th><th>商品名稱</th><th style="text-align:center;">數量</th><th style="text-align:center;">單位</th><th style="text-align:right;">成本</th><th style="text-align:right;">小計</th></tr></thead>
+              <tbody>${rows}</tbody>
+            </table>
+          </div>
+          <div style="text-align:right; margin-top:10px; font-size:18px; font-weight:bold; color:#047857;">
+            合計：$${Number(o.grand_total || o.subtotal || 0).toLocaleString()}
+          </div>`,
+        width: 750,
+        showCloseButton: true,
+        showConfirmButton: false
+      });
+    } catch(e) {
+      Swal.fire('讀取失敗', e.message, 'error');
+    }
+  }
+
+  // 確認轉入正式進貨單
+  async function approvePurchaseOrder(id) {
+    const o = pendingPurchaseOrders.find(x => x.id === id);
+    if (!o) return;
+
+    const amount = Number(o.grand_total || o.subtotal || 0);
+    const confirm = await Swal.fire({
+      title: '確認轉入正式進貨單？',
+      html: `供應商：<b>${o.supplier_name || '未填'}</b><br>金額：<b style="color:#047857; font-size:18px;">$${amount.toLocaleString()}</b>
+        <br><br><span style="color:#047857; font-size:13px;">✅ 將寫入正式進貨單，進入 ERP 帳務流程。</span>`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: '確認轉入',
+      confirmButtonColor: '#047857',
+      cancelButtonText: '再看看'
+    });
+    if (!confirm.isConfirmed) return;
+
+    Swal.fire({ title: '轉入中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+    try {
+      // 先讀取明細
+      const detRes = await fetch(`${SB_URL}/internal_purchase_details?order_id=eq.${id}&select=*&order=id.asc`, { headers: HEADERS });
+      if (!detRes.ok) throw new Error('讀取明細失敗');
+      const details = await detRes.json();
+
+      // 組裝 RPC 資料
+      const orderData = {
+        order_date: o.order_date,
+        supplier_id: o.supplier_id,
+        supplier_name: o.supplier_name || '',
+        total_amount: Number(o.subtotal || 0),
+        tax_amount: Number(o.tax_amount || 0),
+        grand_total: amount,
+        handler: o.handler || '調度中心',
+        payment_status: '未付款',
+        payment_method: '',
+        note: `轉自內部採購 ${o.id}${o.note ? ' | ' + o.note : ''}`,
+        items: details.map(it => ({
+          product_id: it.product_id,
+          product_name: it.product_name || '',
+          spec: '',
+          qty: Number(it.qty),
+          unit: it.unit || '個',
+          unit_cost: Number(it.cost || 0),
+          note: it.note || ''
+        }))
+      };
+
+      const res = await fetch(`${SB_URL}/rpc/web_save_purchase_order`, {
+        method: 'POST',
+        headers: HEADERS,
+        body: JSON.stringify({ p_order_data: orderData })
+      });
+
+      if (!res.ok) {
+        const errText = await res.text();
+        throw new Error('寫入失敗：' + errText);
+      }
+
+      const newPoId = await res.json();
+
+      // 更新 internal_purchases 狀態為「已轉單」
+      await fetch(`${SB_URL}/internal_purchases?id=eq.${id}`, {
+        method: 'PATCH',
+        headers: { ...HEADERS, 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ status: '已轉單' })
+      });
+
+      Swal.fire({
+        title: '轉入成功',
+        html: `正式進貨單號：<b>${newPoId}</b><br>金額：$${amount.toLocaleString()}`,
+        icon: 'success',
+        timer: 2500,
+        showConfirmButton: true
+      });
+
+      await loadPendingPurchases();
+    } catch(e) {
+      console.error('approvePurchaseOrder error:', e);
+      Swal.fire('轉入失敗', e.message, 'error');
+    }
+  }
+
+  // 駁回進貨單
+  async function rejectPurchaseOrder(id) {
+    const result = await Swal.fire({
+      title: '駁回進貨單？',
+      html: `將駁回 <b>${id}</b>，此單不會轉入正式進貨。`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: '確定駁回',
+      confirmButtonColor: '#dc2626',
+      cancelButtonText: '取消',
+      input: 'text',
+      inputLabel: '駁回原因（選填）',
+      inputPlaceholder: '例如：數量有誤、供應商不對...'
+    });
+    if (!result.isConfirmed) return;
+
+    Swal.fire({ title: '處理中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+    try {
+      await fetch(`${SB_URL}/internal_purchases?id=eq.${id}`, {
+        method: 'PATCH',
+        headers: { ...HEADERS, 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ status: '駁回', note: result.value ? `駁回原因: ${result.value}` : undefined })
+      });
+
+      Swal.fire({ title: '已駁回', icon: 'success', timer: 1500, showConfirmButton: false });
+      await loadPendingPurchases();
+    } catch(e) {
+      Swal.fire('操作失敗', e.message, 'error');
+    }
+  }
+
+  // ============================
+  // 頁面初始化
+  // ============================
+  window.onload = function() {
+    loadAllPending();
+  };
+</script>
+</body>
+</html>

@@ -139,10 +139,8 @@
     <div class="menu-item" id="menu-demandBackorder" onclick="switchTab('demandBackorder', this)">📋 需求與欠品管理</div>
     <div class="menu-item" id="menu-transfer" onclick="switchTab('transfer', this)">🔄 店轉店與退倉審核</div>
     <div class="menu-item" id="menu-aid" onclick="switchTab('aid', this)">🤝 互助交流板</div>
+    <div class="menu-item" id="menu-bulletin" onclick="switchTab('bulletin', this)">📢 公告管理</div>
 
-    <div id="menu-employees-section" style="padding: 10px 20px; font-size: 11px; color: var(--text2); margin-top: 10px;">系統管理</div>
-    <div class="menu-item" id="menu-employees" onclick="switchTab('employees', this)">👥 員工管理</div>
-    <div class="menu-item" id="menu-branches" onclick="switchTab('branches', this)">🏪 分店管理</div>
 
     <div style="flex:1;"></div>
     <div style="padding: 20px; border-top: 1px solid var(--border);">
@@ -263,9 +261,6 @@
       const isStaff = !isAdmin && !isAssistant;
 
       // 系統管理：僅 admin
-      document.getElementById('menu-employees').style.display = isAdmin ? '' : 'none';
-      document.getElementById('menu-employees-section').style.display = isAdmin ? '' : 'none';
-      document.getElementById('menu-branches').style.display = isAdmin ? '' : 'none';
 
       // 陸貨專區（漂漂館+團購叫貨）：assistant + admin，其他帳號隱藏
       const showPP = isAdmin || isAssistant;
@@ -276,7 +271,7 @@
       const hideForStaff = [
         'menu-home','label-product','menu-campaign','menu-purchase','menu-searchPurchase','menu-adminSummary','menu-importGroupBuy','menu-orders',
         'menu-cnArrivals','menu-cnReturns',
-        'label-warehouse','menu-picking','menu-pickingHistory','menu-demandBackorder','menu-transfer','menu-aid',
+        'label-warehouse','menu-picking','menu-pickingHistory','menu-demandBackorder','menu-transfer','menu-aid','menu-bulletin',
         'label-accounting','menu-accounting'
       ];
       hideForStaff.forEach(id => {
@@ -414,10 +409,14 @@
         icon: 'question',
         showCancelButton: true,
         confirmButtonText: '確定登出'
-      }).then((result) => {
+      }).then(async (result) => {
         if (result.isConfirmed) {
           logActivity('登出系統', 'USER', '主動登出');
+          await sbClient.auth.signOut({ scope: 'local' });
           sessionStorage.removeItem('erp_employee');
+          sessionStorage.removeItem('sb_auth_token');
+          sessionStorage.removeItem('sb_auth_token_admin_email');
+          sessionStorage.removeItem('sb_auth_token_admin_pass');
           location.reload();
         }
       });
@@ -536,26 +535,15 @@
       } else if (tabId === 'aid') {
         title.innerText = '當前功能：互助交流板';
         renderAdminAidStation();
+      } else if (tabId === 'bulletin') {
+        title.innerText = '當前功能：公告管理';
+        renderBulletinStation();
       } else if (tabId === 'accounting') {
         title.innerText = '當前功能：銷貨單管理';
         renderAccountingStation();
       } else if (tabId === 'service') {
         title.innerText = '當前功能：需求與欠品管理';
         renderDemandBackorderStation();
-      } else if (tabId === 'employees') {
-        if (!currentUser || currentUser.role !== 'admin') {
-          Swal.fire('權限不足', '僅管理員可使用此功能。', 'error');
-          return;
-        }
-        title.innerText = '當前功能：員工管理';
-        renderEmployeeManagement();
-      } else if (tabId === 'branches') {
-        if (!currentUser || currentUser.role !== 'admin') {
-          Swal.fire('權限不足', '僅管理員可使用此功能。', 'error');
-          return;
-        }
-        title.innerText = '當前功能：分店管理';
-        renderBranchManagement();
       } else {
         title.innerText = `當前功能：施工中`;
         container.innerHTML = `<div class="panel"><h3>此功能準備連線 Supabase...</h3></div>`;
@@ -942,9 +930,10 @@
         if (catSel) {
           cats.forEach(c => { catSel.innerHTML += `<option value="${c}">${c}</option>`; });
         }
-        ipFilterProducts();
+        if (document.getElementById('ipCatFilter')) ipFilterProducts();
       } catch (err) {
-        document.getElementById('ipProdList').innerHTML = `<div style="padding:20px; color:red;">載入失敗: ${err.message}</div>`;
+        const el = document.getElementById('ipProdList');
+        if (el) el.innerHTML = `<div style="padding:20px; color:red;">載入失敗: ${err.message}</div>`;
       }
     }
 
@@ -5385,6 +5374,221 @@
   }
 
   // ============================
+  // 公告管理（總倉端）
+  // ============================
+  function getBulletins() {
+    return JSON.parse(localStorage.getItem('portalBulletin') || '[]');
+  }
+  function saveBulletins(list) {
+    localStorage.setItem('portalBulletin', JSON.stringify(list));
+    cloudSave('portalBulletin');
+  }
+
+  function renderBulletinStation() {
+    const bulletins = getBulletins();
+    const container = document.getElementById('mainContainer');
+
+    const listHtml = bulletins.length === 0
+      ? '<div style="text-align:center; padding:60px 20px; color:#718096; font-size:15px;">目前沒有公告，點擊上方按鈕發佈第一則公告</div>'
+      : bulletins.map((b, i) => {
+          const typeBg = b.type === 'urgent' ? 'border-left:4px solid #dc2626;'
+            : b.type === 'important' ? 'border-left:4px solid #f59e0b;'
+            : 'border-left:4px solid #3b82f6;';
+          const typeBadge = b.type === 'urgent'
+            ? '<span style="background:#fee2e2; color:#dc2626; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;">🔴 緊急</span>'
+            : b.type === 'important'
+            ? '<span style="background:#fef3c7; color:#b45309; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;">🟡 重要</span>'
+            : '<span style="background:#dbeafe; color:#2563eb; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;">🔵 一般</span>';
+          const pinBadge = b.pinned ? ' <span style="background:#fef3c7; color:#b45309; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;">📌 置頂</span>' : '';
+          return `<div style="background:white; border-radius:8px; border:1px solid var(--border); padding:16px 20px; margin-bottom:12px; box-shadow:0 2px 4px rgba(0,0,0,0.04); ${typeBg}">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
+              <div style="display:flex; align-items:center; gap:8px;">${typeBadge}${pinBadge}
+                <span style="font-size:15px; font-weight:700; color:#1e293b;">${(b.title || '').replace(/</g,'&lt;')}</span>
+              </div>
+              <div style="display:flex; align-items:center; gap:8px;">
+                <span style="font-size:12px; color:#9ca3af;">${b.author || ''} · ${b.time || ''}</span>
+                <button class="btn" style="padding:3px 10px; font-size:11px; background:#2b6cb0;" onclick="editBulletin(${i})">✏️ 編輯</button>
+                <button class="btn" style="padding:3px 10px; font-size:11px; background:#c53030;" onclick="deleteBulletin(${i})">🗑️ 刪除</button>
+              </div>
+            </div>
+            <div style="font-size:14px; color:#374151; line-height:1.8; white-space:pre-wrap;">${(b.content || '').replace(/</g,'&lt;')}</div>
+          </div>`;
+        }).join('');
+
+    container.innerHTML = `
+      <div style="display:flex; flex-direction:column; gap:15px; height:100%;">
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--border); padding-bottom:10px; flex-shrink:0;">
+          <div style="font-size:16px; font-weight:bold; color:#2d3748;">📢 公告管理</div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <span style="font-size:13px; color:#718096;">共 ${bulletins.length} 則公告</span>
+            <button class="btn" style="padding:6px 14px; font-size:13px; background:#2b6cb0;" onclick="addBulletin()">➕ 發佈公告</button>
+          </div>
+        </div>
+        <div style="flex:1; overflow:auto; min-height:0;">${listHtml}</div>
+      </div>`;
+  }
+
+  async function addBulletin() {
+    const { value: formValues } = await Swal.fire({
+      title: '發佈新公告',
+      html: `
+        <div style="text-align:left;">
+          <label style="display:block; font-size:13px; font-weight:bold; color:#4a5568; margin-bottom:4px;">標題</label>
+          <input id="swal-bul-title" class="swal2-input" placeholder="公告標題" style="margin:0 0 12px 0; width:100%;">
+          <label style="display:block; font-size:13px; font-weight:bold; color:#4a5568; margin-bottom:4px;">內容</label>
+          <textarea id="swal-bul-content" class="swal2-textarea" placeholder="公告內容..." style="margin:0 0 12px 0; width:100%; min-height:120px;"></textarea>
+          <div style="display:flex; gap:12px; align-items:center;">
+            <div>
+              <label style="font-size:13px; font-weight:bold; color:#4a5568;">類型</label>
+              <select id="swal-bul-type" class="swal2-select" style="margin:4px 0 0 0; padding:6px; border:1px solid #d1d5db; border-radius:4px;">
+                <option value="normal">🔵 一般</option>
+                <option value="important">🟡 重要</option>
+                <option value="urgent">🔴 緊急</option>
+              </select>
+            </div>
+            <div style="margin-top:18px;">
+              <label style="font-size:13px; cursor:pointer;">
+                <input type="checkbox" id="swal-bul-pin" style="margin-right:4px;"> 📌 置頂
+              </label>
+            </div>
+          </div>
+        </div>`,
+      width: 550,
+      showCancelButton: true,
+      confirmButtonText: '發佈',
+      confirmButtonColor: '#2b6cb0',
+      cancelButtonText: '取消',
+      preConfirm: () => {
+        const title = document.getElementById('swal-bul-title').value.trim();
+        const content = document.getElementById('swal-bul-content').value.trim();
+        if (!title) { Swal.showValidationMessage('請填寫標題'); return false; }
+        if (!content) { Swal.showValidationMessage('請填寫內容'); return false; }
+        return {
+          title,
+          content,
+          type: document.getElementById('swal-bul-type').value,
+          pinned: document.getElementById('swal-bul-pin').checked
+        };
+      }
+    });
+    if (!formValues) return;
+
+    const now = new Date();
+    const timeStr = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    const author = currentUser?.full_name || currentUser?.username || '管理員';
+
+    const bulletins = getBulletins();
+    const newItem = {
+      title: formValues.title,
+      content: formValues.content,
+      type: formValues.type,
+      pinned: formValues.pinned,
+      author: author,
+      time: timeStr
+    };
+
+    // 置頂的放最前面，否則放最前面（新到舊）
+    if (formValues.pinned) {
+      bulletins.unshift(newItem);
+    } else {
+      const firstNonPin = bulletins.findIndex(b => !b.pinned);
+      if (firstNonPin === -1) bulletins.push(newItem);
+      else bulletins.splice(firstNonPin, 0, newItem);
+    }
+
+    saveBulletins(bulletins);
+    logActivity('發佈公告', newItem.title, { type: newItem.type, pinned: newItem.pinned });
+    Swal.fire({ title: '已發佈', icon: 'success', timer: 1200, showConfirmButton: false });
+    renderBulletinStation();
+  }
+
+  async function editBulletin(idx) {
+    const bulletins = getBulletins();
+    const b = bulletins[idx];
+    if (!b) return;
+
+    const { value: formValues } = await Swal.fire({
+      title: '編輯公告',
+      html: `
+        <div style="text-align:left;">
+          <label style="display:block; font-size:13px; font-weight:bold; color:#4a5568; margin-bottom:4px;">標題</label>
+          <input id="swal-bul-title" class="swal2-input" value="${(b.title||'').replace(/"/g,'&quot;')}" style="margin:0 0 12px 0; width:100%;">
+          <label style="display:block; font-size:13px; font-weight:bold; color:#4a5568; margin-bottom:4px;">內容</label>
+          <textarea id="swal-bul-content" class="swal2-textarea" style="margin:0 0 12px 0; width:100%; min-height:120px;">${(b.content||'').replace(/</g,'&lt;')}</textarea>
+          <div style="display:flex; gap:12px; align-items:center;">
+            <div>
+              <label style="font-size:13px; font-weight:bold; color:#4a5568;">類型</label>
+              <select id="swal-bul-type" class="swal2-select" style="margin:4px 0 0 0; padding:6px; border:1px solid #d1d5db; border-radius:4px;">
+                <option value="normal" ${b.type==='normal'?'selected':''}>🔵 一般</option>
+                <option value="important" ${b.type==='important'?'selected':''}>🟡 重要</option>
+                <option value="urgent" ${b.type==='urgent'?'selected':''}>🔴 緊急</option>
+              </select>
+            </div>
+            <div style="margin-top:18px;">
+              <label style="font-size:13px; cursor:pointer;">
+                <input type="checkbox" id="swal-bul-pin" ${b.pinned?'checked':''} style="margin-right:4px;"> 📌 置頂
+              </label>
+            </div>
+          </div>
+        </div>`,
+      width: 550,
+      showCancelButton: true,
+      confirmButtonText: '儲存',
+      confirmButtonColor: '#2b6cb0',
+      cancelButtonText: '取消',
+      preConfirm: () => {
+        const title = document.getElementById('swal-bul-title').value.trim();
+        const content = document.getElementById('swal-bul-content').value.trim();
+        if (!title) { Swal.showValidationMessage('請填寫標題'); return false; }
+        if (!content) { Swal.showValidationMessage('請填寫內容'); return false; }
+        return {
+          title,
+          content,
+          type: document.getElementById('swal-bul-type').value,
+          pinned: document.getElementById('swal-bul-pin').checked
+        };
+      }
+    });
+    if (!formValues) return;
+
+    b.title = formValues.title;
+    b.content = formValues.content;
+    b.type = formValues.type;
+    b.pinned = formValues.pinned;
+
+    // 重新排序：置頂在前
+    bulletins.sort((a, b2) => (b2.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+
+    saveBulletins(bulletins);
+    logActivity('編輯公告', b.title, { type: b.type });
+    Swal.fire({ title: '已儲存', icon: 'success', timer: 1200, showConfirmButton: false });
+    renderBulletinStation();
+  }
+
+  async function deleteBulletin(idx) {
+    const bulletins = getBulletins();
+    const b = bulletins[idx];
+    if (!b) return;
+
+    const result = await Swal.fire({
+      title: '刪除公告？',
+      html: `確定刪除「<b>${(b.title||'').replace(/</g,'&lt;')}</b>」？<br><span style="color:#c53030; font-size:13px;">此操作無法復原。</span>`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: '確定刪除',
+      confirmButtonColor: '#c53030',
+      cancelButtonText: '取消'
+    });
+    if (!result.isConfirmed) return;
+
+    bulletins.splice(idx, 1);
+    saveBulletins(bulletins);
+    logActivity('刪除公告', b.title, {});
+    Swal.fire({ title: '已刪除', icon: 'success', timer: 1200, showConfirmButton: false });
+    renderBulletinStation();
+  }
+
+  // ============================
   // 互助交流板（總倉端）
   // ============================
   let adminAidProductDB = [];
@@ -6173,7 +6377,7 @@
               <option value="disputed">退貨處理中</option>
               <option value="closed">已結案</option>
             </select>
-            <button class="btn" style="padding:5px 12px; font-size:12px; background:#b7791f;" onclick="manualCreateSO()">➕ 手動新增</button>
+            <button class="btn" style="padding:5px 12px; font-size:12px; background:#2b6cb0;" onclick="showManualSOForm()">➕ 新增銷貨單</button>
             <span style="color:#e2e8f0;">│</span>
             <button class="btn" style="padding:5px 12px; font-size:12px; background:#718096;" onclick="toggleSelectAllSO()">☑ 全選</button>
             <button class="btn" style="padding:5px 12px; font-size:12px; background:#047857;" onclick="batchIssueSO()">✅ 批次開立</button>
@@ -6189,193 +6393,203 @@
     refreshAccountingTable();
   }
 
-  // ===== 手動新增銷貨單 =====
-  let _manualItems = [];
+  // ── 獨立新增銷貨單 ──
+  let soAllProducts = [];
+  let soCart = [];
 
-  async function manualCreateSO() {
-    // 確保商品資料已載入
-    if (!ipAllProducts || ipAllProducts.length === 0) {
-      Swal.fire({ title: '載入商品資料...', allowOutsideClick: false });
-      Swal.showLoading();
-      await ipLoadProducts();
-      Swal.close();
+  async function soLoadProducts() {
+    if (soAllProducts.length > 0) return;
+    let all = [], offset = 0;
+    while (true) {
+      const res = await fetch(`${SB_URL}/products?select=id,name,category,unit,price,price_branch,price_wholesale,price_group,cost&status=eq.啟用&limit=1000&offset=${offset}`, { headers: HEADERS });
+      const data = await res.json();
+      all = all.concat(data);
+      if (data.length < 1000) break;
+      offset += 1000;
     }
-    _manualItems = [{ productId: '', name: '', qty: 1, unitPrice: 0 }];
-    const storeOpts = branchNames.map(b => `<option value="${b}">${b}</option>`).join('');
-    const today = new Date().toISOString().split('T')[0];
+    soAllProducts = all;
+  }
 
-    Swal.fire({
-      title: '手動新增銷貨單',
-      width: 720,
-      html: `
-        <div style="text-align:left; font-size:13px;">
-          <div style="display:flex; gap:12px; margin-bottom:12px;">
-            <div style="flex:1;">
-              <label style="font-weight:bold; display:block; margin-bottom:4px;">分店</label>
-              <select id="mcso-store" style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:13px;">
-                <option value="">-- 選擇分店 --</option>
-                ${storeOpts}
+  function soFilterProducts() {
+    const kw = (document.getElementById('soProductSearch')?.value || '').toLowerCase();
+    const cat = document.getElementById('soCatFilter')?.value || '';
+    let list = soAllProducts;
+    if (cat) list = list.filter(p => p.category === cat);
+    if (kw) list = list.filter(p => (p.name && p.name.toLowerCase().includes(kw)) || (p.id && p.id.toLowerCase().includes(kw)));
+    soRenderProductList(list.slice(0, 80));
+  }
+
+  function soRenderProductList(list) {
+    const div = document.getElementById('soProductList');
+    if (!div) return;
+    if (!list.length) { div.innerHTML = '<div style="padding:20px; text-align:center; color:#aaa;">無符合商品</div>'; return; }
+    const cartIds = soCart.map(c => c.id);
+    let html = '<table style="width:100%; border-collapse:collapse;"><thead><tr style="background:#eef1f5;"><th style="padding:6px 8px; text-align:left; font-size:11px; color:#4a5568;">商品</th><th style="padding:6px 8px; text-align:right; font-size:11px; color:#4a5568; width:70px;">分店價</th><th style="padding:6px 8px; text-align:center; font-size:11px; color:#4a5568; width:50px;">加入</th></tr></thead><tbody>';
+    list.forEach(p => {
+      const inCart = cartIds.includes(p.id);
+      html += `<tr style="border-bottom:1px solid #eee; ${inCart ? 'background:#ebf8ff;' : ''}" onmouseover="if(!${inCart})this.style.background='#f7fafc'" onmouseout="if(!${inCart})this.style.background=''">
+        <td style="padding:6px 8px;"><div style="font-weight:600; font-size:13px;">${p.name}</div><div style="font-size:11px; color:#999;">${p.id} | ${p.category || ''}</div></td>
+        <td style="padding:6px 8px; text-align:right; font-weight:600; color:#2b6cb0; font-size:13px;">$${(Number(p.price_branch) || Number(p.price) || 0).toLocaleString()}</td>
+        <td style="padding:6px 8px; text-align:center;">${inCart ? '<span style="color:#38a169; font-weight:bold;">✓</span>' : `<button onclick="soAddToCart('${p.id}')" style="padding:2px 10px; border:1px solid #2b6cb0; background:white; color:#2b6cb0; border-radius:4px; cursor:pointer; font-size:12px;">+</button>`}</td>
+      </tr>`;
+    });
+    div.innerHTML = html + '</tbody></table>';
+  }
+
+  function soAddToCart(productId) {
+    if (soCart.find(c => c.id === productId)) return;
+    const p = soAllProducts.find(x => x.id === productId);
+    if (!p) return;
+    soCart.push({
+      id: p.id, name: p.name, unit: p.unit || '件',
+      unitPrice: Number(p.price_branch) || Number(p.price) || 0,
+      cost: Number(p.cost) || 0,
+      qty: 1
+    });
+    soFilterProducts();
+    soRenderCart();
+  }
+
+  function soRemoveFromCart(idx) {
+    soCart.splice(idx, 1);
+    soFilterProducts();
+    soRenderCart();
+  }
+
+  function soUpdateCartQty(idx, val) {
+    const n = parseInt(val) || 0;
+    if (n <= 0) { soRemoveFromCart(idx); return; }
+    soCart[idx].qty = n;
+    soRenderCart();
+  }
+
+  function soUpdateCartPrice(idx, val) {
+    soCart[idx].unitPrice = Number(val) || 0;
+    soRenderCart();
+  }
+
+  function soRenderCart() {
+    const div = document.getElementById('soCartList');
+    if (!div) return;
+    if (!soCart.length) { div.innerHTML = '<div style="padding:20px; text-align:center; color:#aaa;">尚未加入商品</div>'; return; }
+    let total = 0;
+    let html = '<table style="width:100%; border-collapse:collapse;"><thead><tr style="background:#eef1f5;"><th style="padding:6px 8px; text-align:left; font-size:11px;">商品</th><th style="padding:6px 8px; text-align:right; font-size:11px; width:80px;">單價</th><th style="padding:6px 8px; text-align:center; font-size:11px; width:70px;">數量</th><th style="padding:6px 8px; text-align:right; font-size:11px; width:70px;">小計</th><th style="padding:6px 8px; text-align:center; font-size:11px; width:40px;"></th></tr></thead><tbody>';
+    soCart.forEach((item, i) => {
+      const sub = item.qty * item.unitPrice;
+      total += sub;
+      html += `<tr style="border-bottom:1px solid #eee;">
+        <td style="padding:6px 8px; font-size:13px;"><div style="font-weight:600;">${item.name}</div><div style="font-size:11px; color:#999;">${item.id}</div></td>
+        <td style="padding:6px 8px; text-align:right;"><input type="number" value="${item.unitPrice}" onchange="soUpdateCartPrice(${i}, this.value)" style="width:70px; padding:3px; text-align:right; border:1px solid #d1d5db; border-radius:4px; font-size:13px;"></td>
+        <td style="padding:6px 8px; text-align:center;"><input type="number" min="1" value="${item.qty}" onchange="soUpdateCartQty(${i}, this.value)" style="width:55px; padding:3px; text-align:center; border:1px solid #d1d5db; border-radius:4px; font-size:13px;"></td>
+        <td style="padding:6px 8px; text-align:right; font-weight:600; color:#2b6cb0; font-size:13px;">$${sub.toLocaleString()}</td>
+        <td style="padding:6px 8px; text-align:center;"><button onclick="soRemoveFromCart(${i})" style="background:none; border:none; color:#c53030; cursor:pointer; font-size:14px;">✕</button></td>
+      </tr>`;
+    });
+    html += `</tbody></table><div style="text-align:right; padding:10px 8px; font-size:15px; font-weight:bold; color:#2d3748; border-top:2px solid #e2e8f0;">合計：<span style="color:#2b6cb0;">$${total.toLocaleString()}</span></div>`;
+    div.innerHTML = html;
+  }
+
+  async function showManualSOForm() {
+    soCart = [];
+    Swal.fire({ title: '載入商品中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    try {
+      await soLoadProducts();
+    } catch (e) {
+      Swal.fire('錯誤', '商品載入失敗: ' + e.message, 'error');
+      return;
+    }
+    Swal.close();
+
+    const cats = [...new Set(soAllProducts.map(p => p.category).filter(Boolean))].sort();
+    const custOptions = allCustomers.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
+
+    const html = `
+      <div style="display:flex; gap:15px; height:70vh; max-height:600px;">
+        <!-- 左側：商品搜尋 -->
+        <div style="width:45%; display:flex; flex-direction:column; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden;">
+          <div style="padding:10px; background:#f7fafc; border-bottom:1px solid #e2e8f0;">
+            <div style="font-weight:bold; font-size:14px; color:#2d3748; margin-bottom:8px;">搜尋商品</div>
+            <input id="soProductSearch" type="text" placeholder="輸入品名或商品編號..." oninput="soFilterProducts()" style="width:100%; padding:7px 10px; border:1px solid #d1d5db; border-radius:4px; font-size:13px; font-family:inherit; margin-bottom:6px;">
+            <select id="soCatFilter" onchange="soFilterProducts()" style="width:100%; padding:5px 8px; border:1px solid #d1d5db; border-radius:4px; font-size:12px; font-family:inherit;">
+              <option value="">全部類別</option>
+              ${cats.map(c => `<option value="${c}">${c}</option>`).join('')}
+            </select>
+          </div>
+          <div id="soProductList" style="flex:1; overflow:auto;"></div>
+        </div>
+        <!-- 右側：購物車 -->
+        <div style="width:55%; display:flex; flex-direction:column; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden;">
+          <div style="padding:10px; background:#f7fafc; border-bottom:1px solid #e2e8f0;">
+            <div style="font-weight:bold; font-size:14px; color:#2d3748; margin-bottom:8px;">銷貨明細</div>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <label style="font-size:12px; color:#4a5568; white-space:nowrap;">客戶：</label>
+              <select id="soCustomerSelect" style="flex:1; padding:5px 8px; border:1px solid #d1d5db; border-radius:4px; font-size:13px; font-family:inherit;">
+                <option value="">-- 請選擇客戶 --</option>
+                ${custOptions}
               </select>
             </div>
-            <div style="flex:1;">
-              <label style="font-weight:bold; display:block; margin-bottom:4px;">日期</label>
-              <input type="date" id="mcso-date" value="${today}" style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:13px;">
-            </div>
           </div>
-          <div style="margin-bottom:8px;">
-            <label style="font-weight:bold; display:block; margin-bottom:4px;">備註</label>
-            <input type="text" id="mcso-note" placeholder="選填" style="width:100%; padding:6px 8px; border:1px solid #ddd; border-radius:4px; font-size:13px;">
-          </div>
-          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-            <span style="font-weight:bold;">商品明細</span>
-            <button type="button" onclick="_mcsoAddRow()" style="padding:4px 10px; background:#2b6cb0; color:#fff; border:none; border-radius:4px; font-size:12px; cursor:pointer;">＋ 加一列</button>
-          </div>
-          <div id="mcso-items" style="max-height:300px; overflow:auto;"></div>
-          <div id="mcso-total" style="text-align:right; font-weight:bold; margin-top:8px; font-size:14px; color:#2b6cb0;"></div>
-        </div>`,
-      didOpen: () => { _mcsoRenderItems(); },
+          <div id="soCartList" style="flex:1; overflow:auto;"><div style="padding:20px; text-align:center; color:#aaa;">尚未加入商品</div></div>
+        </div>
+      </div>`;
+
+    const result = await Swal.fire({
+      title: '新增銷貨單',
+      html: html,
+      width: '900px',
       showCancelButton: true,
-      confirmButtonText: '建立銷貨單',
+      confirmButtonText: '確認建立',
       cancelButtonText: '取消',
-      confirmButtonColor: '#047857',
-      preConfirm: () => {
-        const store = document.getElementById('mcso-store').value;
-        const date = document.getElementById('mcso-date').value;
-        const note = document.getElementById('mcso-note').value.trim();
-        if (!store) { Swal.showValidationMessage('請選擇分店'); return false; }
-        if (!date) { Swal.showValidationMessage('請選擇日期'); return false; }
-        // 讀取所有明細行
-        const items = [];
-        document.querySelectorAll('.mcso-row').forEach(row => {
-          const pid = row.querySelector('.mcso-pid')?.value.trim() || '';
-          const nm = row.querySelector('.mcso-nm')?.value.trim() || '';
-          const q = parseFloat(row.querySelector('.mcso-qty')?.value) || 0;
-          const p = parseFloat(row.querySelector('.mcso-price')?.value) || 0;
-          if (nm && q > 0) items.push({ productId: pid, name: nm, qty: q, unitPrice: p });
-        });
-        if (items.length === 0) { Swal.showValidationMessage('至少需要一項商品'); return false; }
-        return { store, date, note, items };
-      }
-    }).then(result => {
-      if (!result.isConfirmed) return;
-      const { store, date, note, items } = result.value;
-      const now = new Date();
-      const dateNum = date.replace(/-/g, '');
-      const soId = `SO-${dateNum}-${String(mockSalesOrders.length + 1).padStart(3, '0')}`;
-      const timeStr = `${date.replace(/-/g, '/')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
-      const total = items.reduce((s, i) => s + i.qty * i.unitPrice, 0);
-
-      mockSalesOrders.push({
-        id: soId,
-        waveId: 'MANUAL',
-        storeName: store,
-        createdAt: timeStr,
-        storeConfirmedAt: null,
-        status: 'pending',
-        issuedAt: timeStr,
-        finalAmount: total,
-        note: note || '手動新增',
-        items: items.map(it => ({
-          productId: it.productId,
-          name: it.name,
-          expectedQty: it.qty,
-          qty: it.qty,
-          unitPrice: it.unitPrice,
-          returnQty: 0,
-          returnStatus: 'none',
-          returnReason: '',
-          returnDate: '',
-          damaged: false,
-          note: ''
-        }))
-      });
-
-      syncSalesOrdersToPortal();
-      renderAccountingStation();
-      Swal.fire({ title: '已建立！', text: `銷貨單 ${soId}（${store}）`, icon: 'success', timer: 1800, showConfirmButton: false });
+      confirmButtonColor: '#2b6cb0',
+      didOpen: () => { soFilterProducts(); }
     });
-  }
 
-  function _mcsoAddRow() {
-    _manualItems.push({ productId: '', name: '', qty: 1, unitPrice: 0 });
-    _mcsoRenderItems();
-  }
+    if (!result.isConfirmed) return;
 
-  function _mcsoRenderItems() {
-    const box = document.getElementById('mcso-items');
-    if (!box) return;
-    box.innerHTML = `
-      <table style="width:100%; border-collapse:collapse; font-size:12px;">
-        <thead><tr style="background:#f1f5f9;">
-          <th style="padding:5px 4px; text-align:left; width:140px;">商品編號/搜尋</th>
-          <th style="padding:5px 4px; text-align:left;">商品名稱</th>
-          <th style="padding:5px 4px; text-align:center; width:65px;">數量</th>
-          <th style="padding:5px 4px; text-align:center; width:80px;">單價</th>
-          <th style="padding:5px 4px; text-align:center; width:80px;">小計</th>
-          <th style="padding:5px 4px; width:36px;"></th>
-        </tr></thead>
-        <tbody>${_manualItems.map((it, i) => `
-          <tr class="mcso-row" style="border-bottom:1px solid #e2e8f0;">
-            <td style="padding:4px; position:relative;">
-              <input class="mcso-pid" value="${it.productId}" style="width:100%; padding:4px; border:1px solid #ddd; border-radius:3px; font-size:12px;" placeholder="輸入編號或名稱" oninput="_mcsoSearch(this,${i})" onfocus="_mcsoSearch(this,${i})">
-              <div class="mcso-dropdown" style="display:none; position:absolute; left:4px; right:4px; top:100%; background:#fff; border:1px solid #ddd; border-radius:4px; max-height:180px; overflow:auto; z-index:9999; box-shadow:0 4px 12px rgba(0,0,0,0.15);"></div>
-            </td>
-            <td style="padding:4px;"><input class="mcso-nm" value="${it.name}" style="width:100%; padding:4px; border:1px solid #ddd; border-radius:3px; font-size:12px;" placeholder="商品名稱"></td>
-            <td style="padding:4px;"><input class="mcso-qty" type="number" min="1" value="${it.qty}" style="width:100%; padding:4px; border:1px solid #ddd; border-radius:3px; font-size:12px; text-align:center;" onchange="_mcsoCalcTotal()"></td>
-            <td style="padding:4px;"><input class="mcso-price" type="number" min="0" value="${it.unitPrice}" style="width:100%; padding:4px; border:1px solid #ddd; border-radius:3px; font-size:12px; text-align:right;" onchange="_mcsoCalcTotal()"></td>
-            <td style="padding:4px; text-align:right; color:#2b6cb0; font-weight:bold;">$${(it.qty * it.unitPrice).toLocaleString()}</td>
-            <td style="padding:4px; text-align:center;"><button type="button" onclick="_mcsoDelRow(${i})" style="background:#c53030; color:#fff; border:none; border-radius:3px; padding:2px 6px; font-size:11px; cursor:pointer;">✕</button></td>
-          </tr>`).join('')}
-        </tbody>
-      </table>`;
-    _mcsoCalcTotal();
-  }
+    const customerName = document.getElementById('soCustomerSelect')?.value;
+    if (!customerName) { Swal.fire('提醒', '請選擇客戶', 'warning'); return; }
+    if (soCart.length === 0) { Swal.fire('提醒', '請至少加入一項商品', 'warning'); return; }
 
-  function _mcsoSearch(inputEl, rowIdx) {
-    const kw = inputEl.value.trim().toLowerCase();
-    const dropdown = inputEl.parentElement.querySelector('.mcso-dropdown');
-    if (!kw || kw.length < 1) { dropdown.style.display = 'none'; return; }
-    const matches = (ipAllProducts || []).filter(p =>
-      (p.id && p.id.toLowerCase().includes(kw)) || (p.name && p.name.toLowerCase().includes(kw))
-    ).slice(0, 20);
-    if (matches.length === 0) { dropdown.style.display = 'none'; return; }
-    dropdown.innerHTML = matches.map(p =>
-      `<div style="padding:6px 8px; cursor:pointer; font-size:12px; border-bottom:1px solid #f0f0f0; display:flex; gap:6px;" onmousedown="_mcsoSelect(${rowIdx},'${p.id}',\`${(p.name||'').replace(/`/g,"'")}\`,${p.price_branch || p.price || 0})">
-        <span style="color:#2b6cb0; font-weight:bold; white-space:nowrap;">${p.id}</span>
-        <span style="color:#333; flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${p.name}</span>
-        <span style="color:#718096; white-space:nowrap;">$${p.price_branch || p.price || 0}</span>
-      </div>`
-    ).join('');
-    dropdown.style.display = 'block';
-    // 點擊外面關閉
-    setTimeout(() => {
-      inputEl.addEventListener('blur', () => { setTimeout(() => { dropdown.style.display = 'none'; }, 150); }, { once: true });
-    }, 0);
-  }
+    const cust = allCustomers.find(c => c.name === customerName) || { id: null, name: customerName, tax_type: '免稅' };
+    const now = new Date();
+    const dateStr = now.toISOString().split('T')[0];
+    const subtotal = soCart.reduce((s, i) => s + i.qty * i.unitPrice, 0);
+    const taxRate = cust.tax_type === '外加5%' ? 0.05 : 0;
+    const tax_amount = Math.round(subtotal * taxRate);
+    const grand_total = subtotal + tax_amount;
+    const issuedTime = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    const soId = `SO-${dateStr.replace(/-/g,'')}-${String(mockSalesOrders.length + 1).padStart(3,'0')}`;
 
-  function _mcsoSelect(rowIdx, pid, name, price) {
-    _manualItems[rowIdx].productId = pid;
-    _manualItems[rowIdx].name = name;
-    _manualItems[rowIdx].unitPrice = price;
-    _mcsoRenderItems();
-  }
-
-  function _mcsoDelRow(idx) {
-    if (_manualItems.length <= 1) return;
-    _manualItems.splice(idx, 1);
-    _mcsoRenderItems();
-  }
-
-  function _mcsoCalcTotal() {
-    let total = 0;
-    document.querySelectorAll('.mcso-row').forEach((row, i) => {
-      const q = parseFloat(row.querySelector('.mcso-qty')?.value) || 0;
-      const p = parseFloat(row.querySelector('.mcso-price')?.value) || 0;
-      if (_manualItems[i]) { _manualItems[i].qty = q; _manualItems[i].unitPrice = p; }
-      total += q * p;
+    mockSalesOrders.push({
+      id: soId,
+      waveId: 'MANUAL',
+      storeName: customerName,
+      createdAt: issuedTime,
+      storeConfirmedAt: null,
+      status: 'pending',
+      issuedAt: issuedTime,
+      finalAmount: grand_total,
+      note: '手動新增',
+      items: soCart.map(it => ({
+        productId: it.id,
+        name: it.name,
+        expectedQty: it.qty,
+        qty: it.qty,
+        unitPrice: it.unitPrice,
+        returnQty: 0,
+        returnStatus: 'none',
+        returnReason: '',
+        returnDate: '',
+        damaged: false,
+        note: ''
+      }))
     });
-    const el = document.getElementById('mcso-total');
-    if (el) el.textContent = `合計：$${total.toLocaleString()}`;
+
+    localStorage.setItem('portalSalesOrders', JSON.stringify(mockSalesOrders));
+    cloudSave('portalSalesOrders');
+    logActivity('手動新增銷貨單', soId, { customer: customerName, amount: grand_total, items: soCart.length });
+    Swal.fire({ title: '建立成功', text: `銷貨單 ${soId}，金額 $${grand_total.toLocaleString()}`, icon: 'success', timer: 2000, showConfirmButton: false });
+    renderAccountingStation();
   }
 
   function renderAccountingSummary() {
@@ -7987,463 +8201,8 @@
 
 
   // ============================
-  // 系統管理：員工帳號管理
+  // （員工管理與分店管理已移至 index.html）
   // ============================
-  let employeeList = [];
-
-  async function loadEmployees() {
-    try {
-      const res = await fetch(`${SB_URL}/employees?select=*`, { headers: HEADERS });
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        employeeList = data;
-      } else {
-        console.error('employees API 回傳非陣列:', data);
-        employeeList = [];
-      }
-    } catch(e) {
-      console.error('載入員工失敗:', e);
-      employeeList = [];
-    }
-  }
-
-  async function renderEmployeeManagement() {
-    await loadEmployees();
-    const rows = employeeList.map((emp, idx) => {
-      const isActive = emp.status === 'active';
-      const isAdmin = emp.role === 'admin';
-      const statusBadge = isActive
-        ? '<span style="background:#f0f7ff; color:#2b6cb0; border:1px solid #6ee7b7; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:bold;">啟用</span>'
-        : '<span style="background:#fef2f2; color:#c53030; border:1px solid #fca5a5; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:bold;">停用</span>';
-      const roleBadge = isAdmin
-        ? '<span style="background:#f0f7ff; color:#2b6cb0; border:1px solid #93c5fd; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:bold;">管理員</span>'
-        : '<span style="background:#eef1f5; color:#718096; border:1px solid #718096; padding:2px 8px; border-radius:4px; font-size:12px;">員工</span>';
-      const storeName = emp.store || '<span style="color:#718096;">總倉</span>';
-      return `<tr style="border-bottom:1px solid #e2e8f0;">
-        <td style="padding:10px 12px; font-family:monospace; color:#718096;">${idx + 1}</td>
-        <td style="padding:10px 12px; font-weight:bold; color:#2d3748;">${emp.username}</td>
-        <td style="padding:10px 12px;">${emp.full_name || ''}</td>
-        <td style="padding:10px 12px;">${storeName}</td>
-        <td style="padding:10px 12px; text-align:center;">${roleBadge}</td>
-        <td style="padding:10px 12px; text-align:center;">${statusBadge}</td>
-        <td style="padding:10px 12px; text-align:center;">
-          <button class="btn" style="padding:4px 10px; font-size:12px; background:#2b6cb0; margin-right:4px;" onclick="editEmployee('${emp.username}')">✏️ 編輯</button>
-          <button class="btn" style="padding:4px 10px; font-size:12px; background:${isActive ? '#c53030' : '#047857'};" onclick="toggleEmployeeStatus('${emp.username}', '${isActive ? 'inactive' : 'active'}')">${isActive ? '停用' : '啟用'}</button>
-        </td>
-      </tr>`;
-    }).join('');
-
-    document.getElementById('mainContainer').innerHTML = `
-      <div class="panel" style="height:100%; display:flex; flex-direction:column;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-shrink:0;">
-          <div style="font-size:16px; font-weight:bold; color:#2d3748;">👥 員工帳號管理</div>
-          <div style="display:flex; gap:8px;">
-            <button class="btn" style="background:#2b6cb0;" onclick="addEmployee()">➕ 新增員工</button>
-            <button class="btn" style="background:#f1f5f9; color:#718096; border:1px solid #718096;" onclick="renderEmployeeManagement()">🔄 重新整理</button>
-          </div>
-        </div>
-        <div style="flex:1; overflow:auto; border:1px solid var(--border); border-radius:8px;">
-          <table style="width:100%; border-collapse:collapse; font-size:13px; table-layout:fixed;">
-            <colgroup>
-              <col style="width:40px;">
-              <col style="width:110px;">
-              <col style="width:100px;">
-              <col style="width:100px;">
-              <col style="width:80px;">
-              <col style="width:65px;">
-              <col style="width:150px;">
-            </colgroup>
-            <thead style="position:sticky; top:0; z-index:1; background:#eef1f5; box-shadow:0 1px 2px rgba(0,0,0,0.1);">
-              <tr>
-                <th style="padding:10px 8px;">#</th>
-                <th style="padding:10px 8px; text-align:left;">帳號</th>
-                <th style="padding:10px 8px; text-align:left;">姓名</th>
-                <th style="padding:10px 8px; text-align:left;">所屬分店</th>
-                <th style="padding:10px 8px; text-align:center;">層級</th>
-                <th style="padding:10px 8px; text-align:center;">狀態</th>
-                <th style="padding:10px 8px; text-align:center;">操作</th>
-              </tr>
-            </thead>
-            <tbody>${rows || '<tr><td colspan="7" style="text-align:center; padding:40px; color:#718096;">尚無員工資料</td></tr>'}</tbody>
-          </table>
-        </div>
-      </div>`;
-  }
-
-  function addEmployee() {
-    Swal.fire({
-      title: '➕ 新增員工帳號',
-      width: '420px',
-      html: `
-        <div style="text-align:left; font-size:13px;">
-          <div style="margin-bottom:10px;">
-            <label style="font-weight:bold; color:#718096; font-size:12px;">帳號（登入用）</label>
-            <input id="emp-username" type="text" placeholder="例：staff01" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;">
-          </div>
-          <div style="margin-bottom:10px;">
-            <label style="font-weight:bold; color:#718096; font-size:12px;">密碼</label>
-            <input id="emp-password" type="text" placeholder="設定密碼" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;">
-          </div>
-          <div style="margin-bottom:10px;">
-            <label style="font-weight:bold; color:#718096; font-size:12px;">姓名</label>
-            <input id="emp-fullname" type="text" placeholder="員工姓名" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;">
-          </div>
-          <div style="margin-bottom:10px;">
-            <label style="font-weight:bold; color:#718096; font-size:12px;">層級</label>
-            <select id="emp-role" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;">
-              <option value="staff" selected>員工</option>
-              <option value="assistant">助理</option>
-              <option value="admin">管理員</option>
-            </select>
-          </div>
-          <div style="margin-bottom:10px;">
-            <label style="font-weight:bold; color:#718096; font-size:12px;">所屬分店（分店員工必填）</label>
-            <select id="emp-store" onchange="if(this.value==='__custom__'){document.getElementById('emp-store-custom').style.display='block';this.style.display='none';document.getElementById('emp-store-custom').focus();}else{document.getElementById('emp-store-custom').style.display='none';}" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;">
-              <option value="">總倉（不指定）</option>
-              ${branchNames.map(n => '<option value="' + n + '">' + n + '</option>').join('')}
-              <option value="__custom__">✏️ 自訂...</option>
-            </select>
-            <input id="emp-store-custom" type="text" placeholder="輸入自訂分店名稱" style="display:none; width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;">
-          </div>
-        </div>`,
-      showCancelButton: true,
-      confirmButtonText: '新增', cancelButtonText: '取消', confirmButtonColor: '#2b6cb0',
-      preConfirm: () => {
-        const username = (document.getElementById('emp-username')?.value || '').trim();
-        const password = (document.getElementById('emp-password')?.value || '').trim();
-        const full_name = (document.getElementById('emp-fullname')?.value || '').trim();
-        const role = document.getElementById('emp-role')?.value || 'staff';
-        const storeSelect = document.getElementById('emp-store')?.value || '';
-        const storeCustom = (document.getElementById('emp-store-custom')?.value || '').trim();
-        const store = storeSelect === '__custom__' ? storeCustom : storeSelect;
-        if (!username || !password) { Swal.showValidationMessage('帳號和密碼為必填'); return false; }
-        return { username, password, full_name, role, store };
-      }
-    }).then(async res => {
-      if (!res.isConfirmed) return;
-      const v = res.value;
-      if (v.password.length < 6) { Swal.fire('錯誤', '密碼至少 6 碼', 'error'); return; }
-      try {
-        // 1. 建立 Supabase Auth 帳號（用 RPC，密碼直接用 crypt 設定）
-        const authResp = await fetch(`${SB_URL}/rpc/admin_create_auth_user`, {
-          method: 'POST', headers: { ...HEADERS, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ p_username: v.username, p_password: v.password, p_full_name: v.full_name, p_role: v.role, p_store: v.store })
-        });
-        if (!authResp.ok) { const err = await authResp.json(); throw new Error(err.message || 'Auth 建立失敗'); }
-
-        // 2. 寫入 employees 表
-        const resp = await fetch(`${SB_URL}/employees`, {
-          method: 'POST',
-          headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
-          body: JSON.stringify({ username: v.username, password: v.password, full_name: v.full_name, role: v.role, store: v.store, status: 'active' })
-        });
-        if (!resp.ok) { const err = await resp.json(); throw new Error(err.message || '寫入失敗'); }
-        Swal.fire({ icon:'success', title:'新增成功', text:`帳號 ${v.username} 已建立（含登入權限）`, timer:1500, showConfirmButton:false })
-          .then(() => renderEmployeeManagement());
-      } catch(e) {
-        Swal.fire('新增失敗', e.message, 'error');
-      }
-    });
-  }
-
-  function editEmployee(empId) {
-    const emp = employeeList.find(e => e.username === empId);
-    if (!emp) return;
-    Swal.fire({
-      title: '✏️ 編輯員工',
-      width: '420px',
-      html: `
-        <div style="text-align:left; font-size:13px;">
-          <div style="margin-bottom:10px;">
-            <label style="font-weight:bold; color:#718096; font-size:12px;">帳號</label>
-            <input id="emp-username" type="text" value="${emp.username}" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;">
-          </div>
-          <div style="margin-bottom:10px;">
-            <label style="font-weight:bold; color:#718096; font-size:12px;">新密碼（留空不修改）</label>
-            <input id="emp-password" type="text" placeholder="輸入新密碼..." style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;">
-          </div>
-          <div style="margin-bottom:10px;">
-            <label style="font-weight:bold; color:#718096; font-size:12px;">姓名</label>
-            <input id="emp-fullname" type="text" value="${emp.full_name || ''}" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;">
-          </div>
-          <div style="margin-bottom:10px;">
-            <label style="font-weight:bold; color:#718096; font-size:12px;">層級</label>
-            <select id="emp-role" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;">
-              <option value="staff" ${emp.role === 'staff' ? 'selected' : ''}>員工</option>
-              <option value="assistant" ${emp.role === 'assistant' ? 'selected' : ''}>助理</option>
-              <option value="admin" ${emp.role === 'admin' ? 'selected' : ''}>管理員</option>
-            </select>
-          </div>
-          <div style="margin-bottom:10px;">
-            <label style="font-weight:bold; color:#718096; font-size:12px;">所屬分店</label>
-            <select id="emp-store" onchange="if(this.value==='__custom__'){document.getElementById('emp-store-custom').style.display='block';this.style.display='none';document.getElementById('emp-store-custom').focus();}else{document.getElementById('emp-store-custom').style.display='none';}" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;">
-              <option value="" ${!emp.store ? 'selected' : ''}>總倉（不指定）</option>
-              ${branchNames.map(n => '<option value="' + n + '"' + (emp.store === n ? ' selected' : '') + '>' + n + '</option>').join('')}
-              ${emp.store && !branchNames.includes(emp.store) ? '<option value="' + emp.store + '" selected>' + emp.store + '（自訂）</option>' : ''}
-              <option value="__custom__">✏️ 自訂...</option>
-            </select>
-            <input id="emp-store-custom" type="text" placeholder="輸入自訂分店名稱" style="display:none; width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;">
-          </div>
-        </div>`,
-      showCancelButton: true,
-      confirmButtonText: '💾 儲存', cancelButtonText: '取消', confirmButtonColor: '#2b6cb0',
-      preConfirm: () => {
-        const username = (document.getElementById('emp-username')?.value || '').trim();
-        const password = (document.getElementById('emp-password')?.value || '').trim();
-        const full_name = (document.getElementById('emp-fullname')?.value || '').trim();
-        const role = document.getElementById('emp-role')?.value || 'staff';
-        const storeSelect = document.getElementById('emp-store')?.value || '';
-        const storeCustom = (document.getElementById('emp-store-custom')?.value || '').trim();
-        const store = storeSelect === '__custom__' ? storeCustom : storeSelect;
-        if (!username) { Swal.showValidationMessage('帳號為必填'); return false; }
-        return { username, password, full_name, role, store };
-      }
-    }).then(async res => {
-      if (!res.isConfirmed) return;
-      const v = res.value;
-      if (v.password && v.password.length < 6) { Swal.fire('錯誤', '密碼至少 6 碼', 'error'); return; }
-      try {
-        // 1. 同步更新 Auth 帳號
-        const authPayload = { p_username: emp.username, p_full_name: v.full_name, p_role: v.role, p_store: v.store };
-        if (v.password) authPayload.p_password = v.password;
-        const authResp = await fetch(`${SB_URL}/rpc/admin_update_auth_user`, {
-          method: 'POST',
-          headers: { ...HEADERS, 'Content-Type': 'application/json' },
-          body: JSON.stringify(authPayload)
-        });
-        if (!authResp.ok) { const err = await authResp.json(); throw new Error(err.message || 'Auth 更新失敗'); }
-
-        // 2. 更新 employees 表
-        const payload = { username: v.username, full_name: v.full_name, role: v.role, store: v.store };
-        if (v.password) payload.password = v.password;
-        const resp = await fetch(`${SB_URL}/employees?username=eq.${emp.username}`, {
-          method: 'PATCH',
-          headers: { ...HEADERS, 'Content-Type': 'application/json' },
-          body: JSON.stringify(payload)
-        });
-        if (!resp.ok) { const err = await resp.json(); throw new Error(err.message || '更新失敗'); }
-        Swal.fire({ icon:'success', title:'更新成功', timer:1200, showConfirmButton:false })
-          .then(() => renderEmployeeManagement());
-      } catch(e) {
-        Swal.fire('更新失敗', e.message, 'error');
-      }
-    });
-  }
-
-  async function toggleEmployeeStatus(empId, newStatus) {
-    const emp = employeeList.find(e => e.username === empId);
-    if (!emp) return;
-    const action = newStatus === 'active' ? '啟用' : '停用';
-    const confirmed = await Swal.fire({
-      title: `確定${action}此帳號？`,
-      html: `帳號：<b>${emp.username}</b>（${emp.full_name || ''}）`,
-      icon: 'warning', showCancelButton: true,
-      confirmButtonText: `確定${action}`, cancelButtonText: '取消',
-      confirmButtonColor: newStatus === 'active' ? '#047857' : '#c53030'
-    });
-    if (!confirmed.isConfirmed) return;
-    try {
-      // 停用時刪除 Auth 帳號，啟用時用 signUp 重建
-      if (newStatus === 'inactive') {
-        await fetch(`${SB_URL}/rpc/admin_delete_auth_user`, {
-          method: 'POST', headers: { ...HEADERS, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ p_username: emp.username })
-        });
-      } else {
-        const pw = emp.password || '123456';
-        const reCreateResp = await fetch(`${SB_URL}/rpc/admin_create_auth_user`, {
-          method: 'POST', headers: { ...HEADERS, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ p_username: emp.username, p_password: pw, p_full_name: emp.full_name || '', p_role: emp.role || 'staff', p_store: emp.store || '' })
-        });
-        if (!reCreateResp.ok) { const err = await reCreateResp.json(); throw new Error(err.message || '重建帳號失敗'); }
-      }
-      const resp = await fetch(`${SB_URL}/employees?username=eq.${emp.username}`, {
-        method: 'PATCH',
-        headers: { ...HEADERS, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus })
-      });
-      if (!resp.ok) { const err = await resp.json(); throw new Error(err.message || '操作失敗'); }
-      Swal.fire({ icon:'success', title:`已${action}`, timer:1200, showConfirmButton:false })
-        .then(() => renderEmployeeManagement());
-    } catch(e) {
-      Swal.fire('操作失敗', e.message, 'error');
-    }
-  }
-
-  // ============================
-  // 系統管理：分店管理
-  // ============================
-  function renderBranchManagement() {
-    const storeCount = branchData.filter(b => b.type === 'store').length;
-    const wholesaleCount = branchData.filter(b => b.type === 'wholesale').length;
-
-    const rows = branchData.map((b, idx) => {
-      const isStore = b.type === 'store';
-      const typeBadge = isStore
-        ? '<span style="background:#f0f7ff; color:#2b6cb0; border:1px solid #6ee7b7; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:bold;">🏪 分店</span>'
-        : '<span style="background:#f0f7ff; color:#2b6cb0; border:1px solid #93c5fd; padding:2px 8px; border-radius:4px; font-size:12px; font-weight:bold;">📦 批發</span>';
-      return `
-        <tr style="border-bottom:1px solid #e2e8f0;">
-          <td style="padding:10px 12px; font-family:monospace; color:#718096; text-align:center;">${idx + 1}</td>
-          <td style="padding:10px 12px; font-weight:bold; color:#2d3748; font-size:14px;">${b.name}</td>
-          <td style="padding:10px 12px; text-align:center;">${typeBadge}</td>
-          <td style="padding:10px 12px; text-align:center;">
-            <button class="btn" style="padding:4px 10px; font-size:12px; background:#2b6cb0; margin-right:4px;" onclick="renameBranch(${idx})">✏️ 改名</button>
-            <button class="btn" style="padding:4px 10px; font-size:12px; background:${isStore ? '#2b6cb0' : '#b7791f'};" onclick="toggleBranchType(${idx})">${isStore ? '→ 批發' : '→ 分店'}</button>
-            <button class="btn" style="padding:4px 10px; font-size:12px; background:#c53030; margin-left:4px;" onclick="deleteBranch(${idx})">🗑️</button>
-          </td>
-        </tr>`;
-    }).join('');
-
-    document.getElementById('mainContainer').innerHTML = `
-      <div class="panel" style="height:100%; display:flex; flex-direction:column;">
-        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:15px; flex-shrink:0; flex-wrap:wrap; gap:8px;">
-          <div>
-            <div style="font-size:16px; font-weight:bold; color:#2d3748;">🏪 分店清單管理</div>
-            <div style="font-size:12px; color:#718096; margin-top:4px;">🏪 分店 ${storeCount} 間 ｜ 📦 批發 ${wholesaleCount} 間 ｜ 共 ${branchData.length} 間</div>
-          </div>
-          <div style="display:flex; gap:8px;">
-            <button class="btn" style="background:#2b6cb0;" onclick="addBranch()">➕ 新增</button>
-            <button class="btn" style="background:#b7791f;" onclick="resetBranches()">🔄 還原預設</button>
-          </div>
-        </div>
-        <div style="flex:1; overflow:auto; border:1px solid var(--border); border-radius:8px;">
-          <table style="width:100%; border-collapse:collapse; font-size:13px; table-layout:fixed;">
-            <colgroup>
-              <col style="width:45px;">
-              <col>
-              <col style="width:90px;">
-              <col style="width:200px;">
-            </colgroup>
-            <thead style="position:sticky; top:0; z-index:1; background:#eef1f5; box-shadow:0 1px 2px rgba(0,0,0,0.1);">
-              <tr>
-                <th style="padding:10px 8px; text-align:center;">#</th>
-                <th style="padding:10px 8px; text-align:left;">名稱</th>
-                <th style="padding:10px 8px; text-align:center;">類型</th>
-                <th style="padding:10px 8px; text-align:center;">操作</th>
-              </tr>
-            </thead>
-            <tbody>${rows || '<tr><td colspan="4" style="text-align:center; padding:40px; color:#718096;">尚無分店資料</td></tr>'}</tbody>
-          </table>
-        </div>
-        <div style="margin-top:12px; font-size:12px; color:#718096;">
-          🏪 分店：分店前台可看到彼此訂購量、有月費、完整功能<br>
-          📦 批發：分店前台看不到其數量、無月費、僅基本訂貨功能
-        </div>
-      </div>`;
-  }
-
-  function addBranch() {
-    Swal.fire({
-      title: '➕ 新增',
-      html: `
-        <div style="text-align:left; font-size:13px;">
-          <div style="margin-bottom:10px;">
-            <label style="font-weight:bold; color:#718096; font-size:12px;">名稱</label>
-            <input id="branch-name" type="text" placeholder="輸入名稱" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;">
-          </div>
-          <div>
-            <label style="font-weight:bold; color:#718096; font-size:12px;">類型</label>
-            <select id="branch-type" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;">
-              <option value="store">🏪 分店</option>
-              <option value="wholesale">📦 批發</option>
-            </select>
-          </div>
-        </div>`,
-      showCancelButton: true,
-      confirmButtonText: '新增',
-      cancelButtonText: '取消',
-      confirmButtonColor: '#2b6cb0',
-      preConfirm: () => {
-        const name = (document.getElementById('branch-name')?.value || '').trim();
-        const type = document.getElementById('branch-type')?.value || 'store';
-        if (!name) { Swal.showValidationMessage('請輸入名稱'); return false; }
-        if (branchNames.includes(name)) { Swal.showValidationMessage('此名稱已存在'); return false; }
-        return { name, type };
-      }
-    }).then(res => {
-      if (res.isConfirmed) {
-        branchData.push(res.value);
-        saveBranchData();
-        renderBranchManagement();
-        Swal.fire({ icon:'success', title:'已新增', text:res.value.name, timer:1200, showConfirmButton:false });
-      }
-    });
-  }
-
-  function renameBranch(idx) {
-    const old = branchData[idx];
-    Swal.fire({
-      title: '✏️ 修改名稱',
-      input: 'text',
-      inputValue: old.name,
-      showCancelButton: true,
-      confirmButtonText: '儲存',
-      cancelButtonText: '取消',
-      confirmButtonColor: '#2b6cb0',
-      inputValidator: (val) => {
-        if (!val || !val.trim()) return '請輸入名稱';
-        if (val.trim() !== old.name && branchNames.includes(val.trim())) return '此名稱已存在';
-      }
-    }).then(res => {
-      if (res.isConfirmed) {
-        branchData[idx].name = res.value.trim();
-        saveBranchData();
-        renderBranchManagement();
-        Swal.fire({ icon:'success', title:'已更新', timer:1000, showConfirmButton:false });
-      }
-    });
-  }
-
-  function toggleBranchType(idx) {
-    const b = branchData[idx];
-    const newType = b.type === 'store' ? 'wholesale' : 'store';
-    const label = newType === 'store' ? '🏪 分店' : '📦 批發';
-    b.type = newType;
-    saveBranchData();
-    renderBranchManagement();
-    Swal.fire({ icon:'success', title:`${b.name} → ${label}`, timer:1000, showConfirmButton:false });
-  }
-
-  function deleteBranch(idx) {
-    const b = branchData[idx];
-    Swal.fire({
-      title: '確定刪除？',
-      html: `<b>${b.name}</b>（${b.type === 'store' ? '分店' : '批發'}）`,
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: '刪除',
-      cancelButtonText: '取消',
-      confirmButtonColor: '#c53030'
-    }).then(res => {
-      if (res.isConfirmed) {
-        branchData.splice(idx, 1);
-        saveBranchData();
-        renderBranchManagement();
-        Swal.fire({ icon:'success', title:'已刪除', timer:1000, showConfirmButton:false });
-      }
-    });
-  }
-
-  function resetBranches() {
-    Swal.fire({
-      title: '還原為預設清單？',
-      text: '將覆蓋目前的自訂清單，恢復為系統預設的 ' + DEFAULT_BRANCH_DATA.length + ' 間。',
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: '確定還原',
-      cancelButtonText: '取消',
-      confirmButtonColor: '#b7791f'
-    }).then(res => {
-      if (res.isConfirmed) {
-        branchData = JSON.parse(JSON.stringify(DEFAULT_BRANCH_DATA));
-        saveBranchData();
-        renderBranchManagement();
-        Swal.fire({ icon:'success', title:'已還原', timer:1200, showConfirmButton:false });
-      }
-    });
-  }
-
 
   // ============================
   // 陸貨專區：共用 Supabase fetch
