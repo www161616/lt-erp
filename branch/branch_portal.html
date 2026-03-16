@@ -4963,6 +4963,9 @@ function renderAidBoard() {
       '</div>';
     }).join('');
 
+    var editBtn = (post.posterStore === myName && post.status === 'open')
+      ? "<button onclick=\"editAidPost('" + post.id + "')\" style=\"padding:4px 10px; background:#fff0f6; color:#2563eb; border:1px solid #2563eb; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit;\">✏️ 修改</button>"
+      : '';
     var cancelBtn = (post.posterStore === myName && post.status === 'open')
       ? "<button onclick=\"cancelAidPost('" + post.id + "')\" style=\"padding:4px 10px; background:white; color:#ef4444; border:1px solid #ef4444; border-radius:6px; font-size:12px; cursor:pointer; font-family:inherit;\">取消</button>"
       : '';
@@ -4996,6 +4999,7 @@ function renderAidBoard() {
         '<div style="display:flex; align-items:center; gap:8px;">' +
           '<span style="font-size:12px; color:#9ca3af;">' + post.createdAt + '</span>' +
           replyBtn +
+          editBtn +
           cancelBtn +
         '</div>' +
       '</div>' +
@@ -5282,6 +5286,48 @@ function openAidReplyModal(postId) {
       renderAidBoard();
     }
   });
+}
+
+async function editAidPost(postId) {
+  const post = aidBoard.find(a => a.id === postId);
+  if (!post) return;
+
+  let editItems = post.items.map(i => ({ ...i }));
+
+  const itemsHtml = editItems.map((item, idx) => `
+    <div style="border:1px solid #e2e8f0; border-radius:6px; padding:10px; margin-bottom:8px; background:#fafafa;">
+      <div style="font-weight:600; font-size:13px; margin-bottom:6px;">${item.code ? item.code + ' ' : ''}${item.name}</div>
+      <div style="display:flex; gap:8px; align-items:center;">
+        <span style="font-size:12px; color:#6b7280;">數量</span>
+        <input type="number" min="0" id="editAidQty${idx}" value="${item.qty}" style="width:70px; padding:5px; border:1px solid #d1d5db; border-radius:4px; font-size:14px; font-weight:700; text-align:center;">
+        <span style="font-size:12px; color:#6b7280;">$</span>
+        <input type="number" min="0" id="editAidPrice${idx}" value="${item.price || 0}" style="width:70px; padding:5px; border:1px solid #d1d5db; border-radius:4px; font-size:13px; text-align:center;">
+      </div>
+    </div>`).join('');
+
+  const result = await Swal.fire({
+    title: '修改貼文 — ' + post.id,
+    html: `<div style="text-align:left; max-height:50vh; overflow-y:auto;">${itemsHtml}</div>`,
+    width: 450,
+    showCancelButton: true,
+    confirmButtonText: '儲存',
+    confirmButtonColor: '#be185d',
+    cancelButtonText: '取消',
+    preConfirm: () => {
+      editItems.forEach((item, idx) => {
+        item.qty = parseInt(document.getElementById('editAidQty' + idx).value) || 0;
+        item.price = Number(document.getElementById('editAidPrice' + idx).value) || 0;
+      });
+      return editItems;
+    }
+  });
+
+  if (!result.isConfirmed) return;
+  post.items = result.value;
+  localStorage.setItem('portalMutualAidBoard', JSON.stringify(aidBoard));
+  cloudSave('portalMutualAidBoard');
+  Swal.fire({ title: '已修改', icon: 'success', timer: 1200, showConfirmButton: false });
+  renderAidBoard();
 }
 
 function cancelAidPost(postId) {
