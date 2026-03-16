@@ -2405,7 +2405,8 @@
     let mockBackorderMeta = JSON.parse(localStorage.getItem('lt_backorderMeta') || '{}'); // key: waveId-productId，存原因/處理/狀態
     function saveBackorderMeta() { localStorage.setItem('lt_backorderMeta', JSON.stringify(mockBackorderMeta)); }
 
-    function renderPickingStation() {
+    async function renderPickingStation() {
+      await cloudLoadAll(); // 先從雲端同步最新開團資料
       initPickingData(); // 重新載入最新匯入資料
       let html = `
         <div style="display: flex; flex-direction: column; gap: 15px; height: 100%;">
