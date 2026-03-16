@@ -3564,6 +3564,24 @@
       Swal.showLoading();
 
       try {
+        // 0. 批次查詢分店價（從 products 表）
+        const productIds = wave.matrix.map(r => r.id || r.productId).filter(Boolean);
+        const branchPriceMap = {};
+        if (productIds.length > 0) {
+          let offset = 0;
+          while (true) {
+            const pids = productIds.slice(offset, offset + 200).map(id => `"${id}"`).join(',');
+            if (!pids) break;
+            const pRes = await fetch(`${SB_URL}/products?id=in.(${pids})&select=id,price,price_branch,cost`, { headers: HEADERS });
+            if (pRes.ok) {
+              const pData = await pRes.json();
+              pData.forEach(p => { branchPriceMap[p.id] = { price_branch: Number(p.price_branch) || 0, price: Number(p.price) || 0, cost: Number(p.cost) || 0 }; });
+            }
+            offset += 200;
+            if (offset >= productIds.length) break;
+          }
+        }
+
         // 1. 按分店分組需要開單的商品 (數量 > 0)
         const branchBundles = {};
         wave.matrix.forEach(row => {
@@ -3578,14 +3596,18 @@
                 if (corrItem && corrItem.action === 'oversell') note += `｜超發 +${corrItem.diff} 請超賣`;
                 else if (corrItem && corrItem.action === 'pending') note += `｜少貨 ${corrItem.diff} 待補`;
                 else if (corrItem && corrItem.action === 'noRestock') note += `｜少貨 ${corrItem.diff} 不補`;
+                // 優先用 products 表的分店價
+                const dbPrice = branchPriceMap[row.id] || branchPriceMap[row.productId];
+                const finalPrice = dbPrice ? (dbPrice.price_branch || dbPrice.price || 0) : (row.storePrice || row.price || 0);
+                const finalCost = dbPrice ? (dbPrice.cost || 0) : (row.cost || 0);
                 branchBundles[bName].push({
                   product_id: row.id,
                   product_name: row.name,
                   expectedQty: data.expected || 0,
                   qty: qty,
                   unit: '件',
-                  price: row.storePrice || row.price || 0,
-                  cost: row.cost || 0,
+                  price: finalPrice,
+                  cost: finalCost,
                   note: note
                 });
               }
