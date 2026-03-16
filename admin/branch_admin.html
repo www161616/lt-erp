@@ -2304,8 +2304,14 @@
       try {
         const orderList = JSON.parse(localStorage.getItem('branchOrderList') || '[]');
         const branchOrdersData = JSON.parse(localStorage.getItem('branchOrders') || '{}');
-        const importedStores = JSON.parse(localStorage.getItem('importedStoreNames') || 'null');
-        const importedPersonal = JSON.parse(localStorage.getItem('importedPersonalNames') || 'null');
+        let importedStores = JSON.parse(localStorage.getItem('importedStoreNames') || 'null');
+        let importedPersonal = JSON.parse(localStorage.getItem('importedPersonalNames') || 'null');
+
+        // 如果沒有 importedStoreNames（其他裝置），從 branchOrders 自動取得店名
+        if ((!importedStores || importedStores.length === 0) && Object.keys(branchOrdersData).length > 0) {
+          importedStores = Object.keys(branchOrdersData);
+          importedPersonal = [];
+        }
 
         if (orderList.length > 0 && importedStores && importedStores.length > 0) {
           // 合併店家 + 個人買家，全部納入揀貨欄位
