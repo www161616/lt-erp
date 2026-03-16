@@ -5445,18 +5445,39 @@
             ? '<span style="background:#fef3c7; color:#b45309; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;">🟡 重要</span>'
             : '<span style="background:#dbeafe; color:#2563eb; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;">🔵 一般</span>';
           const pinBadge = b.pinned ? ' <span style="background:#fef3c7; color:#b45309; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;">📌 置頂</span>' : '';
-          return `<div style="background:white; border-radius:8px; border:1px solid var(--border); padding:16px 20px; margin-bottom:12px; box-shadow:0 2px 4px rgba(0,0,0,0.04); ${typeBg}">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">
+          const replies = b.replies || [];
+          const replyCount = replies.length > 0 ? ` <span style="font-size:11px; color:#718096;">(${replies.length} 則回覆)</span>` : '';
+          const repliesHtml = replies.length > 0
+            ? replies.map(r =>
+                `<div style="display:flex; gap:8px; padding:8px 0; border-top:1px dashed var(--border);">
+                  <span style="background:var(--accent-light); color:var(--accent); padding:1px 8px; border-radius:10px; font-size:11px; font-weight:600; white-space:nowrap;">${(r.store||'')}</span>
+                  <div style="flex:1;">
+                    <div style="font-size:13px; color:#374151;">${(r.text||'').replace(/</g,'&lt;')}</div>
+                    <div style="font-size:11px; color:#9ca3af; margin-top:2px;">${r.employee||''} · ${r.time||''}</div>
+                  </div>
+                </div>`
+              ).join('')
+            : '<div style="font-size:13px; color:#9ca3af; padding:4px 0;">尚無回覆</div>';
+
+          return `<div style="background:white; border-radius:8px; border:1px solid var(--border); margin-bottom:12px; box-shadow:0 2px 4px rgba(0,0,0,0.04); ${typeBg} overflow:hidden;">
+            <div onclick="toggleAdminBulletin(${i})" style="display:flex; justify-content:space-between; align-items:center; padding:14px 20px; cursor:pointer; user-select:none; flex-wrap:wrap; gap:6px;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
               <div style="display:flex; align-items:center; gap:8px;">${typeBadge}${pinBadge}
-                <span style="font-size:15px; font-weight:700; color:#1e293b;">${(b.title || '').replace(/</g,'&lt;')}</span>
+                <span style="font-size:15px; font-weight:700; color:#1e293b;">${(b.title || '').replace(/</g,'&lt;')}</span>${replyCount}
               </div>
               <div style="display:flex; align-items:center; gap:8px;">
                 <span style="font-size:12px; color:#9ca3af;">${b.author || ''} · ${b.time || ''}</span>
-                <button class="btn" style="padding:3px 10px; font-size:11px; background:#2b6cb0;" onclick="editBulletin(${i})">✏️ 編輯</button>
-                <button class="btn" style="padding:3px 10px; font-size:11px; background:#c53030;" onclick="deleteBulletin(${i})">🗑️ 刪除</button>
+                <button class="btn" style="padding:3px 10px; font-size:11px; background:#2b6cb0;" onclick="event.stopPropagation();editBulletin(${i})">✏️ 編輯</button>
+                <button class="btn" style="padding:3px 10px; font-size:11px; background:#c53030;" onclick="event.stopPropagation();deleteBulletin(${i})">🗑️ 刪除</button>
+                <span id="adminBulArrow${i}" style="color:#9ca3af; font-size:12px;">▼</span>
               </div>
             </div>
-            <div style="font-size:14px; color:#374151; line-height:1.8; white-space:pre-wrap;">${(b.content || '').replace(/</g,'&lt;')}</div>
+            <div id="adminBulBody${i}" style="display:none; padding:0 20px 16px;">
+              <div style="font-size:14px; color:#374151; line-height:1.8; white-space:pre-wrap; margin-bottom:12px;">${(b.content || '').replace(/</g,'&lt;')}</div>
+              <div style="border-top:1px solid var(--border); padding-top:10px;">
+                <div style="font-size:12px; font-weight:700; color:#4a5568; margin-bottom:6px;">💬 分店回覆 (${replies.length})</div>
+                ${repliesHtml}
+              </div>
+            </div>
           </div>`;
         }).join('');
 
@@ -5471,6 +5492,15 @@
         </div>
         <div style="flex:1; overflow:auto; min-height:0;">${listHtml}</div>
       </div>`;
+  }
+
+  function toggleAdminBulletin(idx) {
+    const body = document.getElementById('adminBulBody' + idx);
+    const arrow = document.getElementById('adminBulArrow' + idx);
+    if (!body) return;
+    const show = body.style.display === 'none';
+    body.style.display = show ? '' : 'none';
+    if (arrow) arrow.textContent = show ? '▲' : '▼';
   }
 
   async function addBulletin() {

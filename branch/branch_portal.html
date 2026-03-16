@@ -5138,7 +5138,7 @@ async function saveStocktake() {
 }
 
 // ============================
-// 公告欄（分店端只讀）
+// 公告欄（分店端：折疊 + 回覆）
 // ============================
 function renderBulletinBoard() {
   const area = document.getElementById('bulletinBoardArea');
@@ -5150,7 +5150,7 @@ function renderBulletinBoard() {
     return;
   }
 
-  area.innerHTML = bulletins.map(b => {
+  area.innerHTML = bulletins.map((b, i) => {
     const typeBg = b.type === 'urgent' ? 'border-left:4px solid #dc2626;'
       : b.type === 'important' ? 'border-left:4px solid #f59e0b;'
       : 'border-left:4px solid #3b82f6;';
@@ -5160,15 +5160,78 @@ function renderBulletinBoard() {
       ? '<span style="background:#fef3c7; color:#b45309; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;">🟡 重要</span>'
       : '<span style="background:#dbeafe; color:#2563eb; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;">🔵 一般</span>';
     const pinBadge = b.pinned ? ' <span style="background:#fef3c7; color:#b45309; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;">📌 置頂</span>' : '';
-    return '<div style="background:white; border-radius:8px; border:1px solid var(--border); padding:16px 20px; margin-bottom:12px; box-shadow:0 2px 4px rgba(0,0,0,0.04); ' + typeBg + '">' +
-      '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">' +
-        '<div style="display:flex; align-items:center; gap:8px;">' + typeBadge + pinBadge +
-          ' <span style="font-size:15px; font-weight:700; color:#1e293b;">' + (b.title || '').replace(/</g,'&lt;') + '</span></div>' +
-        '<span style="font-size:12px; color:#9ca3af;">' + (b.author || '') + ' · ' + (b.time || '') + '</span>' +
-      '</div>' +
-      '<div style="font-size:14px; color:#374151; line-height:1.8; white-space:pre-wrap;">' + (b.content || '').replace(/</g,'&lt;') + '</div>' +
-    '</div>';
+    const replies = b.replies || [];
+    const replyCount = replies.length > 0 ? ` <span style="font-size:11px; color:#9ca3af;">(${replies.length} 則回覆)</span>` : '';
+    const repliesHtml = replies.map(r =>
+      `<div style="display:flex; gap:8px; padding:8px 0; border-top:1px dashed var(--border);">
+        <span style="background:var(--accent-light); color:var(--accent); padding:1px 8px; border-radius:10px; font-size:11px; font-weight:600; white-space:nowrap;">${(r.store||'')}</span>
+        <div style="flex:1;">
+          <div style="font-size:13px; color:#374151;">${(r.text||'').replace(/</g,'&lt;')}</div>
+          <div style="font-size:11px; color:#9ca3af; margin-top:2px;">${r.employee||''} · ${r.time||''}</div>
+        </div>
+      </div>`
+    ).join('');
+
+    return `<div style="background:white; border-radius:8px; border:1px solid var(--border); margin-bottom:12px; box-shadow:0 2px 4px rgba(0,0,0,0.04); ${typeBg} overflow:hidden;">
+      <div onclick="toggleBulletin(${i})" style="display:flex; justify-content:space-between; align-items:center; padding:14px 20px; cursor:pointer; user-select:none; flex-wrap:wrap; gap:6px;" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
+        <div style="display:flex; align-items:center; gap:8px;">${typeBadge}${pinBadge}
+          <span style="font-size:15px; font-weight:700; color:#1e293b;">${(b.title || '').replace(/</g,'&lt;')}</span>${replyCount}
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:12px; color:#9ca3af;">${b.author || ''} · ${b.time || ''}</span>
+          <span id="bulArrow${i}" style="color:#9ca3af; font-size:12px; transition:0.2s;">▼</span>
+        </div>
+      </div>
+      <div id="bulBody${i}" style="display:none; padding:0 20px 16px;">
+        <div style="font-size:14px; color:#374151; line-height:1.8; white-space:pre-wrap; margin-bottom:12px;">${(b.content || '').replace(/</g,'&lt;')}</div>
+        <div style="border-top:1px solid var(--border); padding-top:10px;">
+          <div style="font-size:12px; font-weight:700; color:var(--text2); margin-bottom:6px;">💬 回覆 (${replies.length})</div>
+          ${repliesHtml || '<div style="font-size:13px; color:#9ca3af; padding:4px 0;">尚無回覆</div>'}
+          <div style="display:flex; gap:8px; margin-top:10px;">
+            <input type="text" id="bulReplyInput${i}" placeholder="輸入回覆..." style="flex:1; padding:8px 12px; border:1.5px solid var(--border); border-radius:6px; font-size:13px; font-family:inherit;" onkeypress="if(event.key==='Enter')submitBulletinReply(${i})">
+            <button onclick="submitBulletinReply(${i})" style="padding:8px 16px; background:var(--accent); color:white; border:none; border-radius:6px; font-size:13px; cursor:pointer; font-weight:600; font-family:inherit; white-space:nowrap;">送出</button>
+          </div>
+        </div>
+      </div>
+    </div>`;
   }).join('');
+}
+
+function toggleBulletin(idx) {
+  const body = document.getElementById('bulBody' + idx);
+  const arrow = document.getElementById('bulArrow' + idx);
+  if (!body) return;
+  const show = body.style.display === 'none';
+  body.style.display = show ? '' : 'none';
+  if (arrow) arrow.textContent = show ? '▲' : '▼';
+}
+
+function submitBulletinReply(idx) {
+  const input = document.getElementById('bulReplyInput' + idx);
+  if (!input) return;
+  const text = input.value.trim();
+  if (!text) return;
+
+  const bulletins = JSON.parse(localStorage.getItem('portalBulletin') || '[]');
+  if (!bulletins[idx]) return;
+  if (!bulletins[idx].replies) bulletins[idx].replies = [];
+
+  const now = new Date();
+  const timeStr = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+
+  bulletins[idx].replies.push({
+    store: currentStore?.name || '',
+    employee: currentStore?.employee || '',
+    text: text,
+    time: timeStr
+  });
+
+  localStorage.setItem('portalBulletin', JSON.stringify(bulletins));
+  cloudSave('portalBulletin');
+  input.value = '';
+  renderBulletinBoard();
+  // 重新展開這則公告
+  setTimeout(() => toggleBulletin(idx), 50);
 }
 
 // ============================
