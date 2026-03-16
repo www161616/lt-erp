@@ -2300,7 +2300,7 @@
     let pickingStoreNames = branchNames;
     let pickingArrivals = mockArrivals;
 
-    function initPickingData() {
+    async function initPickingData() {
       try {
         const orderList = JSON.parse(localStorage.getItem('branchOrderList') || '[]');
         const branchOrdersData = JSON.parse(localStorage.getItem('branchOrders') || '{}');
@@ -2319,6 +2319,23 @@
           if (importedPersonal && importedPersonal.length > 0) {
             pickingStoreNames = pickingStoreNames.concat(importedPersonal);
           }
+
+          // 批次查詢 products 表的分店價
+          const _priceMap = {};
+          try {
+            const allPids = [...new Set(orderList.map(i => i.productId || i.id).filter(Boolean))];
+            let offset = 0;
+            while (offset < allPids.length) {
+              const batch = allPids.slice(offset, offset + 200).map(id => `"${id}"`).join(',');
+              const pRes = await fetch(`${SB_URL}/products?id=in.(${batch})&select=id,price,price_branch,cost`, { headers: HEADERS });
+              if (pRes.ok) {
+                const pData = await pRes.json();
+                pData.forEach(p => { _priceMap[p.id] = p; });
+              }
+              offset += 200;
+            }
+          } catch(e) { console.warn('查詢分店價失敗，使用匯入價格:', e); }
+
           pickingArrivals = orderList.map(item => {
             const alloc = {};
             let totalAllocQty = 0;
@@ -2327,9 +2344,11 @@
               alloc[store] = qty;
               totalAllocQty += qty;
             });
+            const pid = item.productId || item.id;
+            const dbP = _priceMap[pid];
             return {
               id: item.id,
-              productId: item.productId || item.id,
+              productId: pid,
               name: item.name,
               temp: item.temp || '',
               category: item.category || '',
@@ -2339,11 +2358,12 @@
               pickedQty: 0,
               alloc: alloc,
               pickingHistory: [],
-              price: item.price || 0,
-              storePrice: item.storePrice || item.price || 0
+              price: dbP ? (Number(dbP.price) || item.price || 0) : (item.price || 0),
+              storePrice: dbP ? (Number(dbP.price_branch) || Number(dbP.price) || item.price || 0) : (item.storePrice || item.price || 0),
+              cost: dbP ? (Number(dbP.cost) || 0) : (item.cost || 0)
             };
           });
-          console.log(`[揀貨站] 已載入匯入資料：${pickingArrivals.length} 筆商品，${pickingStoreNames.length} 家店`);
+          console.log(`[揀貨站] 已載入匯入資料：${pickingArrivals.length} 筆商品，${pickingStoreNames.length} 家店（含分店價查詢）`);
         } else {
           pickingStoreNames = branchNames;
           pickingArrivals = mockArrivals;
@@ -2414,7 +2434,7 @@
 
     async function renderPickingStation() {
       await cloudLoadAll(); // 先從雲端同步最新開團資料
-      initPickingData(); // 重新載入最新匯入資料
+      await initPickingData(); // 重新載入最新匯入資料（含分店價查詢）
       let html = `
         <div style="display: flex; flex-direction: column; gap: 15px; height: 100%;">
           
