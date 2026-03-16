@@ -7197,7 +7197,7 @@
 
     const sMap = { pending:'暫存待確認', confirmed:'已確認到貨', issued:'已開立', disputed:'退貨處理中', closed:'已結案' };
 
-    const html = `<html><head><title>${o.id}</title><style>
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${o.id}</title><style>
       body{font-family:'Noto Sans TC','Microsoft JhengHei',sans-serif; padding:15px 20px; font-size:13px; color:#333; margin:0;}
       .title{text-align:center; font-size:18px; font-weight:bold; margin-bottom:10px; border-bottom:2px solid #333; padding-bottom:6px;}
       .info-row{display:flex; justify-content:space-between; margin-bottom:3px; font-size:13px;}
@@ -9151,7 +9151,7 @@
 
     const w = window.open('','_blank');
     if (!w) return Swal.fire('提示','請允許彈出視窗','warning');
-    w.document.write(`<!DOCTYPE html><html><head><title>陸貨到貨清單</title>
+    w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>陸貨到貨清單</title>
       <style>body{font-family:'Noto Sans TC',sans-serif;padding:10px;font-size:12pt;margin:0;}
       h2{text-align:center;margin:0 0 4px;font-size:18px;}
       table{width:100%;border-collapse:collapse;} th,td{border:1px solid #999;padding:4px 6px;text-align:left;white-space:nowrap;font-size:12pt;}
