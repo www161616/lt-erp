@@ -527,7 +527,9 @@
     const SB_URL = 'https://asugjynpocwygggttxyo.supabase.co/rest/v1';
     const SB_KEY = 'sb_publishable_cG0dslg6JnSwOtPSBko2Eg_VB0NtbTW';
     const SB_BASE = 'https://asugjynpocwygggttxyo.supabase.co';
-    const sbClient = supabase.createClient(SB_BASE, SB_KEY);
+    const sbClient = supabase.createClient(SB_BASE, SB_KEY, {
+      auth: { persistSession: true, storage: window.localStorage, storageKey: 'lt-erp-index-auth', autoRefreshToken: true }
+    });
 
     // Auth token: 登入後用 session token，未登入用 anon key
     function getAuthToken() { return sessionStorage.getItem('sb_auth_token') || SB_KEY; }
