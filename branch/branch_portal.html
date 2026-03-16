@@ -2804,28 +2804,45 @@ function printTransfer(id) {
   if (!t) return;
   const dateStr = t.date.toLocaleString('zh-TW', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
   const itemRows = t.items.map(i =>
-    `<tr><td style="padding:3px 0;">${i.code||'—'}</td><td style="padding:3px 4px;">${i.name}</td><td style="padding:3px 0; text-align:right;">${i.price?'$'+i.price:''}</td><td style="padding:3px 0; text-align:right;">${i.qty}</td><td style="padding:3px 0 3px 4px; color:#555;">${i.note||''}</td></tr>`
+    `<tr><td style="padding:5px 0; font-size:16px;">${i.name}</td><td style="padding:5px 0; text-align:right; font-size:16px; font-weight:bold;">${i.qty}</td><td style="padding:5px 0 5px 6px; font-size:14px; color:#555;">${i.note||''}</td></tr>`
   ).join('');
-  const win = window.open('', '_blank', 'width=320,height=500');
+  const total = t.items.reduce((s, i) => s + (parseInt(i.qty) || 0), 0);
+  const win = window.open('', '_blank', 'width=350,height=600');
   win.document.write(`
     <!DOCTYPE html><html><head><meta charset="UTF-8">
     <style>
-      body { font-family: monospace; font-size: 13px; width: 72mm; margin: 0; padding: 8px; }
-      h2 { text-align:center; font-size:15px; margin:0 0 6px; }
-      .info { margin-bottom:8px; line-height:1.8; }
+      @page { margin: 2mm; size: 80mm auto; }
+      body { font-family: 'Microsoft JhengHei', monospace; font-size: 16px; width: 76mm; margin: 0; padding: 4px; }
+      h2 { text-align:center; font-size:20px; font-weight:bold; margin:0 0 8px; letter-spacing:4px; }
+      .info { margin-bottom:10px; line-height:2; font-size:16px; }
+      .info b { font-size:18px; }
       table { width:100%; border-collapse:collapse; }
-      th { border-bottom:1px solid #000; padding:3px 0; font-size:12px; }
-      td { font-size:12px; }
-      .footer { margin-top:10px; border-top:1px dashed #000; padding-top:6px; font-size:11px; color:#555; text-align:center; }
+      th { border-bottom:2px solid #000; padding:5px 0; font-size:15px; font-weight:bold; }
+      td { border-bottom:1px dashed #ccc; }
+      .total { margin-top:8px; text-align:right; font-size:18px; font-weight:bold; border-top:2px solid #000; padding-top:6px; }
+      .footer { margin-top:10px; border-top:1px dashed #000; padding-top:6px; font-size:13px; color:#555; text-align:center; }
+      .no-print { position:fixed; top:8px; right:8px; z-index:99; }
+      .no-print button { padding:8px 16px; font-size:14px; border:none; border-radius:6px; cursor:pointer; font-weight:bold; margin-left:6px; }
+      @media print { .no-print { display:none; } }
     </style></head><body>
-    <h2>店 轉 店 轉 貨 單</h2>
-    <div class="info">單號：${t.id}<br>日期：${dateStr}<br>轉出：${t.fromStore}<br>轉入：${t.toStore}<br>${t.tempNote?'整單溫層：'+t.tempNote+'<br>':''}${t.note?'備註：'+t.note:''}</div>
+    <div class="no-print">
+      <button onclick="window.print()" style="background:#be185d; color:white;">🖨️ 列印</button>
+      <button onclick="window.close()" style="background:#e2e8f0; color:#333;">✕ 關閉</button>
+    </div>
+    <h2>店轉店轉貨單</h2>
+    <div class="info">
+      單號：<b>${t.id}</b><br>
+      日期：<b>${dateStr}</b><br>
+      轉出：<b>${t.fromStore}</b><br>
+      轉入：<b>${t.toStore}</b><br>
+      ${t.tempNote?'溫層：<b>'+t.tempNote+'</b><br>':''}${t.note?'備註：'+t.note:''}
+    </div>
     <table>
-      <thead><tr><th style="text-align:left;">編號</th><th style="text-align:left;">商品</th><th style="text-align:right;">分店價</th><th style="text-align:right;">數量</th><th style="text-align:left;">效期</th></tr></thead>
+      <thead><tr><th style="text-align:left;">商品名稱</th><th style="text-align:right;">數量</th><th style="text-align:left; padding-left:6px;">效期</th></tr></thead>
       <tbody>${itemRows}</tbody>
     </table>
+    <div class="total">合計：${total} 件</div>
     <div class="footer">龍潭總倉分店系統</div>
-    <script>window.onload=function(){window.print();}<\/script>
     </body></html>
   `);
   win.document.close();
