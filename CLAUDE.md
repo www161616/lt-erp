@@ -42,7 +42,7 @@
 
 ## Supabase
 - URL: `https://asugjynpocwygggttxyo.supabase.co/rest/v1`
-- KEY: `sb_publishable_cG0dslg6JnSwOtPSBko2Eg_VB0NtbTW`
+- KEY: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFzdWdqeW5wb2N3eWdnZ3R0eHlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNzU3MjksImV4cCI6MjA4ODk1MTcyOX0.LzcRQAl80rZxKKD8NIYWGvylfwCbs1ek5LtKpmZodBc`
 - 變數名稱：`SB_URL`, `SB_KEY`, `HEADERS`
 - 預設只回傳 1000 筆，大量資料需分頁 while loop
 
