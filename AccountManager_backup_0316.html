@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <title>帳號管理</title>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script src="libs/sweetalert2.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
     body { font-family:'Segoe UI','Microsoft JhengHei',sans-serif; background:#f8fafc; color:#1e293b; padding:24px; }
@@ -28,83 +28,33 @@
     .badge-inactive { background:#fef2f2; color:#991b1b; }
     .access-tag { display:inline-block; padding:1px 6px; border-radius:4px; font-size:10px; font-weight:600; margin-right:2px; }
     .empty { text-align:center; padding:60px; color:#94a3b8; font-size:14px; }
-
-    /* 分頁標籤 */
-    .tab-bar { display:flex; gap:0; margin-bottom:20px; }
-    .tab-btn { padding:10px 24px; font-size:14px; font-weight:bold; border:1px solid #e2e8f0; background:#f1f5f9; color:#64748b; cursor:pointer; transition:0.2s; font-family:inherit; }
-    .tab-btn:first-child { border-radius:8px 0 0 8px; }
-    .tab-btn:last-child { border-radius:0 8px 8px 0; }
-    .tab-btn.active { background:#475569; color:white; border-color:#475569; }
-    .tab-content { display:none; }
-    .tab-content.active { display:block; }
-
-    /* 操作紀錄樣式 */
-    .log-filters { display:flex; gap:8px; align-items:center; margin-bottom:16px; flex-wrap:wrap; }
-    .log-filters input, .log-filters select { padding:7px 10px; border:1px solid #d1d5db; border-radius:6px; font-size:13px; font-family:inherit; }
-    .log-card { background:white; border:1px solid #f1f5f9; border-left:3px solid #475569; border-radius:6px; padding:10px 14px; margin-bottom:8px; }
-    .log-card:hover { background:#f8fafc; }
-    .log-header { display:flex; justify-content:space-between; align-items:center; margin-bottom:4px; }
-    .log-action { font-weight:700; color:#1e293b; font-size:13px; }
-    .log-time { font-size:11px; color:#94a3b8; }
-    .log-detail { font-size:12px; color:#64748b; }
-    .log-employee { display:inline-block; background:#dbeafe; color:#1e40af; padding:1px 8px; border-radius:10px; font-size:11px; font-weight:600; margin-right:6px; }
-    .log-target { display:inline-block; background:#f1f5f9; color:#475569; padding:1px 8px; border-radius:10px; font-size:11px; font-weight:600; }
-    .log-pagination { display:flex; justify-content:center; gap:4px; margin-top:16px; }
-    .log-pagination button { padding:5px 12px; border:1px solid #d1d5db; background:white; border-radius:4px; font-size:12px; cursor:pointer; font-family:inherit; }
-    .log-pagination button.active { background:#475569; color:white; border-color:#475569; }
-    .log-pagination button:hover:not(.active) { background:#f1f5f9; }
   </style>
 </head>
 <body>
 
-<div class="tab-bar">
-  <button class="tab-btn active" onclick="switchTab('accounts', this)">👤 帳號管理</button>
-  <button class="tab-btn" onclick="switchTab('logs', this)">📜 操作紀錄</button>
+<div class="page-title">👤 帳號管理</div>
+<div class="toolbar">
+  <button class="btn btn-primary" onclick="addAccount()">➕ 新增帳號</button>
+  <button class="btn" style="background:#e2e8f0; color:#374151;" onclick="loadAccounts()">🔄 重新整理</button>
+  <span id="accountCount" style="font-size:12px; color:#94a3b8; margin-left:8px;"></span>
 </div>
 
-<!-- ===== 帳號管理分頁 ===== -->
-<div class="tab-content active" id="tabAccounts">
-  <div class="toolbar">
-    <button class="btn btn-primary" onclick="addAccount()">➕ 新增帳號</button>
-    <button class="btn" style="background:#e2e8f0; color:#374151;" onclick="loadAccounts()">🔄 重新整理</button>
-    <span id="accountCount" style="font-size:12px; color:#94a3b8; margin-left:8px;"></span>
-  </div>
-
-  <table>
-    <thead>
-      <tr>
-        <th>帳號</th>
-        <th>姓名</th>
-        <th>角色</th>
-        <th>可登入</th>
-        <th>所屬分店</th>
-        <th>狀態</th>
-        <th>操作</th>
-      </tr>
-    </thead>
-    <tbody id="accountBody">
-      <tr><td colspan="7" class="empty">載入中...</td></tr>
-    </tbody>
-  </table>
-</div>
-
-<!-- ===== 操作紀錄分頁 ===== -->
-<div class="tab-content" id="tabLogs">
-  <div class="log-filters">
-    <input type="date" id="logDateFrom" title="起始日期">
-    <span style="color:#94a3b8;">~</span>
-    <input type="date" id="logDateTo" title="結束日期">
-    <select id="logEmployee">
-      <option value="">全部員工</option>
-    </select>
-    <input type="text" id="logSearch" placeholder="搜尋操作/對象..." style="width:180px;" oninput="filterLogs()">
-    <button class="btn btn-primary" onclick="loadLogs()">🔍 查詢</button>
-    <button class="btn" style="background:#e2e8f0; color:#374151;" onclick="clearLogFilters()">清除</button>
-    <span id="logCount" style="font-size:12px; color:#94a3b8; margin-left:8px;"></span>
-  </div>
-  <div id="logList"><div class="empty">點擊「查詢」載入操作紀錄</div></div>
-  <div id="logPagination" class="log-pagination"></div>
-</div>
+<table>
+  <thead>
+    <tr>
+      <th>帳號</th>
+      <th>姓名</th>
+      <th>角色</th>
+      <th>可登入</th>
+      <th>所屬分店</th>
+      <th>狀態</th>
+      <th>操作</th>
+    </tr>
+  </thead>
+  <tbody id="accountBody">
+    <tr><td colspan="7" class="empty">載入中...</td></tr>
+  </tbody>
+</table>
 
 <script>
   const SB_URL = 'https://asugjynpocwygggttxyo.supabase.co/rest/v1';
@@ -117,20 +67,6 @@
     return h;
   }
 
-  // ============================
-  // 分頁切換
-  // ============================
-  function switchTab(tab, el) {
-    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
-    document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
-    el.classList.add('active');
-    document.getElementById(tab === 'accounts' ? 'tabAccounts' : 'tabLogs').classList.add('active');
-    if (tab === 'logs' && allLogs.length === 0) loadLogs();
-  }
-
-  // ============================
-  // 帳號管理（原有功能，完全不動）
-  // ============================
   let accountList = [];
 
   async function loadAccounts() {
@@ -139,8 +75,6 @@
       if (!res.ok) throw new Error('讀取失敗 (' + res.status + ')');
       accountList = await res.json();
       renderAccounts();
-      // 同步更新操作紀錄的員工下拉
-      updateLogEmployeeFilter();
     } catch(e) {
       document.getElementById('accountBody').innerHTML = '<tr><td colspan="7" class="empty">讀取失敗: ' + e.message + '</td></tr>';
     }
@@ -228,6 +162,7 @@
       var v = res.value;
       Swal.fire({ title: '建立中...', allowOutsideClick: false, didOpen: function() { Swal.showLoading(); } });
       try {
+        // 1. Supabase Auth 建帳號
         var authResp = await fetch(SB_URL + '/rpc/admin_create_auth_user', {
           method: 'POST', headers: H(),
           body: JSON.stringify({ p_username: v.username, p_password: v.password, p_full_name: v.full_name, p_role: v.role, p_store: v.store })
@@ -237,6 +172,7 @@
           throw new Error(err.message || 'Auth 建立失敗');
         }
 
+        // 2. 寫入 employees 表
         var resp = await fetch(SB_URL + '/employees', {
           method: 'POST', headers: H({ 'Prefer': 'return=representation' }),
           body: JSON.stringify({ username: v.username, password: v.password, full_name: v.full_name, role: v.role, store: v.store, status: 'active' })
@@ -254,7 +190,7 @@
     });
   }
 
-  // ===== 編輯帳號 =====
+  // ===== 編輯帳號（姓名、角色、分店、狀態）=====
   function editAccount(username) {
     var emp = accountList.find(function(a) { return a.username === username; });
     if (!emp) return;
@@ -296,6 +232,7 @@
       var v = res.value;
       Swal.fire({ title: '更新中...', allowOutsideClick: false, didOpen: function() { Swal.showLoading(); } });
       try {
+        // 1. 更新 Auth metadata（角色、姓名、分店）
         var authResp = await fetch(SB_URL + '/rpc/admin_update_auth_user', {
           method: 'POST', headers: H(),
           body: JSON.stringify({ p_username: username, p_full_name: v.full_name, p_role: v.role, p_store: v.store })
@@ -305,6 +242,7 @@
           throw new Error('Auth 更新失敗: ' + (err.message || ''));
         }
 
+        // 2. 更新 employees 表
         var resp = await fetch(SB_URL + '/employees?username=eq.' + encodeURIComponent(username), {
           method: 'PATCH', headers: H(),
           body: JSON.stringify({ full_name: v.full_name, role: v.role, store: v.store, status: v.status })
@@ -319,7 +257,7 @@
     });
   }
 
-  // ===== 改密碼 =====
+  // ===== 改密碼（用 admin_update_auth_user）=====
   function resetPassword(username) {
     Swal.fire({
       title: '🔑 重設密碼',
@@ -335,6 +273,7 @@
     }).then(async function(res) {
       if (!res.isConfirmed) return;
       try {
+        // 用 admin_update_auth_user 改密碼（不是 create）
         var authResp = await fetch(SB_URL + '/rpc/admin_update_auth_user', {
           method: 'POST', headers: H(),
           body: JSON.stringify({ p_username: username, p_password: res.value })
@@ -344,6 +283,7 @@
           throw new Error(err.message || '重設失敗');
         }
 
+        // 同步更新 employees 表密碼
         await fetch(SB_URL + '/employees?username=eq.' + encodeURIComponent(username), {
           method: 'PATCH', headers: H(),
           body: JSON.stringify({ password: res.value })
@@ -356,7 +296,7 @@
     });
   }
 
-  // ===== 刪除帳號 =====
+  // ===== 刪除帳號（Auth + employees）=====
   function deleteAccount(username) {
     Swal.fire({
       title: '確定刪除？',
@@ -368,11 +308,14 @@
     }).then(async function(res) {
       if (!res.isConfirmed) return;
       try {
+        // 1. 刪除 Auth 帳號
         var authResp = await fetch(SB_URL + '/rpc/admin_delete_auth_user', {
           method: 'POST', headers: H(),
           body: JSON.stringify({ p_username: username })
         });
+        // Auth 刪除失敗不阻斷，繼續刪 employees
 
+        // 2. 刪除 employees 記錄
         var resp = await fetch(SB_URL + '/employees?username=eq.' + encodeURIComponent(username), {
           method: 'DELETE', headers: H()
         });
@@ -384,125 +327,6 @@
         Swal.fire('錯誤', e.message, 'error');
       }
     });
-  }
-
-  // ============================
-  // 操作紀錄
-  // ============================
-  let allLogs = [];
-  let filteredLogs = [];
-  let logPage = 1;
-  const LOG_PER_PAGE = 50;
-
-  function updateLogEmployeeFilter() {
-    const sel = document.getElementById('logEmployee');
-    if (!sel) return;
-    const current = sel.value;
-    const names = [...new Set(accountList.map(a => a.full_name || a.username).filter(Boolean))].sort();
-    sel.innerHTML = '<option value="">全部員工</option>' + names.map(n => `<option value="${n}" ${n === current ? 'selected' : ''}>${n}</option>`).join('');
-  }
-
-  async function loadLogs() {
-    const fromDate = document.getElementById('logDateFrom').value;
-    const toDate = document.getElementById('logDateTo').value;
-    const employee = document.getElementById('logEmployee').value;
-
-    let url = `${SB_URL}/activity_logs?select=*&order=created_at.desc`;
-    if (fromDate) url += `&created_at=gte.${fromDate}T00:00:00`;
-    if (toDate) url += `&created_at=lte.${toDate}T23:59:59`;
-    if (employee) url += `&employee_name=eq.${encodeURIComponent(employee)}`;
-    url += '&limit=500';
-
-    const listEl = document.getElementById('logList');
-    listEl.innerHTML = '<div class="empty">載入中...</div>';
-
-    try {
-      const res = await fetch(url, { headers: H() });
-      if (!res.ok) throw new Error('讀取失敗 (' + res.status + ')');
-      allLogs = await res.json();
-      logPage = 1;
-      filterLogs();
-    } catch(e) {
-      listEl.innerHTML = '<div class="empty" style="color:#c53030;">載入失敗: ' + e.message + '</div>';
-    }
-  }
-
-  function filterLogs() {
-    const kw = (document.getElementById('logSearch')?.value || '').toLowerCase();
-    filteredLogs = allLogs;
-    if (kw) {
-      filteredLogs = filteredLogs.filter(log =>
-        (log.action || '').toLowerCase().includes(kw) ||
-        (log.target_id || '').toLowerCase().includes(kw) ||
-        (log.employee_name || '').toLowerCase().includes(kw) ||
-        JSON.stringify(log.detail || '').toLowerCase().includes(kw)
-      );
-    }
-    document.getElementById('logCount').textContent = `共 ${filteredLogs.length} 筆`;
-    renderLogs();
-  }
-
-  function renderLogs() {
-    const listEl = document.getElementById('logList');
-    if (filteredLogs.length === 0) {
-      listEl.innerHTML = '<div class="empty">查無紀錄</div>';
-      document.getElementById('logPagination').innerHTML = '';
-      return;
-    }
-
-    const totalPages = Math.ceil(filteredLogs.length / LOG_PER_PAGE);
-    if (logPage > totalPages) logPage = totalPages;
-    const start = (logPage - 1) * LOG_PER_PAGE;
-    const pageData = filteredLogs.slice(start, start + LOG_PER_PAGE);
-
-    listEl.innerHTML = pageData.map(log => {
-      const time = log.created_at ? new Date(log.created_at).toLocaleString('zh-TW', { hour12: false }) : '';
-      let detailStr = '';
-      if (log.detail) {
-        if (typeof log.detail === 'object') {
-          const entries = Object.entries(log.detail).filter(([k, v]) => v !== '' && v !== null);
-          if (entries.length > 0) detailStr = entries.map(([k, v]) => `${k}: ${v}`).join(' | ');
-        } else {
-          detailStr = String(log.detail);
-        }
-      }
-      return `<div class="log-card">
-        <div class="log-header">
-          <div>
-            <span class="log-employee">${log.employee_name || log.employee_id || '?'}</span>
-            <span class="log-action">${log.action || ''}</span>
-            ${log.target_id ? `<span class="log-target">${log.target_id}</span>` : ''}
-          </div>
-          <span class="log-time">${time}</span>
-        </div>
-        ${detailStr ? `<div class="log-detail">${detailStr}</div>` : ''}
-      </div>`;
-    }).join('');
-
-    // 分頁
-    if (totalPages > 1) {
-      let pHtml = '';
-      if (logPage > 1) pHtml += `<button onclick="logPage=1;renderLogs();">«</button><button onclick="logPage--;renderLogs();">‹</button>`;
-      for (let i = Math.max(1, logPage - 2); i <= Math.min(totalPages, logPage + 2); i++) {
-        pHtml += `<button class="${i === logPage ? 'active' : ''}" onclick="logPage=${i};renderLogs();">${i}</button>`;
-      }
-      if (logPage < totalPages) pHtml += `<button onclick="logPage++;renderLogs();">›</button><button onclick="logPage=${totalPages};renderLogs();">»</button>`;
-      document.getElementById('logPagination').innerHTML = pHtml;
-    } else {
-      document.getElementById('logPagination').innerHTML = '';
-    }
-  }
-
-  function clearLogFilters() {
-    document.getElementById('logDateFrom').value = '';
-    document.getElementById('logDateTo').value = '';
-    document.getElementById('logEmployee').value = '';
-    document.getElementById('logSearch').value = '';
-    allLogs = [];
-    filteredLogs = [];
-    document.getElementById('logList').innerHTML = '<div class="empty">點擊「查詢」載入操作紀錄</div>';
-    document.getElementById('logPagination').innerHTML = '';
-    document.getElementById('logCount').textContent = '';
   }
 
   // 頁面載入

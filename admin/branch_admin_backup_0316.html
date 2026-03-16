@@ -4,9 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>龍潭總倉 - 分店調度與開團管理後台</title>
-  <script src="../libs/sweetalert2.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script src="../libs/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
   
   <style>
@@ -139,7 +139,6 @@
     <div class="menu-item" id="menu-demandBackorder" onclick="switchTab('demandBackorder', this)">📋 需求與欠品管理</div>
     <div class="menu-item" id="menu-transfer" onclick="switchTab('transfer', this)">🔄 店轉店與退倉審核</div>
     <div class="menu-item" id="menu-aid" onclick="switchTab('aid', this)">🤝 互助交流板</div>
-    <div class="menu-item" id="menu-bulletin" onclick="switchTab('bulletin', this)">📢 公告管理</div>
 
 
     <div style="flex:1;"></div>
@@ -271,7 +270,7 @@
       const hideForStaff = [
         'menu-home','label-product','menu-campaign','menu-purchase','menu-searchPurchase','menu-adminSummary','menu-importGroupBuy','menu-orders',
         'menu-cnArrivals','menu-cnReturns',
-        'label-warehouse','menu-picking','menu-pickingHistory','menu-demandBackorder','menu-transfer','menu-aid','menu-bulletin',
+        'label-warehouse','menu-picking','menu-pickingHistory','menu-demandBackorder','menu-transfer','menu-aid',
         'label-accounting','menu-accounting'
       ];
       hideForStaff.forEach(id => {
@@ -385,7 +384,6 @@
         sessionStorage.setItem('erp_employee', JSON.stringify(currentUser));
 
         applyRolePermissions();
-        await cloudLoadAll();
         await logActivity('登入系統', 'USER', `員工 ${currentUser.username} 登入成功`);
 
         Swal.fire({ icon: 'success', title: '登入成功！', timer: 1000, showConfirmButton: false });
@@ -436,6 +434,11 @@
         created_at: new Date().toISOString()
       };
 
+      if (MOCK_MODE) {
+        console.log(`[🧪 MOCK LOG] ${action} -> Target: ${targetId}`, detail);
+        return;
+      }
+
       try {
         await fetch(`${SB_URL}/activity_logs`, {
           method: 'POST',
@@ -457,8 +460,8 @@
     // 初始化與頁面切換
     // ============================
     window.onload = async () => {
-      await checkLoginStatus();
       await cloudLoadAll();
+      await checkLoginStatus();
       fetchCustomers();
       fetchSuppliers();
       updateClock();
@@ -531,9 +534,6 @@
       } else if (tabId === 'aid') {
         title.innerText = '當前功能：互助交流板';
         renderAdminAidStation();
-      } else if (tabId === 'bulletin') {
-        title.innerText = '當前功能：公告管理';
-        renderBulletinStation();
       } else if (tabId === 'accounting') {
         title.innerText = '當前功能：銷貨單管理';
         renderAccountingStation();
@@ -1226,24 +1226,6 @@
         });
         if (!detRes.ok) throw new Error('明細寫入失敗: ' + await detRes.text());
 
-        // 自動更新 products 表的分店價（只在送出審核時，且 price_branch > 0）
-        let priceUpdated = 0;
-        if (status === '待審核') {
-          for (const it of ipCart) {
-            if (Number(it.price_branch) > 0) {
-              try {
-                await fetch(`${SB_URL}/products?id=eq.${encodeURIComponent(it.id)}`, {
-                  method: 'PATCH',
-                  headers: { ...HEADERS, 'Prefer': 'return=minimal' },
-                  body: JSON.stringify({ price_branch: Number(it.price_branch) })
-                });
-                priceUpdated++;
-              } catch(e) { console.warn('更新分店價失敗:', it.id, e); }
-            }
-          }
-          if (priceUpdated > 0) console.log(`[採購單] 已更新 ${priceUpdated} 筆商品分店價`);
-        }
-
         // 自動更新訂貨追蹤：採購單開了 = 已向廠商叫貨
         let updatedCount = 0;
         ipCart.forEach(it => {
@@ -1261,10 +1243,9 @@
         ipRenderCart();
 
         const statusText = status === '草稿' ? '已存為草稿' : '已送出審核';
-        const priceNote = priceUpdated > 0 ? `<br><span style="font-size:12px; color:#2563eb;">💰 已更新 ${priceUpdated} 筆商品分店價</span>` : '';
         Swal.fire({
           icon: 'success', title: statusText,
-          html: `單號：<b>${orderId}</b><br>金額：<b>$${subtotal.toLocaleString()}</b>${updatedCount > 0 ? '<br><span style="font-size:12px; color:#805ad5;">📋 已同步更新 ' + updatedCount + ' 項訂貨追蹤為「已向廠商叫貨」</span>' : ''}${priceNote}`,
+          html: `單號：<b>${orderId}</b><br>金額：<b>$${subtotal.toLocaleString()}</b>${updatedCount > 0 ? '<br><span style="font-size:12px; color:#805ad5;">📋 已同步更新 ' + updatedCount + ' 項訂貨追蹤為「已向廠商叫貨」</span>' : ''}`,
           confirmButtonColor: 'var(--accent)'
         });
 
@@ -2319,18 +2300,12 @@
     let pickingStoreNames = branchNames;
     let pickingArrivals = mockArrivals;
 
-    async function initPickingData() {
+    function initPickingData() {
       try {
         const orderList = JSON.parse(localStorage.getItem('branchOrderList') || '[]');
         const branchOrdersData = JSON.parse(localStorage.getItem('branchOrders') || '{}');
-        let importedStores = JSON.parse(localStorage.getItem('importedStoreNames') || 'null');
-        let importedPersonal = JSON.parse(localStorage.getItem('importedPersonalNames') || 'null');
-
-        // 如果沒有 importedStoreNames（其他裝置），從 branchOrders 自動取得店名
-        if ((!importedStores || importedStores.length === 0) && Object.keys(branchOrdersData).length > 0) {
-          importedStores = Object.keys(branchOrdersData);
-          importedPersonal = [];
-        }
+        const importedStores = JSON.parse(localStorage.getItem('importedStoreNames') || 'null');
+        const importedPersonal = JSON.parse(localStorage.getItem('importedPersonalNames') || 'null');
 
         if (orderList.length > 0 && importedStores && importedStores.length > 0) {
           // 合併店家 + 個人買家，全部納入揀貨欄位
@@ -2338,23 +2313,6 @@
           if (importedPersonal && importedPersonal.length > 0) {
             pickingStoreNames = pickingStoreNames.concat(importedPersonal);
           }
-
-          // 批次查詢 products 表的分店價
-          const _priceMap = {};
-          try {
-            const allPids = [...new Set(orderList.map(i => i.productId || i.id).filter(Boolean))];
-            let offset = 0;
-            while (offset < allPids.length) {
-              const batch = allPids.slice(offset, offset + 200).map(id => `"${id}"`).join(',');
-              const pRes = await fetch(`${SB_URL}/products?id=in.(${batch})&select=id,price,price_branch,cost`, { headers: HEADERS });
-              if (pRes.ok) {
-                const pData = await pRes.json();
-                pData.forEach(p => { _priceMap[p.id] = p; });
-              }
-              offset += 200;
-            }
-          } catch(e) { console.warn('查詢分店價失敗，使用匯入價格:', e); }
-
           pickingArrivals = orderList.map(item => {
             const alloc = {};
             let totalAllocQty = 0;
@@ -2363,11 +2321,9 @@
               alloc[store] = qty;
               totalAllocQty += qty;
             });
-            const pid = item.productId || item.id;
-            const dbP = _priceMap[pid];
             return {
               id: item.id,
-              productId: pid,
+              productId: item.productId || item.id,
               name: item.name,
               temp: item.temp || '',
               category: item.category || '',
@@ -2377,12 +2333,11 @@
               pickedQty: 0,
               alloc: alloc,
               pickingHistory: [],
-              price: dbP ? (Number(dbP.price) || item.price || 0) : (item.price || 0),
-              storePrice: dbP ? (Number(dbP.price_branch) || Number(dbP.price) || item.price || 0) : (item.storePrice || item.price || 0),
-              cost: dbP ? (Number(dbP.cost) || 0) : (item.cost || 0)
+              price: item.price || 0,
+              storePrice: item.storePrice || item.price || 0
             };
           });
-          console.log(`[揀貨站] 已載入匯入資料：${pickingArrivals.length} 筆商品，${pickingStoreNames.length} 家店（含分店價查詢）`);
+          console.log(`[揀貨站] 已載入匯入資料：${pickingArrivals.length} 筆商品，${pickingStoreNames.length} 家店`);
         } else {
           pickingStoreNames = branchNames;
           pickingArrivals = mockArrivals;
@@ -2451,9 +2406,8 @@
     let mockBackorderMeta = JSON.parse(localStorage.getItem('lt_backorderMeta') || '{}'); // key: waveId-productId，存原因/處理/狀態
     function saveBackorderMeta() { localStorage.setItem('lt_backorderMeta', JSON.stringify(mockBackorderMeta)); }
 
-    async function renderPickingStation() {
-      await cloudLoadAll(); // 先從雲端同步最新開團資料
-      await initPickingData(); // 重新載入最新匯入資料（含分店價查詢）
+    function renderPickingStation() {
+      initPickingData(); // 重新載入最新匯入資料
       let html = `
         <div style="display: flex; flex-direction: column; gap: 15px; height: 100%;">
           
@@ -3603,24 +3557,6 @@
       Swal.showLoading();
 
       try {
-        // 0. 批次查詢分店價（從 products 表）
-        const productIds = [...new Set(wave.matrix.map(r => r.productId || r.id).filter(Boolean))];
-        const branchPriceMap = {};
-        if (productIds.length > 0) {
-          let offset = 0;
-          while (true) {
-            const pids = productIds.slice(offset, offset + 200).map(id => `"${id}"`).join(',');
-            if (!pids) break;
-            const pRes = await fetch(`${SB_URL}/products?id=in.(${pids})&select=id,price,price_branch,cost`, { headers: HEADERS });
-            if (pRes.ok) {
-              const pData = await pRes.json();
-              pData.forEach(p => { branchPriceMap[p.id] = { price_branch: Number(p.price_branch) || 0, price: Number(p.price) || 0, cost: Number(p.cost) || 0 }; });
-            }
-            offset += 200;
-            if (offset >= productIds.length) break;
-          }
-        }
-
         // 1. 按分店分組需要開單的商品 (數量 > 0)
         const branchBundles = {};
         wave.matrix.forEach(row => {
@@ -3635,18 +3571,14 @@
                 if (corrItem && corrItem.action === 'oversell') note += `｜超發 +${corrItem.diff} 請超賣`;
                 else if (corrItem && corrItem.action === 'pending') note += `｜少貨 ${corrItem.diff} 待補`;
                 else if (corrItem && corrItem.action === 'noRestock') note += `｜少貨 ${corrItem.diff} 不補`;
-                // 優先用 products 表的分店價
-                const dbPrice = branchPriceMap[row.productId] || branchPriceMap[row.id];
-                const finalPrice = dbPrice ? (dbPrice.price_branch || dbPrice.price || 0) : (row.storePrice || row.price || 0);
-                const finalCost = dbPrice ? (dbPrice.cost || 0) : (row.cost || 0);
                 branchBundles[bName].push({
                   product_id: row.id,
                   product_name: row.name,
                   expectedQty: data.expected || 0,
                   qty: qty,
                   unit: '件',
-                  price: finalPrice,
-                  cost: finalCost,
+                  price: row.storePrice || row.price || 0,
+                  cost: row.cost || 0,
                   note: note
                 });
               }
@@ -5438,251 +5370,6 @@
   }
 
   // ============================
-  // 公告管理（總倉端）
-  // ============================
-  function getBulletins() {
-    return JSON.parse(localStorage.getItem('portalBulletin') || '[]');
-  }
-  function saveBulletins(list) {
-    localStorage.setItem('portalBulletin', JSON.stringify(list));
-    cloudSave('portalBulletin');
-  }
-
-  function renderBulletinStation() {
-    const bulletins = getBulletins();
-    const container = document.getElementById('mainContainer');
-
-    const listHtml = bulletins.length === 0
-      ? '<div style="text-align:center; padding:60px 20px; color:#718096; font-size:15px;">目前沒有公告，點擊上方按鈕發佈第一則公告</div>'
-      : bulletins.map((b, i) => {
-          const typeBg = b.type === 'urgent' ? 'border-left:4px solid #dc2626;'
-            : b.type === 'important' ? 'border-left:4px solid #f59e0b;'
-            : 'border-left:4px solid #3b82f6;';
-          const typeBadge = b.type === 'urgent'
-            ? '<span style="background:#fee2e2; color:#dc2626; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;">🔴 緊急</span>'
-            : b.type === 'important'
-            ? '<span style="background:#fef3c7; color:#b45309; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;">🟡 重要</span>'
-            : '<span style="background:#dbeafe; color:#2563eb; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;">🔵 一般</span>';
-          const pinBadge = b.pinned ? ' <span style="background:#fef3c7; color:#b45309; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;">📌 置頂</span>' : '';
-          const replies = b.replies || [];
-          const replyCount = replies.length > 0 ? ` <span style="font-size:11px; color:#718096;">(${replies.length} 則回覆)</span>` : '';
-          const repliesHtml = replies.length > 0
-            ? replies.map(r =>
-                `<div style="display:flex; gap:8px; padding:8px 0; border-top:1px dashed var(--border);">
-                  <span style="background:var(--accent-light); color:var(--accent); padding:1px 8px; border-radius:10px; font-size:11px; font-weight:600; white-space:nowrap;">${(r.store||'')}</span>
-                  <div style="flex:1;">
-                    <div style="font-size:13px; color:#374151;">${(r.text||'').replace(/</g,'&lt;')}</div>
-                    <div style="font-size:11px; color:#9ca3af; margin-top:2px;">${r.employee||''} · ${r.time||''}</div>
-                  </div>
-                </div>`
-              ).join('')
-            : '<div style="font-size:13px; color:#9ca3af; padding:4px 0;">尚無回覆</div>';
-
-          return `<div style="background:white; border-radius:8px; border:1px solid var(--border); margin-bottom:12px; box-shadow:0 2px 4px rgba(0,0,0,0.04); ${typeBg} overflow:hidden;">
-            <div onclick="toggleAdminBulletin(${i})" style="display:flex; justify-content:space-between; align-items:center; padding:14px 20px; cursor:pointer; user-select:none; flex-wrap:wrap; gap:6px;" onmouseover="this.style.background='#f8fafc'" onmouseout="this.style.background=''">
-              <div style="display:flex; align-items:center; gap:8px;">${typeBadge}${pinBadge}
-                <span style="font-size:15px; font-weight:700; color:#1e293b;">${(b.title || '').replace(/</g,'&lt;')}</span>${replyCount}
-              </div>
-              <div style="display:flex; align-items:center; gap:8px;">
-                <span style="font-size:12px; color:#9ca3af;">${b.author || ''} · ${b.time || ''}</span>
-                <button class="btn" style="padding:3px 10px; font-size:11px; background:#2b6cb0;" onclick="event.stopPropagation();editBulletin(${i})">✏️ 編輯</button>
-                <button class="btn" style="padding:3px 10px; font-size:11px; background:#c53030;" onclick="event.stopPropagation();deleteBulletin(${i})">🗑️ 刪除</button>
-                <span id="adminBulArrow${i}" style="color:#9ca3af; font-size:12px;">▼</span>
-              </div>
-            </div>
-            <div id="adminBulBody${i}" style="display:none; padding:0 20px 16px;">
-              <div style="font-size:14px; color:#374151; line-height:1.8; white-space:pre-wrap; margin-bottom:12px;">${(b.content || '').replace(/</g,'&lt;')}</div>
-              <div style="border-top:1px solid var(--border); padding-top:10px;">
-                <div style="font-size:12px; font-weight:700; color:#4a5568; margin-bottom:6px;">💬 分店回覆 (${replies.length})</div>
-                ${repliesHtml}
-              </div>
-            </div>
-          </div>`;
-        }).join('');
-
-    container.innerHTML = `
-      <div style="display:flex; flex-direction:column; gap:15px; height:100%;">
-        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--border); padding-bottom:10px; flex-shrink:0;">
-          <div style="font-size:16px; font-weight:bold; color:#2d3748;">📢 公告管理</div>
-          <div style="display:flex; gap:8px; align-items:center;">
-            <span style="font-size:13px; color:#718096;">共 ${bulletins.length} 則公告</span>
-            <button class="btn" style="padding:6px 14px; font-size:13px; background:#2b6cb0;" onclick="addBulletin()">➕ 發佈公告</button>
-          </div>
-        </div>
-        <div style="flex:1; overflow:auto; min-height:0;">${listHtml}</div>
-      </div>`;
-  }
-
-  function toggleAdminBulletin(idx) {
-    const body = document.getElementById('adminBulBody' + idx);
-    const arrow = document.getElementById('adminBulArrow' + idx);
-    if (!body) return;
-    const show = body.style.display === 'none';
-    body.style.display = show ? '' : 'none';
-    if (arrow) arrow.textContent = show ? '▲' : '▼';
-  }
-
-  async function addBulletin() {
-    const { value: formValues } = await Swal.fire({
-      title: '發佈新公告',
-      html: `
-        <div style="text-align:left;">
-          <label style="display:block; font-size:13px; font-weight:bold; color:#4a5568; margin-bottom:4px;">標題</label>
-          <input id="swal-bul-title" class="swal2-input" placeholder="公告標題" style="margin:0 0 12px 0; width:100%;">
-          <label style="display:block; font-size:13px; font-weight:bold; color:#4a5568; margin-bottom:4px;">內容</label>
-          <textarea id="swal-bul-content" class="swal2-textarea" placeholder="公告內容..." style="margin:0 0 12px 0; width:100%; min-height:120px;"></textarea>
-          <div style="display:flex; gap:12px; align-items:center;">
-            <div>
-              <label style="font-size:13px; font-weight:bold; color:#4a5568;">類型</label>
-              <select id="swal-bul-type" class="swal2-select" style="margin:4px 0 0 0; padding:6px; border:1px solid #d1d5db; border-radius:4px;">
-                <option value="normal">🔵 一般</option>
-                <option value="important">🟡 重要</option>
-                <option value="urgent">🔴 緊急</option>
-              </select>
-            </div>
-            <div style="margin-top:18px;">
-              <label style="font-size:13px; cursor:pointer;">
-                <input type="checkbox" id="swal-bul-pin" style="margin-right:4px;"> 📌 置頂
-              </label>
-            </div>
-          </div>
-        </div>`,
-      width: 550,
-      showCancelButton: true,
-      confirmButtonText: '發佈',
-      confirmButtonColor: '#2b6cb0',
-      cancelButtonText: '取消',
-      preConfirm: () => {
-        const title = document.getElementById('swal-bul-title').value.trim();
-        const content = document.getElementById('swal-bul-content').value.trim();
-        if (!title) { Swal.showValidationMessage('請填寫標題'); return false; }
-        if (!content) { Swal.showValidationMessage('請填寫內容'); return false; }
-        return {
-          title,
-          content,
-          type: document.getElementById('swal-bul-type').value,
-          pinned: document.getElementById('swal-bul-pin').checked
-        };
-      }
-    });
-    if (!formValues) return;
-
-    const now = new Date();
-    const timeStr = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-    const author = currentUser?.full_name || currentUser?.username || '管理員';
-
-    const bulletins = getBulletins();
-    const newItem = {
-      title: formValues.title,
-      content: formValues.content,
-      type: formValues.type,
-      pinned: formValues.pinned,
-      author: author,
-      time: timeStr
-    };
-
-    // 置頂的放最前面，否則放最前面（新到舊）
-    if (formValues.pinned) {
-      bulletins.unshift(newItem);
-    } else {
-      const firstNonPin = bulletins.findIndex(b => !b.pinned);
-      if (firstNonPin === -1) bulletins.push(newItem);
-      else bulletins.splice(firstNonPin, 0, newItem);
-    }
-
-    saveBulletins(bulletins);
-    logActivity('發佈公告', newItem.title, { type: newItem.type, pinned: newItem.pinned });
-    Swal.fire({ title: '已發佈', icon: 'success', timer: 1200, showConfirmButton: false });
-    renderBulletinStation();
-  }
-
-  async function editBulletin(idx) {
-    const bulletins = getBulletins();
-    const b = bulletins[idx];
-    if (!b) return;
-
-    const { value: formValues } = await Swal.fire({
-      title: '編輯公告',
-      html: `
-        <div style="text-align:left;">
-          <label style="display:block; font-size:13px; font-weight:bold; color:#4a5568; margin-bottom:4px;">標題</label>
-          <input id="swal-bul-title" class="swal2-input" value="${(b.title||'').replace(/"/g,'&quot;')}" style="margin:0 0 12px 0; width:100%;">
-          <label style="display:block; font-size:13px; font-weight:bold; color:#4a5568; margin-bottom:4px;">內容</label>
-          <textarea id="swal-bul-content" class="swal2-textarea" style="margin:0 0 12px 0; width:100%; min-height:120px;">${(b.content||'').replace(/</g,'&lt;')}</textarea>
-          <div style="display:flex; gap:12px; align-items:center;">
-            <div>
-              <label style="font-size:13px; font-weight:bold; color:#4a5568;">類型</label>
-              <select id="swal-bul-type" class="swal2-select" style="margin:4px 0 0 0; padding:6px; border:1px solid #d1d5db; border-radius:4px;">
-                <option value="normal" ${b.type==='normal'?'selected':''}>🔵 一般</option>
-                <option value="important" ${b.type==='important'?'selected':''}>🟡 重要</option>
-                <option value="urgent" ${b.type==='urgent'?'selected':''}>🔴 緊急</option>
-              </select>
-            </div>
-            <div style="margin-top:18px;">
-              <label style="font-size:13px; cursor:pointer;">
-                <input type="checkbox" id="swal-bul-pin" ${b.pinned?'checked':''} style="margin-right:4px;"> 📌 置頂
-              </label>
-            </div>
-          </div>
-        </div>`,
-      width: 550,
-      showCancelButton: true,
-      confirmButtonText: '儲存',
-      confirmButtonColor: '#2b6cb0',
-      cancelButtonText: '取消',
-      preConfirm: () => {
-        const title = document.getElementById('swal-bul-title').value.trim();
-        const content = document.getElementById('swal-bul-content').value.trim();
-        if (!title) { Swal.showValidationMessage('請填寫標題'); return false; }
-        if (!content) { Swal.showValidationMessage('請填寫內容'); return false; }
-        return {
-          title,
-          content,
-          type: document.getElementById('swal-bul-type').value,
-          pinned: document.getElementById('swal-bul-pin').checked
-        };
-      }
-    });
-    if (!formValues) return;
-
-    b.title = formValues.title;
-    b.content = formValues.content;
-    b.type = formValues.type;
-    b.pinned = formValues.pinned;
-
-    // 重新排序：置頂在前
-    bulletins.sort((a, b2) => (b2.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
-
-    saveBulletins(bulletins);
-    logActivity('編輯公告', b.title, { type: b.type });
-    Swal.fire({ title: '已儲存', icon: 'success', timer: 1200, showConfirmButton: false });
-    renderBulletinStation();
-  }
-
-  async function deleteBulletin(idx) {
-    const bulletins = getBulletins();
-    const b = bulletins[idx];
-    if (!b) return;
-
-    const result = await Swal.fire({
-      title: '刪除公告？',
-      html: `確定刪除「<b>${(b.title||'').replace(/</g,'&lt;')}</b>」？<br><span style="color:#c53030; font-size:13px;">此操作無法復原。</span>`,
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: '確定刪除',
-      confirmButtonColor: '#c53030',
-      cancelButtonText: '取消'
-    });
-    if (!result.isConfirmed) return;
-
-    bulletins.splice(idx, 1);
-    saveBulletins(bulletins);
-    logActivity('刪除公告', b.title, {});
-    Swal.fire({ title: '已刪除', icon: 'success', timer: 1200, showConfirmButton: false });
-    renderBulletinStation();
-  }
-
-  // ============================
   // 互助交流板（總倉端）
   // ============================
   let adminAidProductDB = [];
@@ -6471,7 +6158,6 @@
               <option value="disputed">退貨處理中</option>
               <option value="closed">已結案</option>
             </select>
-            <button class="btn" style="padding:5px 12px; font-size:12px; background:#2b6cb0;" onclick="showManualSOForm()">➕ 新增銷貨單</button>
             <span style="color:#e2e8f0;">│</span>
             <button class="btn" style="padding:5px 12px; font-size:12px; background:#718096;" onclick="toggleSelectAllSO()">☑ 全選</button>
             <button class="btn" style="padding:5px 12px; font-size:12px; background:#047857;" onclick="batchIssueSO()">✅ 批次開立</button>
@@ -6485,205 +6171,6 @@
       </div>`;
     document.getElementById('mainContainer').innerHTML = html;
     refreshAccountingTable();
-  }
-
-  // ── 獨立新增銷貨單 ──
-  let soAllProducts = [];
-  let soCart = [];
-
-  async function soLoadProducts() {
-    if (soAllProducts.length > 0) return;
-    let all = [], offset = 0;
-    while (true) {
-      const res = await fetch(`${SB_URL}/products?select=id,name,category,unit,price,price_branch,price_wholesale,price_group,cost&status=eq.啟用&limit=1000&offset=${offset}`, { headers: HEADERS });
-      const data = await res.json();
-      all = all.concat(data);
-      if (data.length < 1000) break;
-      offset += 1000;
-    }
-    soAllProducts = all;
-  }
-
-  function soFilterProducts() {
-    const kw = (document.getElementById('soProductSearch')?.value || '').toLowerCase();
-    const cat = document.getElementById('soCatFilter')?.value || '';
-    let list = soAllProducts;
-    if (cat) list = list.filter(p => p.category === cat);
-    if (kw) list = list.filter(p => (p.name && p.name.toLowerCase().includes(kw)) || (p.id && p.id.toLowerCase().includes(kw)));
-    soRenderProductList(list.slice(0, 80));
-  }
-
-  function soRenderProductList(list) {
-    const div = document.getElementById('soProductList');
-    if (!div) return;
-    if (!list.length) { div.innerHTML = '<div style="padding:20px; text-align:center; color:#aaa;">無符合商品</div>'; return; }
-    const cartIds = soCart.map(c => c.id);
-    let html = '<table style="width:100%; border-collapse:collapse;"><thead><tr style="background:#eef1f5;"><th style="padding:6px 8px; text-align:left; font-size:11px; color:#4a5568;">商品</th><th style="padding:6px 8px; text-align:right; font-size:11px; color:#4a5568; width:70px;">分店價</th><th style="padding:6px 8px; text-align:center; font-size:11px; color:#4a5568; width:50px;">加入</th></tr></thead><tbody>';
-    list.forEach(p => {
-      const inCart = cartIds.includes(p.id);
-      html += `<tr style="border-bottom:1px solid #eee; ${inCart ? 'background:#ebf8ff;' : ''}" onmouseover="if(!${inCart})this.style.background='#f7fafc'" onmouseout="if(!${inCart})this.style.background=''">
-        <td style="padding:6px 8px;"><div style="font-weight:600; font-size:13px;">${p.name}</div><div style="font-size:11px; color:#999;">${p.id} | ${p.category || ''}</div></td>
-        <td style="padding:6px 8px; text-align:right; font-weight:600; color:#2b6cb0; font-size:13px;">$${(Number(p.price_branch) || Number(p.price) || 0).toLocaleString()}</td>
-        <td style="padding:6px 8px; text-align:center;">${inCart ? '<span style="color:#38a169; font-weight:bold;">✓</span>' : `<button onclick="soAddToCart('${p.id}')" style="padding:2px 10px; border:1px solid #2b6cb0; background:white; color:#2b6cb0; border-radius:4px; cursor:pointer; font-size:12px;">+</button>`}</td>
-      </tr>`;
-    });
-    div.innerHTML = html + '</tbody></table>';
-  }
-
-  function soAddToCart(productId) {
-    if (soCart.find(c => c.id === productId)) return;
-    const p = soAllProducts.find(x => x.id === productId);
-    if (!p) return;
-    soCart.push({
-      id: p.id, name: p.name, unit: p.unit || '件',
-      unitPrice: Number(p.price_branch) || Number(p.price) || 0,
-      cost: Number(p.cost) || 0,
-      qty: 1
-    });
-    soFilterProducts();
-    soRenderCart();
-  }
-
-  function soRemoveFromCart(idx) {
-    soCart.splice(idx, 1);
-    soFilterProducts();
-    soRenderCart();
-  }
-
-  function soUpdateCartQty(idx, val) {
-    const n = parseInt(val) || 0;
-    if (n <= 0) { soRemoveFromCart(idx); return; }
-    soCart[idx].qty = n;
-    soRenderCart();
-  }
-
-  function soUpdateCartPrice(idx, val) {
-    soCart[idx].unitPrice = Number(val) || 0;
-    soRenderCart();
-  }
-
-  function soRenderCart() {
-    const div = document.getElementById('soCartList');
-    if (!div) return;
-    if (!soCart.length) { div.innerHTML = '<div style="padding:20px; text-align:center; color:#aaa;">尚未加入商品</div>'; return; }
-    let total = 0;
-    let html = '<table style="width:100%; border-collapse:collapse;"><thead><tr style="background:#eef1f5;"><th style="padding:6px 8px; text-align:left; font-size:11px;">商品</th><th style="padding:6px 8px; text-align:right; font-size:11px; width:80px;">單價</th><th style="padding:6px 8px; text-align:center; font-size:11px; width:70px;">數量</th><th style="padding:6px 8px; text-align:right; font-size:11px; width:70px;">小計</th><th style="padding:6px 8px; text-align:center; font-size:11px; width:40px;"></th></tr></thead><tbody>';
-    soCart.forEach((item, i) => {
-      const sub = item.qty * item.unitPrice;
-      total += sub;
-      html += `<tr style="border-bottom:1px solid #eee;">
-        <td style="padding:6px 8px; font-size:13px;"><div style="font-weight:600;">${item.name}</div><div style="font-size:11px; color:#999;">${item.id}</div></td>
-        <td style="padding:6px 8px; text-align:right;"><input type="number" value="${item.unitPrice}" onchange="soUpdateCartPrice(${i}, this.value)" style="width:70px; padding:3px; text-align:right; border:1px solid #d1d5db; border-radius:4px; font-size:13px;"></td>
-        <td style="padding:6px 8px; text-align:center;"><input type="number" min="1" value="${item.qty}" onchange="soUpdateCartQty(${i}, this.value)" style="width:55px; padding:3px; text-align:center; border:1px solid #d1d5db; border-radius:4px; font-size:13px;"></td>
-        <td style="padding:6px 8px; text-align:right; font-weight:600; color:#2b6cb0; font-size:13px;">$${sub.toLocaleString()}</td>
-        <td style="padding:6px 8px; text-align:center;"><button onclick="soRemoveFromCart(${i})" style="background:none; border:none; color:#c53030; cursor:pointer; font-size:14px;">✕</button></td>
-      </tr>`;
-    });
-    html += `</tbody></table><div style="text-align:right; padding:10px 8px; font-size:15px; font-weight:bold; color:#2d3748; border-top:2px solid #e2e8f0;">合計：<span style="color:#2b6cb0;">$${total.toLocaleString()}</span></div>`;
-    div.innerHTML = html;
-  }
-
-  async function showManualSOForm() {
-    soCart = [];
-    Swal.fire({ title: '載入商品中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-    try {
-      await soLoadProducts();
-    } catch (e) {
-      Swal.fire('錯誤', '商品載入失敗: ' + e.message, 'error');
-      return;
-    }
-    Swal.close();
-
-    const cats = [...new Set(soAllProducts.map(p => p.category).filter(Boolean))].sort();
-    const custOptions = allCustomers.map(c => `<option value="${c.name}">${c.name}</option>`).join('');
-
-    const html = `
-      <div style="display:flex; gap:15px; height:70vh; max-height:600px;">
-        <!-- 左側：商品搜尋 -->
-        <div style="width:45%; display:flex; flex-direction:column; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden;">
-          <div style="padding:10px; background:#f7fafc; border-bottom:1px solid #e2e8f0;">
-            <div style="font-weight:bold; font-size:14px; color:#2d3748; margin-bottom:8px;">搜尋商品</div>
-            <input id="soProductSearch" type="text" placeholder="輸入品名或商品編號..." oninput="soFilterProducts()" style="width:100%; padding:7px 10px; border:1px solid #d1d5db; border-radius:4px; font-size:13px; font-family:inherit; margin-bottom:6px;">
-            <select id="soCatFilter" onchange="soFilterProducts()" style="width:100%; padding:5px 8px; border:1px solid #d1d5db; border-radius:4px; font-size:12px; font-family:inherit;">
-              <option value="">全部類別</option>
-              ${cats.map(c => `<option value="${c}">${c}</option>`).join('')}
-            </select>
-          </div>
-          <div id="soProductList" style="flex:1; overflow:auto;"></div>
-        </div>
-        <!-- 右側：購物車 -->
-        <div style="width:55%; display:flex; flex-direction:column; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden;">
-          <div style="padding:10px; background:#f7fafc; border-bottom:1px solid #e2e8f0;">
-            <div style="font-weight:bold; font-size:14px; color:#2d3748; margin-bottom:8px;">銷貨明細</div>
-            <div style="display:flex; gap:8px; align-items:center;">
-              <label style="font-size:12px; color:#4a5568; white-space:nowrap;">客戶：</label>
-              <select id="soCustomerSelect" style="flex:1; padding:5px 8px; border:1px solid #d1d5db; border-radius:4px; font-size:13px; font-family:inherit;">
-                <option value="">-- 請選擇客戶 --</option>
-                ${custOptions}
-              </select>
-            </div>
-          </div>
-          <div id="soCartList" style="flex:1; overflow:auto;"><div style="padding:20px; text-align:center; color:#aaa;">尚未加入商品</div></div>
-        </div>
-      </div>`;
-
-    const result = await Swal.fire({
-      title: '新增銷貨單',
-      html: html,
-      width: '900px',
-      showCancelButton: true,
-      confirmButtonText: '確認建立',
-      cancelButtonText: '取消',
-      confirmButtonColor: '#2b6cb0',
-      didOpen: () => { soFilterProducts(); }
-    });
-
-    if (!result.isConfirmed) return;
-
-    const customerName = document.getElementById('soCustomerSelect')?.value;
-    if (!customerName) { Swal.fire('提醒', '請選擇客戶', 'warning'); return; }
-    if (soCart.length === 0) { Swal.fire('提醒', '請至少加入一項商品', 'warning'); return; }
-
-    const cust = allCustomers.find(c => c.name === customerName) || { id: null, name: customerName, tax_type: '免稅' };
-    const now = new Date();
-    const dateStr = now.toISOString().split('T')[0];
-    const subtotal = soCart.reduce((s, i) => s + i.qty * i.unitPrice, 0);
-    const taxRate = cust.tax_type === '外加5%' ? 0.05 : 0;
-    const tax_amount = Math.round(subtotal * taxRate);
-    const grand_total = subtotal + tax_amount;
-    const issuedTime = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-    const soId = `SO-${dateStr.replace(/-/g,'')}-${String(mockSalesOrders.length + 1).padStart(3,'0')}`;
-
-    mockSalesOrders.push({
-      id: soId,
-      waveId: 'MANUAL',
-      storeName: customerName,
-      createdAt: issuedTime,
-      storeConfirmedAt: null,
-      status: 'pending',
-      issuedAt: issuedTime,
-      finalAmount: grand_total,
-      note: '手動新增',
-      items: soCart.map(it => ({
-        productId: it.id,
-        name: it.name,
-        expectedQty: it.qty,
-        qty: it.qty,
-        unitPrice: it.unitPrice,
-        returnQty: 0,
-        returnStatus: 'none',
-        returnReason: '',
-        returnDate: '',
-        damaged: false,
-        note: ''
-      }))
-    });
-
-    localStorage.setItem('portalSalesOrders', JSON.stringify(mockSalesOrders));
-    cloudSave('portalSalesOrders');
-    logActivity('手動新增銷貨單', soId, { customer: customerName, amount: grand_total, items: soCart.length });
-    Swal.fire({ title: '建立成功', text: `銷貨單 ${soId}，金額 $${grand_total.toLocaleString()}`, icon: 'success', timer: 2000, showConfirmButton: false });
-    renderAccountingStation();
   }
 
   function renderAccountingSummary() {
@@ -7216,7 +6703,7 @@
 
     const sMap = { pending:'暫存待確認', confirmed:'已確認到貨', issued:'已開立', disputed:'退貨處理中', closed:'已結案' };
 
-    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>${o.id}</title><style>
+    const html = `<html><head><title>${o.id}</title><style>
       body{font-family:'Noto Sans TC','Microsoft JhengHei',sans-serif; padding:15px 20px; font-size:13px; color:#333; margin:0;}
       .title{text-align:center; font-size:18px; font-weight:bold; margin-bottom:10px; border-bottom:2px solid #333; padding-bottom:6px;}
       .info-row{display:flex; justify-content:space-between; margin-bottom:3px; font-size:13px;}
@@ -9170,7 +8657,7 @@
 
     const w = window.open('','_blank');
     if (!w) return Swal.fire('提示','請允許彈出視窗','warning');
-    w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>陸貨到貨清單</title>
+    w.document.write(`<!DOCTYPE html><html><head><title>陸貨到貨清單</title>
       <style>body{font-family:'Noto Sans TC',sans-serif;padding:10px;font-size:12pt;margin:0;}
       h2{text-align:center;margin:0 0 4px;font-size:18px;}
       table{width:100%;border-collapse:collapse;} th,td{border:1px solid #999;padding:4px 6px;text-align:left;white-space:nowrap;font-size:12pt;}

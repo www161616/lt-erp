@@ -4,9 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>龍潭總倉 - 通路夥伴進貨入口</title>
-  <script src="../libs/sweetalert2.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script src="../libs/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
 
   <style>
@@ -295,9 +295,9 @@
       <div class="menu-item" id="menuRequest" onclick="switchPage('pageRequest', this)">📋 需求表<span id="notifyRequest" style="display:none; margin-left:6px; background:#dc2626; color:white; font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px; min-width:16px; text-align:center;">0</span></div>
       <div class="menu-item" id="menuTransfer" onclick="switchPage('pageTransfer', this)">🔄 店轉店登記<span id="notifyTransfer" style="display:none; margin-left:6px; background:#dc2626; color:white; font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px; min-width:16px; text-align:center;">0</span></div>
       <div class="menu-item" id="menuAid" onclick="switchPage('pageAid', this)">🤝 互助交流<span id="notifyAid" style="display:none; margin-left:6px; background:#dc2626; color:white; font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px; min-width:16px; text-align:center;">0</span></div>
-      <div class="menu-item" onclick="switchPage('pageBilling', this)">📦 今日進貨單</div>
+      <div class="menu-item" onclick="switchPage('pageBilling', this)">💳 待結貨款</div>
       <div class="menu-item" onclick="switchPage('pageHistory', this)">📜 所有進貨單</div>
-<div class="menu-item" id="menuLedger" onclick="switchPage('pageLedger', this)">💰 流水帳/訂包管理</div>
+      <div class="menu-item" id="menuLedger" onclick="switchPage('pageLedger', this)">💰 流水帳/訂包管理</div>
       <div class="menu-item" id="menuCommon" onclick="switchPage('pageCommon', this)">⭐ 常用功能</div>
 
       <div class="sidebar-footer">
@@ -325,7 +325,7 @@
               <div style="font-size:13px; color:#6b7280;">系統會自動拉取當期商品，已結單之商品將反灰無法填寫。</div>
               <div style="font-size:12px; color:#b45309; background:#fef3c7; padding:6px 10px; border-radius:6px; margin-top:6px; line-height:1.6;">
                 💡 <b>快速匯入</b>：點「📥 匯入樂樂報表」可直接匯入樂樂資料，系統自動比對商品填入數量。匯入後請再次檢查數量是否正確。<br>
-                ✏️ <b>手動修改</b>：直接修改數量，離開欄位自動儲存，不需按送出。
+                ✏️ <b>手動填寫</b>：可一次輸入所有商品數量，全部填完後再按「送出訂單」即可。
               </div>
             </div>
             <div id="importExcelWrap" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
@@ -337,10 +337,6 @@
               <button onclick="clearAllQty()"
                 style="background:#6b7280; color:white; border:none; padding:10px 16px; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit;">
                 🗑️ 清除數量
-              </button>
-              <button onclick="submitOrder()"
-                style="background:#059669; color:white; border:none; padding:10px 20px; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit;">
-                🚀 送出資料
               </button>
             </div>
           </div>
@@ -380,16 +376,16 @@
             <span id="orderPaginationTop" style="margin-left:auto; display:flex; align-items:center; gap:6px; flex-wrap:wrap;"></span>
           </div>
 
-          <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:auto; max-height:65vh; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
+          <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow-x:auto; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
             <table style="width:100%; border-collapse:collapse; min-width:650px;">
-              <thead style="position:sticky; top:0; z-index:1;">
+              <thead>
                 <tr style="background:#fff0f6;">
-                  <th style="padding:6px 10px; text-align:left; font-size:13px; color:#6b7280; font-weight:600; border-bottom:1px solid var(--border); white-space:nowrap; background:#fff0f6;">開團日期</th>
-                  <th style="padding:6px 10px; text-align:left; font-size:13px; color:#6b7280; font-weight:600; border-bottom:1px solid var(--border); white-space:nowrap; background:#fff0f6;">結單日期</th>
-                  <th style="padding:6px 10px; text-align:left; font-size:13px; color:#6b7280; font-weight:600; border-bottom:1px solid var(--border); white-space:nowrap; background:#fff0f6;">商品編號</th>
-                  <th style="padding:6px 10px; text-align:left; font-size:13px; color:#6b7280; font-weight:600; border-bottom:1px solid var(--border); white-space:nowrap; background:#fff0f6;">商品名稱</th>
-                  <th style="padding:6px 10px; text-align:right; font-size:13px; color:#6b7280; font-weight:600; border-bottom:1px solid var(--border); white-space:nowrap; background:#fff0f6;">售價</th>
-                  <th style="padding:6px 10px; text-align:center; font-size:13px; color:#6b7280; font-weight:600; border-bottom:1px solid var(--border); white-space:nowrap; width:100px; background:#fff0f6;">訂購數量</th>
+                  <th style="padding:6px 10px; text-align:left; font-size:13px; color:#6b7280; font-weight:600; border-bottom:1px solid var(--border); white-space:nowrap;">開團日期</th>
+                  <th style="padding:6px 10px; text-align:left; font-size:13px; color:#6b7280; font-weight:600; border-bottom:1px solid var(--border); white-space:nowrap;">結單日期</th>
+                  <th style="padding:6px 10px; text-align:left; font-size:13px; color:#6b7280; font-weight:600; border-bottom:1px solid var(--border); white-space:nowrap;">商品編號</th>
+                  <th style="padding:6px 10px; text-align:left; font-size:13px; color:#6b7280; font-weight:600; border-bottom:1px solid var(--border); white-space:nowrap;">商品名稱</th>
+                  <th style="padding:6px 10px; text-align:right; font-size:13px; color:#6b7280; font-weight:600; border-bottom:1px solid var(--border); white-space:nowrap;">售價</th>
+                  <th style="padding:6px 10px; text-align:center; font-size:13px; color:#6b7280; font-weight:600; border-bottom:1px solid var(--border); white-space:nowrap; width:100px;">訂購數量</th>
                 </tr>
               </thead>
               <tbody id="orderTableBody"></tbody>
@@ -492,19 +488,19 @@
 
   <!-- 待處理 -->
   <div id="reqPanel-pending">
-    <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:auto; max-height:60vh; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
+    <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:hidden; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
       <table style="width:100%; border-collapse:collapse; font-size:13px;">
-        <thead style="position:sticky; top:0; z-index:1;">
+        <thead>
           <tr style="background:#fce7f3;">
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fce7f3;">單號</th>
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fce7f3;">分店</th>
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fce7f3;">商品編號</th>
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fce7f3;">商品名稱</th>
-            <th style="padding:10px 16px; text-align:right; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fce7f3;">分店價</th>
-            <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fce7f3;">數量</th>
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fce7f3;">備註</th>
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fce7f3;">建立時間</th>
-            <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fce7f3;">操作</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">單號</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">分店</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">商品編號</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">商品名稱</th>
+            <th style="padding:10px 16px; text-align:right; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">分店價</th>
+            <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">數量</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">備註</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">建立時間</th>
+            <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">操作</th>
           </tr>
         </thead>
         <tbody id="reqPendingBody"></tbody>
@@ -519,19 +515,19 @@
       <select id="doneMonthFilter" onchange="renderRequestPage()" style="padding:6px 10px; border:1.5px solid var(--border); border-radius:6px; font-size:13px; font-family:inherit;">
       </select>
     </div>
-    <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:auto; max-height:60vh; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
+    <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:hidden; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
       <table style="width:100%; border-collapse:collapse; font-size:13px;">
-        <thead style="position:sticky; top:0; z-index:1;">
+        <thead>
           <tr style="background:#fff0f6;">
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fff0f6;">單號</th>
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fff0f6;">分店</th>
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fff0f6;">商品編號</th>
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fff0f6;">商品名稱</th>
-            <th style="padding:10px 16px; text-align:right; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fff0f6;">分店價</th>
-            <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fff0f6;">數量</th>
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fff0f6;">備註</th>
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fff0f6;">建立時間</th>
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fff0f6;">總倉回覆</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">單號</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">分店</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">商品編號</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">商品名稱</th>
+            <th style="padding:10px 16px; text-align:right; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">分店價</th>
+            <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">數量</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">備註</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">建立時間</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">總倉回覆</th>
           </tr>
         </thead>
         <tbody id="reqDoneBody"></tbody>
@@ -551,20 +547,20 @@
         <option value="done">已處理</option>
       </select>
     </div>
-    <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:auto; max-height:60vh; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
+    <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:hidden; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
       <table style="width:100%; border-collapse:collapse; font-size:13px;">
-        <thead style="position:sticky; top:0; z-index:1;">
+        <thead>
           <tr style="background:#f8f9fa;">
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#f8f9fa;">單號</th>
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#f8f9fa;">分店</th>
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#f8f9fa;">商品編號</th>
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#f8f9fa;">商品名稱</th>
-            <th style="padding:10px 16px; text-align:right; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#f8f9fa;">分店價</th>
-            <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#f8f9fa;">數量</th>
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#f8f9fa;">備註</th>
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#f8f9fa;">建立時間</th>
-            <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#f8f9fa;">狀態</th>
-            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#f8f9fa;">總倉回覆</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">單號</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">分店</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">商品編號</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">商品名稱</th>
+            <th style="padding:10px 16px; text-align:right; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">分店價</th>
+            <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">數量</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">備註</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">建立時間</th>
+            <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">狀態</th>
+            <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">總倉回覆</th>
           </tr>
         </thead>
         <tbody id="reqHistoryBody"></tbody>
@@ -865,7 +861,7 @@
     <select id="billingMonthSelect" onchange="renderBillingPage()"
       style="padding:8px 14px; border:1.5px solid var(--border); border-radius:6px; font-size:14px; font-family:inherit; min-width:150px;">
     </select>
-    <div style="margin-left:auto; font-size:13px; color:#9ca3af;">總倉出貨查詢</div>
+    <div style="margin-left:auto; font-size:13px; color:#9ca3af;">總倉出貨帳款查詢</div>
   </div>
 
   <!-- 帳款總覽卡片 -->
@@ -921,26 +917,32 @@
             </div>
           </div>
 
-          <!-- 月費橫條（非批發店才顯示）-->
-          <div id="historyFeeBar" style="background:white; border-radius:8px; border:1px solid var(--border); padding:12px 24px; margin-bottom:16px; display:flex; align-items:center; gap:24px; box-shadow:0 2px 4px rgba(0,0,0,0.04);"></div>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(300px,1fr)); gap:16px; align-items:start;">
 
-          <!-- 全寬單據表格 -->
-          <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:hidden; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
-            <table style="width:100%; border-collapse:collapse; font-size:13px;">
-              <thead>
-                <tr style="background:#fff0f6;">
-                  <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">單號</th>
-                  <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">日期</th>
-                  <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">商品摘要</th>
-                  <th style="padding:10px 16px; text-align:right; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">金額</th>
-                  <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">操作</th>
-                </tr>
-              </thead>
-              <tbody id="historyTableBody"></tbody>
-            </table>
+            <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:hidden; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
+              <div style="padding:14px 20px; border-bottom:1px solid var(--border); font-size:15px; font-weight:700; color:var(--primary);">🚚 進貨單據</div>
+              <table style="width:100%; border-collapse:collapse; font-size:13px;">
+                <thead>
+                  <tr style="background:#fff0f6;">
+                    <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">單號</th>
+                    <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">日期</th>
+                    <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">商品摘要</th>
+                    <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">操作</th>
+                  </tr>
+                </thead>
+                <tbody id="historyTableBody"></tbody>
+              </table>
+            </div>
+
+            <div id="historyDetailArea" style="background:white; border-radius:8px; border:1px solid var(--border); overflow:hidden; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
+              <div style="padding:14px 20px; border-bottom:1px solid var(--border);">
+                <div style="font-size:14px; font-weight:700; color:var(--primary);" id="historyDetailTitle">點單號查看進貨明細</div>
+              </div>
+              <div id="historyDetailInner" style="padding:24px; text-align:center; color:#9ca3af; font-size:14px;">請點選單據以檢視到貨商品清單</div>
+            </div>
+
           </div>
         </div>
-
 
       </div>
     </div>
@@ -993,7 +995,7 @@
 
     async function cloudLoadAll() {
       try {
-        const resp = await fetch(`${SB_URL}/shared_kv?key=in.("branchOrderList","branchOrders","branchDataList","branchTypeMap","portalAllRequests","portalTransferList","portalMutualAidBoard","portalTrackingData","portalBulletin","portalSalesOrders")`, { headers: SB_HEADERS });
+        const resp = await fetch(`${SB_URL}/shared_kv?key=in.("branchOrderList","branchOrders","branchDataList","branchTypeMap","portalAllRequests","portalTransferList","portalMutualAidBoard","portalTrackingData","portalBulletin")`, { headers: SB_HEADERS });
         if (resp.ok) {
           const rows = await resp.json();
           rows.forEach(r => {
@@ -1207,7 +1209,7 @@
 
         const disableReason = '總倉已結單，無法訂購';
         const inputProps = canOrder
-          ? `oninput="sanitizeQty(this);" onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='var(--border)';autoSaveSingleQty(this)"`
+          ? `oninput="sanitizeQty(this);if(!orderDirty){orderDirty=true;updateSubmitBar();}" onfocus="this.style.borderColor='var(--primary)';showQtyHint(this)" onblur="this.style.borderColor='var(--border)';hideQtyHint()"`
           : `disabled title="${disableReason}"`;
         const inputStyle = canOrder
           ? `background:white; border:2px solid var(--border); cursor:text;`
@@ -1215,7 +1217,9 @@
 
         const statusBadge = isClosed
           ? '<span style="background:#fef2f2; color:#ef4444; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:700; margin-left:4px;">已結單</span>'
-          : '';
+          : (p.endDate < today)
+            ? '<span style="background:#fef3c7; color:#b45309; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:700; margin-left:4px;">已過期</span>'
+            : '';
 
         const importedQty = myStoreOrders[p.id] || 0;
         const cached = orderQtyCache[p.id] || (importedQty > 0 ? String(importedQty) : '');
@@ -1244,6 +1248,12 @@
       });
       document.getElementById('orderTableBody').innerHTML = html;
 
+      // 鎖定狀態復原
+      if (isQtyLocked) {
+        document.querySelectorAll('.qty-input:not([disabled])').forEach(el => {
+          el.readOnly = true; el.style.background = '#f3f4f6'; el.style.cursor = 'not-allowed';
+        });
+      }
 
       // Enter 鍵跳下一行
       const allQty = document.querySelectorAll('.qty-input:not([disabled])');
@@ -1461,32 +1471,9 @@
     }
 
     // ============================
-    // 手動修改單筆自動存檔
-    // ============================
-    let importMode = false; // 匯入模式：true=等按送出，false=自動存
-
-    function autoSaveSingleQty(el) {
-      if (importMode) return; // 匯入模式下不自動存，等按送出
-      const id = el.dataset.id;
-      const qty = parseInt(el.value) || 0;
-      // 更新 cache
-      if (qty > 0) orderQtyCache[id] = String(qty);
-      else delete orderQtyCache[id];
-      saveQtyCache();
-      // 直接存到 branchOrders
-      const storeName = currentStore?.name || '未知';
-      const saved = JSON.parse(localStorage.getItem('branchOrders') || '{}');
-      if (!saved[storeName]) saved[storeName] = {};
-      if (qty > 0) saved[storeName][id] = qty;
-      else delete saved[storeName][id];
-      localStorage.setItem('branchOrders', JSON.stringify(saved));
-      cloudSave('branchOrders');
-    }
-
-    // ============================
     // 匯入樂樂報表
     // ============================
-    let isQtyLocked = false; // 已停用，保留變數避免報錯
+    let isQtyLocked = false;
 
     function handleExcelUpload(event) {
       const file = event.target.files[0];
@@ -1679,16 +1666,16 @@
             reportDiv.style.background = hasError ? '#fef2f2' : '#f0fdf4';
             reportDiv.style.borderColor = hasError ? '#fecaca' : '#bbf7d0';
 
-
-            if (matchCount > 0) importMode = true; // 匯入後進入匯入模式，等按送出
+            // 6. 鎖定數量
+            lockQtyInputs();
 
             Swal.fire({
               title: matchCount > 0 ? '匯入完成' : '匯入失敗',
-              html: matchCount > 0
-                ? `成功 ${matchCount} 筆${skippedCount > 0 ? `，跳過 ${skippedCount} 筆` : ''}${missingIds.length > 0 ? `，${missingIds.length} 筆未匹配` : ''}<br><span style="color:#059669; font-size:13px; font-weight:bold;">請確認數量後按「🚀 送出資料」</span>`
+              text: matchCount > 0
+                ? `成功 ${matchCount} 筆${skippedCount > 0 ? `，跳過 ${skippedCount} 筆` : ''}${missingIds.length > 0 ? `，${missingIds.length} 筆未匹配` : ''}`
                 : '沒有匹配到任何商品',
               icon: matchCount > 0 ? (missingIds.length > 0 ? 'warning' : 'success') : 'error',
-              confirmButtonColor: '#be185d'
+              confirmButtonColor: '#be185d', timer: 2500
             });
           } catch (err) {
             Swal.fire('匯入失敗', '檔案格式不符或讀取錯誤：' + err.message, 'error');
@@ -1702,13 +1689,49 @@
     // ============================
     // 鎖定 / 解鎖數量
     // ============================
-    function lockQtyInputs() { /* 已停用 */ }
-    function unlockQtyInputs() { /* 已停用 */ }
+    function lockQtyInputs() {
+      isQtyLocked = true;
+      document.querySelectorAll('.qty-input').forEach(el => {
+        if (!el.disabled) { el.readOnly = true; el.style.background = '#f3f4f6'; el.style.cursor = 'not-allowed'; }
+      });
+      updateSubmitBar();
+    }
 
-    function showQtyHint() {}
-    function hideQtyHint() {}
+    function unlockQtyInputs() {
+      isQtyLocked = false;
+      document.querySelectorAll('.qty-input').forEach(el => {
+        if (!el.disabled) { el.readOnly = false; el.style.background = ''; el.style.cursor = ''; }
+      });
+      updateSubmitBar();
+    }
 
-    function updateSubmitBar() { /* 已停用 */ }
+    function showQtyHint(el) {
+      hideQtyHint();
+      const hint = document.createElement('div');
+      hint.id = 'qtyHint';
+      hint.innerHTML = '💡 填完記得按送出 <button onclick="event.stopPropagation();submitOrder()" style="margin-left:6px; background:#be185d; color:white; border:none; padding:3px 10px; border-radius:4px; font-size:11px; font-weight:700; cursor:pointer; font-family:inherit;">🚀 送出</button>';
+      hint.style.cssText = 'position:absolute; background:#fef3c7; color:#92400e; font-size:12px; font-weight:600; padding:4px 10px; border-radius:6px; border:1px solid #fcd34d; white-space:nowrap; z-index:999; box-shadow:0 2px 6px rgba(0,0,0,0.1);';
+      document.body.appendChild(hint);
+      const rect = el.getBoundingClientRect();
+      hint.style.left = (rect.left + window.scrollX - 80) + 'px';
+      hint.style.top = (rect.bottom + 4 + window.scrollY) + 'px';
+    }
+    function hideQtyHint() {
+      const h = document.getElementById('qtyHint');
+      if (h) h.remove();
+    }
+
+    function updateSubmitBar() {
+      const bar = document.getElementById('submitBar');
+      if (!bar) return;
+      let html = '';
+      if (isQtyLocked) {
+        html += '<div style="display:flex; align-items:center; gap:10px; padding:8px 14px; background:#fef3c7; border:1px solid #fcd34d; border-radius:8px; font-size:13px; color:#92400e;">🔒 數量已鎖定，避免誤按　<button onclick="unlockQtyInputs()" style="background:#b45309; color:white; border:none; padding:5px 14px; border-radius:5px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;">🔓 解鎖修改</button></div>';
+      }
+      html += '<button onclick="submitOrder()" style="background:#be185d; color:white; border:none; padding:10px 20px; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit;">🚀 送出資料</button>';
+      bar.innerHTML = html;
+
+    }
 
     // ============================
     // 送出訂單
@@ -1734,43 +1757,24 @@
         return;
       }
 
-      // 比對上次送出的資料，找出異動項目
-      const storeName = currentStore?.name || '未知';
-      const lastSaved = JSON.parse(localStorage.getItem('branchOrders') || '{}');
-      const lastStoreOrders = lastSaved[storeName] || {};
-      const changedItems = items.filter(item => {
-        const oldQty = lastStoreOrders[item.id] || 0;
-        return item.qty !== oldQty;
-      });
-      const newItems = changedItems.filter(item => !lastStoreOrders[item.id]);
-      const modifiedItems = changedItems.filter(item => lastStoreOrders[item.id]);
-
-      // 產生確認清單 HTML（只顯示異動項目）
-      const showItems = changedItems.length > 0 ? changedItems : items;
-      const isFullList = changedItems.length === 0;
+      // 產生確認清單 HTML
       let tableHtml = `
         <div style="text-align:left; margin-top:8px;">
-          ${!isFullList ? `<div style="font-size:13px; color:#059669; margin-bottom:8px; padding:6px 10px; background:#f0fdf4; border-radius:6px;">
-            ${newItems.length > 0 ? `新增 <b>${newItems.length}</b> 項` : ''}${newItems.length > 0 && modifiedItems.length > 0 ? '、' : ''}${modifiedItems.length > 0 ? `修改 <b>${modifiedItems.length}</b> 項` : ''}
-          </div>` : ''}
-          <div style="max-height:50vh; overflow-y:auto;">
           <table style="width:100%; border-collapse:collapse; font-size:14px;">
             <thead>
               <tr style="background:#fff0f6; border-bottom:2px solid #fcd5e0;">
+                <th style="padding:8px 12px; color:#6b7280; font-weight:600; text-align:left;">商品編號</th>
                 <th style="padding:8px 12px; color:#6b7280; font-weight:600; text-align:left;">商品名稱</th>
-                ${!isFullList ? '<th style="padding:8px 12px; color:#6b7280; font-weight:600; text-align:center;">原數量</th>' : ''}
-                <th style="padding:8px 12px; color:#6b7280; font-weight:600; text-align:center;">${isFullList ? '數量' : '新數量'}</th>
+                <th style="padding:8px 12px; color:#6b7280; font-weight:600; text-align:center;">數量</th>
               </tr>
             </thead>
             <tbody>
       `;
-      showItems.forEach(item => {
-        const oldQty = lastStoreOrders[item.id] || 0;
-        const isNew = !lastStoreOrders[item.id];
+      items.forEach(item => {
         tableHtml += `
-          <tr style="border-bottom:1px solid #f3f4f6; ${isNew ? 'background:#f0fdf4;' : ''}">
-            <td style="padding:8px 12px; font-weight:500;">${item.name}${isNew ? ' <span style="color:#059669; font-size:11px;">新增</span>' : ''}</td>
-            ${!isFullList ? `<td style="padding:8px 12px; text-align:center; color:#9ca3af;">${oldQty}</td>` : ''}
+          <tr style="border-bottom:1px solid #f3f4f6;">
+            <td style="padding:8px 12px; color:#6b7280;">${item.productId}</td>
+            <td style="padding:8px 12px; font-weight:500;">${item.name}</td>
             <td style="padding:8px 12px; text-align:center; font-weight:700; color:#be185d;">${item.qty}</td>
           </tr>
         `;
@@ -1778,15 +1782,12 @@
       tableHtml += `
             </tbody>
           </table>
-          </div>
-          <div style="margin-top:12px; font-size:13px; color:#6b7280; text-align:right;">
-            ${isFullList ? `共 ${items.length} 項商品` : `異動 ${changedItems.length} 項（總計 ${items.length} 項）`}
-          </div>
+          <div style="margin-top:12px; font-size:13px; color:#6b7280; text-align:right;">共 ${items.length} 項商品</div>
         </div>
       `;
 
       Swal.fire({
-        title: isFullList ? '請確認訂貨內容' : '請確認修改內容',
+        title: '請確認訂貨內容',
         html: tableHtml,
         icon: 'question',
         showCancelButton: true,
@@ -1798,28 +1799,23 @@
       }).then(result => {
         if (result.isConfirmed) {
           // 儲存訂單至 localStorage（供開團總表讀取）
+          const storeName = currentStore?.name || '未知';
           const saved = JSON.parse(localStorage.getItem('branchOrders') || '{}');
           if (!saved[storeName]) saved[storeName] = {};
           items.forEach(item => { saved[storeName][item.id] = item.qty; });
           localStorage.setItem('branchOrders', JSON.stringify(saved));
           cloudSave('branchOrders');
 
-          // 同步更新 cache
-          items.forEach(item => { orderQtyCache[item.id] = String(item.qty); });
-          saveQtyCache();
-
           orderDirty = false;
-          importMode = false; // 送出後退出匯入模式，恢復自動存
-          const msg = isFullList
-            ? `共 <b>${items.length}</b> 項商品已送出`
-            : `${newItems.length > 0 ? '新增 <b>' + newItems.length + '</b> 項' : ''}${newItems.length > 0 && modifiedItems.length > 0 ? '、' : ''}${modifiedItems.length > 0 ? '修改 <b>' + modifiedItems.length + '</b> 項' : ''}`;
+          lockQtyInputs();
           Swal.fire({
             icon: 'success',
-            title: '已送出！',
-            html: msg + '，龍潭總倉已收到',
+            title: '已填單完成！',
+            text: `共 ${items.length} 項商品，龍潭總倉已收到`,
             confirmButtonColor: '#be185d'
           });
         }
+        // 取消就直接關閉，回到表單繼續修改
       });
     }
 
@@ -1834,20 +1830,13 @@
       pageTransfer: '🔄 店轉店登記',
       pageLedger:   '💰 流水帳/訂包管理',
       pageHistory:  '📜 所有進貨單',
-      pageBilling:  '📦 今日進貨單',
+      pageBilling:  '💳 待結貨款',
       pageCommon:   '⭐ 常用功能',
       pageAid:      '🤝 互助交流板',
       pageBulletin: '📢 公告欄',
     };
 
     function switchPage(pageId, menuEl) {
-      // 離開結單填表前，先存當前輸入的數量
-      document.querySelectorAll('.qty-input').forEach(input => {
-        if (input.value) orderQtyCache[input.dataset.id] = input.value;
-        else delete orderQtyCache[input.dataset.id];
-      });
-      saveQtyCache();
-
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
       document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active'));
       document.getElementById(pageId).classList.add('active');
@@ -1993,23 +1982,23 @@ function renderSummaryPage() {
 
   // 表格標頭
   let html = `
-    <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:auto; max-height:65vh; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
-      <table style="border-collapse:collapse; font-size:13px; table-layout:auto; width:100%;">
-        <thead style="position:sticky; top:0; z-index:1;">
+    <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow-x:auto; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
+      <table style="border-collapse:collapse; font-size:13px; table-layout:auto;">
+        <thead>
           <tr style="background:#fff0f6; vertical-align:bottom;">
-            <th style="padding:8px 10px; text-align:left; border-bottom:2px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap; min-width:52px; background:#fff0f6;">開團</th>
-            <th style="padding:8px 10px; text-align:left; border-bottom:2px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap; min-width:52px; background:#fff0f6;">結單</th>
-            <th style="padding:8px 10px; text-align:left; border-bottom:2px solid var(--border); color:#6b7280; font-weight:600; min-width:200px; max-width:300px; background:#fff0f6;">商品名稱</th>
-            <th style="padding:8px 10px; text-align:right; border-bottom:2px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap; background:#fff0f6;">售價</th>
+            <th style="padding:8px 10px; text-align:left; border-bottom:2px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap; min-width:52px;">開團</th>
+            <th style="padding:8px 10px; text-align:left; border-bottom:2px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap; min-width:52px;">結單</th>
+            <th style="padding:8px 10px; text-align:left; border-bottom:2px solid var(--border); color:#6b7280; font-weight:600; min-width:200px; max-width:300px;">商品名稱</th>
+            <th style="padding:8px 10px; text-align:right; border-bottom:2px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap;">售價</th>
   `;
 
   stores.forEach(s => {
     const isSelf = currentStore && currentStore.name === s.name;
     const shortName = s.name.replace('店', '');
-    html += `<th style="padding:6px 8px; border-bottom:2px solid var(--border); color:${isSelf ? '#be185d' : '#6b7280'}; font-weight:${isSelf ? '700' : '600'}; text-align:center; white-space:nowrap; font-size:12px; background:#fff0f6;">${shortName}${isSelf ? '✦' : ''}</th>`;
+    html += `<th style="padding:6px 8px; border-bottom:2px solid var(--border); color:${isSelf ? '#be185d' : '#6b7280'}; font-weight:${isSelf ? '700' : '600'}; text-align:center; white-space:nowrap; font-size:12px;">${shortName}${isSelf ? '✦' : ''}</th>`;
   });
 
-  html += `<th style="padding:8px 6px; text-align:center; border-bottom:2px solid var(--border); color:#1f2937; font-weight:700; white-space:nowrap; min-width:48px; background:#fff0f6;">總計</th></tr></thead><tbody>`;
+  html += `<th style="padding:8px 6px; text-align:center; border-bottom:2px solid var(--border); color:#1f2937; font-weight:700; white-space:nowrap; min-width:48px;">總計</th></tr></thead><tbody>`;
 
   // 表格資料列
   if (pageData.length === 0) {
@@ -2819,45 +2808,28 @@ function printTransfer(id) {
   if (!t) return;
   const dateStr = t.date.toLocaleString('zh-TW', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
   const itemRows = t.items.map(i =>
-    `<tr><td style="padding:5px 0; font-size:16px;">${i.name}</td><td style="padding:5px 0; text-align:right; font-size:16px; font-weight:bold;">${i.qty}</td><td style="padding:5px 0 5px 6px; font-size:14px; color:#555;">${i.note||''}</td></tr>`
+    `<tr><td style="padding:3px 0;">${i.code||'—'}</td><td style="padding:3px 4px;">${i.name}</td><td style="padding:3px 0; text-align:right;">${i.price?'$'+i.price:''}</td><td style="padding:3px 0; text-align:right;">${i.qty}</td><td style="padding:3px 0 3px 4px; color:#555;">${i.note||''}</td></tr>`
   ).join('');
-  const total = t.items.reduce((s, i) => s + (parseInt(i.qty) || 0), 0);
-  const win = window.open('', '_blank', 'width=350,height=600');
+  const win = window.open('', '_blank', 'width=320,height=500');
   win.document.write(`
     <!DOCTYPE html><html><head><meta charset="UTF-8">
     <style>
-      @page { margin: 2mm; size: 80mm auto; }
-      body { font-family: 'Microsoft JhengHei', monospace; font-size: 16px; width: 76mm; margin: 0; padding: 4px; }
-      h2 { text-align:center; font-size:20px; font-weight:bold; margin:0 0 8px; letter-spacing:4px; }
-      .info { margin-bottom:10px; line-height:2; font-size:16px; }
-      .info b { font-size:18px; }
+      body { font-family: monospace; font-size: 13px; width: 72mm; margin: 0; padding: 8px; }
+      h2 { text-align:center; font-size:15px; margin:0 0 6px; }
+      .info { margin-bottom:8px; line-height:1.8; }
       table { width:100%; border-collapse:collapse; }
-      th { border-bottom:2px solid #000; padding:5px 0; font-size:15px; font-weight:bold; }
-      td { border-bottom:1px dashed #ccc; }
-      .total { margin-top:8px; text-align:right; font-size:18px; font-weight:bold; border-top:2px solid #000; padding-top:6px; }
-      .footer { margin-top:10px; border-top:1px dashed #000; padding-top:6px; font-size:13px; color:#555; text-align:center; }
-      .no-print { position:fixed; top:8px; right:8px; z-index:99; }
-      .no-print button { padding:8px 16px; font-size:14px; border:none; border-radius:6px; cursor:pointer; font-weight:bold; margin-left:6px; }
-      @media print { .no-print { display:none; } }
+      th { border-bottom:1px solid #000; padding:3px 0; font-size:12px; }
+      td { font-size:12px; }
+      .footer { margin-top:10px; border-top:1px dashed #000; padding-top:6px; font-size:11px; color:#555; text-align:center; }
     </style></head><body>
-    <div class="no-print">
-      <button onclick="window.print()" style="background:#be185d; color:white;">🖨️ 列印</button>
-      <button onclick="window.close()" style="background:#e2e8f0; color:#333;">✕ 關閉</button>
-    </div>
-    <h2>店轉店轉貨單</h2>
-    <div class="info">
-      單號：<b>${t.id}</b><br>
-      日期：<b>${dateStr}</b><br>
-      轉出：<b>${t.fromStore}</b><br>
-      轉入：<b>${t.toStore}</b><br>
-      ${t.tempNote?'溫層：<b>'+t.tempNote+'</b><br>':''}${t.note?'備註：'+t.note:''}
-    </div>
+    <h2>店 轉 店 轉 貨 單</h2>
+    <div class="info">單號：${t.id}<br>日期：${dateStr}<br>轉出：${t.fromStore}<br>轉入：${t.toStore}<br>${t.tempNote?'整單溫層：'+t.tempNote+'<br>':''}${t.note?'備註：'+t.note:''}</div>
     <table>
-      <thead><tr><th style="text-align:left;">商品名稱</th><th style="text-align:right;">數量</th><th style="text-align:left; padding-left:6px;">效期</th></tr></thead>
+      <thead><tr><th style="text-align:left;">編號</th><th style="text-align:left;">商品</th><th style="text-align:right;">分店價</th><th style="text-align:right;">數量</th><th style="text-align:left;">效期</th></tr></thead>
       <tbody>${itemRows}</tbody>
     </table>
-    <div class="total">合計：${total} 件</div>
     <div class="footer">龍潭總倉分店系統</div>
+    <script>window.onload=function(){window.print();}<\/script>
     </body></html>
   `);
   win.document.close();
@@ -2919,6 +2891,8 @@ function initBillingPage() {
 function renderBillingPage() {
   const month = document.getElementById('billingMonthSelect').value;
   const filtered = portalOrders.filter(r => r.createdAt.startsWith(month));
+  const isWholesale = currentStore?.type === 'wholesale';
+  const monthlyFee = isWholesale ? 0 : MONTHLY_FEE;
 
   const statusMap = {
     pending:   { label: '待確認到貨', bg: '#fffbeb', text: '#92400e' },
@@ -2930,9 +2904,18 @@ function renderBillingPage() {
 
   const pendingCount = filtered.filter(r => r.status === 'pending').length;
   const salesTotal = filtered.filter(r => r.status === 'issued' || r.status === 'closed').reduce((s, r) => s + (r.finalAmount || 0), 0);
+  const grandTotal = salesTotal + monthlyFee;
 
-  const cards = [
+  const cards = isWholesale
+    ? [
         { label: '已開立銷貨合計', value: `$${salesTotal.toLocaleString()}`,   color: '#be185d', bg: '#fff0f6' },
+        { label: '本月應付合計', value: `$${grandTotal.toLocaleString()}`,     color: '#1f2937', bg: '#fff0f6' },
+        { label: '待確認到貨',   value: `${pendingCount} 筆`, color: pendingCount > 0 ? '#92400e' : '#9ca3af', bg: pendingCount > 0 ? '#fffbeb' : '#f3f4f6' },
+      ]
+    : [
+        { label: '固定月費',     value: `$${MONTHLY_FEE.toLocaleString()}`,   color: '#6b7280', bg: '#f3f4f6' },
+        { label: '已開立銷貨合計', value: `$${salesTotal.toLocaleString()}`,   color: '#be185d', bg: '#fff0f6' },
+        { label: '本月應付合計', value: `$${grandTotal.toLocaleString()}`,     color: '#1f2937', bg: '#fff0f6' },
         { label: '待確認到貨',   value: `${pendingCount} 筆`, color: pendingCount > 0 ? '#92400e' : '#9ca3af', bg: pendingCount > 0 ? '#fffbeb' : '#f3f4f6' },
       ];
   document.getElementById('billingCards').innerHTML = cards.map(c => `
@@ -2942,6 +2925,17 @@ function renderBillingPage() {
     </div>`).join('');
 
   let html = '';
+  if (!isWholesale) {
+    html += `
+    <tr style="background:#fafafa; border-bottom:1px solid #f3f4f6;">
+      <td style="padding:10px 16px;"><span style="background:#e5e7eb; color:#6b7280; padding:2px 8px; border-radius:8px; font-size:11px; font-weight:700;">固定月費</span></td>
+      <td style="padding:10px 16px; color:#6b7280;">—</td>
+      <td style="padding:10px 16px; color:#6b7280;">${month.replace('/', '年')}月</td>
+      <td style="padding:10px 16px; text-align:right; font-weight:700;">$${MONTHLY_FEE.toLocaleString()}</td>
+      <td style="padding:10px 16px; text-align:center;"><span style="background:#fff0f6; color:#be185d; padding:2px 8px; border-radius:8px; font-size:11px; font-weight:700;">固定收費</span></td>
+      <td style="padding:10px 16px; text-align:center; color:#d1d5db;">—</td>
+    </tr>`;
+  }
 
   if (filtered.length === 0) {
     html += `<tr><td colspan="6" style="padding:24px; text-align:center; color:#9ca3af;">本月無銷貨紀錄</td></tr>`;
@@ -2968,8 +2962,8 @@ function renderBillingPage() {
 
   html += `
     <tr style="background:#fff0f6; font-weight:700; border-top:2px solid var(--border);">
-      <td colspan="3" style="padding:12px 16px; color:#1f2937;">本月已開立合計</td>
-      <td style="padding:12px 16px; text-align:right; font-size:15px; color:#be185d;">$${salesTotal.toLocaleString()}</td>
+      <td colspan="3" style="padding:12px 16px; color:#1f2937;">本月已開立合計${isWholesale ? '' : '（含月費）'}</td>
+      <td style="padding:12px 16px; text-align:right; font-size:15px; color:#be185d;">$${grandTotal.toLocaleString()}</td>
       <td colspan="2"></td>
     </tr>`;
 
@@ -3120,7 +3114,6 @@ function confirmReceived(orderId) {
     order.status = 'confirmed';
     order.storeConfirmedAt = ts;
     localStorage.setItem('portalSalesOrders', JSON.stringify(allSO));
-    cloudSave('portalSalesOrders');
     // 更新本地
     portalOrders = allSO.filter(o => o.storeName === currentStore?.name);
     Swal.fire({ title: '已確認收貨！', text: '總倉將會開立正式銷貨單', icon: 'success', timer: 1500, showConfirmButton: false });
@@ -3140,7 +3133,6 @@ function submitReturnReport(orderId, itemIdx, data) {
   item.reportType = data.type;
 
   localStorage.setItem('portalSalesOrders', JSON.stringify(allSO));
-  cloudSave('portalSalesOrders');
 
   // 同步更新本地 portalOrders
   portalOrders = allSO.filter(o => o.storeName === currentStore?.name);
@@ -3153,16 +3145,7 @@ function submitReturnReport(orderId, itemIdx, data) {
 let portalHistory = [];
 
 function initHistoryPage() {
-  // 預設本月1號～月底
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = now.getMonth();
-  const firstDay = `${y}-${String(m+1).padStart(2,'0')}-01`;
-  const lastDay = new Date(y, m+1, 0); // 月底
-  const lastDayStr = `${y}-${String(m+1).padStart(2,'0')}-${String(lastDay.getDate()).padStart(2,'0')}`;
-  document.getElementById('historyDateStart').value = firstDay;
-  document.getElementById('historyDateEnd').value = lastDayStr;
-  renderHistoryPage();
+  setHistoryRange(30); // 預設顯示近 30 天
 }
 
 function setHistoryRange(days) {
@@ -3191,102 +3174,83 @@ function renderHistoryPage() {
   });
 
   let html = '';
-  let historyTotal = 0;
-
   if (filtered.length === 0) {
-    html = `<tr><td colspan="5" style="padding:24px; text-align:center; color:#9ca3af;">查無符合條件的進貨單據</td></tr>`;
+    html = `<tr><td colspan="4" style="padding:24px; text-align:center; color:#9ca3af;">查無符合條件的進貨單據 😅</td></tr>`;
   } else {
     filtered.forEach(r => {
-      const amt = (r.items || []).reduce((s, i) => s + (i.qty || 0) * ((i.unitPrice || i.price) || 0), 0);
-      historyTotal += amt;
+      // 只顯示第1項，超過1項加「等N樣」
       const first = r.items[0];
       let summary = first ? `${first.name} x${first.qty}` : '—';
       if (r.items.length > 1) summary += ` <span style="color:#9ca3af; font-size:12px;">等 ${r.items.length} 樣</span>`;
 
       html += `
-        <tr style="border-bottom:1px solid #f3f4f6; cursor:pointer;" onclick="showHistoryDetail('${r.id}')">
-          <td style="padding:10px 16px; font-weight:600; color:var(--primary);">${r.id}</td>
+        <tr style="border-bottom:1px solid #f3f4f6;" id="historyRow-${r.id}">
+          <td style="padding:10px 16px; font-weight:600; color:var(--primary); cursor:pointer;" onclick="showHistoryDetail('${r.id}')">${r.id}</td>
           <td style="padding:10px 16px; color:#6b7280;">${r.date}</td>
           <td style="padding:10px 16px; font-size:13px; color:#4b5563;">${summary}</td>
-          <td style="padding:10px 16px; text-align:right; font-weight:700; color:#1f2937;">$${amt.toLocaleString()}</td>
           <td style="padding:10px 16px; text-align:center;">
-            <button onclick="event.stopPropagation(); showHistoryDetail('${r.id}')" style="padding:4px 10px; background:#fff0f6; color:#be185d; border:1px solid #be185d; border-radius:4px; font-size:12px; cursor:pointer; font-family:inherit;">查看</button>
+            <button onclick="showHistoryDetail('${r.id}')" style="padding:4px 10px; background:#fff0f6; color:#be185d; border:1px solid #be185d; border-radius:4px; font-size:12px; cursor:pointer; font-family:inherit;">查看</button>
           </td>
-        </tr>`;
+        </tr>
+      `;
     });
   }
 
   document.getElementById('historyTableBody').innerHTML = html;
-
-  // 月費橫條
-  const isWH = currentStore?.type === 'wholesale';
-  const feeBar = document.getElementById('historyFeeBar');
-  if (isWH) {
-    feeBar.style.display = 'none';
-  } else {
-    feeBar.style.display = '';
-    const grandTotal = historyTotal + MONTHLY_FEE;
-    feeBar.innerHTML = `
-      <span style="font-size:13px; color:#6b7280;">固定月費</span>
-      <span style="font-size:15px; font-weight:700; color:#6b7280;">$${MONTHLY_FEE.toLocaleString()}</span>
-      <span style="color:var(--border);">│</span>
-      <span style="font-size:13px; color:#6b7280;">進貨合計</span>
-      <span style="font-size:15px; font-weight:700; color:#be185d;">$${historyTotal.toLocaleString()}</span>
-      <span style="color:var(--border);">│</span>
-      <span style="font-size:13px; color:#6b7280;">含月費總計</span>
-      <span style="font-size:17px; font-weight:700; color:#1f2937;">$${grandTotal.toLocaleString()}</span>`;
-  }
+  document.getElementById('historyDetailInner').innerHTML = '<div style="padding:24px; text-align:center; color:#9ca3af; font-size:14px;">請點選左側單據以檢視到貨商品清單</div>';
+  document.getElementById('historyDetailTitle').textContent = '← 點左側單號查看進貨明細';
 }
 
 function showHistoryDetail(orderId) {
   const r = portalHistory.find(x => x.id === orderId);
   if (!r) return;
 
-  let rows = '';
-  let totalQty = 0, totalAmount = 0;
+  document.querySelectorAll('#historyTableBody tr').forEach(tr => tr.style.background = '');
+  const activeRow = document.getElementById('historyRow-' + orderId);
+  if (activeRow) activeRow.style.background = '#fff0f6';
+
+  document.getElementById('historyDetailTitle').textContent = `單號：${r.id}　進貨日期：${r.date}`;
+
+  let html = `
+    <table style="width:100%; border-collapse:collapse; font-size:13px;">
+      <thead>
+        <tr style="background:#f8f9fa;">
+          <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">商品編號</th>
+          <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">商品名稱</th>
+          <th style="padding:10px 16px; text-align:right; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">單價</th>
+          <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">到貨數量</th>
+          <th style="padding:10px 16px; text-align:right; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">小計</th>
+        </tr>
+      </thead><tbody>`;
+
+  let totalQty = 0;
+  let totalAmount = 0;
+
   r.items.forEach(item => {
-    // 優先用 PRODUCT_DB 的分店價
-    let displayPrice = item.price || 0;
-    if (PRODUCT_DB.length > 0) {
-      const dbP = PRODUCT_DB.find(p => p.code === item.code);
-      if (dbP && dbP.price) displayPrice = dbP.price;
-    }
-    const subtotal = displayPrice * (item.qty || 0);
-    totalQty += item.qty || 0;
+    const subtotal = item.price * item.qty;
+    totalQty += item.qty;
     totalAmount += subtotal;
-    rows += `<tr style="border-bottom:1px solid #f3f4f6;">
-      <td style="padding:8px 12px; color:#6b7280;">${item.code}</td>
-      <td style="padding:8px 12px; font-weight:500;">${item.name}</td>
-      <td style="padding:8px 12px; text-align:right; color:#6b7280;">$${displayPrice.toLocaleString()}</td>
-      <td style="padding:8px 12px; text-align:center; font-weight:700; color:#be185d;">${item.qty}</td>
-      <td style="padding:8px 12px; text-align:right; font-weight:700;">$${subtotal.toLocaleString()}</td>
-    </tr>`;
+
+    html += `
+      <tr style="border-bottom:1px solid #f3f4f6;">
+        <td style="padding:10px 16px; color:#6b7280;">${item.code}</td>
+        <td style="padding:10px 16px; font-weight:500;">${item.name}</td>
+        <td style="padding:10px 16px; text-align:right; color:#6b7280;">$${item.price.toLocaleString()}</td>
+        <td style="padding:10px 16px; text-align:center; font-weight:700; color:#be185d;">${item.qty}</td>
+        <td style="padding:10px 16px; text-align:right; font-weight:700; color:#1f2937;">$${subtotal.toLocaleString()}</td>
+      </tr>`;
   });
 
-  Swal.fire({
-    title: `📋 ${r.id}`,
-    html: `<div style="text-align:left; font-size:13px; color:#6b7280; margin-bottom:10px;">進貨日期：${r.date}</div>
-      <div style="max-height:50vh; overflow-y:auto;">
-      <table style="width:100%; border-collapse:collapse; font-size:13px;">
-        <thead><tr style="background:#f8f9fa;">
-          <th style="padding:8px 12px; text-align:left; border-bottom:2px solid #d1d5db;">編號</th>
-          <th style="padding:8px 12px; text-align:left; border-bottom:2px solid #d1d5db;">品名</th>
-          <th style="padding:8px 12px; text-align:right; border-bottom:2px solid #d1d5db;">單價</th>
-          <th style="padding:8px 12px; text-align:center; border-bottom:2px solid #d1d5db;">數量</th>
-          <th style="padding:8px 12px; text-align:right; border-bottom:2px solid #d1d5db;">小計</th>
-        </tr></thead>
-        <tbody>${rows}
-          <tr style="background:#fff0f6; font-weight:700; border-top:2px solid #d1d5db;">
-            <td colspan="3" style="padding:8px 12px; text-align:right;">總計</td>
-            <td style="padding:8px 12px; text-align:center; color:#be185d;">${totalQty}</td>
-            <td style="padding:8px 12px; text-align:right; color:#be185d;">$${totalAmount.toLocaleString()}</td>
-          </tr>
-        </tbody>
-      </table></div>`,
-    width: '650px',
-    showCloseButton: true,
-    showConfirmButton: false,
-  });
+  html += `
+    <tr style="background:#fff0f6; font-weight:700; border-top:2px solid var(--border);">
+      <td colspan="3" style="padding:10px 16px; text-align:right; color:#1f2937;">總計</td>
+      <td style="padding:10px 16px; text-align:center; color:#be185d; font-size:15px;">${totalQty}</td>
+      <td style="padding:10px 16px; text-align:right; color:#be185d; font-size:15px;">$${totalAmount.toLocaleString()}</td>
+    </tr>
+    </tbody></table>
+  `;
+
+  document.getElementById('historyDetailInner').innerHTML = html;
 }
 
 
@@ -4461,18 +4425,18 @@ function renderTrackingPage() {
       <!-- 追蹤表格 -->
       <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:hidden; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
         <div style="padding:14px 20px; border-bottom:1px solid var(--border); font-size:15px; font-weight:700; color:var(--primary);">📦 採購進度一覽</div>
-        <div style="overflow:auto; max-height:60vh;">
+        <div style="overflow-x:auto;">
           <table style="width:100%; border-collapse:collapse; font-size:13px; min-width:700px;">
-            <thead style="position:sticky; top:0; z-index:1;">
+            <thead>
               <tr style="background:#fff0f6;">
-                <th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap; background:#fff0f6;">開團日</th>
-                <th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap; background:#fff0f6;">結單日</th>
-                <th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap; background:#fff0f6;">商品編號</th>
-                <th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fff0f6;">商品名稱</th>
-                <th style="padding:10px 14px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap; background:#fff0f6;">本店訂購</th>
-                <th style="padding:10px 14px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap; background:#fff0f6;">採購狀態</th>
-                <th style="padding:10px 14px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap; background:#fff0f6;">預計到貨日</th>
-                <th style="padding:10px 14px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap; background:#fff0f6;">操作</th>
+                <th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap;">開團日</th>
+                <th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap;">結單日</th>
+                <th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap;">商品編號</th>
+                <th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">商品名稱</th>
+                <th style="padding:10px 14px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap;">本店訂購</th>
+                <th style="padding:10px 14px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap;">採購狀態</th>
+                <th style="padding:10px 14px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap;">預計到貨日</th>
+                <th style="padding:10px 14px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; white-space:nowrap;">操作</th>
               </tr>
             </thead>
             <tbody>${tableRows}</tbody>
@@ -4733,7 +4697,7 @@ function submitShortageReply(negoId, replyData) {
 }
 
 // ============================
-// 公告欄（分店端：折疊 + 回覆）
+// 公告欄（分店端只讀）
 // ============================
 function renderBulletinBoard() {
   const area = document.getElementById('bulletinBoardArea');
@@ -4745,7 +4709,7 @@ function renderBulletinBoard() {
     return;
   }
 
-  area.innerHTML = bulletins.map((b, i) => {
+  area.innerHTML = bulletins.map(b => {
     const typeBg = b.type === 'urgent' ? 'border-left:4px solid #dc2626;'
       : b.type === 'important' ? 'border-left:4px solid #f59e0b;'
       : 'border-left:4px solid #3b82f6;';
@@ -4755,78 +4719,15 @@ function renderBulletinBoard() {
       ? '<span style="background:#fef3c7; color:#b45309; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;">🟡 重要</span>'
       : '<span style="background:#dbeafe; color:#2563eb; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;">🔵 一般</span>';
     const pinBadge = b.pinned ? ' <span style="background:#fef3c7; color:#b45309; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;">📌 置頂</span>' : '';
-    const replies = b.replies || [];
-    const replyCount = replies.length > 0 ? ` <span style="font-size:11px; color:#9ca3af;">(${replies.length} 則回覆)</span>` : '';
-    const repliesHtml = replies.map(r =>
-      `<div style="display:flex; gap:8px; padding:8px 0; border-top:1px dashed var(--border);">
-        <span style="background:var(--accent-light); color:var(--accent); padding:1px 8px; border-radius:10px; font-size:11px; font-weight:600; white-space:nowrap;">${(r.store||'')}</span>
-        <div style="flex:1;">
-          <div style="font-size:13px; color:#374151;">${(r.text||'').replace(/</g,'&lt;')}</div>
-          <div style="font-size:11px; color:#9ca3af; margin-top:2px;">${r.employee||''} · ${r.time||''}</div>
-        </div>
-      </div>`
-    ).join('');
-
-    return `<div style="background:white; border-radius:8px; border:1px solid var(--border); margin-bottom:12px; box-shadow:0 2px 4px rgba(0,0,0,0.04); ${typeBg} overflow:hidden;">
-      <div onclick="toggleBulletin(${i})" style="display:flex; justify-content:space-between; align-items:center; padding:14px 20px; cursor:pointer; user-select:none; flex-wrap:wrap; gap:6px;" onmouseover="this.style.background='var(--surface2)'" onmouseout="this.style.background=''">
-        <div style="display:flex; align-items:center; gap:8px;">${typeBadge}${pinBadge}
-          <span style="font-size:15px; font-weight:700; color:#1e293b;">${(b.title || '').replace(/</g,'&lt;')}</span>${replyCount}
-        </div>
-        <div style="display:flex; align-items:center; gap:8px;">
-          <span style="font-size:12px; color:#9ca3af;">${b.author || ''} · ${b.time || ''}</span>
-          <span id="bulArrow${i}" style="color:#9ca3af; font-size:12px; transition:0.2s;">▼</span>
-        </div>
-      </div>
-      <div id="bulBody${i}" style="display:none; padding:0 20px 16px;">
-        <div style="font-size:14px; color:#374151; line-height:1.8; white-space:pre-wrap; margin-bottom:12px;">${(b.content || '').replace(/</g,'&lt;')}</div>
-        <div style="border-top:1px solid var(--border); padding-top:10px;">
-          <div style="font-size:12px; font-weight:700; color:var(--text2); margin-bottom:6px;">💬 回覆 (${replies.length})</div>
-          ${repliesHtml || '<div style="font-size:13px; color:#9ca3af; padding:4px 0;">尚無回覆</div>'}
-          <div style="display:flex; gap:8px; margin-top:10px;">
-            <input type="text" id="bulReplyInput${i}" placeholder="輸入回覆..." style="flex:1; padding:8px 12px; border:1.5px solid var(--border); border-radius:6px; font-size:13px; font-family:inherit;" onkeypress="if(event.key==='Enter')submitBulletinReply(${i})">
-            <button onclick="submitBulletinReply(${i})" style="padding:8px 16px; background:var(--accent); color:white; border:none; border-radius:6px; font-size:13px; cursor:pointer; font-weight:600; font-family:inherit; white-space:nowrap;">送出</button>
-          </div>
-        </div>
-      </div>
-    </div>`;
+    return '<div style="background:white; border-radius:8px; border:1px solid var(--border); padding:16px 20px; margin-bottom:12px; box-shadow:0 2px 4px rgba(0,0,0,0.04); ' + typeBg + '">' +
+      '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">' +
+        '<div style="display:flex; align-items:center; gap:8px;">' + typeBadge + pinBadge +
+          ' <span style="font-size:15px; font-weight:700; color:#1e293b;">' + (b.title || '').replace(/</g,'&lt;') + '</span></div>' +
+        '<span style="font-size:12px; color:#9ca3af;">' + (b.author || '') + ' · ' + (b.time || '') + '</span>' +
+      '</div>' +
+      '<div style="font-size:14px; color:#374151; line-height:1.8; white-space:pre-wrap;">' + (b.content || '').replace(/</g,'&lt;') + '</div>' +
+    '</div>';
   }).join('');
-}
-
-function toggleBulletin(idx) {
-  const body = document.getElementById('bulBody' + idx);
-  const arrow = document.getElementById('bulArrow' + idx);
-  if (!body) return;
-  const show = body.style.display === 'none';
-  body.style.display = show ? '' : 'none';
-  if (arrow) arrow.textContent = show ? '▲' : '▼';
-}
-
-function submitBulletinReply(idx) {
-  const input = document.getElementById('bulReplyInput' + idx);
-  if (!input) return;
-  const text = input.value.trim();
-  if (!text) return;
-
-  const bulletins = JSON.parse(localStorage.getItem('portalBulletin') || '[]');
-  if (!bulletins[idx]) return;
-  if (!bulletins[idx].replies) bulletins[idx].replies = [];
-
-  const now = new Date();
-  const timeStr = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-
-  bulletins[idx].replies.push({
-    store: currentStore?.name || '',
-    employee: currentStore?.employee || '',
-    text: text,
-    time: timeStr
-  });
-
-  localStorage.setItem('portalBulletin', JSON.stringify(bulletins));
-  cloudSave('portalBulletin');
-  input.value = '';
-  renderBulletinBoard();
-  // 重新展開這則公告
-  setTimeout(() => toggleBulletin(idx), 50);
 }
 
 // ============================
@@ -4963,9 +4864,6 @@ function renderAidBoard() {
       '</div>';
     }).join('');
 
-    var editBtn = (post.posterStore === myName && post.status === 'open')
-      ? "<button onclick=\"editAidPost('" + post.id + "')\" style=\"padding:4px 10px; background:#fff0f6; color:#2563eb; border:1px solid #2563eb; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit;\">✏️ 修改</button>"
-      : '';
     var cancelBtn = (post.posterStore === myName && post.status === 'open')
       ? "<button onclick=\"cancelAidPost('" + post.id + "')\" style=\"padding:4px 10px; background:white; color:#ef4444; border:1px solid #ef4444; border-radius:6px; font-size:12px; cursor:pointer; font-family:inherit;\">取消</button>"
       : '';
@@ -4999,7 +4897,6 @@ function renderAidBoard() {
         '<div style="display:flex; align-items:center; gap:8px;">' +
           '<span style="font-size:12px; color:#9ca3af;">' + post.createdAt + '</span>' +
           replyBtn +
-          editBtn +
           cancelBtn +
         '</div>' +
       '</div>' +
@@ -5073,8 +4970,6 @@ function renderAidModalItems() {
         tempBadge +
         '<input type="text" inputmode="numeric" id="aidQty-' + idx + '" placeholder="數量" value="' + (item.qty || '') + '" oninput="updateAidQty(' + idx + ', this.value)" style="width:80px; padding:7px 10px; border:1.5px solid #e2e8f0; border-radius:6px; font-size:14px; font-weight:700; font-family:inherit; text-align:center;">' +
         '<span style="font-size:12px; color:#6b7280;">件</span>' +
-        '<span style="font-size:12px; color:#6b7280; margin-left:4px;">$</span>' +
-        '<input type="number" id="aidPrice-' + idx + '" placeholder="單價" value="' + (item.price || '') + '" oninput="aidItems[' + idx + '].price=Number(this.value)||0" style="width:70px; padding:7px 10px; border:1.5px solid #e2e8f0; border-radius:6px; font-size:13px; font-family:inherit; text-align:center;">' +
         removeBtn +
       '</div>' +
     '</div>';
@@ -5286,48 +5181,6 @@ function openAidReplyModal(postId) {
       renderAidBoard();
     }
   });
-}
-
-async function editAidPost(postId) {
-  const post = aidBoard.find(a => a.id === postId);
-  if (!post) return;
-
-  let editItems = post.items.map(i => ({ ...i }));
-
-  const itemsHtml = editItems.map((item, idx) => `
-    <div style="border:1px solid #e2e8f0; border-radius:6px; padding:10px; margin-bottom:8px; background:#fafafa;">
-      <div style="font-weight:600; font-size:13px; margin-bottom:6px;">${item.code ? item.code + ' ' : ''}${item.name}</div>
-      <div style="display:flex; gap:8px; align-items:center;">
-        <span style="font-size:12px; color:#6b7280;">數量</span>
-        <input type="number" min="0" id="editAidQty${idx}" value="${item.qty}" style="width:70px; padding:5px; border:1px solid #d1d5db; border-radius:4px; font-size:14px; font-weight:700; text-align:center;">
-        <span style="font-size:12px; color:#6b7280;">$</span>
-        <input type="number" min="0" id="editAidPrice${idx}" value="${item.price || 0}" style="width:70px; padding:5px; border:1px solid #d1d5db; border-radius:4px; font-size:13px; text-align:center;">
-      </div>
-    </div>`).join('');
-
-  const result = await Swal.fire({
-    title: '修改貼文 — ' + post.id,
-    html: `<div style="text-align:left; max-height:50vh; overflow-y:auto;">${itemsHtml}</div>`,
-    width: 450,
-    showCancelButton: true,
-    confirmButtonText: '儲存',
-    confirmButtonColor: '#be185d',
-    cancelButtonText: '取消',
-    preConfirm: () => {
-      editItems.forEach((item, idx) => {
-        item.qty = parseInt(document.getElementById('editAidQty' + idx).value) || 0;
-        item.price = Number(document.getElementById('editAidPrice' + idx).value) || 0;
-      });
-      return editItems;
-    }
-  });
-
-  if (!result.isConfirmed) return;
-  post.items = result.value;
-  localStorage.setItem('portalMutualAidBoard', JSON.stringify(aidBoard));
-  cloudSave('portalMutualAidBoard');
-  Swal.fire({ title: '已修改', icon: 'success', timer: 1200, showConfirmButton: false });
-  renderAidBoard();
 }
 
 function cancelAidPost(postId) {

@@ -4,9 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>龍潭總倉 - 分店調度與開團管理後台</title>
-  <script src="../libs/sweetalert2.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
-  <script src="../libs/xlsx.full.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
   
   <style>
@@ -1226,24 +1226,6 @@
         });
         if (!detRes.ok) throw new Error('明細寫入失敗: ' + await detRes.text());
 
-        // 自動更新 products 表的分店價（只在送出審核時，且 price_branch > 0）
-        let priceUpdated = 0;
-        if (status === '待審核') {
-          for (const it of ipCart) {
-            if (Number(it.price_branch) > 0) {
-              try {
-                await fetch(`${SB_URL}/products?id=eq.${encodeURIComponent(it.id)}`, {
-                  method: 'PATCH',
-                  headers: { ...HEADERS, 'Prefer': 'return=minimal' },
-                  body: JSON.stringify({ price_branch: Number(it.price_branch) })
-                });
-                priceUpdated++;
-              } catch(e) { console.warn('更新分店價失敗:', it.id, e); }
-            }
-          }
-          if (priceUpdated > 0) console.log(`[採購單] 已更新 ${priceUpdated} 筆商品分店價`);
-        }
-
         // 自動更新訂貨追蹤：採購單開了 = 已向廠商叫貨
         let updatedCount = 0;
         ipCart.forEach(it => {
@@ -1261,10 +1243,9 @@
         ipRenderCart();
 
         const statusText = status === '草稿' ? '已存為草稿' : '已送出審核';
-        const priceNote = priceUpdated > 0 ? `<br><span style="font-size:12px; color:#2563eb;">💰 已更新 ${priceUpdated} 筆商品分店價</span>` : '';
         Swal.fire({
           icon: 'success', title: statusText,
-          html: `單號：<b>${orderId}</b><br>金額：<b>$${subtotal.toLocaleString()}</b>${updatedCount > 0 ? '<br><span style="font-size:12px; color:#805ad5;">📋 已同步更新 ' + updatedCount + ' 項訂貨追蹤為「已向廠商叫貨」</span>' : ''}${priceNote}`,
+          html: `單號：<b>${orderId}</b><br>金額：<b>$${subtotal.toLocaleString()}</b>${updatedCount > 0 ? '<br><span style="font-size:12px; color:#805ad5;">📋 已同步更新 ' + updatedCount + ' 項訂貨追蹤為「已向廠商叫貨」</span>' : ''}`,
           confirmButtonColor: 'var(--accent)'
         });
 
