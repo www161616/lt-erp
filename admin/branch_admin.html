@@ -5946,7 +5946,7 @@
         var safeTemp = (p.temp || '').replace(/'/g, '');
         return "<div onclick=\"selectAdminAidProd(" + idx + ", '" + safeCode + "', '" + safeName + "', '" + safeTemp + "')\" style=\"padding:8px 12px; cursor:pointer; font-size:13px; border-bottom:1px solid #f3f4f6;\" onmouseover=\"this.style.background='#f0f7ff'\" onmouseout=\"this.style.background=''\">" +
           '<b style="color:#718096; margin-right:6px;">' + p.code + '</b>' + p.name +
-          (p.temp ? ' <span style="background:' + tc + '20; color:' + tc + '; padding:1px 5px; border-radius:4px; font-size:11px; font-weight:700;">' + p.temp + '</span>' : '') +
+          (p.price ? ' <span style="color:#047857; font-weight:bold; margin-left:6px;">$' + p.price + '</span>' : '') +
         '</div>';
       }).join('');
     }
