@@ -456,8 +456,8 @@
     // 初始化與頁面切換
     // ============================
     window.onload = async () => {
-      await cloudLoadAll();
       await checkLoginStatus();
+      await cloudLoadAll();
       fetchCustomers();
       fetchSuppliers();
       updateClock();
