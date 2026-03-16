@@ -1771,11 +1771,15 @@
           localStorage.setItem('branchOrders', JSON.stringify(saved));
           cloudSave('branchOrders');
 
+          // 同步更新 cache，確保切頁再回來數量不會跑掉
+          items.forEach(item => { orderQtyCache[item.id] = String(item.qty); });
+          saveQtyCache();
+
           orderDirty = false;
           Swal.fire({
             icon: 'success',
-            title: '已填單完成！',
-            text: `共 ${items.length} 項商品，龍潭總倉已收到`,
+            title: '已送出！',
+            html: `共 <b>${items.length}</b> 項商品已更新，龍潭總倉已收到`,
             confirmButtonColor: '#be185d'
           });
         }
@@ -1801,6 +1805,13 @@
     };
 
     function switchPage(pageId, menuEl) {
+      // 離開結單填表前，先存當前輸入的數量
+      document.querySelectorAll('.qty-input').forEach(input => {
+        if (input.value) orderQtyCache[input.dataset.id] = input.value;
+        else delete orderQtyCache[input.dataset.id];
+      });
+      saveQtyCache();
+
       document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
       document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active'));
       document.getElementById(pageId).classList.add('active');
