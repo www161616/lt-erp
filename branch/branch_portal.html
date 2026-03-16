@@ -298,6 +298,7 @@
       <div class="menu-item" onclick="switchPage('pageBilling', this)">📦 今日進貨單</div>
       <div class="menu-item" onclick="switchPage('pageHistory', this)">📜 所有進貨單</div>
 <div class="menu-item" id="menuLedger" onclick="switchPage('pageLedger', this)">💰 流水帳/訂包管理</div>
+      <div class="menu-item" onclick="switchPage('pagePriceSearch', this)">💲 商品查價</div>
       <div class="menu-item" id="menuCommon" onclick="switchPage('pageCommon', this)">⭐ 常用功能</div>
 
       <div class="sidebar-footer">
@@ -807,6 +808,10 @@
 
         <div id="pageBulletin" class="page">
           <div id="bulletinBoardArea"></div>
+        </div>
+
+        <div id="pagePriceSearch" class="page">
+          <div id="priceSearchContainer"></div>
         </div>
 
         <div id="pageCommon" class="page">
@@ -1836,6 +1841,7 @@
       pageHistory:  '📜 所有進貨單',
       pageBilling:  '📦 今日進貨單',
       pageCommon:   '⭐ 常用功能',
+      pagePriceSearch: '💲 商品查價',
       pageAid:      '🤝 互助交流板',
       pageBulletin: '📢 公告欄',
     };
@@ -1876,6 +1882,7 @@
         if (pageId === 'pageHistory') initHistoryPage();
         if (pageId === 'pageAid') initAidPage();
         if (pageId === 'pageBulletin') renderBulletinBoard();
+        if (pageId === 'pagePriceSearch') renderPriceSearchPage();
         // 進入頁面時標記已讀，並更新徽章
         markPageSeen(pageId);
         updateNotificationBadges();
@@ -2421,7 +2428,9 @@ async function loadProductDB() {
       name: p.name,
       temp: p.category || '',
       category: p.category || '',
-      price: p.price_branch || p.price || 0
+      price: p.price_branch || p.price || 0,
+      sellPrice: p.price || 0,
+      branchPrice: p.price_branch || 0
     }));
     console.log(`[商品資料庫] 已載入 ${PRODUCT_DB.length} 筆商品`);
   } catch(e) {
@@ -3918,6 +3927,154 @@ function printBunReport() {
     </div>
     <script>window.onload=function(){window.print();}<\/script></body></html>`);
   win.document.close();
+}
+
+// ============================
+// 商品查價
+// ============================
+let priceSearchPage = 1;
+const PRICE_PER = 50;
+
+function renderPriceSearchPage() {
+  const container = document.getElementById('priceSearchContainer');
+  const kw = document.getElementById('priceSearchInput')?.value || '';
+  const catVal = document.getElementById('priceCatFilter')?.value || '';
+
+  // 篩選
+  let data = PRODUCT_DB;
+  if (catVal) data = data.filter(p => p.category === catVal);
+  if (kw.trim()) {
+    const k = kw.trim().toLowerCase();
+    data = data.filter(p => p.name.toLowerCase().includes(k) || p.code.toLowerCase().includes(k));
+  }
+
+  const totalPages = Math.max(1, Math.ceil(data.length / PRICE_PER));
+  if (priceSearchPage > totalPages) priceSearchPage = totalPages;
+  const start = (priceSearchPage - 1) * PRICE_PER;
+  const pageData = data.slice(start, start + PRICE_PER);
+
+  // 類別選項
+  const cats = [...new Set(PRODUCT_DB.map(p => p.category).filter(Boolean))].sort();
+  const catOptions = cats.map(c => `<option value="${c}" ${c===catVal?'selected':''}>${c}</option>`).join('');
+
+  // 分頁
+  const pgHtml = buildPriceSearchPagination(data.length, totalPages);
+
+  // 表格
+  const rows = pageData.map(p => `
+    <tr style="border-bottom:1px solid var(--border);">
+      <td style="padding:10px 12px; font-family:monospace; font-size:12px; color:var(--accent);">${p.code}</td>
+      <td style="padding:10px 12px; font-weight:600;">${p.name}</td>
+      <td style="padding:10px 12px; font-size:12px; color:var(--text2);">${p.category || '-'}</td>
+      <td style="padding:10px 12px; text-align:right; font-weight:700; color:#2b6cb0;">$${p.sellPrice.toLocaleString()}</td>
+      <td style="padding:10px 12px; text-align:right; font-weight:700; color:#047857;">$${p.branchPrice.toLocaleString()}</td>
+    </tr>
+  `).join('');
+
+  container.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:10px;">
+      <div style="font-size:16px; font-weight:700; color:var(--primary);">💲 商品查價</div>
+      <div style="font-size:13px; color:var(--text2);">共 ${data.length} 筆${totalPages > 1 ? '，第 ' + priceSearchPage + ' / ' + totalPages + ' 頁' : ''}</div>
+    </div>
+    <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; align-items:center;">
+      <input id="priceSearchInput" type="text" placeholder="搜尋商品編號或名稱..." value="${kw.replace(/"/g,'&quot;')}" onkeydown="if(event.key==='Enter'){priceSearchPage=1; renderPriceSearchPage();}" style="flex:1; min-width:200px; padding:8px 12px; border:1px solid var(--border); border-radius:6px; font-size:14px; font-family:inherit;">
+      <select id="priceCatFilter" onchange="priceSearchPage=1; renderPriceSearchPage();" style="padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; font-family:inherit;">
+        <option value="">全部類別</option>
+        ${catOptions}
+      </select>
+      <button onclick="priceSearchPage=1; renderPriceSearchPage();" style="padding:8px 14px; background:var(--accent); color:white; border:none; border-radius:6px; cursor:pointer; font-size:13px; font-family:inherit; font-weight:600;">查詢</button>
+      <button onclick="document.getElementById('priceSearchInput').value=''; document.getElementById('priceCatFilter').value=''; priceSearchPage=1; renderPriceSearchPage();" style="padding:8px 14px; background:var(--bg2); color:var(--text2); border:1px solid var(--border); border-radius:6px; cursor:pointer; font-size:13px; font-family:inherit;">清除</button>
+    </div>
+    <div style="margin-bottom:8px;">${pgHtml}</div>
+    <div style="overflow-x:auto; border:1px solid var(--border); border-radius:8px; background:white;">
+      <table style="width:100%; border-collapse:collapse; font-size:13px;">
+        <thead>
+          <tr style="background:var(--bg2);">
+            <th style="padding:10px 12px; text-align:left; min-width:120px;">商品編號</th>
+            <th style="padding:10px 12px; text-align:left; min-width:180px;">商品名稱</th>
+            <th style="padding:10px 12px; text-align:left; min-width:80px;">類別</th>
+            <th style="padding:10px 12px; text-align:right; min-width:80px;">售價</th>
+            <th style="padding:10px 12px; text-align:right; min-width:80px;">分店價</th>
+          </tr>
+        </thead>
+        <tbody>${rows || '<tr><td colspan="5" style="text-align:center; padding:40px; color:var(--text2);">查無商品</td></tr>'}</tbody>
+      </table>
+    </div>
+    ${kw.trim() ? '<div style="text-align:center; margin-top:12px;"><button onclick="searchAllProducts()" style="padding:8px 18px; background:#2b6cb0; color:white; border:none; border-radius:6px; cursor:pointer; font-size:13px; font-family:inherit; font-weight:600;">🔍 搜尋全部商品（含停用）</button></div>' : ''}
+    <div id="priceSearchAllResult"></div>
+    <div style="margin-top:8px;">${pgHtml}</div>
+  `;
+}
+
+async function searchAllProducts() {
+  const kw = document.getElementById('priceSearchInput')?.value?.trim();
+  if (!kw) return;
+  const resultDiv = document.getElementById('priceSearchAllResult');
+  resultDiv.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text2);">搜尋中...</div>';
+  try {
+    const encoded = encodeURIComponent(`%${kw}%`);
+    const res = await fetch(`${SB_URL}/products?or=(id.ilike.${encoded},name.ilike.${encoded})&order=id.asc&limit=100`, { headers: SB_HEADERS });
+    if (!res.ok) throw new Error('查詢失敗');
+    const data = await res.json();
+    if (data.length === 0) {
+      resultDiv.innerHTML = '<div style="text-align:center; padding:20px; color:var(--text2);">全部商品中也找不到符合的結果</div>';
+      return;
+    }
+    const rows = data.map(p => {
+      const statusBg = (!p.status || p.status === '啟用') ? '#d1fae5' : '#fee2e2';
+      const statusColor = (!p.status || p.status === '啟用') ? '#047857' : '#c53030';
+      const statusText = (!p.status || p.status === '啟用') ? '啟用' : '停用';
+      return `<tr style="border-bottom:1px solid var(--border);">
+        <td style="padding:10px 12px; font-family:monospace; font-size:12px; color:var(--accent);">${p.id}</td>
+        <td style="padding:10px 12px; font-weight:600;">${p.name}</td>
+        <td style="padding:10px 12px; font-size:12px; color:var(--text2);">${p.category || '-'}</td>
+        <td style="padding:10px 12px; text-align:right; font-weight:700; color:#2b6cb0;">$${(p.price || 0).toLocaleString()}</td>
+        <td style="padding:10px 12px; text-align:right; font-weight:700; color:#047857;">$${(p.price_branch || 0).toLocaleString()}</td>
+        <td style="padding:10px 12px; text-align:center;"><span style="padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; background:${statusBg}; color:${statusColor};">${statusText}</span></td>
+      </tr>`;
+    }).join('');
+    resultDiv.innerHTML = `
+      <div style="margin-top:12px; padding:10px 14px; background:#f0f7ff; border:1px solid #93c5fd; border-radius:8px; font-size:13px; color:#1d4ed8; font-weight:600;">🔍 全部商品搜尋結果（含停用）：${data.length} 筆</div>
+      <div style="margin-top:8px; padding:8px 14px; background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; font-size:12px; color:#9a3412;">⚠️ 如需開啟商品，請聯絡龍潭工作人員</div>
+      <div style="overflow-x:auto; border:1px solid var(--border); border-radius:8px; background:white; margin-top:8px;">
+        <table style="width:100%; border-collapse:collapse; font-size:13px;">
+          <thead><tr style="background:var(--bg2);">
+            <th style="padding:10px 12px; text-align:left;">商品編號</th>
+            <th style="padding:10px 12px; text-align:left;">商品名稱</th>
+            <th style="padding:10px 12px; text-align:left;">類別</th>
+            <th style="padding:10px 12px; text-align:right;">售價</th>
+            <th style="padding:10px 12px; text-align:right;">分店價</th>
+            <th style="padding:10px 12px; text-align:center;">狀態</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+      </div>`;
+  } catch(e) {
+    resultDiv.innerHTML = `<div style="text-align:center; padding:20px; color:#c53030;">查詢失敗：${e.message}</div>`;
+  }
+}
+
+function buildPriceSearchPagination(total, totalPages) {
+  if (totalPages <= 1) return '';
+  let h = '<div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap;">';
+  h += `<button onclick="priceSearchGoPage(1)" style="padding:4px 8px; border:1px solid var(--border); border-radius:4px; cursor:pointer; font-size:12px; background:white;" ${priceSearchPage===1?'disabled':''}>«</button>`;
+  h += `<button onclick="priceSearchGoPage(${priceSearchPage-1})" style="padding:4px 8px; border:1px solid var(--border); border-radius:4px; cursor:pointer; font-size:12px; background:white;" ${priceSearchPage===1?'disabled':''}>‹</button>`;
+  const s = Math.max(1, priceSearchPage - 2);
+  const e = Math.min(totalPages, s + 4);
+  for (let i = s; i <= e; i++) {
+    h += `<button onclick="priceSearchGoPage(${i})" style="padding:4px 10px; border:1px solid var(--border); border-radius:4px; cursor:pointer; font-size:12px; ${i===priceSearchPage?'background:var(--accent); color:white; font-weight:700;':'background:white;'}">${i}</button>`;
+  }
+  h += `<button onclick="priceSearchGoPage(${priceSearchPage+1})" style="padding:4px 8px; border:1px solid var(--border); border-radius:4px; cursor:pointer; font-size:12px; background:white;" ${priceSearchPage===totalPages?'disabled':''}>›</button>`;
+  h += `<button onclick="priceSearchGoPage(${totalPages})" style="padding:4px 8px; border:1px solid var(--border); border-radius:4px; cursor:pointer; font-size:12px; background:white;" ${priceSearchPage===totalPages?'disabled':''}>»</button>`;
+  h += '</div>';
+  return h;
+}
+
+function priceSearchGoPage(p) {
+  const data = PRODUCT_DB;
+  const totalPages = Math.max(1, Math.ceil(data.length / PRICE_PER));
+  priceSearchPage = Math.max(1, Math.min(p, totalPages));
+  renderPriceSearchPage();
 }
 
 // ============================
