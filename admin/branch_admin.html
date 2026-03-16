@@ -7103,8 +7103,8 @@
       return `<tr style="border-bottom:1px solid #e2e8f0; ${rowBg}">
         <td style="padding:8px 12px; font-family:monospace; font-size:12px; color:#2b6cb0;">${item.productId}</td>
         <td style="padding:8px 12px; font-weight:bold;">${item.name}</td>
-        <td style="padding:8px 12px; text-align:center;">${item.qty}</td>
-        <td style="padding:8px 12px; text-align:right; color:#718096;">$${item.unitPrice}</td>
+        <td style="padding:8px 12px; text-align:center;">${(o.status==='pending'||o.status==='confirmed') ? `<input type="number" min="0" value="${item.qty}" style="width:55px; text-align:center; padding:3px; border:1px solid #cbd5e0; border-radius:4px; font-size:13px; font-weight:bold;" onchange="updateSOItemQty('${o.id}',${idx},this.value)">` : item.qty}</td>
+        <td style="padding:8px 12px; text-align:right; color:#718096;">${(o.status==='pending'||o.status==='confirmed') ? `$<input type="number" min="0" value="${item.unitPrice}" style="width:65px; text-align:right; padding:3px; border:1px solid #cbd5e0; border-radius:4px; font-size:13px; color:#718096;" onchange="updateSOItemPrice('${o.id}',${idx},this.value)">` : `$${item.unitPrice}`}</td>
         <td style="padding:8px 12px; text-align:center; color:#718096; font-size:13px;">${deduct>0?`<span style="color:#c53030;">-${deduct}</span>`:'—'}</td>
         <td style="padding:8px 12px; text-align:center; font-weight:bold;">${effective}</td>
         <td style="padding:8px 12px; text-align:right; font-weight:bold; color:#0369a1;">$${subtotal.toLocaleString()}</td>
@@ -7190,6 +7190,22 @@
         </div>
       </div>`;
     document.getElementById('mainContainer').innerHTML = html;
+  }
+
+  function updateSOItemQty(soId, itemIdx, newVal) {
+    const o = mockSalesOrders.find(s => s.id === soId);
+    if (!o || (o.status !== 'pending' && o.status !== 'confirmed')) return;
+    o.items[itemIdx].qty = parseInt(newVal) || 0;
+    syncSalesOrdersToPortal();
+    showSalesOrderDetail(soId);
+  }
+
+  function updateSOItemPrice(soId, itemIdx, newVal) {
+    const o = mockSalesOrders.find(s => s.id === soId);
+    if (!o || (o.status !== 'pending' && o.status !== 'confirmed')) return;
+    o.items[itemIdx].unitPrice = parseInt(newVal) || 0;
+    syncSalesOrdersToPortal();
+    showSalesOrderDetail(soId);
   }
 
   function printSalesOrderDetail(id) {
