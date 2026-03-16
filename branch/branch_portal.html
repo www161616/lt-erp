@@ -1207,7 +1207,7 @@
 
         const disableReason = '總倉已結單，無法訂購';
         const inputProps = canOrder
-          ? `oninput="sanitizeQty(this);if(!orderDirty){orderDirty=true;updateSubmitBar();}" onfocus="this.style.borderColor='var(--primary)';showQtyHint(this)" onblur="this.style.borderColor='var(--border)';hideQtyHint()"`
+          ? `oninput="sanitizeQty(this);if(!orderDirty){orderDirty=true;}" onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='var(--border)'"`
           : `disabled title="${disableReason}"`;
         const inputStyle = canOrder
           ? `background:white; border:2px solid var(--border); cursor:text;`
@@ -1680,21 +1680,8 @@
     function lockQtyInputs() { /* 已停用 */ }
     function unlockQtyInputs() { /* 已停用 */ }
 
-    function showQtyHint(el) {
-      hideQtyHint();
-      const hint = document.createElement('div');
-      hint.id = 'qtyHint';
-      hint.innerHTML = '💡 填完記得按送出 <button onclick="event.stopPropagation();submitOrder()" style="margin-left:6px; background:#be185d; color:white; border:none; padding:3px 10px; border-radius:4px; font-size:11px; font-weight:700; cursor:pointer; font-family:inherit;">🚀 送出</button>';
-      hint.style.cssText = 'position:absolute; background:#fef3c7; color:#92400e; font-size:12px; font-weight:600; padding:4px 10px; border-radius:6px; border:1px solid #fcd34d; white-space:nowrap; z-index:999; box-shadow:0 2px 6px rgba(0,0,0,0.1);';
-      document.body.appendChild(hint);
-      const rect = el.getBoundingClientRect();
-      hint.style.left = (rect.left + window.scrollX - 80) + 'px';
-      hint.style.top = (rect.bottom + 4 + window.scrollY) + 'px';
-    }
-    function hideQtyHint() {
-      const h = document.getElementById('qtyHint');
-      if (h) h.remove();
-    }
+    function showQtyHint() {}
+    function hideQtyHint() {}
 
     function updateSubmitBar() { /* 已停用 */ }
 
