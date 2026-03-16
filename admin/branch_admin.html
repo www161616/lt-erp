@@ -435,11 +435,6 @@
         created_at: new Date().toISOString()
       };
 
-      if (MOCK_MODE) {
-        console.log(`[🧪 MOCK LOG] ${action} -> Target: ${targetId}`, detail);
-        return;
-      }
-
       try {
         await fetch(`${SB_URL}/activity_logs`, {
           method: 'POST',
