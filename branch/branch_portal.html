@@ -5069,6 +5069,8 @@ function renderAidModalItems() {
         tempBadge +
         '<input type="text" inputmode="numeric" id="aidQty-' + idx + '" placeholder="數量" value="' + (item.qty || '') + '" oninput="updateAidQty(' + idx + ', this.value)" style="width:80px; padding:7px 10px; border:1.5px solid #e2e8f0; border-radius:6px; font-size:14px; font-weight:700; font-family:inherit; text-align:center;">' +
         '<span style="font-size:12px; color:#6b7280;">件</span>' +
+        '<span style="font-size:12px; color:#6b7280; margin-left:4px;">$</span>' +
+        '<input type="number" id="aidPrice-' + idx + '" placeholder="單價" value="' + (item.price || '') + '" oninput="aidItems[' + idx + '].price=Number(this.value)||0" style="width:70px; padding:7px 10px; border:1.5px solid #e2e8f0; border-radius:6px; font-size:13px; font-family:inherit; text-align:center;">' +
         removeBtn +
       '</div>' +
     '</div>';
