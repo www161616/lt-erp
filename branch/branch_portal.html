@@ -1207,7 +1207,7 @@
 
         const disableReason = '總倉已結單，無法訂購';
         const inputProps = canOrder
-          ? `oninput="sanitizeQty(this);if(!orderDirty){orderDirty=true;}" onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='var(--border)'"`
+          ? `oninput="sanitizeQty(this);" onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='var(--border)';autoSaveSingleQty(this)"`
           : `disabled title="${disableReason}"`;
         const inputStyle = canOrder
           ? `background:white; border:2px solid var(--border); cursor:text;`
@@ -1461,6 +1461,29 @@
     }
 
     // ============================
+    // 手動修改單筆自動存檔
+    // ============================
+    let importMode = false; // 匯入模式：true=等按送出，false=自動存
+
+    function autoSaveSingleQty(el) {
+      if (importMode) return; // 匯入模式下不自動存，等按送出
+      const id = el.dataset.id;
+      const qty = parseInt(el.value) || 0;
+      // 更新 cache
+      if (qty > 0) orderQtyCache[id] = String(qty);
+      else delete orderQtyCache[id];
+      saveQtyCache();
+      // 直接存到 branchOrders
+      const storeName = currentStore?.name || '未知';
+      const saved = JSON.parse(localStorage.getItem('branchOrders') || '{}');
+      if (!saved[storeName]) saved[storeName] = {};
+      if (qty > 0) saved[storeName][id] = qty;
+      else delete saved[storeName][id];
+      localStorage.setItem('branchOrders', JSON.stringify(saved));
+      cloudSave('branchOrders');
+    }
+
+    // ============================
     // 匯入樂樂報表
     // ============================
     let isQtyLocked = false; // 已停用，保留變數避免報錯
@@ -1657,13 +1680,15 @@
             reportDiv.style.borderColor = hasError ? '#fecaca' : '#bbf7d0';
 
 
+            if (matchCount > 0) importMode = true; // 匯入後進入匯入模式，等按送出
+
             Swal.fire({
               title: matchCount > 0 ? '匯入完成' : '匯入失敗',
-              text: matchCount > 0
-                ? `成功 ${matchCount} 筆${skippedCount > 0 ? `，跳過 ${skippedCount} 筆` : ''}${missingIds.length > 0 ? `，${missingIds.length} 筆未匹配` : ''}`
+              html: matchCount > 0
+                ? `成功 ${matchCount} 筆${skippedCount > 0 ? `，跳過 ${skippedCount} 筆` : ''}${missingIds.length > 0 ? `，${missingIds.length} 筆未匹配` : ''}<br><span style="color:#059669; font-size:13px; font-weight:bold;">請確認數量後按「🚀 送出資料」</span>`
                 : '沒有匹配到任何商品',
               icon: matchCount > 0 ? (missingIds.length > 0 ? 'warning' : 'success') : 'error',
-              confirmButtonColor: '#be185d', timer: 2500
+              confirmButtonColor: '#be185d'
             });
           } catch (err) {
             Swal.fire('匯入失敗', '檔案格式不符或讀取錯誤：' + err.message, 'error');
@@ -1784,6 +1809,7 @@
           saveQtyCache();
 
           orderDirty = false;
+          importMode = false; // 送出後退出匯入模式，恢復自動存
           const msg = isFullList
             ? `共 <b>${items.length}</b> 項商品已送出`
             : `${newItems.length > 0 ? '新增 <b>' + newItems.length + '</b> 項' : ''}${newItems.length > 0 && modifiedItems.length > 0 ? '、' : ''}${modifiedItems.length > 0 ? '修改 <b>' + modifiedItems.length + '</b> 項' : ''}`;
