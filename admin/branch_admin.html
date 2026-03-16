@@ -3403,7 +3403,11 @@
       const popup = Swal.getPopup();
       if (popup) {
         const container = popup.querySelector('.swal2-html-container');
-        if (container) container.innerHTML = buildCorrectionPanelHTML(wave);
+        if (container) {
+          const scrollTop = container.scrollTop;
+          container.innerHTML = buildCorrectionPanelHTML(wave);
+          container.scrollTop = scrollTop;
+        }
       }
     }
 
