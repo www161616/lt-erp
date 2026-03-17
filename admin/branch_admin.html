@@ -2420,9 +2420,58 @@
     let activePickingMatrix = []; // 當前直接操作的揀貨大表
     let currentEditingWaveId = null; // 紀錄目前是否正在編輯歷史單據
     let hideZeroCols = false; // 是否隱藏數量全為 0 的欄位
-    let waveCorrections = JSON.parse(localStorage.getItem('lt_waveCorrections') || '{}'); // 修正數量：waveId → { productId → { storeName → { diff, action } } }
-    function saveWaveCorrections() { localStorage.setItem('lt_waveCorrections', JSON.stringify(waveCorrections)); }
-    let openCorrectionWaveId = null; // 目前展開修正面板的 waveId
+    let correctionCache = {}; // { waveId: { productId: { store: {diff, action, action_reason, status} } } }
+    let openCorrectionWaveId = null;
+
+    async function loadCorrectionCache(waveId) {
+      try {
+        const res = await fetch(`${SB_URL}/backorders?wave_id=eq.${encodeURIComponent(waveId)}`, { headers: HEADERS });
+        const rows = res.ok ? await res.json() : [];
+        correctionCache[waveId] = {};
+        rows.forEach(r => {
+          if (!correctionCache[waveId][r.product_id]) correctionCache[waveId][r.product_id] = {};
+          correctionCache[waveId][r.product_id][r.store] = {
+            diff: r.diff, action: r.action, action_reason: r.action_reason || '',
+            status: r.status, id: r.id, expected_qty: r.expected_qty, actual_qty: r.actual_qty
+          };
+        });
+      } catch(e) { console.error('loadCorrectionCache error:', e); }
+    }
+
+    async function upsertBackorder(waveId, productId, productName, store, expectedQty, actualQty, action, actionReason) {
+      const body = {
+        wave_id: waveId, product_id: productId, product_name: productName,
+        store: store, expected_qty: expectedQty, actual_qty: actualQty,
+        action: action || 'pending', action_reason: actionReason || ''
+      };
+      try {
+        const res = await fetch(`${SB_URL}/backorders`, {
+          method: 'POST',
+          headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+          body: JSON.stringify(body)
+        });
+        if (!res.ok) console.error('upsertBackorder error:', await res.text());
+      } catch(e) { console.error('upsertBackorder error:', e); }
+    }
+
+    async function patchBackorder(waveId, productId, store, fields) {
+      try {
+        const res = await fetch(`${SB_URL}/backorders?wave_id=eq.${encodeURIComponent(waveId)}&product_id=eq.${encodeURIComponent(productId)}&store=eq.${encodeURIComponent(store)}`, {
+          method: 'PATCH',
+          headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+          body: JSON.stringify(fields)
+        });
+        if (!res.ok) console.error('patchBackorder error:', await res.text());
+      } catch(e) { console.error('patchBackorder error:', e); }
+    }
+
+    async function deleteBackorder(waveId, productId, store) {
+      try {
+        await fetch(`${SB_URL}/backorders?wave_id=eq.${encodeURIComponent(waveId)}&product_id=eq.${encodeURIComponent(productId)}&store=eq.${encodeURIComponent(store)}`, {
+          method: 'DELETE', headers: HEADERS
+        });
+      } catch(e) { console.error('deleteBackorder error:', e); }
+    }
 
     // 取得目前可見的店名欄位（根據 hideZeroCols 過濾）
     function getVisibleStoreNames() {
@@ -2448,8 +2497,7 @@
     }
     let mockSavedWaves = JSON.parse(localStorage.getItem('lt_savedWaves') || '[]'); // 歷史紀錄
     function saveMockSavedWaves() { localStorage.setItem('lt_savedWaves', JSON.stringify(mockSavedWaves)); }
-    let mockBackorderMeta = JSON.parse(localStorage.getItem('lt_backorderMeta') || '{}'); // key: waveId-productId，存原因/處理/狀態
-    function saveBackorderMeta() { localStorage.setItem('lt_backorderMeta', JSON.stringify(mockBackorderMeta)); }
+    // mockBackorderMeta 已遷移到 Supabase backorders 表
 
     async function renderPickingStation() {
       await cloudLoadAll(); // 先從雲端同步最新開團資料
@@ -3105,7 +3153,7 @@
         const totalDiff = totalActual - totalExpected;
 
         // 修正數量統計
-        const corr = waveCorrections[wave.id];
+        const corr = correctionCache[wave.id];
         let corrSummary = '';
         if (corr) {
           let osCnt = 0, pdCnt = 0, nrCnt = 0;
@@ -3187,11 +3235,12 @@
     }
 
     // === 修正數量面板（大視窗彈出） ===
-    function openCorrectionPanel(waveId) {
+    async function openCorrectionPanel(waveId) {
       const wave = mockSavedWaves.find(w => w.id === waveId);
       if (!wave) return;
       openCorrectionWaveId = waveId;
 
+      await loadCorrectionCache(waveId);
       const panelHTML = buildCorrectionPanelHTML(wave);
 
       Swal.fire({
@@ -3214,8 +3263,8 @@
 
     function buildCorrectionPanelHTML(wave) {
       const waveId = wave.id;
-      if (!waveCorrections[waveId]) waveCorrections[waveId] = {};
-      const corr = waveCorrections[waveId];
+      if (!correctionCache[waveId]) correctionCache[waveId] = {};
+      const corr = correctionCache[waveId];
 
       // 收集有量的店名（橫向排列用）
       const visibleStores = pickingStoreNames.filter(name => {
@@ -3229,8 +3278,9 @@
       const storeHeaders = visibleStores.map(n => `<th style="padding:4px 6px; text-align:center; border:1px solid #e2e8f0; font-size:11px; min-width:52px; white-space:nowrap;">${n}</th>`).join('');
 
       const productRows = wave.matrix.map((row, ri) => {
-        if (!corr[row.id]) corr[row.id] = {};
-        const prodCorr = corr[row.id];
+        const cleanPid = (row.productId || row.id).replace(/_.*$/, '');
+        if (!corr[cleanPid]) corr[cleanPid] = {};
+        const prodCorr = corr[cleanPid];
 
         // 應發行
         const expectedCells = visibleStores.map(s => {
@@ -3280,17 +3330,14 @@
               return `<td style="text-align:center; padding:2px; border:1px solid #e2e8f0; background:#fef3c7;">
                 <div style="font-size:10px; color:#c53030; font-weight:bold;">${diff}</div>
                 <div style="display:flex; gap:2px; justify-content:center; margin-top:2px;">
-                  <button style="padding:1px 4px; font-size:9px; border-radius:3px; cursor:pointer; font-family:inherit; background:#fef3c7; color:#92400e; border:1px solid #ecc94b;" onclick="setCorrectionAction('${waveId}','${row.id}','${s}','pending')">待補</button>
-                  <button style="padding:1px 4px; font-size:9px; border-radius:3px; cursor:pointer; font-family:inherit; background:#fee2e2; color:#c53030; border:1px solid #fca5a5;" onclick="setCorrectionAction('${waveId}','${row.id}','${s}','noRestock')">不補</button>
-                  <button style="padding:1px 4px; font-size:9px; border-radius:3px; cursor:pointer; font-family:inherit; background:#dbeafe; color:#1d4ed8; border:1px solid #93c5fd;" onclick="setCorrectionAction('${waveId}','${row.id}','${s}','storeConfirm')">待確認</button>
+                  <button style="padding:1px 4px; font-size:9px; border-radius:3px; cursor:pointer; font-family:inherit; background:#fef3c7; color:#92400e; border:1px solid #ecc94b;" onclick="setCorrectionAction('${waveId}','${cleanPid}','${s}','pending')">待補</button>
+                  <button style="padding:1px 4px; font-size:9px; border-radius:3px; cursor:pointer; font-family:inherit; background:#fee2e2; color:#c53030; border:1px solid #fca5a5;" onclick="setCorrectionAction('${waveId}','${cleanPid}','${s}','noRestock')">不補</button>
                 </div>
               </td>`;
             } else if (existing.action === 'pending') {
-              return `<td style="text-align:center; padding:2px; border:1px solid #e2e8f0; background:#fef3c7; cursor:pointer;" onclick="setCorrectionAction('${waveId}','${row.id}','${s}',null)"><span style="font-size:10px; color:#92400e; font-weight:bold;">${diff} 待補</span></td>`;
-            } else if (existing.action === 'storeConfirm') {
-              return `<td style="text-align:center; padding:2px; border:1px solid #e2e8f0; background:#dbeafe; cursor:pointer;" onclick="setCorrectionAction('${waveId}','${row.id}','${s}',null)"><span style="font-size:10px; color:#1d4ed8; font-weight:bold;">${diff} 待確認</span></td>`;
+              return `<td style="text-align:center; padding:2px; border:1px solid #e2e8f0; background:#fef3c7; cursor:pointer;" onclick="setCorrectionAction('${waveId}','${cleanPid}','${s}','pending')"><span style="font-size:10px; color:#92400e; font-weight:bold;">${diff} 待補</span></td>`;
             } else {
-              return `<td style="text-align:center; padding:2px; border:1px solid #e2e8f0; background:#fee2e2; cursor:pointer;" onclick="setCorrectionAction('${waveId}','${row.id}','${s}',null)"><span style="font-size:10px; color:#c53030; font-weight:bold;">${diff} 不補</span></td>`;
+              return `<td style="text-align:center; padding:2px; border:1px solid #e2e8f0; background:#fee2e2; cursor:pointer;" onclick="setCorrectionAction('${waveId}','${cleanPid}','${s}','noRestock')"><span style="font-size:10px; color:#c53030; font-weight:bold;">${diff} 不補</span></td>`;
             }
           }
         }).join('');
@@ -3364,13 +3411,12 @@
     }
 
     // 修正面板：更新實際數量
-    function updateCorrectionQty(waveId, rowIndex, storeName, newValue) {
+    async function updateCorrectionQty(waveId, rowIndex, storeName, newValue) {
       const wave = mockSavedWaves.find(w => w.id === waveId);
       if (!wave || wave.converted) return;
       const row = wave.matrix[rowIndex];
       if (!row || !row.branchData) return;
       if (!row.branchData[storeName]) row.branchData[storeName] = { expected: 0, actual: 0 };
-      const oldActual = row.branchData[storeName].actual ?? row.branchData[storeName].expected ?? 0;
       row.branchData[storeName].actual = parseInt(newValue) || 0;
 
       // 重算 actualSum
@@ -3381,31 +3427,40 @@
       });
       row.actualSum = newSum;
 
-      // 更新 correction 差異
-      const diff = row.branchData[storeName].actual - (row.branchData[storeName].expected || 0);
-      if (!waveCorrections[waveId]) waveCorrections[waveId] = {};
-      if (!waveCorrections[waveId][row.id]) waveCorrections[waveId][row.id] = {};
+      // 更新 cache + Supabase
+      const expectedQty = row.branchData[storeName].expected || 0;
+      const actualQty = row.branchData[storeName].actual;
+      const diff = actualQty - expectedQty;
+      const productId = (row.productId || row.id).replace(/_.*$/, '');
+
+      if (!correctionCache[waveId]) correctionCache[waveId] = {};
+      if (!correctionCache[waveId][productId]) correctionCache[waveId][productId] = {};
+
       if (diff === 0) {
-        delete waveCorrections[waveId][row.id][storeName];
-      } else if (diff > 0) {
-        waveCorrections[waveId][row.id][storeName] = { diff, action: 'oversell' };
+        delete correctionCache[waveId][productId][storeName];
+        deleteBackorder(waveId, productId, storeName);
       } else {
-        const existing = waveCorrections[waveId][row.id][storeName];
-        waveCorrections[waveId][row.id][storeName] = { diff, action: existing ? existing.action : null };
+        const existing = correctionCache[waveId][productId][storeName];
+        const action = diff > 0 ? 'oversell' : (existing ? existing.action : 'pending');
+        correctionCache[waveId][productId][storeName] = { diff, action, expected_qty: expectedQty, actual_qty: actualQty };
+        upsertBackorder(waveId, productId, row.name, storeName, expectedQty, actualQty, action, '');
       }
 
-      saveMockSavedWaves(); saveWaveCorrections();
+      saveMockSavedWaves();
       refreshCorrectionPopup(waveId);
     }
 
-    function setCorrectionAction(waveId, productId, storeName, action) {
+    async function setCorrectionAction(waveId, productId, storeName, action) {
       const checkWave = mockSavedWaves.find(w => w.id === waveId);
       if (checkWave && checkWave.converted) return;
-      if (!waveCorrections[waveId]) waveCorrections[waveId] = {};
-      if (!waveCorrections[waveId][productId]) waveCorrections[waveId][productId] = {};
-      const existing = waveCorrections[waveId][productId][storeName];
-      waveCorrections[waveId][productId][storeName] = { diff: existing ? existing.diff : 0, action: action };
-      saveWaveCorrections();
+      productId = (productId || '').replace(/_.*$/, '');
+
+      if (!correctionCache[waveId]) correctionCache[waveId] = {};
+      if (!correctionCache[waveId][productId]) correctionCache[waveId][productId] = {};
+      const existing = correctionCache[waveId][productId][storeName] || {};
+      correctionCache[waveId][productId][storeName] = { ...existing, action };
+
+      patchBackorder(waveId, productId, storeName, { action });
       refreshCorrectionPopup(waveId);
     }
 
@@ -3425,7 +3480,7 @@
     }
 
     function confirmCorrection(waveId) {
-      const corr = waveCorrections[waveId];
+      const corr = correctionCache[waveId];
       let unhandled = 0;
       if (corr) {
         Object.values(corr).forEach(prod => Object.values(prod).forEach(s => {
@@ -3458,8 +3513,8 @@
         if (result.isConfirmed) {
           wave.matrix.splice(rowIndex, 1);
           // 清除該品項的修正紀錄
-          if (waveCorrections[waveId] && waveCorrections[waveId][row.id]) {
-            delete waveCorrections[waveId][row.id];
+          if (correctionCache[waveId] && correctionCache[waveId][row.id]) {
+            delete correctionCache[waveId][row.id];
           }
           // 重算 wave 總量
           wave.totalExpected = wave.matrix.reduce((s, r) => s + (r.expectedSum || 0), 0);
@@ -3467,12 +3522,12 @@
           if (wave.matrix.length === 0) {
             const idx = mockSavedWaves.indexOf(wave);
             if (idx !== -1) mockSavedWaves.splice(idx, 1);
-            saveMockSavedWaves(); saveWaveCorrections();
+            saveMockSavedWaves(); /* saveWaveCorrections removed */;
             openCorrectionWaveId = null;
             Swal.fire({ title: '揀貨單已刪除', text: `${waveId} 品項為空，已移除整張單。`, icon: 'info', timer: 1500, showConfirmButton: false });
             refreshHistoryTable();
           } else {
-            saveMockSavedWaves(); saveWaveCorrections();
+            saveMockSavedWaves(); /* saveWaveCorrections removed */;
             // 重新開啟修正面板
             openCorrectionPanel(waveId);
           }
@@ -3492,8 +3547,8 @@
         if (!res.isConfirmed) return;
         const idx = mockSavedWaves.findIndex(w => w.id === waveId);
         if (idx !== -1) mockSavedWaves.splice(idx, 1);
-        if (waveCorrections[waveId]) delete waveCorrections[waveId];
-        saveMockSavedWaves(); saveWaveCorrections();
+        if (correctionCache[waveId]) delete correctionCache[waveId];
+        saveMockSavedWaves(); /* saveWaveCorrections removed */;
         logActivity('刪除揀貨單', waveId, {});
         Swal.fire({ title: '已刪除', icon: 'success', timer: 1200, showConfirmButton: false });
         refreshHistoryTable();
@@ -3523,8 +3578,8 @@
         // 刪除揀貨單
         const idx = mockSavedWaves.findIndex(w => w.id === waveId);
         if (idx !== -1) mockSavedWaves.splice(idx, 1);
-        if (waveCorrections[waveId]) delete waveCorrections[waveId];
-        saveMockSavedWaves(); saveWaveCorrections();
+        if (correctionCache[waveId]) delete correctionCache[waveId];
+        saveMockSavedWaves(); /* saveWaveCorrections removed */;
         syncSalesOrdersToPortal();
         logActivity('刪除揀貨單與銷貨單', waveId, { deletedSOs: relatedSOs.length });
         Swal.fire({ title: '已刪除', html: `揀貨單及 ${relatedSOs.length} 張銷貨單已移除。`, icon: 'success', timer: 1500, showConfirmButton: false });
@@ -3648,7 +3703,7 @@
                 if (!branchBundles[bName]) branchBundles[bName] = [];
                 // 帶入修正數量備註
                 let note = `來自揀貨單 ${waveId}`;
-                const corrItem = waveCorrections[waveId] && waveCorrections[waveId][row.id] && waveCorrections[waveId][row.id][bName];
+                const corrItem = correctionCache[waveId] && correctionCache[waveId][row.id] && correctionCache[waveId][row.id][bName];
                 if (corrItem && corrItem.action === 'oversell') note += `｜超發 +${corrItem.diff} 請超賣`;
                 else if (corrItem && corrItem.action === 'pending') note += `｜少貨 ${corrItem.diff} 待補`;
                 else if (corrItem && corrItem.action === 'noRestock') note += `｜少貨 ${corrItem.diff} 不補`;
@@ -4609,7 +4664,7 @@
   function computeAnomalies() {
     const anomalies = [];
     mockSavedWaves.forEach(wave => {
-      const corr = waveCorrections[wave.id] || {};
+      const corr = correctionCache[wave.id] || {};
       wave.matrix.forEach(row => {
         const diff = row.actualSum - row.expectedSum;
         if (diff === 0) return;
