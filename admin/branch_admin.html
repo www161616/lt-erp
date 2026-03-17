@@ -3644,7 +3644,7 @@
                 const finalPrice = dbPrice ? (dbPrice.price_branch || dbPrice.price || 0) : (row.storePrice || row.price || 0);
                 const finalCost = dbPrice ? (dbPrice.cost || 0) : (row.cost || 0);
                 branchBundles[bName].push({
-                  product_id: row.id,
+                  product_id: row.productId || row.id.replace(/_.*$/, ''),
                   product_name: row.name,
                   expectedQty: data.expected || 0,
                   qty: qty,
@@ -3698,7 +3698,7 @@
               finalAmount: grand_total,
               note: `來自揀貨單 ${waveId}`,
               items: items.map(it => ({
-                productId: it.product_id,
+                productId: it.product_id.replace(/_.*$/, ''),
                 name: it.product_name,
                 expectedQty: it.expectedQty || it.qty,
                 qty: it.qty,
