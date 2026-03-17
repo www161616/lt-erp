@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>龍潭進銷存總倉 ERP 系統</title>
-  <script src="libs/sweetalert2.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js"></script>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
@@ -240,10 +240,6 @@
         <i class="fas fa-home"></i> 儀表板 <span id="calBadge" style="display:none;font-size:10px;background:var(--danger);color:white;padding:1px 6px;border-radius:10px;margin-left:4px;">0</span>
       </a>
 
-      <a class="nav-item" data-url="PendingReview.html" data-title="待審單據" style="border-left:3px solid #c05621; margin-bottom:4px;">
-        <i class="fas fa-clipboard-check"></i> 待審單據 <span id="pendingBadge" style="display:none;font-size:10px;background:var(--danger);color:white;padding:1px 6px;border-radius:10px;margin-left:4px;">0</span>
-      </a>
-
       <div class="nav-group-label" data-group="orders" onclick="toggleGroup(this)">開單作業 <span class="arrow">▾</span></div>
       <div class="nav-group-items" data-group="orders">
         <a class="nav-item" data-url="SalesOrder.html" data-title="開新銷貨單"><i class="fas fa-file-invoice"></i> 開新銷貨單</a>
@@ -343,14 +339,6 @@
                 </div>
               </div>
             </div>
-            <div class="cal-todo">
-              <div class="cal-right-title">待辦事項</div>
-              <div class="todo-list" id="todoList"></div>
-              <div class="todo-add">
-                <input type="text" id="todoNewText" placeholder="新增待辦..." style="font-size:13px;padding:6px 10px;border:1px solid var(--border);border-radius:4px;width:100%;outline:none;font-family:inherit;" onkeydown="if(event.key==='Enter')addTodo()">
-                <button class="cal-add-btn" onclick="addTodo()" style="margin-top:6px;">新增</button>
-              </div>
-            </div>
           </div>
         </div>
 
@@ -387,17 +375,6 @@
               <thead><tr><th>單號</th><th>客戶</th><th>未收金額</th><th>日期</th></tr></thead>
               <tbody id="unpaidList"><tr><td colspan="4" style="text-align:center;padding:20px"><div class="spinner"></div></td></tr></tbody>
             </table>
-          </div>
-        </div>
-
-        <!-- 待審單據提醒 -->
-        <div id="pendingAlert" style="display:none; background:linear-gradient(135deg,#fffbeb,#fef3c7); border:1px solid #fde68a; border-left:4px solid #f59e0b; border-radius:8px; padding:14px 20px; margin-bottom:15px; cursor:pointer; transition:0.2s;" onclick="loadPage('PendingReview.html','待審單據')" onmouseover="this.style.boxShadow='0 2px 8px rgba(245,158,11,0.2)'" onmouseout="this.style.boxShadow='none'">
-          <div style="display:flex; justify-content:space-between; align-items:center;">
-            <div>
-              <span style="font-size:16px; font-weight:bold; color:#92400e;">📋 有待審單據</span>
-              <span id="pendingAlertDetail" style="font-size:13px; color:#a16207; margin-left:10px;"></span>
-            </div>
-            <span style="font-size:13px; color:#92400e; font-weight:bold;">點擊審核 →</span>
           </div>
         </div>
 
@@ -605,10 +582,8 @@
 
       initDateTime();
       refreshDashboard();
-      checkPendingReview();
       // 從 Supabase 載入記事與待辦
       await loadCalEvents();
-      await loadTodos();
       calRender();
       updateCalBadge();
     }
@@ -653,7 +628,6 @@
         iframe.style.display = 'none';
         iframe.src = '';
         refreshDashboard();
-        checkPendingReview();
       } else {
         dashboard.style.display = 'none';
         iframe.style.display = 'block';
@@ -765,11 +739,12 @@
       const y=now.getFullYear(), m=String(now.getMonth()+1).padStart(2,'0');
       const firstDay=`${y}-${m}-01`;
       try{
+        const h = getHeaders();
         const [salesRes, purRes, arRes, pRes] = await Promise.all([
-          fetch(`${SB_URL}/sales_orders?order_date=gte.${firstDay}&select=id,customer_name,grand_total,payment_status,order_date&order=order_date.desc,id.desc`, {headers:HEADERS}),
-          fetch(`${SB_URL}/purchase_orders?order_date=gte.${firstDay}&select=grand_total`, {headers:HEADERS}),
-          fetch(`${SB_URL}/accounts_receivable?unpaid_amount=gt.0&select=unpaid_amount,order_id,customer_name,order_date`, {headers:HEADERS}),
-          fetch(`${SB_URL}/petty_cash?select=balance&order=id.desc&limit=1`, {headers:HEADERS})
+          fetch(`${SB_URL}/sales_orders?order_date=gte.${firstDay}&select=id,customer_name,grand_total,payment_status,order_date&order=order_date.desc,id.desc`, {headers:h}),
+          fetch(`${SB_URL}/purchase_orders?order_date=gte.${firstDay}&select=grand_total`, {headers:h}),
+          fetch(`${SB_URL}/accounts_receivable?unpaid_amount=gt.0&select=unpaid_amount,order_id,customer_name,order_date`, {headers:h}),
+          fetch(`${SB_URL}/petty_cash?select=balance&order=id.desc&limit=1`, {headers:h})
         ]);
 
         const sales = salesRes.ok ? await salesRes.json() : [];
@@ -814,47 +789,6 @@
       }
     }
 
-    // ===== 待審單據檢查 =====
-    async function checkPendingReview() {
-      try {
-        let salesCount = 0, purchaseCount = 0;
-        const [kvRes, ipRes] = await Promise.all([
-          fetch(`${SB_URL}/shared_kv?key=eq.portalSalesOrders&select=value`, { headers: getHeaders() }),
-          fetch(`${SB_URL}/internal_purchases?status=eq.待審核&select=id`, { headers: getHeaders() })
-        ]);
-        if (kvRes.ok) {
-          const kvData = await kvRes.json();
-          const allOrders = kvData.length > 0 ? (kvData[0].value || []) : [];
-          salesCount = allOrders.filter(o => o.status === 'pending' || o.status === 'confirmed').length;
-        }
-        if (ipRes.ok) {
-          const ipData = await ipRes.json();
-          purchaseCount = ipData.length;
-        }
-        const total = salesCount + purchaseCount;
-        // 更新 sidebar badge
-        const badge = document.getElementById('pendingBadge');
-        if (badge) {
-          badge.textContent = total;
-          badge.style.display = total > 0 ? '' : 'none';
-        }
-        // 更新儀表板提醒
-        const alert = document.getElementById('pendingAlert');
-        const detail = document.getElementById('pendingAlertDetail');
-        if (alert && detail) {
-          if (total > 0) {
-            let parts = [];
-            if (salesCount > 0) parts.push(`銷貨單 ${salesCount} 筆`);
-            if (purchaseCount > 0) parts.push(`進貨單 ${purchaseCount} 筆`);
-            detail.textContent = parts.join('、');
-            alert.style.display = '';
-          } else {
-            alert.style.display = 'none';
-          }
-        }
-      } catch(e) { console.error('checkPendingReview error:', e); }
-    }
-
     // ===== Calendar =====
     let calYear, calMonth, calSelectedDate=null;
     function getLocalDateStr(d){ return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); }
@@ -865,7 +799,6 @@
 
     // 記事/提醒 & 待辦：改用 Supabase 同步
     let calEventsCache = [];
-    let todosCache = [];
 
     async function loadCalEvents() {
       try {
@@ -981,57 +914,6 @@
       } catch(e) { console.error('刪除記事失敗', e); }
     }
 
-    // ===== Todos =====
-    async function loadTodos() {
-      try {
-        const res = await fetch(`${SB_URL}/todos?order=created_at.desc`, { headers: getHeaders() });
-        if (res.ok) todosCache = await res.json();
-      } catch(e) { console.error('載入待辦失敗', e); }
-      renderTodos();
-    }
-    function getTodos() { return todosCache; }
-    function saveTodos(list) { todosCache = list; renderTodos(); }
-
-    function renderTodos(){
-      const todos=getTodos();
-      if(!todos.length){document.getElementById('todoList').innerHTML='<div class="todo-empty">沒有待辦事項</div>';return;}
-      const sorted=[...todos].sort((a,b)=>a.done===b.done?0:a.done?1:-1);
-      document.getElementById('todoList').innerHTML=sorted.map(t=>`
-        <div class="todo-item ${t.done?'done':''}" onclick="toggleTodo(${t.id})">
-          <input type="checkbox" class="todo-chk" ${t.done?'checked':''} onclick="event.stopPropagation();toggleTodo(${t.id})">
-          <span class="todo-text">${t.text}</span>
-          <button class="todo-del" onclick="event.stopPropagation();delTodo(${t.id})" title="刪除">&times;</button>
-        </div>`).join('');
-    }
-
-    async function addTodo(){
-      const input=document.getElementById('todoNewText');
-      const text=input.value.trim();if(!text)return;
-      try {
-        await fetch(`${SB_URL}/todos`, {
-          method: 'POST', headers: { ...getHeaders(), 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-          body: JSON.stringify({ text, done: false })
-        });
-        await loadTodos();
-        input.value='';
-      } catch(e) { console.error('新增待辦失敗', e); }
-    }
-    async function toggleTodo(id){
-      const t=todosCache.find(x=>x.id===id);if(!t)return;
-      try {
-        await fetch(`${SB_URL}/todos?id=eq.${id}`, {
-          method: 'PATCH', headers: { ...getHeaders(), 'Content-Type': 'application/json' },
-          body: JSON.stringify({ done: !t.done })
-        });
-        await loadTodos();
-      } catch(e) { console.error('更新待辦失敗', e); }
-    }
-    async function delTodo(id){
-      try {
-        await fetch(`${SB_URL}/todos?id=eq.${id}`, { method: 'DELETE', headers: getHeaders() });
-        await loadTodos();
-      } catch(e) { console.error('刪除待辦失敗', e); }
-    }
 
     // ===== Init =====
     window.onload = function(){

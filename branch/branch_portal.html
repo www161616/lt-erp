@@ -1044,8 +1044,7 @@
       const allSO = JSON.parse(localStorage.getItem('portalSalesOrders') || '[]');
       portalOrders = allSO.filter(o => o.storeName === currentStore?.name);
 
-      // 進貨紀錄（各店自己的）
-      portalHistory = loadStoreData('history', []);
+      // 進貨紀錄（改由 Supabase sales_orders 查詢，initHistoryPage 時載入）
 
       // 包子饅頭叫貨（各店自己的）
       bunRecords = loadStoreData('bunRecords', []);
@@ -3156,73 +3155,120 @@ function submitReturnReport(orderId, itemIdx, data) {
 }
 
 // ============================
-// 所有進貨單
+// 所有進貨單（從 Supabase sales_orders + sales_details 查詢）
 // ============================
-// 進貨紀錄（各店獨立，由 initStoreData 從 localStorage 載入）
 let portalHistory = [];
+let historyPage = 1;
+const HISTORY_PER = 50;
+let historyCustomerId = null;
 
-function initHistoryPage() {
-  // 預設本月1號～月底
+async function findCustomerId() {
+  if (historyCustomerId) return historyCustomerId;
+  const storeName = currentStore?.name;
+  if (!storeName) return null;
+  try {
+    const res = await fetch(`${SB_URL}/customers?name=ilike.*${encodeURIComponent(storeName)}*&select=id,name&limit=1`, { headers: SB_HEADERS });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.length > 0) { historyCustomerId = data[0].id; return historyCustomerId; }
+    }
+  } catch(e) { console.error('findCustomerId error:', e); }
+  return null;
+}
+
+async function initHistoryPage() {
   const now = new Date();
   const y = now.getFullYear();
   const m = now.getMonth();
   const firstDay = `${y}-${String(m+1).padStart(2,'0')}-01`;
-  const lastDay = new Date(y, m+1, 0); // 月底
+  const lastDay = new Date(y, m+1, 0);
   const lastDayStr = `${y}-${String(m+1).padStart(2,'0')}-${String(lastDay.getDate()).padStart(2,'0')}`;
   document.getElementById('historyDateStart').value = firstDay;
   document.getElementById('historyDateEnd').value = lastDayStr;
-  renderHistoryPage();
+  historyPage = 1;
+  await loadHistoryFromDB();
 }
 
 function setHistoryRange(days) {
   const end = new Date();
   const start = new Date();
   start.setDate(end.getDate() - days);
-
-  // 格式化為 YYYY-MM-DD
   document.getElementById('historyDateEnd').value = end.toISOString().split('T')[0];
   document.getElementById('historyDateStart').value = start.toISOString().split('T')[0];
+  historyPage = 1;
+  loadHistoryFromDB();
+}
 
-  renderHistoryPage();
+async function loadHistoryFromDB() {
+  document.getElementById('historyTableBody').innerHTML = '<tr><td colspan="5" style="padding:24px; text-align:center; color:#9ca3af;">載入中...</td></tr>';
+  const custId = await findCustomerId();
+  if (!custId) {
+    document.getElementById('historyTableBody').innerHTML = '<tr><td colspan="5" style="padding:24px; text-align:center; color:#9ca3af;">找不到對應的客戶資料，請聯繫龍潭工作人員</td></tr>';
+    document.getElementById('historyFeeBar').style.display = 'none';
+    return;
+  }
+  const startDate = document.getElementById('historyDateStart').value;
+  const endDate = document.getElementById('historyDateEnd').value;
+  const kw = document.getElementById('historySearchKw').value.trim();
+  try {
+    let url = `${SB_URL}/sales_orders?customer_id=eq.${custId}&order=order_date.desc,id.desc`;
+    if (startDate) url += `&order_date=gte.${startDate}`;
+    if (endDate) url += `&order_date=lte.${endDate}`;
+    if (kw) url += `&or=(id.ilike.*${encodeURIComponent(kw)}*)`;
+    let all = [], offset = 0;
+    while (true) {
+      const res = await fetch(`${url}&limit=1000&offset=${offset}`, { headers: SB_HEADERS });
+      if (!res.ok) break;
+      const data = await res.json();
+      all = all.concat(data);
+      if (data.length < 1000) break;
+      offset += 1000;
+    }
+    portalHistory = all;
+    renderHistoryPage();
+  } catch(e) {
+    console.error('loadHistoryFromDB error:', e);
+    document.getElementById('historyTableBody').innerHTML = '<tr><td colspan="5" style="padding:24px; text-align:center; color:#c53030;">查詢失敗，請重試</td></tr>';
+  }
 }
 
 function renderHistoryPage() {
-  const startDate = document.getElementById('historyDateStart').value;
-  const endDate = document.getElementById('historyDateEnd').value;
-  const kw = document.getElementById('historySearchKw').value.trim().toLowerCase();
-
-  const filtered = portalHistory.filter(r => {
-    // 日期篩選
-    const dateMatch = (!startDate || r.date >= startDate) && (!endDate || r.date <= endDate);
-    // 關鍵字篩選 (單號 或 包含的商品名稱)
-    const kwMatch = !kw || r.id.toLowerCase().includes(kw) || r.items.some(i => i.name.toLowerCase().includes(kw));
-    return dateMatch && kwMatch;
-  });
-
+  const data = portalHistory;
+  const totalPages = Math.max(1, Math.ceil(data.length / HISTORY_PER));
+  if (historyPage > totalPages) historyPage = totalPages;
+  const start = (historyPage - 1) * HISTORY_PER;
+  const pageData = data.slice(start, start + HISTORY_PER);
   let html = '';
-  let historyTotal = 0;
+  let historyTotal = data.reduce((s, r) => s + (Number(r.grand_total) || 0), 0);
 
-  if (filtered.length === 0) {
+  if (data.length === 0) {
     html = `<tr><td colspan="5" style="padding:24px; text-align:center; color:#9ca3af;">查無符合條件的進貨單據</td></tr>`;
   } else {
-    filtered.forEach(r => {
-      const amt = (r.items || []).reduce((s, i) => s + (i.qty || 0) * ((i.unitPrice || i.price) || 0), 0);
-      historyTotal += amt;
-      const first = r.items[0];
-      let summary = first ? `${first.name} x${first.qty}` : '—';
-      if (r.items.length > 1) summary += ` <span style="color:#9ca3af; font-size:12px;">等 ${r.items.length} 樣</span>`;
-
+    pageData.forEach(r => {
+      const amt = Number(r.grand_total) || 0;
       html += `
         <tr style="border-bottom:1px solid #f3f4f6; cursor:pointer;" onclick="showHistoryDetail('${r.id}')">
           <td style="padding:10px 16px; font-weight:600; color:var(--primary);">${r.id}</td>
-          <td style="padding:10px 16px; color:#6b7280;">${r.date}</td>
-          <td style="padding:10px 16px; font-size:13px; color:#4b5563;">${summary}</td>
+          <td style="padding:10px 16px; color:#6b7280;">${r.order_date}</td>
+          <td style="padding:10px 16px; font-size:13px; color:#4b5563;">${r.note || ''}</td>
           <td style="padding:10px 16px; text-align:right; font-weight:700; color:#1f2937;">$${amt.toLocaleString()}</td>
           <td style="padding:10px 16px; text-align:center;">
             <button onclick="event.stopPropagation(); showHistoryDetail('${r.id}')" style="padding:4px 10px; background:#fff0f6; color:#be185d; border:1px solid #be185d; border-radius:4px; font-size:12px; cursor:pointer; font-family:inherit;">查看</button>
           </td>
         </tr>`;
     });
+  }
+
+  if (totalPages > 1) {
+    html += `<tr><td colspan="5" style="padding:10px 16px; text-align:center;">
+      <div style="display:flex; align-items:center; justify-content:center; gap:4px; flex-wrap:wrap;">
+        <span style="font-size:12px; color:#6b7280;">共 ${data.length} 筆，第 ${historyPage}/${totalPages} 頁</span>
+        <button onclick="historyGoPage(1)" style="padding:3px 8px; border:1px solid var(--border); border-radius:4px; cursor:pointer; font-size:12px; background:white;" ${historyPage===1?'disabled':''}>«</button>
+        <button onclick="historyGoPage(${historyPage-1})" style="padding:3px 8px; border:1px solid var(--border); border-radius:4px; cursor:pointer; font-size:12px; background:white;" ${historyPage===1?'disabled':''}>‹</button>
+        <button onclick="historyGoPage(${historyPage+1})" style="padding:3px 8px; border:1px solid var(--border); border-radius:4px; cursor:pointer; font-size:12px; background:white;" ${historyPage===totalPages?'disabled':''}>›</button>
+        <button onclick="historyGoPage(${totalPages})" style="padding:3px 8px; border:1px solid var(--border); border-radius:4px; cursor:pointer; font-size:12px; background:white;" ${historyPage===totalPages?'disabled':''}>»</button>
+      </div>
+    </td></tr>`;
   }
 
   document.getElementById('historyTableBody').innerHTML = html;
@@ -3247,55 +3293,64 @@ function renderHistoryPage() {
   }
 }
 
-function showHistoryDetail(orderId) {
-  const r = portalHistory.find(x => x.id === orderId);
-  if (!r) return;
+function historyGoPage(p) {
+  const totalPages = Math.max(1, Math.ceil(portalHistory.length / HISTORY_PER));
+  historyPage = Math.max(1, Math.min(p, totalPages));
+  renderHistoryPage();
+}
 
-  let rows = '';
-  let totalQty = 0, totalAmount = 0;
-  r.items.forEach(item => {
-    // 優先用 PRODUCT_DB 的分店價
-    let displayPrice = item.price || 0;
-    if (PRODUCT_DB.length > 0) {
-      const dbP = PRODUCT_DB.find(p => p.code === item.code);
-      if (dbP && dbP.price) displayPrice = dbP.price;
-    }
-    const subtotal = displayPrice * (item.qty || 0);
-    totalQty += item.qty || 0;
-    totalAmount += subtotal;
-    rows += `<tr style="border-bottom:1px solid #f3f4f6;">
-      <td style="padding:8px 12px; color:#6b7280;">${item.code}</td>
-      <td style="padding:8px 12px; font-weight:500;">${item.name}</td>
-      <td style="padding:8px 12px; text-align:right; color:#6b7280;">$${displayPrice.toLocaleString()}</td>
-      <td style="padding:8px 12px; text-align:center; font-weight:700; color:#be185d;">${item.qty}</td>
-      <td style="padding:8px 12px; text-align:right; font-weight:700;">$${subtotal.toLocaleString()}</td>
-    </tr>`;
-  });
+async function showHistoryDetail(orderId) {
+  Swal.fire({ title: '載入中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+  try {
+    const res = await fetch(`${SB_URL}/sales_details?order_id=eq.${orderId}&order=id.asc`, { headers: SB_HEADERS });
+    if (!res.ok) throw new Error('查詢失敗');
+    const items = await res.json();
+    const order = portalHistory.find(x => x.id === orderId);
 
-  Swal.fire({
-    title: `📋 ${r.id}`,
-    html: `<div style="text-align:left; font-size:13px; color:#6b7280; margin-bottom:10px;">進貨日期：${r.date}</div>
-      <div style="max-height:50vh; overflow-y:auto;">
-      <table style="width:100%; border-collapse:collapse; font-size:13px;">
-        <thead><tr style="background:#f8f9fa;">
-          <th style="padding:8px 12px; text-align:left; border-bottom:2px solid #d1d5db;">編號</th>
-          <th style="padding:8px 12px; text-align:left; border-bottom:2px solid #d1d5db;">品名</th>
-          <th style="padding:8px 12px; text-align:right; border-bottom:2px solid #d1d5db;">單價</th>
-          <th style="padding:8px 12px; text-align:center; border-bottom:2px solid #d1d5db;">數量</th>
-          <th style="padding:8px 12px; text-align:right; border-bottom:2px solid #d1d5db;">小計</th>
-        </tr></thead>
-        <tbody>${rows}
-          <tr style="background:#fff0f6; font-weight:700; border-top:2px solid #d1d5db;">
-            <td colspan="3" style="padding:8px 12px; text-align:right;">總計</td>
-            <td style="padding:8px 12px; text-align:center; color:#be185d;">${totalQty}</td>
-            <td style="padding:8px 12px; text-align:right; color:#be185d;">$${totalAmount.toLocaleString()}</td>
-          </tr>
-        </tbody>
-      </table></div>`,
-    width: '650px',
-    showCloseButton: true,
-    showConfirmButton: false,
-  });
+    let rows = '';
+    let totalQty = 0, totalAmount = 0;
+    items.forEach(item => {
+      const price = Number(item.unit_price) || 0;
+      const qty = Number(item.qty) || 0;
+      const subtotal = Number(item.subtotal) || (price * qty);
+      totalQty += qty;
+      totalAmount += subtotal;
+      rows += `<tr style="border-bottom:1px solid #f3f4f6;">
+        <td style="padding:8px 12px; color:#6b7280; font-family:monospace; font-size:12px;">${item.product_id}</td>
+        <td style="padding:8px 12px; font-weight:500;">${item.product_name}</td>
+        <td style="padding:8px 12px; text-align:right; color:#6b7280;">$${price.toLocaleString()}</td>
+        <td style="padding:8px 12px; text-align:center; font-weight:700; color:#be185d;">${qty}</td>
+        <td style="padding:8px 12px; text-align:right; font-weight:700;">$${subtotal.toLocaleString()}</td>
+      </tr>`;
+    });
+
+    Swal.fire({
+      title: `📋 ${orderId}`,
+      html: `<div style="text-align:left; font-size:13px; color:#6b7280; margin-bottom:10px;">進貨日期：${order ? order.order_date : ''}</div>
+        <div style="max-height:50vh; overflow-y:auto;">
+        <table style="width:100%; border-collapse:collapse; font-size:13px;">
+          <thead><tr style="background:#f8f9fa;">
+            <th style="padding:8px 12px; text-align:left; border-bottom:2px solid #d1d5db;">編號</th>
+            <th style="padding:8px 12px; text-align:left; border-bottom:2px solid #d1d5db;">品名</th>
+            <th style="padding:8px 12px; text-align:right; border-bottom:2px solid #d1d5db;">單價</th>
+            <th style="padding:8px 12px; text-align:center; border-bottom:2px solid #d1d5db;">數量</th>
+            <th style="padding:8px 12px; text-align:right; border-bottom:2px solid #d1d5db;">小計</th>
+          </tr></thead>
+          <tbody>${rows}
+            <tr style="background:#fff0f6; font-weight:700; border-top:2px solid #d1d5db;">
+              <td colspan="3" style="padding:8px 12px; text-align:right;">總計</td>
+              <td style="padding:8px 12px; text-align:center; color:#be185d;">${totalQty}</td>
+              <td style="padding:8px 12px; text-align:right; color:#be185d;">$${totalAmount.toLocaleString()}</td>
+            </tr>
+          </tbody>
+        </table></div>`,
+      width: '650px',
+      showCloseButton: true,
+      showConfirmButton: false,
+    });
+  } catch(e) {
+    Swal.fire('錯誤', '查詢明細失敗：' + e.message, 'error');
+  }
 }
 
 

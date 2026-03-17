@@ -86,7 +86,12 @@
       <input type="text" id="searchInput" placeholder="搜尋商品編號或名稱..." oninput="filterTable()">
       <button class="btn btn-secondary" onclick="fetchProducts()"><i class="fas fa-sync-alt"></i> 重新整理</button>
     </div>
-    <a href="ProductForm.html" onclick="event.preventDefault(); if(window.parent&&window.parent.loadPage) window.parent.loadPage('ProductForm.html','新增商品'); else window.location.href='ProductForm.html';" class="btn"><i class="fas fa-plus"></i> 新增商品</a>
+    <div style="display:flex;gap:8px;">
+      <button class="btn btn-secondary" onclick="exportProducts()"><i class="fas fa-file-excel"></i> 匯出 Excel</button>
+      <button class="btn btn-warning" onclick="document.getElementById('importFile').click()"><i class="fas fa-file-import"></i> 匯入價格</button>
+      <input type="file" id="importFile" accept=".xlsx,.xls" style="display:none" onchange="importPrices(this)">
+      <a href="ProductForm.html" onclick="event.preventDefault(); if(window.parent&&window.parent.loadPage) window.parent.loadPage('ProductForm.html','新增商品'); else window.location.href='ProductForm.html';" class="btn"><i class="fas fa-plus"></i> 新增商品</a>
+    </div>
   </div>
 
   <!-- 批次操作列（勾選後顯示） -->
@@ -480,6 +485,187 @@
       if (p) p.status = newStatus;
       filterTable();
     } catch (err) { Swal.fire('錯誤', err.message, 'error'); }
+  }
+
+  // ========== 10. 匯入價格 ==========
+  async function importPrices(input) {
+    const file = input.files[0];
+    if (!file) return;
+    input.value = '';
+
+    // Load ExcelJS
+    if (typeof ExcelJS === 'undefined') {
+      const s = document.createElement('script');
+      s.src = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
+      document.head.appendChild(s);
+      await new Promise(r => s.onload = r);
+    }
+
+    Swal.fire({ title: '讀取 Excel 中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+    try {
+      const buf = await file.arrayBuffer();
+      const wb = new ExcelJS.Workbook();
+      await wb.xlsx.load(buf);
+      const ws = wb.worksheets[0];
+
+      // 找欄位位置（by header name）
+      const headerRow = ws.getRow(1);
+      let colId = -1, colBranch = -1, colCost = -1;
+      headerRow.eachCell((cell, colNum) => {
+        const v = String(cell.value || '').trim();
+        if (v === '商品編號') colId = colNum;
+        else if (v === '分店價') colBranch = colNum;
+        else if (v === '成本') colCost = colNum;
+      });
+
+      if (colId < 0) { Swal.fire('錯誤', '找不到「商品編號」欄位', 'error'); return; }
+      if (colBranch < 0 && colCost < 0) { Swal.fire('錯誤', '找不到「分店價」或「成本」欄位', 'error'); return; }
+
+      // 讀取 Excel 資料
+      const importData = {};
+      ws.eachRow((row, rowNum) => {
+        if (rowNum <= 1) return;
+        const pid = String(row.getCell(colId).value || '').trim();
+        if (!pid) return;
+        const branch = colBranch > 0 ? Number(row.getCell(colBranch).value) || 0 : null;
+        const cost = colCost > 0 ? Number(row.getCell(colCost).value) || 0 : null;
+        importData[pid] = { branch, cost };
+      });
+
+      const importCount = Object.keys(importData).length;
+
+      // 比對現有商品
+      const existingIds = new Set(allProducts.map(p => p.id));
+      const matched = [];
+      const notFound = [];
+
+      for (const [pid, vals] of Object.entries(importData)) {
+        if (existingIds.has(pid)) {
+          const existing = allProducts.find(p => p.id === pid);
+          const changes = {};
+          if (vals.branch !== null && vals.branch !== Number(existing.price_branch ?? 0)) changes.price_branch = vals.branch;
+          if (vals.cost !== null && vals.cost !== Number(existing.cost ?? 0)) changes.cost = vals.cost;
+          if (Object.keys(changes).length > 0) matched.push({ id: pid, name: existing.name, changes, old: { price_branch: existing.price_branch || 0, cost: existing.cost || 0 } });
+        } else {
+          notFound.push(pid);
+        }
+      }
+
+      Swal.close();
+
+      // 預覽確認
+      let html = `<div style="text-align:left;font-size:13px;max-height:400px;overflow-y:auto;">`;
+      html += `<p>Excel 共 <b>${importCount}</b> 筆，比對到系統商品中有 <b>${matched.length}</b> 筆需更新</p>`;
+      if (notFound.length > 0) html += `<p style="color:#b7791f;">⚠ ${notFound.length} 筆商品編號在系統中不存在（略過）</p>`;
+      if (matched.length > 0) {
+        html += `<table style="width:100%;border-collapse:collapse;margin-top:8px;font-size:12px;">
+          <tr style="background:#f1f5f9;"><th style="padding:4px 6px;border:1px solid #ddd;">商品編號</th><th style="padding:4px 6px;border:1px solid #ddd;">商品名稱</th><th style="padding:4px 6px;border:1px solid #ddd;">變更</th></tr>`;
+        matched.slice(0, 50).forEach(m => {
+          const parts = [];
+          if (m.changes.price_branch !== undefined) parts.push(`分店價: ${m.old.price_branch}→${m.changes.price_branch}`);
+          if (m.changes.cost !== undefined) parts.push(`成本: ${m.old.cost}→${m.changes.cost}`);
+          html += `<tr><td style="padding:3px 6px;border:1px solid #ddd;">${m.id}</td><td style="padding:3px 6px;border:1px solid #ddd;">${m.name || ''}</td><td style="padding:3px 6px;border:1px solid #ddd;">${parts.join('、')}</td></tr>`;
+        });
+        if (matched.length > 50) html += `<tr><td colspan="3" style="padding:4px 6px;border:1px solid #ddd;text-align:center;color:#666;">... 還有 ${matched.length - 50} 筆 ...</td></tr>`;
+        html += `</table>`;
+      }
+      html += `</div>`;
+
+      if (matched.length === 0) {
+        Swal.fire('無需更新', '所有商品的分店價和成本都已相同', 'info');
+        return;
+      }
+
+      const confirm = await Swal.fire({
+        title: `確認更新 ${matched.length} 筆商品？`,
+        html,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: '確認更新',
+        cancelButtonText: '取消',
+        width: 700
+      });
+
+      if (!confirm.isConfirmed) return;
+
+      // 批次更新（每 50 筆一批）
+      Swal.fire({ title: '更新中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+      let updated = 0, failed = 0;
+      const batchSize = 50;
+      for (let i = 0; i < matched.length; i += batchSize) {
+        const batch = matched.slice(i, i + batchSize);
+        const promises = batch.map(m =>
+          fetch(`${SB_URL}/products?id=eq.${encodeURIComponent(m.id)}`, {
+            method: 'PATCH',
+            headers: { ...HEADERS, 'Prefer': 'return=minimal' },
+            body: JSON.stringify(m.changes)
+          }).then(r => { if (r.ok) updated++; else failed++; })
+            .catch(() => failed++)
+        );
+        await Promise.all(promises);
+        Swal.update({ title: `更新中... ${Math.min(i + batchSize, matched.length)}/${matched.length}` });
+      }
+
+      await fetchProducts();
+      Swal.fire({
+        icon: failed ? 'warning' : 'success',
+        title: '匯入完成',
+        html: `成功更新 <b>${updated}</b> 筆` + (failed ? `<br>失敗 <b>${failed}</b> 筆` : '')
+      });
+    } catch (err) {
+      Swal.fire('錯誤', '讀取 Excel 失敗：' + err.message, 'error');
+    }
+  }
+
+  // ========== 11. 匯出 Excel ==========
+  async function exportProducts() {
+    if (!allProducts.length) { Swal.fire('提示', '沒有商品資料可匯出', 'info'); return; }
+    const script = document.createElement('script');
+    script.src = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
+    script.onload = async () => {
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('商品清單');
+
+      // 表頭
+      const headers = ['商品編號','類別','商品名稱','規格','單位','售價','分店價','批發價','團購價','成本','供應商','狀態'];
+      const headerRow = ws.addRow(headers);
+      headerRow.eachCell(c => {
+        c.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
+        c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF475569' } };
+        c.alignment = { horizontal: 'center', vertical: 'middle' };
+        c.border = { bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } } };
+      });
+
+      // 資料
+      const sorted = [...allProducts].sort((a, b) => (a.id || '').localeCompare(b.id || ''));
+      sorted.forEach(p => {
+        const row = ws.addRow([
+          p.id || '', p.category || '', p.name || '', p.spec || '', p.unit || '',
+          p.price || 0, p.price_branch || 0, p.price_wholesale || 0, p.price_group || 0,
+          p.cost || 0, p.supplier || '', p.status || ''
+        ]);
+        // 數字欄位格式
+        for (let i = 6; i <= 10; i++) { row.getCell(i).numFmt = '#,##0'; }
+      });
+
+      // 欄寬
+      ws.columns = [
+        { width: 15 }, { width: 12 }, { width: 40 }, { width: 15 }, { width: 8 },
+        { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 }, { width: 10 },
+        { width: 15 }, { width: 8 }
+      ];
+
+      const buf = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = `商品清單_${new Date().toISOString().split('T')[0]}.xlsx`;
+      a.click();
+      Swal.fire({ icon: 'success', title: '匯出成功', text: `共 ${sorted.length} 筆商品`, timer: 2000, showConfirmButton: false });
+    };
+    document.head.appendChild(script);
   }
 
 </script>
