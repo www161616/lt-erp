@@ -339,8 +339,8 @@
                 style="background:#6b7280; color:white; border:none; padding:10px 16px; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit;">
                 🗑️ 清除數量
               </button>
-              <button onclick="submitOrder()"
-                style="background:#059669; color:white; border:none; padding:10px 20px; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit;">
+              <button id="submitOrderBtn" onclick="submitOrder()"
+                style="display:none; background:#059669; color:white; border:none; padding:10px 20px; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit; animation:pulse 1.5s infinite;">
                 🚀 送出資料
               </button>
             </div>
@@ -1462,6 +1462,7 @@
     // 手動修改單筆自動存檔
     // ============================
     let importMode = false; // 匯入模式：true=等按送出，false=自動存
+    let importedIds = []; // 這次匯入的商品 ID 列表
 
     function autoSaveSingleQty(el) {
       if (importMode) return; // 匯入模式下不自動存，等按送出
@@ -1678,7 +1679,12 @@
             reportDiv.style.borderColor = hasError ? '#fecaca' : '#bbf7d0';
 
 
-            if (matchCount > 0) importMode = true; // 匯入後進入匯入模式，等按送出
+            if (matchCount > 0) {
+              importMode = true;
+              importedIds = matchedDetails.map(m => m.csvId);
+              const submitBtn = document.getElementById('submitOrderBtn');
+              if (submitBtn) submitBtn.style.display = '';
+            }
 
             Swal.fire({
               title: matchCount > 0 ? '匯入完成' : '匯入失敗',
@@ -1712,29 +1718,40 @@
     // 送出訂單
     // ============================
     function submitOrder() {
+      if (!importMode) {
+        Swal.fire('提醒', '請先匯入樂樂報表，或直接手動修改數量（手動修改會自動儲存，不需按送出）。', 'info');
+        return;
+      }
+
       // 先把當頁輸入存進 cache
       document.querySelectorAll('.qty-input').forEach(input => {
         if (input.value) orderQtyCache[input.dataset.id] = input.value;
         else delete orderQtyCache[input.dataset.id];
       });
       saveQtyCache();
-      // 從 cache 收集所有頁的數量
+
+      // 只收集這次匯入的商品
       const orderList = JSON.parse(localStorage.getItem('branchOrderList') || '[]');
       const nameMap = {}, pidMap = {};
       orderList.forEach(p => { nameMap[p.id] = p.name; pidMap[p.id] = p.productId || p.id; });
+
       const items = [];
+      const importSet = new Set(importedIds);
       Object.entries(orderQtyCache).forEach(([id, val]) => {
         const qty = parseInt(val);
-        if (qty > 0) items.push({ id, productId: pidMap[id] || id, name: nameMap[id] || id, qty });
+        const pid = pidMap[id] || id;
+        if (qty > 0 && importSet.has(pid)) {
+          items.push({ id, productId: pid, name: nameMap[id] || id, qty });
+        }
       });
+
       if (items.length === 0) {
-        Swal.fire('提醒', '請至少填寫一項商品數量', 'warning');
+        Swal.fire('提醒', '沒有匯入的商品需要送出', 'warning');
         return;
       }
 
       const storeName = currentStore?.name || '未知';
 
-      // 直接顯示本次填的商品清單
       let tableHtml = `
         <div style="text-align:left; margin-top:8px;">
           <div style="max-height:50vh; overflow-y:auto;">
@@ -1760,13 +1777,13 @@
           </table>
           </div>
           <div style="margin-top:12px; font-size:13px; color:#6b7280; text-align:right;">
-            共 ${items.length} 項商品
+            本次匯入共 ${items.length} 項商品
           </div>
         </div>
       `;
 
       Swal.fire({
-        title: '請確認訂貨內容',
+        title: '請確認匯入的訂貨內容',
         html: tableHtml,
         icon: 'question',
         showCancelButton: true,
@@ -1788,6 +1805,9 @@
 
           orderDirty = false;
           importMode = false;
+          importedIds = [];
+          const submitBtn = document.getElementById('submitOrderBtn');
+          if (submitBtn) submitBtn.style.display = 'none';
           Swal.fire({
             icon: 'success',
             title: '已送出！',
