@@ -875,7 +875,10 @@
     <select id="billingMonthSelect" onchange="renderBillingPage()"
       style="padding:8px 14px; border:1.5px solid var(--border); border-radius:6px; font-size:14px; font-family:inherit; min-width:150px;">
     </select>
-    <div style="margin-left:auto; font-size:13px; color:#9ca3af;">總倉出貨查詢</div>
+    <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
+      <button onclick="printBilling()" style="padding:8px 14px; background:#0e7490; color:white; border:none; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;">🖨️ 列印</button>
+      <button onclick="exportBillingExcel()" style="padding:8px 14px; background:#047857; color:white; border:none; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;">📥 匯出Excel</button>
+    </div>
   </div>
 
   <!-- 帳款總覽卡片 -->
@@ -3278,6 +3281,118 @@ function showBillingDetail(orderId) {
     </div>`;
 
   document.getElementById('billingDetailInner').innerHTML = html;
+}
+
+function printBilling() {
+  const month = document.getElementById('billingMonthSelect').value;
+  const filtered = portalOrders.filter(r => r.createdAt.startsWith(month));
+  if (filtered.length === 0) { Swal.fire('提醒', '本月無進貨紀錄', 'info'); return; }
+  const storeName = currentStore?.name || '';
+  const today = new Date();
+  const dateStr = `${today.getFullYear()}/${String(today.getMonth()+1).padStart(2,'0')}/${String(today.getDate()).padStart(2,'0')}`;
+
+  // 收集所有商品明細（合併同商品）
+  const merged = {};
+  filtered.forEach(r => {
+    (r.items || []).forEach(item => {
+      const key = item.productId || item.name;
+      if (!merged[key]) merged[key] = { name: item.name, qty: 0 };
+      const eq = item.returnStatus === 'received' ? item.qty - (item.adminReturnQty||0)
+               : item.returnStatus === 'waived' ? item.qty - item.returnQty
+               : item.qty;
+      merged[key].qty += eq;
+    });
+  });
+  const items = Object.values(merged).filter(i => i.qty > 0).sort((a, b) => a.name.localeCompare(b.name));
+
+  const rows = items.map(i =>
+    `<tr><td style="border-bottom:1px dashed #ccc; padding:4px 0; font-size:15px;">${i.name}</td><td style="border-bottom:1px dashed #ccc; padding:4px 0; text-align:right; font-size:16px; font-weight:bold;">${i.qty}</td></tr>`
+  ).join('');
+
+  const win = window.open('', '_blank', 'width=350,height=600');
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <style>
+    @page { margin: 2mm; size: 80mm auto; }
+    body { font-family: 'Microsoft JhengHei', sans-serif; font-size: 14px; width: 76mm; margin: 0; padding: 4px; }
+    h2 { text-align:center; font-size:18px; font-weight:bold; margin:0 0 4px; letter-spacing:4px; }
+    .info { font-size:14px; margin-bottom:6px; line-height:1.8; }
+    table { width:100%; border-collapse:collapse; }
+    th { border-bottom:2px solid #000; padding:4px 0; font-size:14px; }
+    .total { margin-top:6px; text-align:right; font-size:16px; font-weight:bold; border-top:2px solid #000; padding-top:4px; }
+    .no-print { position:fixed; top:8px; right:8px; z-index:99; }
+    .no-print button { padding:8px 16px; font-size:14px; border:none; border-radius:6px; cursor:pointer; font-weight:bold; margin-left:6px; }
+    @media print { .no-print { display:none; } }
+  </style></head><body>
+  <div class="no-print">
+    <button onclick="window.print()" style="background:#0e7490; color:white;">🖨️ 列印</button>
+    <button onclick="window.close()" style="background:#e2e8f0; color:#333;">✕ 關閉</button>
+  </div>
+  <h2>${storeName} 進貨單</h2>
+  <div class="info">月份：<b>${month.replace('/', '年')}月</b>　列印：${dateStr}</div>
+  <table>
+    <thead><tr><th style="text-align:left;">品名</th><th style="text-align:right;">數量</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <div class="total">共 ${items.length} 項，${items.reduce((s,i) => s + i.qty, 0)} 件</div>
+  </body></html>`);
+  win.document.close();
+}
+
+async function exportBillingExcel() {
+  const month = document.getElementById('billingMonthSelect').value;
+  const filtered = portalOrders.filter(r => r.createdAt.startsWith(month));
+  if (filtered.length === 0) { Swal.fire('提醒', '本月無進貨紀錄', 'info'); return; }
+  const storeName = currentStore?.name || '';
+
+  // Load ExcelJS
+  if (typeof ExcelJS === 'undefined') {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
+    document.head.appendChild(s);
+    await new Promise(r => s.onload = r);
+  }
+
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('進貨明細');
+
+  // Title
+  ws.mergeCells('A1:F1');
+  const titleCell = ws.getCell('A1');
+  titleCell.value = `${storeName} — ${month.replace('/', '年')}月 進貨明細`;
+  titleCell.font = { size: 14, bold: true };
+  titleCell.alignment = { horizontal: 'center' };
+
+  // Headers
+  const headers = ['日期', '單號', '商品編號', '商品名稱', '數量', '單價'];
+  const headerRow = ws.addRow(headers);
+  headerRow.eachCell(c => {
+    c.font = { bold: true, size: 11 };
+    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF0F6' } };
+    c.border = { bottom: { style: 'thin' } };
+  });
+
+  // Data
+  filtered.forEach(r => {
+    const dateStr = r.createdAt.substring(0, 10).replace(/\//g, '-');
+    (r.items || []).forEach(item => {
+      const eq = item.returnStatus === 'received' ? item.qty - (item.adminReturnQty||0)
+               : item.returnStatus === 'waived' ? item.qty - item.returnQty
+               : item.qty;
+      if (eq <= 0) return;
+      const row = ws.addRow([dateStr, r.id, item.productId || '', item.name, eq, item.unitPrice || 0]);
+      row.getCell(5).numFmt = '#,##0';
+      row.getCell(6).numFmt = '#,##0';
+    });
+  });
+
+  ws.columns = [{ width: 12 }, { width: 18 }, { width: 14 }, { width: 35 }, { width: 8 }, { width: 10 }];
+
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${storeName}_進貨明細_${month.replace('/', '')}.xlsx`;
+  a.click();
 }
 
 function openReturnReport(orderId, itemIdx, type) {
