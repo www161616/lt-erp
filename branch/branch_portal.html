@@ -637,11 +637,16 @@
       style="padding:10px 22px; border:none; background:transparent; font-size:14px; font-weight:600; color:#6b7280; cursor:pointer; font-family:inherit; border-bottom:2px solid transparent; margin-bottom:-2px;">
       📜 歷史紀錄
     </button>
+    <button onclick="switchTfTab('settlement', this)" id="tfTab-settlement"
+      style="padding:10px 22px; border:none; background:transparent; font-size:14px; font-weight:600; color:#6b7280; cursor:pointer; font-family:inherit; border-bottom:2px solid transparent; margin-bottom:-2px;">
+      📊 月結對帳
+    </button>
   </div>
 
   <div id="tfPanel-mine"></div>
   <div id="tfPanel-incoming" style="display:none;"></div>
   <div id="tfPanel-history" style="display:none;"></div>
+  <div id="tfPanel-settlement" style="display:none;"></div>
 
 </div>
 
@@ -998,7 +1003,7 @@
 
     async function cloudLoadAll() {
       try {
-        const resp = await fetch(`${SB_URL}/shared_kv?key=in.("branchOrderList","branchOrders","branchDataList","branchTypeMap","portalAllRequests","portalTransferList","portalMutualAidBoard","portalTrackingData","portalBulletin","portalSalesOrders")`, { headers: SB_HEADERS });
+        const resp = await fetch(`${SB_URL}/shared_kv?key=in.("branchOrderList","branchOrders","branchDataList","branchTypeMap","portalAllRequests","portalMutualAidBoard","portalTrackingData","portalBulletin","portalSalesOrders")`, { headers: SB_HEADERS });
         if (resp.ok) {
           const rows = await resp.json();
           rows.forEach(r => {
@@ -1009,7 +1014,7 @@
     }
 
     // 登入後初始化各店自己的資料
-    function initStoreData() {
+    async function initStoreData() {
       // 流水帳
       ledgerList = loadStoreData('ledger', []);
       ledgerCounter = ledgerList.length > 0
@@ -1024,15 +1029,8 @@
         ? Math.max(...requestList.map(r => parseInt(r.id.replace('REQ','')) || 0)) + 1
         : 1;
 
-      // 店轉店（全店共用，但顯示時過濾自己相關的）
-      transferList = JSON.parse(localStorage.getItem('portalTransferList') || '[]');
-      transferList.forEach(t => {
-        if (typeof t.date === 'string') t.date = new Date(t.date);
-        if (typeof t.createdAt === 'string') t.createdAt = new Date(t.createdAt);
-      });
-      tfCounter = transferList.length > 0
-        ? Math.max(...transferList.map(t => parseInt(t.id.replace('TF','')) || 0)) + 1
-        : 1;
+      // 店轉店（從 Supabase 載入）
+      await loadTransferList();
 
       // 互助交流板
       aidBoard = JSON.parse(localStorage.getItem('portalMutualAidBoard') || '[]');
@@ -1062,10 +1060,8 @@
       const seenReqs = JSON.parse(localStorage.getItem('portal_seen_requests_' + myName) || '[]');
       const reqCount = allReqs.filter(r => r.storeId === myName && r.status === 'done' && !seenReqs.includes(r.id)).length;
 
-      // 店轉店：有新的轉入單尚未看過
-      const allTf = JSON.parse(localStorage.getItem('portalTransferList') || '[]');
-      const seenTf = JSON.parse(localStorage.getItem('portal_seen_transfer_' + myName) || '[]');
-      const tfCount = allTf.filter(t => t.toStore === myName && !seenTf.includes(t.id)).length;
+      // 店轉店：pending 的轉入單數量
+      const tfCount = transferList.filter(t => t.to_store === myName && t.status === 'pending').length;
 
       // 互助交流：本店發的貼文有新回應
       const allAid = JSON.parse(localStorage.getItem('portalMutualAidBoard') || '[]');
@@ -1115,9 +1111,7 @@
         });
         localStorage.setItem('portal_seen_aid_' + myName, JSON.stringify(seen));
       } else if (pageId === 'pageTransfer') {
-        const allTf = JSON.parse(localStorage.getItem('portalTransferList') || '[]');
-        const tfIds = allTf.filter(t => t.toStore === myName).map(t => t.id);
-        localStorage.setItem('portal_seen_transfer_' + myName, JSON.stringify(tfIds));
+        // 不需要額外存 seen，badge 直接看 status=pending 數量
       } else if (pageId === 'pageBulletin') {
         const allBul = JSON.parse(localStorage.getItem('portalBulletin') || '[]');
         localStorage.setItem('portal_seen_bulletin_' + myName, String(allBul.length));
@@ -1738,43 +1732,25 @@
         return;
       }
 
-      // 比對上次送出的資料，找出異動項目
       const storeName = currentStore?.name || '未知';
-      const lastSaved = JSON.parse(localStorage.getItem('branchOrders') || '{}');
-      const lastStoreOrders = lastSaved[storeName] || {};
-      const changedItems = items.filter(item => {
-        const oldQty = lastStoreOrders[item.id] || 0;
-        return item.qty !== oldQty;
-      });
-      const newItems = changedItems.filter(item => !lastStoreOrders[item.id]);
-      const modifiedItems = changedItems.filter(item => lastStoreOrders[item.id]);
 
-      // 產生確認清單 HTML（只顯示異動項目）
-      const showItems = changedItems.length > 0 ? changedItems : items;
-      const isFullList = changedItems.length === 0;
+      // 直接顯示本次填的商品清單
       let tableHtml = `
         <div style="text-align:left; margin-top:8px;">
-          ${!isFullList ? `<div style="font-size:13px; color:#059669; margin-bottom:8px; padding:6px 10px; background:#f0fdf4; border-radius:6px;">
-            ${newItems.length > 0 ? `新增 <b>${newItems.length}</b> 項` : ''}${newItems.length > 0 && modifiedItems.length > 0 ? '、' : ''}${modifiedItems.length > 0 ? `修改 <b>${modifiedItems.length}</b> 項` : ''}
-          </div>` : ''}
           <div style="max-height:50vh; overflow-y:auto;">
           <table style="width:100%; border-collapse:collapse; font-size:14px;">
             <thead>
               <tr style="background:#fff0f6; border-bottom:2px solid #fcd5e0;">
                 <th style="padding:8px 12px; color:#6b7280; font-weight:600; text-align:left;">商品名稱</th>
-                ${!isFullList ? '<th style="padding:8px 12px; color:#6b7280; font-weight:600; text-align:center;">原數量</th>' : ''}
-                <th style="padding:8px 12px; color:#6b7280; font-weight:600; text-align:center;">${isFullList ? '數量' : '新數量'}</th>
+                <th style="padding:8px 12px; color:#6b7280; font-weight:600; text-align:center;">數量</th>
               </tr>
             </thead>
             <tbody>
       `;
-      showItems.forEach(item => {
-        const oldQty = lastStoreOrders[item.id] || 0;
-        const isNew = !lastStoreOrders[item.id];
+      items.forEach(item => {
         tableHtml += `
-          <tr style="border-bottom:1px solid #f3f4f6; ${isNew ? 'background:#f0fdf4;' : ''}">
-            <td style="padding:8px 12px; font-weight:500;">${item.name}${isNew ? ' <span style="color:#059669; font-size:11px;">新增</span>' : ''}</td>
-            ${!isFullList ? `<td style="padding:8px 12px; text-align:center; color:#9ca3af;">${oldQty}</td>` : ''}
+          <tr style="border-bottom:1px solid #f3f4f6;">
+            <td style="padding:8px 12px; font-weight:500;">${item.name}</td>
             <td style="padding:8px 12px; text-align:center; font-weight:700; color:#be185d;">${item.qty}</td>
           </tr>
         `;
@@ -1784,13 +1760,13 @@
           </table>
           </div>
           <div style="margin-top:12px; font-size:13px; color:#6b7280; text-align:right;">
-            ${isFullList ? `共 ${items.length} 項商品` : `異動 ${changedItems.length} 項（總計 ${items.length} 項）`}
+            共 ${items.length} 項商品
           </div>
         </div>
       `;
 
       Swal.fire({
-        title: isFullList ? '請確認訂貨內容' : '請確認修改內容',
+        title: '請確認訂貨內容',
         html: tableHtml,
         icon: 'question',
         showCancelButton: true,
@@ -1801,26 +1777,21 @@
         width: '560px',
       }).then(result => {
         if (result.isConfirmed) {
-          // 儲存訂單至 localStorage（供開團總表讀取）
           const saved = JSON.parse(localStorage.getItem('branchOrders') || '{}');
           if (!saved[storeName]) saved[storeName] = {};
           items.forEach(item => { saved[storeName][item.id] = item.qty; });
           localStorage.setItem('branchOrders', JSON.stringify(saved));
           cloudSave('branchOrders');
 
-          // 同步更新 cache
           items.forEach(item => { orderQtyCache[item.id] = String(item.qty); });
           saveQtyCache();
 
           orderDirty = false;
-          importMode = false; // 送出後退出匯入模式，恢復自動存
-          const msg = isFullList
-            ? `共 <b>${items.length}</b> 項商品已送出`
-            : `${newItems.length > 0 ? '新增 <b>' + newItems.length + '</b> 項' : ''}${newItems.length > 0 && modifiedItems.length > 0 ? '、' : ''}${modifiedItems.length > 0 ? '修改 <b>' + modifiedItems.length + '</b> 項' : ''}`;
+          importMode = false;
           Swal.fire({
             icon: 'success',
             title: '已送出！',
-            html: msg + '，龍潭總倉已收到',
+            html: `共 <b>${items.length}</b> 項商品已送出，龍潭總倉已收到`,
             confirmButtonColor: '#be185d'
           });
         }
@@ -1867,8 +1838,7 @@
           const allReqs = JSON.parse(localStorage.getItem('portalAllRequests') || '[]');
           allReqs.forEach(r => { if (typeof r.createdAt === 'string') r.createdAt = new Date(r.createdAt); });
           requestList = allReqs;
-          transferList = JSON.parse(localStorage.getItem('portalTransferList') || '[]');
-          transferList.forEach(t => { if (typeof t.date === 'string') t.date = new Date(t.date); if (typeof t.createdAt === 'string') t.createdAt = new Date(t.createdAt); });
+          // transferList 從 Supabase 載入（在 initTransferPage 裡呼叫 loadTransferList）
           aidBoard = JSON.parse(localStorage.getItem('portalMutualAidBoard') || '[]');
         }
         if (pageId === 'pageOrder') renderOrderPage();
@@ -2465,11 +2435,26 @@ function matchBranchName(storeName) {
 }
 
 let transferList = [];
-let tfCounter = 1;
 let currentTfTab = 'mine';
+
+async function loadTransferList() {
+  const store = currentStore?.name;
+  if (!store) { transferList = []; return; }
+  try {
+    const res = await fetch(`${SB_URL}/transfer_orders?or=(from_store.eq.${encodeURIComponent(store)},to_store.eq.${encodeURIComponent(store)})&order=created_at.desc`, { headers: SB_HEADERS });
+    if (!res.ok) { transferList = []; return; }
+    const orders = await res.json();
+    if (!orders.length) { transferList = []; return; }
+    const ids = orders.map(o => '"'+o.id+'"').join(',');
+    const itemRes = await fetch(`${SB_URL}/transfer_items?transfer_id=in.(${ids})`, { headers: SB_HEADERS });
+    const allItems = itemRes.ok ? await itemRes.json() : [];
+    transferList = orders.map(o => ({ ...o, items: allItems.filter(i => i.transfer_id === o.id) }));
+  } catch(e) { console.error('loadTransferList error:', e); transferList = []; }
+}
 let tfItems = [{ code: '', name: '', qty: '', price: 0 }];
 
-function initTransferPage() {
+async function initTransferPage() {
+  await loadTransferList();
   // 填充轉出/轉入下拉
   const allStores = TF_STORES.map(s => `<option value="${s.id}">${s.name}</option>`).join('');
   // 轉出 = 自己，直接顯示不可選
@@ -2611,7 +2596,20 @@ function removeTfItem(idx) {
   renderTfItems();
 }
 
-function submitTransfer() {
+async function generateTfId() {
+  const today = new Date();
+  const dateStr = today.getFullYear().toString() + String(today.getMonth()+1).padStart(2,'0') + String(today.getDate()).padStart(2,'0');
+  const prefix = 'TF' + dateStr + '-';
+  try {
+    const res = await fetch(`${SB_URL}/transfer_orders?id=like.${prefix}*&select=id&order=id.desc&limit=1`, { headers: SB_HEADERS });
+    const rows = await res.json();
+    if (rows.length === 0) return prefix + '001';
+    const seq = parseInt(rows[0].id.split('-')[1]) + 1;
+    return prefix + String(seq).padStart(3,'0');
+  } catch(e) { return prefix + '001'; }
+}
+
+async function submitTransfer() {
   const fromStore = currentStore?.name;
   const toStore   = document.getElementById('tfTo').value;
   const note      = document.getElementById('tfNote').value.trim();
@@ -2619,30 +2617,44 @@ function submitTransfer() {
   if (!tempNote) { Swal.fire('提醒', '請選擇整單溫層（冷凍／冷藏／常溫）', 'warning'); return; }
   const validItems = tfItems.filter(i => i.name.trim() && parseInt(i.qty) > 0);
   if (validItems.length === 0) { Swal.fire('提醒', '請至少填寫一項商品', 'warning'); return; }
-  const newTf = {
-    id: 'TF' + String(tfCounter++).padStart(3,'0'),
-    fromStore, toStore,
-    items: validItems.map(i => ({ code: i.code.trim(), name: i.name.trim(), qty: parseInt(i.qty), temp: i.temp||'', price: i.price||0, note: i.note||'' })),
-    note, tempNote, date: new Date(), confirmed: false, adminStatus: 'pending', warehouseNote: '', createdAt: new Date()
-  };
-  transferList.unshift(newTf);
-  localStorage.setItem('portalTransferList', JSON.stringify(transferList));
-  cloudSave('portalTransferList');
+
+  const tfId = await generateTfId();
+
+  // 建主單
+  const orderRes = await fetch(`${SB_URL}/transfer_orders`, {
+    method: 'POST',
+    headers: { ...SB_HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+    body: JSON.stringify({ id: tfId, from_store: fromStore, to_store: toStore, status: 'pending', admin_status: 'pending', temp_note: tempNote, note: note })
+  });
+  if (!orderRes.ok) { Swal.fire('建立失敗', await orderRes.text(), 'error'); return; }
+
+  // 建明細
+  const items = validItems.map(i => ({
+    transfer_id: tfId, product_code: i.code.trim(), product_name: i.name.trim(),
+    temp: i.temp||'', qty: parseInt(i.qty), price: i.price||0, amount: parseInt(i.qty) * (i.price||0), note: i.note||''
+  }));
+  const itemRes = await fetch(`${SB_URL}/transfer_items`, {
+    method: 'POST',
+    headers: { ...SB_HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+    body: JSON.stringify(items)
+  });
+  if (!itemRes.ok) { Swal.fire('明細建立失敗', await itemRes.text(), 'error'); return; }
+
   Swal.fire({
-    icon: 'success', title: '登記成功！', html: `單號 <b>${newTf.id}</b><br>是否立即列印轉貨單？`,
+    icon: 'success', title: '登記成功！', html: `單號 <b>${tfId}</b><br>是否立即列印轉貨單？`,
     showCancelButton: true, confirmButtonText: '🖨️ 列印', cancelButtonText: '稍後再說', confirmButtonColor: '#be185d'
   }).then(result => {
-    if (result.isConfirmed) printTransfer(newTf.id);
+    if (result.isConfirmed) printTransfer(tfId);
     document.getElementById('tfNote').value = '';
     tfItems = [{ code: '', name: '', qty: '', price: 0 }];
     renderTfItems();
-    switchTfTab('mine', document.getElementById('tfTab-mine'));
+    loadTransferList().then(() => switchTfTab('mine', document.getElementById('tfTab-mine')));
   });
 }
 
 function switchTfTab(tab, btn) {
   currentTfTab = tab;
-  ['mine','incoming','history'].forEach(t => {
+  ['mine','incoming','history','settlement'].forEach(t => {
     const el = document.getElementById('tfTab-' + t);
     const isActive = t === tab;
     el.style.color = isActive ? 'var(--primary)' : '#6b7280';
@@ -2658,44 +2670,35 @@ function getStoreName(id) {
 }
 
 function renderTransferPage() {
-  // 每次渲染重新讀取，確保拿到總倉最新狀態
-  const freshTf = JSON.parse(localStorage.getItem('portalTransferList') || '[]');
-  freshTf.forEach(t => {
-    if (typeof t.date === 'string') t.date = new Date(t.date);
-    if (typeof t.createdAt === 'string') t.createdAt = new Date(t.createdAt);
-  });
-  transferList = freshTf;
-
   const now = new Date();
   const myName = currentStore?.name;
 
-  // 狀態標籤（配合總倉審核流程）
   const adminStatusLabel = { pending:'⏳ 待總倉審核', arrived:'📦 已到總倉', shipped:'🚚 已配送', received:'✅ 已收到' };
   const adminStatusColor = { pending:'#be185d', arrived:'#2563eb', shipped:'#047857', received:'#475569' };
   const adminStatusBg    = { pending:'#fce7f3', arrived:'#dbeafe', shipped:'#d1fae5', received:'#f3f4f6' };
 
+  function tfDateStr(t) { return new Date(t.created_at).toLocaleString('zh-TW', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }); }
+  function tfItemSummary(t) { return (t.items||[]).map(i => `${i.product_name} x${i.qty}${i.price ? ' ($'+i.price+')' : ''}`).join('、'); }
+  function tfTempBadge(tn) {
+    if (!tn) return '<span style="color:#9ca3af; font-size:12px;">—</span>';
+    return `<span style="padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; background:${tn==='冷凍'?'#dbeafe':tn==='冷藏'?'#cffafe':'#fef9c3'}; color:${tn==='冷凍'?'#1d4ed8':tn==='冷藏'?'#0e7490':'#854d0e'};">${tn}</span>`;
+  }
+
   if (currentTfTab === 'mine') {
-    const mine = transferList.filter(t => t.fromStore === myName);
+    const mine = transferList.filter(t => t.from_store === myName);
     let html = mine.length === 0
       ? `<tr><td colspan="7" style="padding:24px; text-align:center; color:#9ca3af;">目前沒有登記紀錄</td></tr>`
       : mine.map(t => {
-          const st = t.adminStatus || 'pending';
-          const canEdit = (now - t.createdAt)/1000/3600 < 24 && st === 'pending';
-          const dateStr = t.date.toLocaleString('zh-TW', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+          const st = t.admin_status || 'pending';
+          const canEdit = (now - new Date(t.created_at))/1000/3600 < 24 && st === 'pending';
           const statusBadge = `<span style="background:${adminStatusBg[st]||'#f3f4f6'}; color:${adminStatusColor[st]||'#374151'}; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; white-space:nowrap;">${adminStatusLabel[st]||st}</span>`;
-          const itemSummary = t.items.map(i => `${i.name} x${i.qty}${i.price ? ' ($'+i.price+')' : ''}`).join('、');
-          const tempBadge = t.tempNote
-            ? `<span style="padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;
-                background:${t.tempNote==='冷凍'?'#dbeafe':t.tempNote==='冷藏'?'#cffafe':t.tempNote==='常溫'?'#fef9c3':'#f3f4f6'};
-                color:${t.tempNote==='冷凍'?'#1d4ed8':t.tempNote==='冷藏'?'#0e7490':t.tempNote==='常溫'?'#854d0e':'#374151'};">${t.tempNote}</span>`
-            : '<span style="color:#9ca3af; font-size:12px;">—</span>';
-          const noteHtml = t.warehouseNote ? `<div style="font-size:11px; color:#2563eb; margin-top:2px;">總倉：${t.warehouseNote}</div>` : '';
+          const noteHtml = t.warehouse_note ? `<div style="font-size:11px; color:#2563eb; margin-top:2px;">總倉：${t.warehouse_note}</div>` : '';
           return `<tr style="border-bottom:1px solid #f3f4f6;">
             <td style="padding:10px 16px; color:#6b7280;">${t.id}</td>
-            <td style="padding:10px 16px;">→ ${t.toStore}</td>
-            <td style="padding:10px 16px; font-size:13px;">${itemSummary}</td>
-            <td style="padding:10px 16px; text-align:center;">${tempBadge}</td>
-            <td style="padding:10px 16px; color:#6b7280; white-space:nowrap;">${dateStr}</td>
+            <td style="padding:10px 16px;">→ ${t.to_store}</td>
+            <td style="padding:10px 16px; font-size:13px;">${tfItemSummary(t)}</td>
+            <td style="padding:10px 16px; text-align:center;">${tfTempBadge(t.temp_note)}</td>
+            <td style="padding:10px 16px; color:#6b7280; white-space:nowrap;">${tfDateStr(t)}</td>
             <td style="padding:10px 16px; text-align:center;">${statusBadge}${noteHtml}</td>
             <td style="padding:10px 16px; text-align:center; white-space:nowrap;">
               <button onclick="printTransfer('${t.id}')" style="padding:4px 10px; background:#fff0f6; color:#be185d; border:1px solid #be185d; border-radius:4px; font-size:12px; cursor:pointer; font-family:inherit; margin-right:4px;">🖨️ 列印</button>
@@ -2720,24 +2723,21 @@ function renderTransferPage() {
       </div>`;
 
   } else if (currentTfTab === 'incoming') {
-    // 顯示所有轉入（未完成的），三邊都看得到狀態
-    const incoming = transferList.filter(t => t.toStore === myName && (t.adminStatus || 'pending') !== 'received');
+    const incoming = transferList.filter(t => t.to_store === myName && (t.admin_status || 'pending') !== 'received');
     let html = incoming.length === 0
       ? `<tr><td colspan="6" style="padding:24px; text-align:center; color:#9ca3af;">目前沒有待確認的轉入 👍</td></tr>`
       : incoming.map(t => {
-          const st = t.adminStatus || 'pending';
-          const dateStr = t.date.toLocaleString('zh-TW', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
-          const itemSummary = t.items.map(i => `${i.name} x${i.qty}${i.price ? ' ($'+i.price+')' : ''}`).join('、');
-          const noteHtml = t.warehouseNote ? `<div style="font-size:11px; color:#2563eb;">總倉：${t.warehouseNote}</div>` : '';
+          const st = t.admin_status || 'pending';
+          const noteHtml = t.warehouse_note ? `<div style="font-size:11px; color:#2563eb;">總倉：${t.warehouse_note}</div>` : '';
           const statusBadge = `<span style="background:${adminStatusBg[st]||'#f3f4f6'}; color:${adminStatusColor[st]||'#374151'}; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; white-space:nowrap;">${adminStatusLabel[st]||st}</span>`;
           const actionHtml = st === 'shipped'
             ? `<button onclick="confirmTf('${t.id}')" style="padding:6px 14px; background:var(--primary); color:white; border:none; border-radius:4px; font-size:12px; font-weight:700; cursor:pointer; font-family:inherit;">✅ 確認收到</button>`
             : `<span style="font-size:11px; color:#9ca3af;">等待總倉處理</span>`;
           return `<tr style="border-bottom:1px solid #f3f4f6;">
             <td style="padding:10px 16px; color:#6b7280;">${t.id}</td>
-            <td style="padding:10px 16px;">${t.fromStore} →</td>
-            <td style="padding:10px 16px; font-size:13px;">${itemSummary}${noteHtml}</td>
-            <td style="padding:10px 16px; color:#6b7280; white-space:nowrap;">${dateStr}</td>
+            <td style="padding:10px 16px;">${t.from_store} →</td>
+            <td style="padding:10px 16px; font-size:13px;">${tfItemSummary(t)}${noteHtml}</td>
+            <td style="padding:10px 16px; color:#6b7280; white-space:nowrap;">${tfDateStr(t)}</td>
             <td style="padding:10px 16px; text-align:center;">${statusBadge}</td>
             <td style="padding:10px 16px; text-align:center;">${actionHtml}</td>
           </tr>`;
@@ -2758,21 +2758,19 @@ function renderTransferPage() {
       </div>`;
 
   } else if (currentTfTab === 'history') {
-    const related = transferList.filter(t => t.fromStore === myName || t.toStore === myName);
+    const related = transferList.filter(t => t.from_store === myName || t.to_store === myName);
     let html = related.length === 0
       ? `<tr><td colspan="7" style="padding:24px; text-align:center; color:#9ca3af;">沒有歷史紀錄</td></tr>`
       : related.map(t => {
-          const dateStr = t.date.toLocaleString('zh-TW', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
-          const itemSummary = t.items.map(i => `${i.name} x${i.qty}${i.price ? ' ($'+i.price+')' : ''}`).join('、');
-          const direction = t.fromStore === myName ? `→ ${t.toStore}` : `← ${t.fromStore}`;
-          const st = t.adminStatus || 'pending';
+          const direction = t.from_store === myName ? `→ ${t.to_store}` : `← ${t.from_store}`;
+          const st = t.admin_status || 'pending';
           const statusBadge = `<span style="background:${adminStatusBg[st]||'#f3f4f6'}; color:${adminStatusColor[st]||'#374151'}; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; white-space:nowrap;">${adminStatusLabel[st]||st}</span>`;
-          const noteHtml = t.warehouseNote ? `<div style="font-size:11px; color:#2563eb; margin-top:2px;">總倉：${t.warehouseNote}</div>` : '';
+          const noteHtml = t.warehouse_note ? `<div style="font-size:11px; color:#2563eb; margin-top:2px;">總倉：${t.warehouse_note}</div>` : '';
           return `<tr style="border-bottom:1px solid #f3f4f6;">
             <td style="padding:10px 16px; color:#6b7280;">${t.id}</td>
             <td style="padding:10px 16px; font-weight:500;">${direction}</td>
-            <td style="padding:10px 16px; font-size:13px;">${itemSummary}</td>
-            <td style="padding:10px 16px; color:#6b7280; white-space:nowrap;">${dateStr}</td>
+            <td style="padding:10px 16px; font-size:13px;">${tfItemSummary(t)}</td>
+            <td style="padding:10px 16px; color:#6b7280; white-space:nowrap;">${tfDateStr(t)}</td>
             <td style="padding:10px 16px; text-align:center;">${statusBadge}${noteHtml}</td>
             <td style="padding:10px 16px; text-align:center;">
               <button onclick="printTransfer('${t.id}')" style="padding:4px 10px; background:#fff0f6; color:#be185d; border:1px solid #be185d; border-radius:4px; font-size:12px; cursor:pointer; font-family:inherit;">🖨️ 列印</button>
@@ -2793,43 +2791,198 @@ function renderTransferPage() {
           <tbody>${html}</tbody>
         </table>
       </div>`;
+
+  } else if (currentTfTab === 'settlement') {
+    renderSettlementTab();
   }
 }
 
-function confirmTf(id) {
-  Swal.fire({ title:'確認收到貨物？', icon:'question', showCancelButton:true, confirmButtonText:'確認', cancelButtonText:'取消', confirmButtonColor:'#be185d' })
-    .then(result => {
-      if (result.isConfirmed) {
-        const t = transferList.find(t => t.id === id);
-        if (t) { t.confirmed = true; t.adminStatus = 'received'; }
-        localStorage.setItem('portalTransferList', JSON.stringify(transferList));
-        cloudSave('portalTransferList');
-        Swal.fire({ icon:'success', title:'已確認收到！', timer:1500, showConfirmButton:false });
-        renderTransferPage();
-      }
-    });
+async function renderSettlementTab() {
+  const myName = currentStore?.name;
+  const panel = document.getElementById('tfPanel-settlement');
+  if (!panel) return;
+
+  // 月份選擇器（預設本月）
+  const now = new Date();
+  const defaultMonth = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0');
+
+  panel.innerHTML = `
+    <div style="background:white; border-radius:8px; border:1px solid var(--border); padding:20px; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
+      <div style="display:flex; align-items:center; gap:12px; margin-bottom:16px;">
+        <label style="font-size:14px; font-weight:700; color:#374151;">選擇月份：</label>
+        <input type="month" id="settlementMonth" value="${defaultMonth}"
+          onchange="loadSettlementData()"
+          style="padding:8px 12px; border:1px solid var(--border); border-radius:6px; font-size:14px; font-family:inherit;">
+      </div>
+      <div id="settlementContent" style="color:#9ca3af; padding:20px; text-align:center;">載入中...</div>
+    </div>`;
+
+  await loadSettlementData();
 }
 
-function deleteTf(id) {
-  Swal.fire({ title:'確定刪除？', icon:'warning', showCancelButton:true, confirmButtonText:'刪除', cancelButtonText:'取消', confirmButtonColor:'#ef4444' })
-    .then(result => {
-      if (result.isConfirmed) {
-        transferList = transferList.filter(t => t.id !== id);
-        localStorage.setItem('portalTransferList', JSON.stringify(transferList));
-        cloudSave('portalTransferList');
-        renderTransferPage();
-      }
+async function loadSettlementData() {
+  const myName = currentStore?.name;
+  const month = document.getElementById('settlementMonth')?.value;
+  const container = document.getElementById('settlementContent');
+  if (!month || !container) return;
+
+  container.innerHTML = '<div style="padding:20px; text-align:center; color:#9ca3af;">載入中...</div>';
+
+  try {
+    // 用 get_store_transfers RPC 取得明細
+    const res = await fetch(`${SB_URL}/rpc/get_store_transfers`, {
+      method: 'POST',
+      headers: { ...SB_HEADERS, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ p_month: month, p_store: myName })
     });
+    const transfers = res.ok ? await res.json() : [];
+
+    // 計算匯總
+    let totalIn = 0, totalOut = 0;
+    const byStore = {};  // group by counterpart
+
+    transfers.forEach(tf => {
+      const amt = Number(tf.total_amount) || 0;
+      if (tf.direction === 'in') {
+        totalIn += amt;
+      } else {
+        totalOut += amt;
+      }
+      const cp = tf.counterpart;
+      if (!byStore[cp]) byStore[cp] = { in: 0, out: 0, count: 0 };
+      byStore[cp].count++;
+      if (tf.direction === 'in') byStore[cp].in += amt;
+      else byStore[cp].out += amt;
+    });
+
+    const net = totalIn - totalOut;
+
+    // 匯總卡片
+    let html = `
+      <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; margin-bottom:20px;">
+        <div style="background:#d1fae5; border-radius:8px; padding:14px; text-align:center;">
+          <div style="font-size:12px; color:#065f46; font-weight:600;">📥 轉入（別人給我）</div>
+          <div style="font-size:22px; font-weight:700; color:#047857; margin-top:6px;">$${totalIn.toLocaleString()}</div>
+        </div>
+        <div style="background:#fee2e2; border-radius:8px; padding:14px; text-align:center;">
+          <div style="font-size:12px; color:#991b1b; font-weight:600;">📤 轉出（我給別人）</div>
+          <div style="font-size:22px; font-weight:700; color:#c53030; margin-top:6px;">$${totalOut.toLocaleString()}</div>
+        </div>
+        <div style="background:${net >= 0 ? '#fef3c7' : '#dbeafe'}; border-radius:8px; padding:14px; text-align:center;">
+          <div style="font-size:12px; color:${net >= 0 ? '#92400e' : '#1e40af'}; font-weight:600;">💰 淨額（轉入-轉出）</div>
+          <div style="font-size:22px; font-weight:700; color:${net >= 0 ? '#b45309' : '#2563eb'}; margin-top:6px;">${net >= 0 ? '+' : ''}$${net.toLocaleString()}</div>
+          <div style="font-size:11px; color:#6b7280; margin-top:4px;">${net > 0 ? '本月需多付' : net < 0 ? '本月可扣抵' : '持平'}</div>
+        </div>
+      </div>`;
+
+    // 分店明細表
+    const storeNames = Object.keys(byStore).sort();
+    if (storeNames.length > 0) {
+      html += `
+        <div style="font-size:14px; font-weight:700; color:#374151; margin-bottom:10px;">各店往來明細</div>
+        <table style="width:100%; border-collapse:collapse; font-size:13px; border:1px solid var(--border); border-radius:8px;">
+          <thead><tr style="background:#f8f9fa;">
+            <th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280;">對方店</th>
+            <th style="padding:10px 14px; text-align:right; border-bottom:1px solid var(--border); color:#047857;">轉入金額</th>
+            <th style="padding:10px 14px; text-align:right; border-bottom:1px solid var(--border); color:#c53030;">轉出金額</th>
+            <th style="padding:10px 14px; text-align:right; border-bottom:1px solid var(--border); color:#374151;">淨額</th>
+            <th style="padding:10px 14px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280;">筆數</th>
+          </tr></thead>
+          <tbody>
+            ${storeNames.map(s => {
+              const d = byStore[s];
+              const sNet = d.in - d.out;
+              return `<tr style="border-bottom:1px solid #f3f4f6;">
+                <td style="padding:10px 14px; font-weight:600;">${s}</td>
+                <td style="padding:10px 14px; text-align:right; color:#047857;">$${d.in.toLocaleString()}</td>
+                <td style="padding:10px 14px; text-align:right; color:#c53030;">$${d.out.toLocaleString()}</td>
+                <td style="padding:10px 14px; text-align:right; font-weight:700; color:${sNet >= 0 ? '#b45309' : '#2563eb'};">${sNet >= 0 ? '+' : ''}$${sNet.toLocaleString()}</td>
+                <td style="padding:10px 14px; text-align:center; color:#6b7280;">${d.count}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>`;
+    }
+
+    // 逐筆明細
+    if (transfers.length > 0) {
+      html += `
+        <div style="font-size:14px; font-weight:700; color:#374151; margin:20px 0 10px;">逐筆交易紀錄</div>
+        <table style="width:100%; border-collapse:collapse; font-size:13px; border:1px solid var(--border); border-radius:8px;">
+          <thead><tr style="background:#f8f9fa;">
+            <th style="padding:8px 12px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280;">單號</th>
+            <th style="padding:8px 12px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280;">方向</th>
+            <th style="padding:8px 12px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280;">對方店</th>
+            <th style="padding:8px 12px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280;">商品</th>
+            <th style="padding:8px 12px; text-align:right; border-bottom:1px solid var(--border); color:#6b7280;">金額</th>
+            <th style="padding:8px 12px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280;">日期</th>
+          </tr></thead>
+          <tbody>
+            ${transfers.map(tf => {
+              const items = tf.items || [];
+              const itemStr = items.map(i => `${i.product_name} x${i.qty}`).join('、');
+              const dirBadge = tf.direction === 'in'
+                ? '<span style="background:#d1fae5; color:#047857; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;">📥 轉入</span>'
+                : '<span style="background:#fee2e2; color:#c53030; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;">📤 轉出</span>';
+              const dateStr = new Date(tf.created_at).toLocaleString('zh-TW', { month:'2-digit', day:'2-digit' });
+              return `<tr style="border-bottom:1px solid #f3f4f6;">
+                <td style="padding:8px 12px; color:#6b7280;">${tf.tf_id}</td>
+                <td style="padding:8px 12px; text-align:center;">${dirBadge}</td>
+                <td style="padding:8px 12px; font-weight:500;">${tf.counterpart}</td>
+                <td style="padding:8px 12px; font-size:12px;">${itemStr}</td>
+                <td style="padding:8px 12px; text-align:right; font-weight:700; color:${tf.direction === 'in' ? '#047857' : '#c53030'};">$${Number(tf.total_amount).toLocaleString()}</td>
+                <td style="padding:8px 12px; color:#6b7280;">${dateStr}</td>
+              </tr>`;
+            }).join('')}
+          </tbody>
+        </table>`;
+    }
+
+    if (transfers.length === 0) {
+      html = '<div style="padding:40px; text-align:center; color:#9ca3af; font-size:14px;">本月沒有店轉店交易紀錄</div>';
+    }
+
+    container.innerHTML = html;
+
+  } catch(e) {
+    console.error('loadSettlementData error:', e);
+    container.innerHTML = '<div style="padding:20px; text-align:center; color:#c53030;">載入失敗，請重試</div>';
+  }
+}
+
+async function confirmTf(id) {
+  const result = await Swal.fire({ title:'確認收到貨物？', text: id, icon:'question', showCancelButton:true, confirmButtonText:'確認', cancelButtonText:'取消', confirmButtonColor:'#be185d' });
+  if (!result.isConfirmed) return;
+  const res = await fetch(`${SB_URL}/transfer_orders?id=eq.${id}`, {
+    method: 'PATCH',
+    headers: { ...SB_HEADERS, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: 'confirmed', confirmed_at: new Date().toISOString() })
+  });
+  if (!res.ok) { Swal.fire('更新失敗', await res.text(), 'error'); return; }
+  Swal.fire({ icon:'success', title:'已確認收到！', timer:1500, showConfirmButton:false });
+  await loadTransferList();
+  renderTransferPage();
+}
+
+async function deleteTf(id) {
+  const result = await Swal.fire({ title:'確定刪除？', icon:'warning', showCancelButton:true, confirmButtonText:'刪除', cancelButtonText:'取消', confirmButtonColor:'#ef4444' });
+  if (!result.isConfirmed) return;
+  // 刪主單（ON DELETE CASCADE 會自動刪明細）
+  const res = await fetch(`${SB_URL}/transfer_orders?id=eq.${id}`, { method: 'DELETE', headers: SB_HEADERS });
+  if (!res.ok) { Swal.fire('刪除失敗', await res.text(), 'error'); return; }
+  await loadTransferList();
+  renderTransferPage();
 }
 
 function printTransfer(id) {
   const t = transferList.find(t => t.id === id);
   if (!t) return;
-  const dateStr = t.date.toLocaleString('zh-TW', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
-  const itemRows = t.items.map(i =>
-    `<tr><td style="padding:5px 0; font-size:16px;">${i.name}</td><td style="padding:5px 0; text-align:right; font-size:16px; font-weight:bold;">${i.qty}</td><td style="padding:5px 0 5px 6px; font-size:14px; color:#555;">${i.note||''}</td></tr>`
+  const dateStr = new Date(t.created_at).toLocaleString('zh-TW', { year:'numeric', month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' });
+  const items = t.items || [];
+  const itemRows = items.map(i =>
+    `<tr><td style="padding:5px 0; font-size:16px;">${i.product_name}</td><td style="padding:5px 0; text-align:right; font-size:16px; font-weight:bold;">${i.qty}</td><td style="padding:5px 0 5px 6px; font-size:14px; color:#555;">${i.note||''}</td></tr>`
   ).join('');
-  const total = t.items.reduce((s, i) => s + (parseInt(i.qty) || 0), 0);
+  const total = items.reduce((s, i) => s + (parseInt(i.qty) || 0), 0);
   const win = window.open('', '_blank', 'width=350,height=600');
   win.document.write(`
     <!DOCTYPE html><html><head><meta charset="UTF-8">
@@ -2856,9 +3009,9 @@ function printTransfer(id) {
     <div class="info">
       單號：<b>${t.id}</b><br>
       日期：<b>${dateStr}</b><br>
-      轉出：<b>${t.fromStore}</b><br>
-      轉入：<b>${t.toStore}</b><br>
-      ${t.tempNote?'溫層：<b>'+t.tempNote+'</b><br>':''}${t.note?'備註：'+t.note:''}
+      轉出：<b>${t.from_store}</b><br>
+      轉入：<b>${t.to_store}</b><br>
+      ${t.temp_note?'溫層：<b>'+t.temp_note+'</b><br>':''}${t.note?'備註：'+t.note:''}
     </div>
     <table>
       <thead><tr><th style="text-align:left;">商品名稱</th><th style="text-align:right;">數量</th><th style="text-align:left; padding-left:6px;">效期</th></tr></thead>
@@ -5425,7 +5578,7 @@ function submitAidResponse(postId, itemIdx, qty, note) {
   renderAidBoard();
 }
 
-function createAidTransfer(postId, itemIdx, respIdx) {
+async function createAidTransfer(postId, itemIdx, respIdx) {
   var post = aidBoard.find(a => a.id === postId);
   if (!post) return;
   var item = post.items[itemIdx];
@@ -5441,26 +5594,28 @@ function createAidTransfer(postId, itemIdx, respIdx) {
     toStore = resp.store;
   }
 
-  var tfId = 'TF' + String(tfCounter++).padStart(3, '0');
-  var newTf = {
-    id: tfId,
-    fromStore: fromStore, toStore: toStore,
-    items: [{ code: item.code || '', name: item.name, qty: resp.qty, temp: item.temp || '', price: item.price || 0, note: '' }],
-    note: '互助交流 ' + postId,
-    tempNote: item.temp || '',
-    date: new Date(),
-    confirmed: false,
-    adminStatus: 'pending',
-    warehouseNote: '',
-    createdAt: new Date()
-  };
-  transferList.unshift(newTf);
-  localStorage.setItem('portalTransferList', JSON.stringify(transferList));
-  cloudSave('portalTransferList');
+  var tfId = await generateTfId();
+
+  // 建主單
+  var orderRes = await fetch(`${SB_URL}/transfer_orders`, {
+    method: 'POST',
+    headers: { ...SB_HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+    body: JSON.stringify({ id: tfId, from_store: fromStore, to_store: toStore, status: 'pending', admin_status: 'pending', temp_note: item.temp || '', note: '互助交流 ' + postId })
+  });
+  if (!orderRes.ok) { Swal.fire('建立失敗', await orderRes.text(), 'error'); return; }
+
+  // 建明細
+  var itemData = { transfer_id: tfId, product_code: item.code || '', product_name: item.name, temp: item.temp || '', qty: resp.qty, price: item.price || 0, amount: resp.qty * (item.price || 0), note: '' };
+  await fetch(`${SB_URL}/transfer_items`, {
+    method: 'POST',
+    headers: { ...SB_HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+    body: JSON.stringify(itemData)
+  });
 
   resp.transferId = tfId;
   localStorage.setItem('portalMutualAidBoard', JSON.stringify(aidBoard)); cloudSave('portalMutualAidBoard');
 
+  await loadTransferList();
   Swal.fire({ icon: 'success', title: '店轉店單已建立！', html: '<b>' + tfId + '</b><br>' + fromStore + ' → ' + toStore, confirmButtonColor: '#be185d' });
   renderAidBoard();
 }

@@ -1,0 +1,307 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>店轉店月結</title>
+  <script src="libs/sweetalert2.min.js"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <style>
+    :root {
+      --bg: #f8f9fb;
+      --surface: #ffffff;
+      --surface2: #f1f5f9;
+      --border: #e2e8f0;
+      --accent: #475569;
+      --text: #1e293b;
+      --text2: #64748b;
+      --success: #047857;
+      --danger: #c53030;
+      --warning: #b45309;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Noto Sans TC', sans-serif; background: var(--bg); color: var(--text); padding: 20px; }
+
+    .toolbar { display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px; background: var(--surface); padding: 16px 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(30,41,59,0.07); flex-wrap: wrap; gap: 10px; }
+    .toolbar-left { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+    .toolbar-title { font-size: 18px; font-weight: 700; color: var(--accent); }
+    .toolbar input, .toolbar select { padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 14px; font-family: inherit; }
+    .btn { padding: 8px 16px; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; font-weight: 600; font-family: inherit; display: inline-flex; align-items: center; gap: 6px; }
+    .btn-primary { background: var(--accent); color: white; }
+    .btn-primary:hover { background: #334155; }
+    .btn-success { background: var(--success); color: white; }
+    .btn-success:hover { background: #065f46; }
+    .btn-warning { background: var(--warning); color: white; }
+    .btn-print { background: #0e7490; color: white; }
+
+    .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-bottom: 20px; }
+    .stat-card { background: var(--surface); border: 1px solid var(--border); border-radius: 10px; padding: 16px; text-align: center; }
+    .stat-label { font-size: 12px; color: var(--text2); font-weight: 600; margin-bottom: 6px; }
+    .stat-value { font-size: 22px; font-weight: 700; }
+
+    .table-wrap { background: var(--surface); border-radius: 8px; box-shadow: 0 2px 8px rgba(30,41,59,0.07); overflow-x: auto; margin-bottom: 20px; }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    th { background: var(--surface2); padding: 10px 14px; text-align: left; font-weight: 600; color: var(--text2); border-bottom: 2px solid var(--border); white-space: nowrap; }
+    td { padding: 10px 14px; border-bottom: 1px solid var(--border); }
+    tr:hover { background: var(--surface2); }
+    .num { text-align: right; font-variant-numeric: tabular-nums; }
+    .positive { color: var(--danger); }
+    .negative { color: #2563eb; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+    .badge-pending { background: #fef3c7; color: var(--warning); }
+    .badge-settled { background: #d1fae5; color: var(--success); }
+
+    .detail-section { margin-top: 20px; }
+    .detail-title { font-size: 15px; font-weight: 700; color: var(--accent); margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+    .empty { text-align: center; padding: 40px; color: var(--text2); }
+
+    @media (max-width: 768px) { .stats-grid { grid-template-columns: repeat(2, 1fr); } }
+  </style>
+</head>
+<body>
+
+<div class="toolbar">
+  <div class="toolbar-left">
+    <span class="toolbar-title"><i class="fas fa-exchange-alt"></i> 店轉店月結</span>
+    <label style="font-size:13px; color:var(--text2);">月份：</label>
+    <input type="month" id="monthPicker" onchange="loadSettlement()">
+    <button class="btn btn-primary" onclick="loadSettlement()"><i class="fas fa-search"></i> 查詢</button>
+  </div>
+  <div style="display:flex; gap:8px;">
+    <button class="btn btn-success" onclick="runSettlement()"><i class="fas fa-calculator"></i> 執行月結</button>
+    <button class="btn btn-print" onclick="printSettlement()"><i class="fas fa-print"></i> 列印</button>
+  </div>
+</div>
+
+<div class="stats-grid" id="statsGrid">
+  <div class="stat-card"><div class="stat-label">參與店數</div><div class="stat-value" id="stStores">-</div></div>
+  <div class="stat-card"><div class="stat-label">總進貨額</div><div class="stat-value" id="stGross" style="color:var(--accent);">-</div></div>
+  <div class="stat-card"><div class="stat-label">店轉店總額</div><div class="stat-value" id="stTransfer" style="color:var(--warning);">-</div></div>
+  <div class="stat-card"><div class="stat-label">實際應付總額</div><div class="stat-value" id="stActual" style="color:var(--danger);">-</div></div>
+</div>
+
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr>
+        <th>分店</th>
+        <th class="num">進貨額 (gross)</th>
+        <th class="num">轉入金額</th>
+        <th class="num">轉出金額</th>
+        <th class="num">轉帳淨額</th>
+        <th class="num">實際應付</th>
+      </tr>
+    </thead>
+    <tbody id="tableBody">
+      <tr><td colspan="6" class="empty">請選擇月份後按「查詢」或「執行月結」</td></tr>
+    </tbody>
+  </table>
+</div>
+
+<div class="detail-section" id="detailSection" style="display:none;">
+  <div class="detail-title"><i class="fas fa-list"></i> <span id="detailStoreName"></span> — 店轉店明細</div>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th>單號</th>
+          <th>方向</th>
+          <th>對方店</th>
+          <th>商品</th>
+          <th class="num">金額</th>
+          <th>日期</th>
+        </tr>
+      </thead>
+      <tbody id="detailBody"></tbody>
+    </table>
+  </div>
+</div>
+
+<script>
+  const SB_URL = 'https://asugjynpocwygggttxyo.supabase.co/rest/v1';
+  const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFzdWdqeW5wb2N3eWdnZ3R0eHlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNzU3MjksImV4cCI6MjA4ODk1MTcyOX0.LzcRQAl80rZxKKD8NIYWGvylfwCbs1ek5LtKpmZodBc';
+  const AUTH_TOKEN = sessionStorage.getItem('sb_auth_token') || SB_KEY;
+  const HEADERS = { 'apikey': SB_KEY, 'Authorization': `Bearer ${AUTH_TOKEN}` };
+  const HEADERS_JSON = { ...HEADERS, 'Content-Type': 'application/json' };
+
+  function fmt(n) { return 'NT$ ' + Number(n || 0).toLocaleString(); }
+
+  // Init
+  const now = new Date();
+  document.getElementById('monthPicker').value = now.getFullYear() + '-' + String(now.getMonth() + 1).padStart(2, '0');
+
+  async function loadSettlement() {
+    const month = document.getElementById('monthPicker').value;
+    if (!month) return;
+    const tbody = document.getElementById('tableBody');
+    tbody.innerHTML = '<tr><td colspan="6" class="empty"><i class="fas fa-spinner fa-spin"></i> 載入中...</td></tr>';
+    document.getElementById('detailSection').style.display = 'none';
+
+    try {
+      const res = await fetch(`${SB_URL}/rpc/get_settlement_detail`, {
+        method: 'POST',
+        headers: HEADERS_JSON,
+        body: JSON.stringify({ p_month: month })
+      });
+      const data = res.ok ? await res.json() : [];
+
+      if (data.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty">尚未執行月結，請按「執行月結」產生結算資料</td></tr>';
+        ['stStores','stGross','stTransfer','stActual'].forEach(id => document.getElementById(id).textContent = '-');
+        return;
+      }
+
+      // Stats
+      let totalGross = 0, totalTransfer = 0, totalActual = 0;
+      data.forEach(d => {
+        totalGross += Number(d.gross_payable || 0);
+        totalTransfer += Number(d.transfer_in || 0) + Number(d.transfer_out || 0);
+        totalActual += Number(d.actual_payable || 0);
+      });
+      document.getElementById('stStores').textContent = data.length + ' 店';
+      document.getElementById('stGross').textContent = fmt(totalGross);
+      document.getElementById('stTransfer').textContent = fmt(totalTransfer / 2); // 每筆算兩次(in+out)，除2
+      document.getElementById('stActual').textContent = fmt(totalActual);
+
+      // Table
+      tbody.innerHTML = data.map(d => {
+        const net = Number(d.transfer_net || 0);
+        const netClass = net > 0 ? 'positive' : net < 0 ? 'negative' : '';
+        const netSign = net > 0 ? '+' : '';
+        return `<tr style="cursor:pointer;" onclick="showStoreDetail('${d.store}')">
+          <td style="font-weight:600;">${d.store}</td>
+          <td class="num">${fmt(d.gross_payable)}</td>
+          <td class="num" style="color:var(--success);">${fmt(d.transfer_in)}</td>
+          <td class="num" style="color:var(--danger);">${fmt(d.transfer_out)}</td>
+          <td class="num ${netClass}" style="font-weight:700;">${netSign}${fmt(net)}</td>
+          <td class="num" style="font-weight:700; font-size:14px;">${fmt(d.actual_payable)}</td>
+        </tr>`;
+      }).join('');
+
+    } catch (e) {
+      console.error(e);
+      tbody.innerHTML = '<tr><td colspan="6" class="empty" style="color:var(--danger);">載入失敗：' + e.message + '</td></tr>';
+    }
+  }
+
+  async function runSettlement() {
+    const month = document.getElementById('monthPicker').value;
+    if (!month) { Swal.fire('請選擇月份', '', 'warning'); return; }
+
+    const confirm = await Swal.fire({
+      title: `執行 ${month} 月結？`,
+      html: '系統將自動計算各店：<br>• 進貨總額（銷貨單）<br>• 店轉店淨額<br>• 實際應付金額<br><br>若已有資料會<b>覆蓋重算</b>。',
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: '確認執行',
+      cancelButtonText: '取消',
+      confirmButtonColor: '#475569'
+    });
+    if (!confirm.isConfirmed) return;
+
+    Swal.fire({ title: '計算中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+    try {
+      const res = await fetch(`${SB_URL}/rpc/generate_transfer_settlement`, {
+        method: 'POST',
+        headers: HEADERS_JSON,
+        body: JSON.stringify({ p_month: month })
+      });
+      if (!res.ok) throw new Error(await res.text());
+
+      await loadSettlement();
+      Swal.fire({ icon: 'success', title: '月結完成！', text: `${month} 各店結算資料已產生`, timer: 2000, showConfirmButton: false });
+    } catch (e) {
+      Swal.fire('執行失敗', e.message, 'error');
+    }
+  }
+
+  async function showStoreDetail(store) {
+    const month = document.getElementById('monthPicker').value;
+    document.getElementById('detailStoreName').textContent = store;
+    document.getElementById('detailSection').style.display = 'block';
+    const tbody = document.getElementById('detailBody');
+    tbody.innerHTML = '<tr><td colspan="6" class="empty"><i class="fas fa-spinner fa-spin"></i> 載入中...</td></tr>';
+
+    try {
+      const res = await fetch(`${SB_URL}/rpc/get_store_transfers`, {
+        method: 'POST',
+        headers: HEADERS_JSON,
+        body: JSON.stringify({ p_month: month, p_store: store })
+      });
+      const transfers = res.ok ? await res.json() : [];
+
+      if (transfers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="6" class="empty">本月無店轉店紀錄</td></tr>';
+        return;
+      }
+
+      tbody.innerHTML = transfers.map(tf => {
+        const items = tf.items || [];
+        const itemStr = items.map(i => `${i.product_name} x${i.qty}`).join('、');
+        const isIn = tf.direction === 'in';
+        const dirBadge = isIn
+          ? '<span style="background:#d1fae5; color:#047857; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;">📥 轉入</span>'
+          : '<span style="background:#fee2e2; color:#c53030; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;">📤 轉出</span>';
+        const dateStr = new Date(tf.created_at).toLocaleDateString('zh-TW');
+        return `<tr>
+          <td style="color:var(--text2);">${tf.tf_id}</td>
+          <td>${dirBadge}</td>
+          <td style="font-weight:500;">${tf.counterpart}</td>
+          <td style="font-size:12px; max-width:300px; overflow:hidden; text-overflow:ellipsis;">${itemStr}</td>
+          <td class="num" style="font-weight:700; color:${isIn ? 'var(--success)' : 'var(--danger)'};">$${Number(tf.total_amount).toLocaleString()}</td>
+          <td style="color:var(--text2);">${dateStr}</td>
+        </tr>`;
+      }).join('');
+
+      // Scroll to detail
+      document.getElementById('detailSection').scrollIntoView({ behavior: 'smooth' });
+    } catch (e) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty" style="color:var(--danger);">載入失敗</td></tr>';
+    }
+  }
+
+  function printSettlement() {
+    const month = document.getElementById('monthPicker').value;
+    const rows = document.getElementById('tableBody').innerHTML;
+    if (rows.includes('尚未執行') || rows.includes('請選擇')) {
+      Swal.fire('提示', '請先執行月結再列印', 'info');
+      return;
+    }
+
+    const html = `<!DOCTYPE html><html><head><meta charset="UTF-8">
+    <style>
+      @page { margin: 3mm; }
+      body { font-family: 'Noto Sans TC', 'Microsoft JhengHei', sans-serif; font-size: 12px; padding: 10px; }
+      .no-print { position: fixed; top: 10px; right: 10px; display: flex; gap: 8px; z-index: 99; }
+      .no-print button { padding: 8px 16px; border: none; border-radius: 6px; font-size: 13px; font-weight: 600; cursor: pointer; }
+      @media print { .no-print { display: none !important; } }
+      h1 { font-size: 22px; font-weight: 700; text-align: center; margin: 0; }
+      h2 { font-size: 15px; font-weight: 400; text-align: center; letter-spacing: 8px; color: #666; margin: 4px 0 10px; }
+      .info { display: flex; justify-content: space-between; font-size: 12px; color: #666; margin-bottom: 8px; }
+      table { width: 100%; border-collapse: collapse; }
+      th { background: #f5f5f5; padding: 6px 8px; text-align: left; font-size: 11px; border: 1px solid #ddd; }
+      td { padding: 5px 8px; border: 1px solid #ddd; font-size: 12px; }
+      .r { text-align: right; }
+      .b { font-weight: 700; }
+    </style></head><body>
+    <div class="no-print">
+      <button onclick="window.print()" style="background:#475569; color:white;">🖨️ 列印</button>
+      <button onclick="window.close()" style="background:#eee; color:#333;">✕ 關閉</button>
+    </div>
+    <h1>丸十水產股份有限公司</h1>
+    <h2>店轉店月結報表</h2>
+    <div class="info"><span>月份：${month}</span><span>列印日期：${new Date().toLocaleDateString('zh-TW')}</span></div>
+    <table>
+      <thead><tr>
+        <th>分店</th><th class="r">進貨額</th><th class="r">轉入金額</th><th class="r">轉出金額</th><th class="r">轉帳淨額</th><th class="r">實際應付</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+    </table>
+    </body></html>`;
+
+    const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    window.open(URL.createObjectURL(blob), '_blank');
+  }
+</script>
+</body>
+</html>
