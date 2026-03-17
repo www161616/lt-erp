@@ -2497,7 +2497,9 @@
     }
     let mockSavedWaves = JSON.parse(localStorage.getItem('lt_savedWaves') || '[]'); // 歷史紀錄
     function saveMockSavedWaves() { localStorage.setItem('lt_savedWaves', JSON.stringify(mockSavedWaves)); }
-    // mockBackorderMeta 已遷移到 Supabase backorders 表
+    // mockBackorderMeta：欠品追蹤頁暫用（問題⑤下一階段遷移至 Supabase backorders）
+    let mockBackorderMeta = JSON.parse(localStorage.getItem('lt_backorderMeta') || '{}');
+    function saveBackorderMeta() { localStorage.setItem('lt_backorderMeta', JSON.stringify(mockBackorderMeta)); }
 
     async function renderPickingStation() {
       await cloudLoadAll(); // 先從雲端同步最新開團資料
