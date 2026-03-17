@@ -1163,7 +1163,25 @@
     let orderQtyCache = JSON.parse(localStorage.getItem('bp_orderQtyCache') || '{}');
     function saveQtyCache() { localStorage.setItem('bp_orderQtyCache', JSON.stringify(orderQtyCache)); }
 
+    // 從雲端 branchOrders 同步自己店的數量到 orderQtyCache（解決跨裝置看不到）
+    function syncQtyCacheFromCloud() {
+      const storeName = currentStore?.name;
+      if (!storeName) return;
+      const saved = JSON.parse(localStorage.getItem('branchOrders') || '{}');
+      const myOrders = saved[storeName] || {};
+      let synced = 0;
+      Object.entries(myOrders).forEach(([id, qty]) => {
+        if (qty > 0 && !orderQtyCache[id]) {
+          orderQtyCache[id] = String(qty);
+          synced++;
+        }
+      });
+      if (synced > 0) saveQtyCache();
+    }
+
     function renderOrderPage(page) {
+      // 從雲端同步自己店的數量（跨裝置）
+      syncQtyCacheFromCloud();
       // 切頁前先存當頁已填數量
       document.querySelectorAll('.qty-input').forEach(input => {
         if (input.value) orderQtyCache[input.dataset.id] = input.value;
