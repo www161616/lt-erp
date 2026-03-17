@@ -2702,7 +2702,10 @@
         return `
           <tr style="border-bottom: 1px solid #e2e8f0;">
             <td style="text-align:center; padding:4px; position:sticky; left:0; background:#fff; z-index:1;">
-              <button style="background:none; border:none; cursor:pointer; font-size:16px; color:#c53030; padding:2px 4px; opacity:0.5; line-height:1;" onclick="removeMatrixRow(${rowIndex})" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.5" title="移除此品項">✕</button>
+              <div style="display:flex; flex-direction:column; align-items:center; gap:2px;">
+                <input type="checkbox" class="matrix-check" data-row="${rowIndex}" checked style="width:15px; height:15px; cursor:pointer;" title="勾選列印">
+                <button style="background:none; border:none; cursor:pointer; font-size:16px; color:#c53030; padding:2px 4px; opacity:0.5; line-height:1;" onclick="removeMatrixRow(${rowIndex})" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.5" title="移除此品項">✕</button>
+              </div>
             </td>
             <td style="padding: 8px 12px;">
               <div style="font-weight:bold; color:#2d3748; font-size:14px;">${row.name}</div>
@@ -2723,7 +2726,7 @@
         <table style="width: 100%; border-collapse: collapse;">
           <thead style="position: sticky; top: 0; z-index: 1; box-shadow: 0 1px 2px rgba(0,0,0,0.1);">
             <tr>
-              <th style="width: 36px; text-align: center; position:sticky; left:0; background:#eef1f5; z-index:2;"></th>
+              <th style="width: 36px; text-align: center; position:sticky; left:0; background:#eef1f5; z-index:2;"><input type="checkbox" checked onchange="document.querySelectorAll('.matrix-check').forEach(c=>c.checked=this.checked)" style="width:15px;height:15px;cursor:pointer;" title="全選/取消"></th>
               <th style="text-align:left; padding: 10px 12px; min-width:200px;">商品名稱</th>
               ${visibleNames.map(n => `<th style="text-align:center; min-width:58px; white-space:nowrap; font-size:12px;">${n}</th>`).join('')}
               <th style="width: 70px; text-align: center; background:#fef3c7; color:#92400e;">合計</th>
@@ -2736,13 +2739,18 @@
 
     // 列印揀貨大表（精簡版：只列內容清單，欄高緊湊）
     function printPickingMatrix() {
-      if (activePickingMatrix.length === 0) {
-        Swal.fire('無資料', '請先加入商品到大表再列印。', 'info');
+      // 取得勾選的行
+      const checkedIndexes = new Set();
+      document.querySelectorAll('.matrix-check:checked').forEach(c => checkedIndexes.add(parseInt(c.dataset.row)));
+      const printRows = activePickingMatrix.filter((_, idx) => checkedIndexes.has(idx));
+
+      if (printRows.length === 0) {
+        Swal.fire('無資料', '請勾選要列印的商品。', 'info');
         return;
       }
       const visibleNames = getVisibleStoreNames();
       const headers = visibleNames.map(n => `<th>${n}</th>`).join('');
-      const rows = activePickingMatrix.map(row => {
+      const rows = printRows.map(row => {
         const cells = visibleNames.map(b => {
           const val = row.branchData && row.branchData[b] ? (row.branchData[b].expected || 0) : 0;
           return `<td style="text-align:center;${val > 0 ? 'font-weight:bold;' : 'color:#ccc;'}">${val}</td>`;
@@ -2766,7 +2774,7 @@
           @media print { button { display: none; } }
         </style></head><body>
         <div class="title">揀貨分發表</div>
-        <div class="sub">列印時間：${ts}　品項數：${activePickingMatrix.length}</div>
+        <div class="sub">列印時間：${ts}　品項數：${printRows.length}</div>
         <button onclick="window.print()" style="margin-bottom:6px;padding:4px 14px;background:#2b6cb0;color:white;border:none;border-radius:4px;cursor:pointer;font-size:12px;">列印</button>
         <table>
           <thead><tr><th style="text-align:left;">品名</th>${headers}<th>合計</th></tr></thead>
@@ -2778,8 +2786,12 @@
 
     // 下載播報文件（純文字）
     function downloadBroadcastText() {
-      if (activePickingMatrix.length === 0) {
-        Swal.fire('無資料', '請先加入商品到大表再下載。', 'info');
+      const checkedIndexes = new Set();
+      document.querySelectorAll('.matrix-check:checked').forEach(c => checkedIndexes.add(parseInt(c.dataset.row)));
+      const broadcastRows = activePickingMatrix.filter((_, idx) => checkedIndexes.has(idx));
+
+      if (broadcastRows.length === 0) {
+        Swal.fire('無資料', '請勾選要播報的商品。', 'info');
         return;
       }
       const lines = [];
@@ -2788,7 +2800,7 @@
       lines.push(`播報單　${dateStr}`);
       lines.push('');
 
-      activePickingMatrix.forEach(row => {
+      broadcastRows.forEach(row => {
         const parts = [];
         pickingStoreNames.forEach(b => {
           const qty = row.branchData && row.branchData[b] ? (row.branchData[b].expected || 0) : 0;
