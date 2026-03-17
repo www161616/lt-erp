@@ -2473,6 +2473,8 @@
       } catch(e) { console.error('deleteBackorder error:', e); }
     }
 
+    let pendingRestockWaveId = null; // 如果正在建立補發揀貨單，記錄原始 wave_id
+
     // 取得目前可見的店名欄位（根據 hideZeroCols 過濾）
     function getVisibleStoreNames() {
       if (!hideZeroCols || activePickingMatrix.length === 0) return pickingStoreNames;
@@ -2951,11 +2953,13 @@
           status: 'pending', // ⚡️ 狀態：pending(待結案), completed(已開銷貨單)
           salesOrderGenerated: false,
           salesOrderDate: null,
+          isRestock: pendingRestockWaveId ? true : false,
+          restockForWave: pendingRestockWaveId || null,
           matrix: JSON.parse(JSON.stringify(activePickingMatrix))
         });
 
         // ✨ 紀錄操作：建立揀貨單
-        logActivity('建立全新揀貨單', newWaveId, { items: activePickingMatrix.length });
+        logActivity(pendingRestockWaveId ? '建立補發揀貨單' : '建立全新揀貨單', newWaveId, { items: activePickingMatrix.length, isRestock: !!pendingRestockWaveId, restockFor: pendingRestockWaveId || '' });
 
         // 更新主檔已分發數，並寫入 pickingHistory
         activePickingMatrix.forEach(row => {
@@ -3799,6 +3803,18 @@
         wave.converted = true;
         wave.salesOrderGenerated = true;
         wave.salesOrderDate = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+
+        // 3b. 如果是補發揀貨單，更新原欠品的 status → shipped + restock_wave_id
+        if (wave.isRestock && wave.restockForWave) {
+          try {
+            await fetch(`${SB_URL}/backorders?wave_id=eq.${encodeURIComponent(wave.restockForWave)}&status=eq.pending&action=eq.pending`, {
+              method: 'PATCH',
+              headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+              body: JSON.stringify({ status: 'shipped', restock_wave_id: waveId })
+            });
+          } catch(e) { console.warn('更新補發狀態失敗:', e); }
+          pendingRestockWaveId = null;
+        }
 
         saveMockSavedWaves();
         syncSalesOrdersToPortal();
@@ -5251,6 +5267,7 @@
         return;
       }
       currentEditingWaveId = null;
+      pendingRestockWaveId = waveId; // 標記這是補發揀貨單，連結原始 wave
       activePickingMatrix.push({
         id: row.id, name: row.name, temp: row.temp,
         purchasedQty: row.purchasedQty,
