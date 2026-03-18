@@ -1197,6 +1197,22 @@
       if (synced > 0) saveQtyCache();
     }
 
+    let backorderMap = {};
+
+    async function loadBackorderMap() {
+      const store = currentStore?.name;
+      if (!store) return;
+      try {
+        const res = await fetch(`${SB_URL}/backorders?store=eq.${encodeURIComponent(store)}&action=eq.pending&status=not.in.(done,cancelled)&select=product_id,diff`, { headers: SB_HEADERS });
+        const rows = res.ok ? await res.json() : [];
+        backorderMap = {};
+        rows.forEach(r => {
+          const pid = (r.product_id || '').replace(/_.*$/, '');
+          backorderMap[pid] = (backorderMap[pid] || 0) + Math.abs(r.diff);
+        });
+      } catch(e) { console.error('loadBackorderMap error:', e); }
+    }
+
     function renderOrderPage(page) {
       // 從雲端同步自己店的數量（跨裝置）
       syncQtyCacheFromCloud();
@@ -1212,8 +1228,16 @@
       const branchOrders = JSON.parse(localStorage.getItem('branchOrders') || '{}');
       const myStoreName = currentStore?.name || '';
       const myStoreOrders = branchOrders[myStoreName] || {};
-      let orderList = JSON.parse(localStorage.getItem('branchOrderList') || '[]')
+      // 去重：同一個 productId 只保留 endDate 最新的
+      const rawOrderList = JSON.parse(localStorage.getItem('branchOrderList') || '[]')
         .sort((a, b) => (b.endDate || '').localeCompare(a.endDate || ''));
+      const seenPids = {};
+      let orderList = rawOrderList.filter(item => {
+        const pid = (item.productId || item.id || '').replace(/_.*$/, '');
+        if (seenPids[pid]) return false;
+        seenPids[pid] = true;
+        return true;
+      });
 
       if (orderSearchKw) {
         const kw = orderSearchKw.toLowerCase();
@@ -1259,7 +1283,7 @@
             <td style="padding:4px 10px; color:#6b7280; font-size:13px;">${p.startDate}</td>
             <td style="padding:4px 10px; color:${canOrder ? '#be185d' : '#9ca3af'}; font-weight:600; font-size:13px;">${p.endDate}${statusBadge}</td>
             <td style="padding:4px 10px; color:#6b7280; font-size:13px;">${p.productId || p.id}</td>
-            <td style="padding:4px 10px; font-weight:500; font-size:13px; color:${canOrder ? '#1f2937' : '#9ca3af'};">${p.name}</td>
+            <td style="padding:4px 10px; font-weight:500; font-size:13px; color:${canOrder ? '#1f2937' : '#9ca3af'};">${p.name}${(()=>{ const boPid = (p.productId || p.id || '').replace(/_.*$/, ''); const boQty = backorderMap[boPid]; return boQty ? ` <span style="font-size:11px; color:#b7791f; background:#fef3c7; padding:1px 6px; border-radius:8px; margin-left:4px;">⚠️ 待補 ${boQty} 件</span>` : ''; })()}</td>
             <td style="padding:4px 10px; text-align:right; font-weight:600; color:#be185d; font-size:13px;">$${p.price}</td>
             <td style="padding:4px 10px; text-align:center;">
               <input type="text" inputmode="numeric"
@@ -1364,6 +1388,7 @@
         updateShortageBadge();
         updateNotificationBadges();
         updateBackorderBadge(); // 欠品紅點
+        loadBackorderMap(); // 欠品 map（填單頁用）
         loadProductDB(); // 載入商品資料庫（需求表/店轉店用）
       } catch(e) {
         Swal.fire('連線錯誤', e.message, 'error');

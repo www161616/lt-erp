@@ -3993,14 +3993,27 @@
 
     // 從開團資料（localStorage）同步到訂貨追蹤
     async function syncOrderTrackingData() {
-      const publishedList = JSON.parse(localStorage.getItem('branchOrderList') || '[]');
+      const rawList = JSON.parse(localStorage.getItem('branchOrderList') || '[]');
       const branchOrders = JSON.parse(localStorage.getItem('branchOrders') || '{}');
-      if (publishedList.length === 0) return; // 無匯入資料，用 mock
+      if (rawList.length === 0) return;
+
+      // 去重：同一個 productId 只保留 endDate 最新的
+      const dedupMap = {};
+      rawList.forEach(item => {
+        const pid = (item.productId || item.id || '').replace(/_.*$/, '');
+        if (!dedupMap[pid] || (item.endDate || '') > (dedupMap[pid].endDate || '')) {
+          dedupMap[pid] = item;
+        }
+      });
+      const publishedList = Object.values(dedupMap);
 
       publishedList.forEach(item => {
-        const itemKey = item.id; // branchOrderList 的 id (可能含 _dateKey)
-        const displayId = item.productId || item.id; // 純商品編號
-        const existing = mockConsolidatedOrders.find(o => o.id === itemKey || o.id === displayId);
+        const itemKey = item.id;
+        const displayId = (item.productId || item.id || '').replace(/_.*$/, '');
+        const existing = mockConsolidatedOrders.find(o => {
+          const oPid = (o.productId || o.id || '').replace(/_.*$/, '');
+          return oPid === displayId;
+        });
         if (existing) {
           // 更新名稱、日期、總量、廠商
           existing.name = item.name || existing.name;
@@ -7733,6 +7746,7 @@
             <button onclick="batchSummaryStatus('closed')" style="background:#c53030; color:#fff; border:none; border-radius:6px; padding:5px 14px; font-size:13px; cursor:pointer; font-weight:600;">🔴 批次結單</button>
             <button onclick="batchSummaryStatus('open')" style="background:#2b6cb0; color:#fff; border:none; border-radius:6px; padding:5px 14px; font-size:13px; cursor:pointer; font-weight:600;">🟢 批次開放</button>
             <button onclick="generatePOFromSummary()" style="background:#047857; color:#fff; border:none; border-radius:6px; padding:5px 14px; font-size:13px; cursor:pointer; font-weight:600;">📝 產生採購單</button>
+            <button onclick="clearBranchOrderQty()" style="background:#b7791f; color:#fff; border:none; border-radius:6px; padding:5px 14px; font-size:13px; cursor:pointer; font-weight:600;">🧹 清除本期數量</button>
           </div>
           <div id="asPagination" style="display:flex; align-items:center; gap:6px; margin-top:8px; flex-wrap:wrap;"></div>
         </div>
@@ -7868,6 +7882,47 @@
   // ===== 開團總表：勾選 / 批次 / 單筆 =====
   function toggleAllAsCheckboxes(source) {
     document.querySelectorAll('.as-checkbox').forEach(cb => { cb.checked = source.checked; });
+  }
+
+  async function clearBranchOrderQty() {
+    // 檢查是否有勾選的商品
+    const checked = [...document.querySelectorAll('.as-check:checked')].map(c => c.dataset.id);
+    const isPartial = checked.length > 0;
+
+    const confirmMsg = isPartial
+      ? `確定清除勾選的 <b>${checked.length}</b> 個商品的所有分店填單數量？<br>分店需要重新填寫。`
+      : `確定清除<b>所有商品</b>的所有分店填單數量？<br>分店需要重新填寫。`;
+
+    const result = await Swal.fire({
+      title: '🧹 清除分店填單數量',
+      html: confirmMsg,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: '確定清除',
+      cancelButtonText: '取消',
+      confirmButtonColor: '#b7791f'
+    });
+    if (!result.isConfirmed) return;
+
+    const saved = JSON.parse(localStorage.getItem('branchOrders') || '{}');
+    let clearCount = 0;
+
+    Object.keys(saved).forEach(storeName => {
+      const targets = isPartial ? checked : Object.keys(saved[storeName]);
+      targets.forEach(pid => {
+        if (saved[storeName][pid] !== undefined) {
+          delete saved[storeName][pid];
+          clearCount++;
+        }
+      });
+    });
+
+    localStorage.setItem('branchOrders', JSON.stringify(saved));
+    cloudSave('branchOrders');
+    await logActivity('清除分店填單數量', 'BRANCH_ORDERS', { count: clearCount, partial: isPartial });
+
+    Swal.fire({ icon: 'success', title: '已清除', text: `共清除 ${clearCount} 筆分店填單數量`, timer: 2000, showConfirmButton: false });
+    filterAdminSummary(false, 1);
   }
 
   function batchSummaryStatus(newStatus) {
