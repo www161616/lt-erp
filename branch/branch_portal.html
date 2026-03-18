@@ -998,7 +998,9 @@
       return `${currentStore?.name || '_unknown'}_${key}`;
     }
     function saveStoreData(key, data) {
-      localStorage.setItem(storeKey(key), JSON.stringify(data));
+      const fullKey = storeKey(key);
+      localStorage.setItem(fullKey, JSON.stringify(data));
+      cloudSave(fullKey);
     }
     function loadStoreData(key, fallback) {
       try {
@@ -1369,6 +1371,12 @@
         sessionStorage.setItem('branch_employee', JSON.stringify(currentStore));
         // 從雲端載入共用資料到 localStorage
         await cloudLoadAll();
+        // 從雲端載入分店專屬資料（流水帳、訂包）
+        const storeDataKeys = ['ledger', 'bunRecords'].map(k => `${storeName}_${k}`);
+        try {
+          const sdResp = await fetch(`${SB_URL}/shared_kv?key=in.(${storeDataKeys.map(k => '"'+k+'"').join(',')})`, { headers: SB_HEADERS });
+          if (sdResp.ok) { (await sdResp.json()).forEach(r => localStorage.setItem(r.key, JSON.stringify(r.value))); }
+        } catch(e) { console.warn('分店資料載入失敗:', e); }
         // 載入該店專屬資料
         initStoreData();
         // 判斷分店類型（分店 or 批發）
@@ -1423,6 +1431,12 @@
         currentStore = { id: meta.username, name: matchBranchName(storeName), employee: fullName };
         sessionStorage.setItem('branch_employee', JSON.stringify(currentStore));
         await cloudLoadAll();
+        // 從雲端載入分店專屬資料（流水帳、訂包）
+        const sdKeys = ['ledger', 'bunRecords'].map(k => `${storeName}_${k}`);
+        try {
+          const sdR = await fetch(`${SB_URL}/shared_kv?key=in.(${sdKeys.map(k => '"'+k+'"').join(',')})`, { headers: SB_HEADERS });
+          if (sdR.ok) { (await sdR.json()).forEach(r => localStorage.setItem(r.key, JSON.stringify(r.value))); }
+        } catch(e) { console.warn('分店資料載入失敗:', e); }
         initStoreData();
         const typeMap = JSON.parse(localStorage.getItem('branchTypeMap') || '{}');
         currentStore.type = typeMap[storeName] || 'store';
