@@ -142,6 +142,8 @@
     <div class="menu-item" id="menu-bulletin" onclick="switchTab('bulletin', this)">📢 公告管理</div>
 
 
+    <div class="menu-item" onclick="switchTab('backup', this)">🔒 資料備份／還原</div>
+
     <div style="flex:1;"></div>
     <div style="padding: 20px; border-top: 1px solid var(--border);">
       <div id="currentUserLabel" style="font-size:13px; color:var(--text2); margin-bottom:8px;">👤 讀取中...</div>
@@ -534,6 +536,9 @@
       } else if (tabId === 'bulletin') {
         title.innerText = '當前功能：公告管理';
         renderBulletinStation();
+      } else if (tabId === 'backup') {
+        title.innerText = '當前功能：資料備份／還原';
+        renderBackupStation();
       } else if (tabId === 'accounting') {
         title.innerText = '當前功能：銷貨單管理';
         renderAccountingStation();
@@ -5786,6 +5791,80 @@
   function saveBulletins(list) {
     localStorage.setItem('portalBulletin', JSON.stringify(list));
     cloudSave('portalBulletin');
+  }
+
+  // ============================
+  // 資料備份／還原
+  // ============================
+  function renderBackupStation() {
+    document.getElementById('mainContainer').innerHTML = `
+      <div class="panel" style="max-width:600px; margin:0 auto; padding:30px;">
+        <div style="font-size:18px; font-weight:700; color:#2d3748; margin-bottom:20px;">🔒 資料備份／還原</div>
+        <div style="font-size:13px; color:#718096; margin-bottom:24px; line-height:1.8;">
+          備份會將目前 localStorage 中的開團資料、分店訂單、揀貨紀錄等匯出為 JSON 檔案。<br>
+          還原會用備份檔案覆蓋目前的資料，並同步到雲端。
+        </div>
+        <div style="display:flex; gap:16px; flex-wrap:wrap;">
+          <button class="btn" style="background:#2b6cb0; padding:14px 28px; font-size:15px;" onclick="backupLocalStorage()">📥 備份資料</button>
+          <button class="btn" style="background:#c53030; padding:14px 28px; font-size:15px;" onclick="document.getElementById('restoreFileInput').click()">📤 還原資料</button>
+          <input type="file" id="restoreFileInput" accept=".json" style="display:none;" onchange="restoreLocalStorage(this.files[0])">
+        </div>
+      </div>`;
+  }
+
+  async function backupLocalStorage() {
+    const keys = [
+      'branchOrderList', 'branchOrders',
+      'importedStoreNames', 'importedPersonalNames',
+      'lt_savedWaves', 'lt_backorderMeta',
+      'portalSalesOrders', 'portalTransferList',
+    ];
+    const backup = { _backupAt: new Date().toISOString() };
+    keys.forEach(k => {
+      const val = localStorage.getItem(k);
+      if (val) backup[k] = JSON.parse(val);
+    });
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `backup_${new Date().toISOString().slice(0,10)}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+    Swal.fire({ icon: 'success', title: '備份完成', text: '檔案已下載', timer: 1500, showConfirmButton: false });
+  }
+
+  async function restoreLocalStorage(file) {
+    if (!file) return;
+    const text = await file.text();
+    const backup = JSON.parse(text);
+    const r = await Swal.fire({
+      title: '確定還原？',
+      html: `備份時間：<b>${backup._backupAt || '不明'}</b><br>目前資料將被覆蓋。`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: '確定還原',
+      confirmButtonColor: '#c53030',
+      cancelButtonText: '取消'
+    });
+    if (!r.isConfirmed) return;
+
+    const keys = [
+      'branchOrderList', 'branchOrders',
+      'importedStoreNames', 'importedPersonalNames',
+      'lt_savedWaves', 'lt_backorderMeta',
+      'portalSalesOrders', 'portalTransferList',
+    ];
+    keys.forEach(k => {
+      if (backup[k] !== undefined) {
+        localStorage.setItem(k, JSON.stringify(backup[k]));
+        cloudSave(k);
+      }
+    });
+
+    Swal.fire({ icon: 'success', title: '還原完成', timer: 1500, showConfirmButton: false })
+      .then(() => location.reload());
+    document.getElementById('restoreFileInput').value = '';
   }
 
   function renderBulletinStation() {
