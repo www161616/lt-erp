@@ -690,6 +690,8 @@
       // 同步到雲端
       _cloudSave('branchOrderList', existingList);
       _cloudSave('branchOrders', existingOrders);
+      _cloudSave('importedStoreNames', STORE_COLUMNS);
+      _cloudSave('importedPersonalNames', PERSONAL_COLUMNS);
 
       addLog('————————————————', 'info');
       addLog(`✅ 匯入完成！新增 ${importedCount} 項，更新 ${skippedCount} 項`, 'ok');

@@ -191,7 +191,7 @@
 
     async function cloudLoadAll() {
       try {
-        const resp = await fetch(`${SB_URL}/shared_kv?key=in.("branchOrderList","branchOrders","branchDataList","branchTypeMap","portalAllRequests","portalTransferList","portalMutualAidBoard","portalSalesOrders")`, { headers: HEADERS });
+        const resp = await fetch(`${SB_URL}/shared_kv?key=in.("branchOrderList","branchOrders","branchDataList","branchTypeMap","portalAllRequests","portalTransferList","portalMutualAidBoard","portalSalesOrders","importedStoreNames","importedPersonalNames")`, { headers: HEADERS });
         if (resp.ok) {
           const rows = await resp.json();
           rows.forEach(r => {
