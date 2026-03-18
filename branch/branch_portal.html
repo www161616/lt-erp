@@ -915,8 +915,9 @@
 
     <!-- 右欄：商品明細 -->
     <div id="billingDetailArea" style="background:white; border-radius:8px; border:1px solid var(--border); overflow:hidden; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
-      <div style="padding:14px 20px; border-bottom:1px solid var(--border);">
+      <div style="padding:14px 20px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
         <div style="font-size:14px; font-weight:700; color:var(--primary);" id="billingDetailTitle">點單號查看明細</div>
+        <button id="billingPrintBtn" onclick="printCurrentBillingDetail()" style="display:none; padding:6px 14px; background:#0e7490; color:white; border:none; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit;">🖨️ 列印</button>
       </div>
       <div id="billingDetailInner" style="padding:24px; text-align:center; color:#9ca3af; font-size:14px;">請點選銷貨單號</div>
     </div>
@@ -3339,6 +3340,8 @@ function showBillingDetail(orderId) {
   const r = portalOrders.find(r => r.id === orderId);
   if (!r) return;
   document.getElementById('billingDetailTitle').textContent = `${r.id}`;
+  document.getElementById('billingPrintBtn').style.display = '';
+  document.getElementById('billingPrintBtn').setAttribute('data-order-id', r.id);
   const amt = calcPortalOrderAmount(r);
   const statusMap = {
     pending:   { label: '待確認到貨', bg: '#fffbeb', text: '#92400e' },
@@ -3411,6 +3414,49 @@ function showBillingDetail(orderId) {
     </div>`;
 
   document.getElementById('billingDetailInner').innerHTML = html;
+}
+
+function printCurrentBillingDetail() {
+  const orderId = document.getElementById('billingPrintBtn')?.getAttribute('data-order-id');
+  if (!orderId) return;
+  const r = portalOrders.find(o => o.id === orderId);
+  if (!r) return;
+  const storeName = currentStore?.name || '';
+  const dateStr = (r.createdAt || '').substring(0, 10).replace(/\//g, '-');
+
+  const items = (r.items || []).filter(i => i.qty > 0);
+  const rows = items.map(i =>
+    `<tr><td style="border:1px solid #000; padding:5px 6px; font-size:17px;">${i.name}</td><td style="border:1px solid #000; padding:5px 6px; text-align:right; font-size:18px; font-weight:bold;">${i.qty}</td></tr>`
+  ).join('');
+  const totalQty = items.reduce((s, i) => s + (parseInt(i.qty) || 0), 0);
+
+  const win = window.open('', '_blank', 'width=350,height=600');
+  win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
+  <style>
+    @page { margin: 2mm; size: 80mm auto; }
+    body { font-family: 'Microsoft JhengHei', sans-serif; font-size: 16px; width: 76mm; margin: 0; padding: 4px; }
+    h2 { text-align:center; font-size:20px; font-weight:bold; margin:0 0 4px; letter-spacing:4px; }
+    .info { font-size:16px; margin-bottom:6px; line-height:1.8; }
+    table { width:100%; border-collapse:collapse; }
+    th { border:1px solid #000; padding:5px 6px; font-size:16px; }
+    .total { margin-top:6px; text-align:right; font-size:18px; font-weight:bold; border-top:2px solid #000; padding-top:4px; }
+    .no-print { position:fixed; top:8px; right:8px; z-index:99; }
+    .no-print button { padding:8px 16px; font-size:14px; border:none; border-radius:6px; cursor:pointer; font-weight:bold; margin-left:6px; }
+    @media print { .no-print { display:none; } }
+  </style></head><body>
+  <div class="no-print">
+    <button onclick="window.print()" style="background:#0e7490; color:white;">🖨️ 列印</button>
+    <button onclick="window.close()" style="background:#e2e8f0; color:#333;">✕ 關閉</button>
+  </div>
+  <h2>${storeName} 進貨單</h2>
+  <div class="info">單號：<b>${orderId}</b>　日期：<b>${dateStr}</b></div>
+  <table>
+    <thead><tr><th style="text-align:left;">品名</th><th style="text-align:right;">數量</th></tr></thead>
+    <tbody>${rows}</tbody>
+  </table>
+  <div class="total">共 ${items.length} 項，${totalQty} 件</div>
+  </body></html>`);
+  win.document.close();
 }
 
 function printBilling() {
