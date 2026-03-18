@@ -4965,6 +4965,119 @@
     refreshDemandBackorderTable();
   }
 
+  async function restockAndClose(backorderId, productId, productName, store, shortageQty) {
+    const cust = allCustomers.find(c => c.name.includes(store)) || { id: 'UNKNOWN', name: store, tax_type: '免稅' };
+
+    // 查商品分店價
+    let unitPrice = 0;
+    try {
+      const pRes = await fetch(`${SB_URL}/products?id=eq.${encodeURIComponent(productId)}&select=price_branch,price,cost`, { headers: HEADERS });
+      if (pRes.ok) {
+        const pData = await pRes.json();
+        if (pData.length > 0) unitPrice = Number(pData[0].price_branch) || Number(pData[0].price) || 0;
+      }
+    } catch(e) {}
+
+    const confirm = await Swal.fire({
+      title: '補發結案',
+      html: `商品：<b>${productName || productId}</b><br>分店：<b>${store}</b><br>補發數量：<b style="color:#c53030;">${shortageQty}</b> 件<br>單價：<b>$${unitPrice}</b><br>金額：<b style="color:#047857;">$${(shortageQty * unitPrice).toLocaleString()}</b><br><br><small style="color:#718096;">將開立補發銷貨單並結案此欠品。</small>`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: '確認補發結案',
+      cancelButtonText: '取消',
+      confirmButtonColor: '#047857'
+    });
+    if (!confirm.isConfirmed) return;
+
+    Swal.fire({ title: '處理中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+    try {
+      const now = new Date();
+      const dateStr = now.toISOString().split('T')[0];
+      const grand_total = shortageQty * unitPrice;
+
+      // 1. 開補發銷貨單
+      let soId = '';
+      if (MOCK_MODE) {
+        const issuedTime = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+        soId = `SO-${dateStr.replace(/-/g,'')}-${String(mockSalesOrders.length + 1).padStart(3,'0')}`;
+        mockSalesOrders.push({
+          id: soId,
+          waveId: 'RESTOCK-' + backorderId,
+          storeName: store,
+          createdAt: issuedTime,
+          storeConfirmedAt: null,
+          status: 'pending',
+          issuedAt: issuedTime,
+          finalAmount: grand_total,
+          note: '欠品補發 backorder#' + backorderId,
+          items: [{
+            productId: productId,
+            name: productName || productId,
+            expectedQty: shortageQty,
+            qty: shortageQty,
+            unitPrice: unitPrice,
+            returnQty: 0,
+            returnStatus: 'none',
+            returnReason: '',
+            returnDate: '',
+            damaged: false,
+            note: '補發'
+          }]
+        });
+        syncSalesOrdersToPortal();
+      } else {
+        const orderData = {
+          order_id: null,
+          order_date: dateStr,
+          customer_id: cust.id,
+          shipping_fee: 0, deduction: 0,
+          subtotal: grand_total, tax_amount: 0, grand_total: grand_total,
+          tax_type: cust.tax_type || '免稅',
+          note: '欠品補發 backorder#' + backorderId,
+          items: [{
+            product_id: productId,
+            product_name: productName || productId,
+            unit: '個',
+            qty: shortageQty,
+            price: unitPrice,
+            cost: 0,
+            note: '補發'
+          }]
+        };
+        const soRes = await fetch(`${SB_URL}/rpc/web_save_sales_order`, {
+          method: 'POST',
+          headers: { ...HEADERS, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ p_order_data: orderData })
+        });
+        if (soRes.ok) {
+          const soData = await soRes.json();
+          soId = soData.order_id || soData.id || '';
+        }
+      }
+
+      // 2. PATCH backorders → done
+      await fetch(`${SB_URL}/backorders?id=eq.${backorderId}`, {
+        method: 'PATCH',
+        headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ status: 'done', resolved_at: new Date().toISOString(), restock_wave_id: soId || 'manual' })
+      });
+
+      Swal.fire({
+        icon: 'success',
+        title: '補發結案完成',
+        html: `已開立補發銷貨單${soId ? ' <b>' + soId + '</b>' : ''}<br>欠品已標記為已完成`,
+        timer: 2500,
+        showConfirmButton: false
+      });
+
+      // 3. 重新整理
+      await refreshDemandBackorderTable();
+    } catch(e) {
+      Swal.fire('操作失敗', e.message, 'error');
+    }
+  }
+
   // ============================
   // 整合功能：需求與欠品管理（合併 需求表 + 欠品追蹤）
   // ============================
@@ -5210,11 +5323,21 @@
         : `<option value="pending" ${r.status==='pending'?'selected':''}>⏳ 待確認</option><option value="done" ${r.status==='done'?'selected':''}>✅ 已完成</option>`;
 
       const canBuild = isShortage && !isDone && !isNoRestock;
-      const operationBtn = isShortage
-        ? (isNoRestock
-          ? '<span style="font-size:11px; color:#718096;">不補</span>'
-          : `<button class="btn" style="padding:4px 8px; font-size:11px; white-space:nowrap; ${!canBuild?'background:#718096;':'background:#c53030;'}" onclick="loadShortageToPickingStation('${r.wave_id}','${r.product_id}')" ${!canBuild?'disabled':''}>➕ 建立補發</button>`)
-        : '<span style="font-size:12px; color:#718096;">—</span>';
+      let operationBtn = '';
+      if (isShortage) {
+        if (isNoRestock) {
+          operationBtn = '<span style="font-size:11px; color:#718096;">不補</span>';
+        } else if (isDone) {
+          operationBtn = '<span style="font-size:11px; color:#718096;">已結案</span>';
+        } else {
+          operationBtn = `<div style="display:flex; flex-direction:column; gap:3px;">
+            <button class="btn" style="padding:4px 8px; font-size:11px; white-space:nowrap; background:#c53030;" onclick="loadShortageToPickingStation('${r.wave_id}','${r.product_id}')">➕ 建立補發</button>
+            <button class="btn" style="padding:4px 8px; font-size:11px; white-space:nowrap; background:#047857;" onclick="restockAndClose(${r.id},'${r.product_id}','${r.product_name||''}','${r.store}',${Math.abs(r.diff)},${r.actual_qty ? (r.expected_qty - r.actual_qty > 0 ? r.expected_qty - r.actual_qty : 0) : 0})">✅ 補發結案</button>
+          </div>`;
+        }
+      } else {
+        operationBtn = '<span style="font-size:12px; color:#718096;">—</span>';
+      }
 
       const dateStr = r.created_at ? new Date(r.created_at).toLocaleDateString('zh-TW') : '';
       const restockInfo = r.restock_wave_id ? `<div style="font-size:10px; color:#047857;">補發：${r.restock_wave_id}</div>` : '';

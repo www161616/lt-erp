@@ -763,9 +763,11 @@
             <div style="background:white; border-radius:8px; border:1px solid var(--border); padding:20px 24px; margin-bottom:20px; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
                 <div style="font-size:15px; font-weight:700; color:var(--primary);">🥟 包子饅頭叫貨（供應商：包子爸）</div>
-                <div style="display:flex; gap:8px; align-items:center;">
+                <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
                   <span style="font-size:12px; color:#6b7280;">叫貨日期</span>
                   <input type="date" id="bunOrderDate" style="padding:7px 12px; border:1.5px solid var(--border); border-radius:6px; font-size:14px; font-family:inherit;">
+                  <span style="font-size:12px; color:#6b7280; margin-left:8px;">到貨日期</span>
+                  <input type="date" id="bunArrivalDate" style="padding:7px 12px; border:1.5px solid var(--border); border-radius:6px; font-size:14px; font-family:inherit;">
                 </div>
               </div>
 
@@ -798,6 +800,7 @@
                 <thead>
                   <tr style="background:#f8f9fa;">
                     <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">叫貨日期</th>
+                    <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">到貨日期</th>
                     <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">品項摘要</th>
                     <th style="padding:10px 16px; text-align:right; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">金額</th>
                     <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">操作</th>
@@ -916,7 +919,10 @@
     <div id="billingDetailArea" style="background:white; border-radius:8px; border:1px solid var(--border); overflow:hidden; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
       <div style="padding:14px 20px; border-bottom:1px solid var(--border); display:flex; justify-content:space-between; align-items:center;">
         <div style="font-size:14px; font-weight:700; color:var(--primary);" id="billingDetailTitle">點單號查看明細</div>
-        <button id="billingPrintBtn" onclick="printCurrentBillingDetail()" style="display:none; padding:6px 14px; background:#0e7490; color:white; border:none; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit;">🖨️ 列印</button>
+        <div id="billingDetailBtns" style="display:none; gap:6px;">
+          <button onclick="printCurrentBillingDetail()" style="padding:6px 14px; background:#0e7490; color:white; border:none; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit;">🖨️ 列印</button>
+          <button onclick="exportCurrentBillingExcel()" style="padding:6px 14px; background:#047857; color:white; border:none; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit;">📥 匯出Excel</button>
+        </div>
       </div>
       <div id="billingDetailInner" style="padding:24px; text-align:center; color:#9ca3af; font-size:14px;">請點選銷貨單號</div>
     </div>
@@ -3339,8 +3345,8 @@ function showBillingDetail(orderId) {
   const r = portalOrders.find(r => r.id === orderId);
   if (!r) return;
   document.getElementById('billingDetailTitle').textContent = `${r.id}`;
-  document.getElementById('billingPrintBtn').style.display = '';
-  document.getElementById('billingPrintBtn').setAttribute('data-order-id', r.id);
+  document.getElementById('billingDetailBtns').style.display = 'flex';
+  document.getElementById('billingDetailBtns').setAttribute('data-order-id', r.id);
   const amt = calcPortalOrderAmount(r);
   const statusMap = {
     pending:   { label: '待確認到貨', bg: '#fffbeb', text: '#92400e' },
@@ -3416,7 +3422,7 @@ function showBillingDetail(orderId) {
 }
 
 function printCurrentBillingDetail() {
-  const orderId = document.getElementById('billingPrintBtn')?.getAttribute('data-order-id');
+  const orderId = document.getElementById('billingDetailBtns')?.getAttribute('data-order-id');
   if (!orderId) return;
   const r = portalOrders.find(o => o.id === orderId);
   if (!r) return;
@@ -3456,6 +3462,70 @@ function printCurrentBillingDetail() {
   <div class="total">共 ${items.length} 項，${totalQty} 件</div>
   </body></html>`);
   win.document.close();
+}
+
+async function exportCurrentBillingExcel() {
+  const orderId = document.getElementById('billingDetailBtns')?.getAttribute('data-order-id');
+  if (!orderId) return;
+  const r = portalOrders.find(o => o.id === orderId);
+  if (!r) return;
+  const storeName = currentStore?.name || '';
+  const dateStr = (r.createdAt || '').substring(0, 10).replace(/\//g, '-');
+  const items = (r.items || []).filter(i => i.qty > 0);
+
+  if (typeof ExcelJS === 'undefined') {
+    const s = document.createElement('script');
+    s.src = 'https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js';
+    document.head.appendChild(s);
+    await new Promise(resolve => s.onload = resolve);
+  }
+
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet('進貨明細');
+
+  ws.mergeCells('A1:F1');
+  const titleCell = ws.getCell('A1');
+  titleCell.value = `${storeName} — 進貨單 ${orderId}`;
+  titleCell.font = { size: 14, bold: true };
+  titleCell.alignment = { horizontal: 'center' };
+
+  ws.mergeCells('A2:F2');
+  const dateCell = ws.getCell('A2');
+  dateCell.value = `日期：${dateStr}`;
+  dateCell.font = { size: 11, color: { argb: 'FF888888' } };
+  dateCell.alignment = { horizontal: 'center' };
+
+  const headers = ['商品編號', '商品名稱', '數量', '單價', '小計', '備註'];
+  const headerRow = ws.addRow(headers);
+  headerRow.eachCell(c => {
+    c.font = { bold: true, size: 11 };
+    c.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF0F6' } };
+    c.border = { bottom: { style: 'thin' } };
+  });
+
+  let grandTotal = 0;
+  items.forEach(item => {
+    const sub = item.qty * item.unitPrice;
+    grandTotal += sub;
+    const row = ws.addRow([item.productId || '', item.name || '', item.qty, item.unitPrice || 0, sub, item.note || '']);
+    row.getCell(3).numFmt = '#,##0';
+    row.getCell(4).numFmt = '#,##0';
+    row.getCell(5).numFmt = '#,##0';
+  });
+
+  const totalRow = ws.addRow(['', '', '', '合計', grandTotal, '']);
+  totalRow.getCell(4).font = { bold: true };
+  totalRow.getCell(5).font = { bold: true, size: 12 };
+  totalRow.getCell(5).numFmt = '#,##0';
+
+  ws.columns = [{ width: 14 }, { width: 30 }, { width: 8 }, { width: 10 }, { width: 12 }, { width: 15 }];
+
+  const buf = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = `${storeName}_進貨單_${orderId}.xlsx`;
+  a.click();
 }
 
 function printBilling() {
@@ -4215,7 +4285,9 @@ function getBunQtyMap(prefix) {
 
 function buildBunLineText(date, qtyMap) {
   let lines = [];
-  lines.push(`叫貨日期：${date}`);
+  const d = new Date(date);
+  const shortDate = `${d.getMonth()+1}/${d.getDate()}`;
+  lines.push(`${shortDate} 訂單`);
   BUN_MENU.forEach(item => {
     const qty = qtyMap[item.no] || 0;
     lines.push(`${item.no}、${item.name}${qty > 0 ? qty : ''}`);
@@ -4262,7 +4334,8 @@ function saveBunOrder() {
   const total = bunCalcTotal(qtyMap);
   const summary = bunMakeSummary(qtyMap);
 
-  bunRecords.push({ id: 'B' + Date.now(), date, qtyMap, total, summary });
+  const arrivalDate = document.getElementById('bunArrivalDate').value || '';
+  bunRecords.push({ id: 'B' + Date.now(), date, arrivalDate, qtyMap, total, summary });
   saveBunData();
   clearBunQty();
   refreshBunMonthAndRecords(date.substring(0,7));
@@ -4295,13 +4368,14 @@ function renderBunRecords() {
   let monthTotal = 0;
   let html = '';
   if (filtered.length === 0) {
-    html = `<tr><td colspan="4" style="padding:24px; text-align:center; color:#9ca3af;">這個月還沒有叫貨紀錄</td></tr>`;
+    html = `<tr><td colspan="5" style="padding:24px; text-align:center; color:#9ca3af;">這個月還沒有叫貨紀錄</td></tr>`;
   } else {
     filtered.forEach(r => {
       monthTotal += r.total;
       html += `
         <tr style="border-bottom:1px solid #f3f4f6;">
           <td style="padding:10px 16px; color:#6b7280; font-family:monospace; font-size:14px;">${r.date}</td>
+          <td style="padding:10px 16px; color:#047857; font-family:monospace; font-size:13px;">${r.arrivalDate || '—'}</td>
           <td style="padding:10px 16px; font-size:12px; color:#374151; max-width:300px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${r.summary}</td>
           <td style="padding:10px 16px; text-align:right; font-weight:700; color:#be185d; font-family:monospace; font-size:15px;">$${r.total.toLocaleString()}</td>
           <td style="padding:10px 16px; text-align:center; white-space:nowrap;">
@@ -4325,8 +4399,12 @@ function editBunOrder(id) {
   const cats = ['饅頭','起司','包子','其他'];
   const catColors = { '饅頭':'#be185d', '起司':'#d97706', '包子':'#059669', '其他':'#7c3aed' };
   const catBgs   = { '饅頭':'#fff0f6', '起司':'#fffbeb', '包子':'#ecfdf5', '其他':'#f5f3ff' };
-  let gridHtml = `<div style="margin-bottom:10px;"><label style="font-size:13px; font-weight:700; color:#6b7280;">叫貨日期</label>
-    <input type="date" id="editBunDate" value="${rec.date}" style="margin-left:8px; padding:6px 10px; border:1.5px solid #d1d5db; border-radius:6px; font-size:14px; font-family:inherit;"></div>`;
+  let gridHtml = `<div style="margin-bottom:10px; display:flex; gap:16px; flex-wrap:wrap;">
+    <div><label style="font-size:13px; font-weight:700; color:#6b7280;">叫貨日期</label>
+    <input type="date" id="editBunDate" value="${rec.date}" style="margin-left:8px; padding:6px 10px; border:1.5px solid #d1d5db; border-radius:6px; font-size:14px; font-family:inherit;"></div>
+    <div><label style="font-size:13px; font-weight:700; color:#6b7280;">到貨日期</label>
+    <input type="date" id="editBunArrivalDate" value="${rec.arrivalDate || ''}" style="margin-left:8px; padding:6px 10px; border:1.5px solid #d1d5db; border-radius:6px; font-size:14px; font-family:inherit;"></div>
+  </div>`;
   cats.forEach(cat => {
     const items = BUN_MENU.filter(b => b.cat === cat);
     gridHtml += `<div style="margin-bottom:10px;">
@@ -4356,15 +4434,17 @@ function editBunOrder(id) {
     preConfirm: () => {
       const newDate = document.getElementById('editBunDate').value;
       if (!newDate) { Swal.showValidationMessage('請選擇日期'); return false; }
+      const newArrivalDate = document.getElementById('editBunArrivalDate').value || '';
       const newQtyMap = getBunQtyMap('editBunQty_');
       const hasAny = Object.values(newQtyMap).some(q => q > 0);
       if (!hasAny) { Swal.showValidationMessage('至少填一個品項的數量'); return false; }
-      return { date: newDate, qtyMap: newQtyMap };
+      return { date: newDate, arrivalDate: newArrivalDate, qtyMap: newQtyMap };
     }
   }).then(result => {
     if (result.isConfirmed) {
-      const { date, qtyMap } = result.value;
+      const { date, arrivalDate, qtyMap } = result.value;
       rec.date = date;
+      rec.arrivalDate = arrivalDate;
       rec.qtyMap = qtyMap;
       rec.total = bunCalcTotal(qtyMap);
       rec.summary = bunMakeSummary(qtyMap);
