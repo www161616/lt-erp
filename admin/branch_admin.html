@@ -4880,10 +4880,34 @@
     }).join('');
   }
 
-  function updateBackorderMeta(key, field, value) {
-    if (!mockBackorderMeta[key]) mockBackorderMeta[key] = {};
-    mockBackorderMeta[key][field] = value;
-    saveBackorderMeta();
+  let backorderData = []; // Supabase backorders 表的資料快取
+
+  async function loadBackorderData(filter) {
+    try {
+      let url = `${SB_URL}/backorders?order=created_at.desc`;
+      if (filter === 'shortage') url += '&diff=lt.0';
+      else if (filter === 'overage') url += '&diff=gt.0';
+      else if (filter === 'pending') url += '&status=in.(pending,shipped)';
+      else if (filter === 'done') url += '&status=in.(done,cancelled)';
+      const res = await fetch(url, { headers: HEADERS });
+      backorderData = res.ok ? await res.json() : [];
+    } catch(e) { console.error('loadBackorderData error:', e); backorderData = []; }
+    return backorderData;
+  }
+
+  async function updateBackorderMeta(id, field, value) {
+    const body = {};
+    body[field] = value;
+    if (field === 'status' && (value === 'done' || value === 'cancelled')) {
+      body.resolved_at = new Date().toISOString();
+    }
+    try {
+      await fetch(`${SB_URL}/backorders?id=eq.${id}`, {
+        method: 'PATCH',
+        headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify(body)
+      });
+    } catch(e) { console.error('updateBackorderMeta error:', e); }
     refreshDemandBackorderTable();
   }
 
@@ -4896,8 +4920,8 @@
     await cloudLoadAll();
     syncInquiriesFromPortal();
     const pendingInq = mockInquiries.filter(i => i.status === 'pending').length;
-    const anomalies = computeAnomalies();
-    const pendingBO = anomalies.filter(a => (mockBackorderMeta[a.key]?.status || 'pending') !== 'done').length;
+    const pendingBOData = await loadBackorderData('pending');
+    const pendingBO = pendingBOData.length;
 
     document.getElementById('mainContainer').innerHTML = `
       <div style="display:flex; flex-direction:column; gap:12px; height:100%;">
@@ -4960,14 +4984,14 @@
     refreshDemandBackorderTable();
   }
 
-  function refreshDemandBackorderTable() {
+  async function refreshDemandBackorderTable() {
     const container = document.getElementById('dbTableContainer');
     if (!container) return;
     syncInquiriesFromPortal();
     if (demandBackorderTab === 'demand') {
       renderDemandTab(container);
     } else {
-      renderBackorderTab(container);
+      await renderBackorderTab(container);
     }
   }
 
@@ -5060,63 +5084,57 @@
       </table>`;
   }
 
-  function renderBackorderTab(container) {
+  async function renderBackorderTab(container) {
     const filter = document.getElementById('db-bo-filter')?.value || 'all';
-    let anomalies = computeAnomalies();
-    if (filter === 'shortage') anomalies = anomalies.filter(a => a.type === 'shortage');
-    else if (filter === 'overage') anomalies = anomalies.filter(a => a.type === 'overage');
-    else if (filter === 'pending') anomalies = anomalies.filter(a => (mockBackorderMeta[a.key]?.status || 'pending') !== 'done');
-    else if (filter === 'done') anomalies = anomalies.filter(a => mockBackorderMeta[a.key]?.status === 'done');
+    container.innerHTML = '<div style="text-align:center; padding:40px; color:#718096;"><i class="fas fa-spinner fa-spin"></i> 載入中...</div>';
 
-    if (anomalies.length === 0) {
+    const data = await loadBackorderData(filter);
+
+    if (data.length === 0) {
       container.innerHTML = '<div style="text-align:center; padding:40px; color:#718096;">目前無異常紀錄</div>';
       return;
     }
 
-    const statusColorMap = { pending:'#b7791f', received:'#2b6cb0', shipped:'#047857', out_of_stock:'#c53030', done:'#718096' };
+    const statusColorMap = { pending:'#b7791f', shipped:'#047857', done:'#718096', cancelled:'#718096' };
 
-    const rows = anomalies.map(a => {
-      const meta   = mockBackorderMeta[a.key] || {};
-      const status = meta.status || 'pending';
-      const reason = meta.reason || '';
-      const isDone = status === 'done' || status === 'out_of_stock';
-      const isShortage = a.type === 'shortage';
-      const isNoRestock = isShortage && a.allNoRestock;
+    const rows = data.map(r => {
+      const isShortage = r.diff < 0;
+      const isDone = r.status === 'done' || r.status === 'cancelled';
+      const isNoRestock = r.action === 'noRestock';
       const rowBg = isDone || isNoRestock ? 'background:#eef1f5; opacity:0.7;' : isShortage ? 'background:#fff5f5;' : 'background:#fdf4ff;';
 
-      const branchHtml = a.branchAnomalies.length > 0
-        ? a.branchAnomalies.map(b => {
-            let label = '', color = '#c53030', bg = '#fef2f2';
-            const sign = b.diff > 0 ? '+' : '';
-            if (b.action === 'oversell') { color = '#7c3aed'; bg = '#faf5ff'; label = ' 超賣'; }
-            else if (b.action === 'pending') { color = '#b7791f'; bg = '#fef3c7'; label = ' 待補'; }
-            else if (b.action === 'noRestock') { color = '#718096'; bg = '#eef1f5'; label = ' 不補'; }
-            else if (b.diff > 0) { color = '#8b5cf6'; bg = '#faf5ff'; }
-            return '<span style="display:inline-block; font-size:11px; padding:1px 6px; margin:1px; border-radius:3px; background:' + bg + '; color:' + color + '; white-space:nowrap;">' + b.store + ' <b>' + sign + b.diff + '</b>' + label + '</span>';
-          }).join('')
-        : '<span style="color:#718096; font-size:12px;">整批差異</span>';
+      let actionLabel = '', actionColor = '#c53030', actionBg = '#fef2f2';
+      if (r.action === 'oversell') { actionColor = '#7c3aed'; actionBg = '#faf5ff'; actionLabel = '超賣'; }
+      else if (r.action === 'pending') { actionColor = '#b7791f'; actionBg = '#fef3c7'; actionLabel = '待補'; }
+      else if (r.action === 'noRestock') { actionColor = '#718096'; actionBg = '#eef1f5'; actionLabel = '不補'; }
+      const sign = r.diff > 0 ? '+' : '';
+      const storeBadge = `<span style="display:inline-block; font-size:11px; padding:1px 6px; border-radius:3px; background:${actionBg}; color:${actionColor}; white-space:nowrap;">${r.store} <b>${sign}${r.diff}</b> ${actionLabel}</span>`;
 
       const statusOptions = isShortage
-        ? '<option value="pending" '+(status==='pending'?'selected':'')+'>⏳ 待處理</option><option value="received" '+(status==='received'?'selected':'')+'>📦 貨已到</option><option value="shipped" '+(status==='shipped'?'selected':'')+'>✅ 已補發</option><option value="out_of_stock" '+(status==='out_of_stock'?'selected':'')+'>❌ 斷貨</option><option value="done" '+(status==='done'?'selected':'')+'>🎉 已完成</option>'
-        : '<option value="pending" '+(status==='pending'?'selected':'')+'>⏳ 待確認</option><option value="done" '+(status==='done'?'selected':'')+'>🎉 已完成</option>';
+        ? `<option value="pending" ${r.status==='pending'?'selected':''}>⏳ 待處理</option><option value="shipped" ${r.status==='shipped'?'selected':''}>🚚 已補發</option><option value="done" ${r.status==='done'?'selected':''}>✅ 已完成</option><option value="cancelled" ${r.status==='cancelled'?'selected':''}>❌ 取消</option>`
+        : `<option value="pending" ${r.status==='pending'?'selected':''}>⏳ 待確認</option><option value="done" ${r.status==='done'?'selected':''}>✅ 已完成</option>`;
 
       const canBuild = isShortage && !isDone && !isNoRestock;
       const operationBtn = isShortage
         ? (isNoRestock
           ? '<span style="font-size:11px; color:#718096;">不補</span>'
-          : '<button class="btn" style="padding:4px 8px; font-size:11px; white-space:nowrap; '+ (!canBuild?'background:#718096;':'background:#c53030;') + '" onclick="loadShortageToPickingStation(\'' + a.waveId + '\',\'' + a.productId + '\')" ' + (!canBuild?'disabled':'') + '>➕ 建立補發</button>')
+          : `<button class="btn" style="padding:4px 8px; font-size:11px; white-space:nowrap; ${!canBuild?'background:#718096;':'background:#c53030;'}" onclick="loadShortageToPickingStation('${r.wave_id}','${r.product_id}')" ${!canBuild?'disabled':''}>➕ 建立補發</button>`)
         : '<span style="font-size:12px; color:#718096;">—</span>';
 
-      return '<tr style="border-bottom:1px solid #e2e8f0; ' + rowBg + '">' +
-        '<td style="padding:8px 12px; white-space:nowrap;"><div style="font-family:monospace; color:#2b6cb0; font-size:12px;">' + a.waveId + '</div><div style="color:#718096; font-size:11px;">' + a.waveDate + '</div></td>' +
-        '<td style="padding:8px 12px;"><div style="font-weight:bold; color:#2d3748;">' + a.productName + '</div></td>' +
-        '<td style="padding:8px; text-align:center; font-weight:bold;">' + a.expectedSum + '</td>' +
-        '<td style="padding:8px; text-align:center; font-weight:bold;">' + a.actualSum + '</td>' +
-        '<td style="padding:8px; text-align:center;"><span style="font-weight:bold; font-size:15px; color:' + (isShortage?'#c53030':'#8b5cf6') + ';">' + (isShortage?'':'+') + a.diff + '</span></td>' +
-        '<td style="padding:8px 12px;">' + branchHtml + '</td>' +
-        '<td style="padding:8px 12px;"><input type="text" value="' + reason + '" placeholder="原因..." onchange="updateBackorderMeta(\'' + a.key + '\',\'reason\',this.value)" style="width:100%; padding:4px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px;"></td>' +
-        '<td style="padding:8px; text-align:center;"><select onchange="updateBackorderMeta(\'' + a.key + '\',\'status\',this.value)" style="padding:4px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px; color:' + statusColorMap[status] + '; font-weight:bold; width:100%;">' + statusOptions + '</select></td>' +
-        '<td style="padding:8px; text-align:center;">' + operationBtn + '</td></tr>';
+      const dateStr = r.created_at ? new Date(r.created_at).toLocaleDateString('zh-TW') : '';
+      const restockInfo = r.restock_wave_id ? `<div style="font-size:10px; color:#047857;">補發：${r.restock_wave_id}</div>` : '';
+
+      return `<tr style="border-bottom:1px solid #e2e8f0; ${rowBg}">
+        <td style="padding:8px 12px; white-space:nowrap;"><div style="font-family:monospace; color:#2b6cb0; font-size:12px;">${r.wave_id}</div><div style="color:#718096; font-size:11px;">${dateStr}</div>${restockInfo}</td>
+        <td style="padding:8px 12px;"><div style="font-weight:bold; color:#2d3748;">${r.product_name || r.product_id}</div><div style="font-size:11px; color:#718096;">${r.product_id}</div></td>
+        <td style="padding:8px; text-align:center; font-weight:bold;">${r.expected_qty}</td>
+        <td style="padding:8px; text-align:center; font-weight:bold;">${r.actual_qty}</td>
+        <td style="padding:8px; text-align:center;"><span style="font-weight:bold; font-size:15px; color:${isShortage?'#c53030':'#8b5cf6'};">${sign}${r.diff}</span></td>
+        <td style="padding:8px 12px;">${storeBadge}</td>
+        <td style="padding:8px 12px;"><input type="text" value="${r.action_reason || ''}" placeholder="原因..." onchange="updateBackorderMeta(${r.id},'action_reason',this.value)" style="width:100%; padding:4px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px;"></td>
+        <td style="padding:8px; text-align:center;"><select onchange="updateBackorderMeta(${r.id},'status',this.value)" style="padding:4px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px; color:${statusColorMap[r.status] || '#718096'}; font-weight:bold; width:100%;">${statusOptions}</select></td>
+        <td style="padding:8px; text-align:center;">${operationBtn}</td>
+      </tr>`;
     }).join('');
 
     container.innerHTML = `
@@ -5128,7 +5146,7 @@
             <th style="padding:8px; text-align:center; width:50px;">應發</th>
             <th style="padding:8px; text-align:center; width:50px;">實發</th>
             <th style="padding:8px; text-align:center; width:55px;">差額</th>
-            <th style="padding:8px 12px; min-width:160px;">異常店家</th>
+            <th style="padding:8px 12px; min-width:100px;">店家</th>
             <th style="padding:8px 12px; min-width:100px;">原因</th>
             <th style="padding:8px; text-align:center; min-width:110px;">狀態</th>
             <th style="padding:8px; text-align:center; width:80px;">操作</th>
