@@ -718,15 +718,24 @@
       area.scrollTop = area.scrollHeight;
     }
 
-    // Supabase 連線（優先用 parent window 的登入 token）
-    const _SB_URL = window.parent?.SB_URL || 'https://asugjynpocwygggttxyo.supabase.co/rest/v1';
+    // Supabase 連線（透過 postMessage 從 parent 取得登入 token）
+    const _SB_URL = 'https://asugjynpocwygggttxyo.supabase.co/rest/v1';
     const _SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFzdWdqeW5wb2N3eWdnZ3R0eHlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNzU3MjksImV4cCI6MjA4ODk1MTcyOX0.LzcRQAl80rZxKKD8NIYWGvylfwCbs1ek5LtKpmZodBc';
+    let _authToken = null;
+    window.addEventListener('message', e => {
+      if (e.data?.authToken) _authToken = e.data.authToken;
+    });
 
     function _cloudSave(key, data) {
-      const headers = window.parent?.HEADERS || { 'apikey': _SB_KEY, 'Authorization': 'Bearer ' + _SB_KEY };
+      if (!_authToken) return;
       fetch(_SB_URL + '/shared_kv', {
         method: 'POST',
-        headers: { ...headers, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
+        headers: {
+          'apikey': _SB_KEY,
+          'Authorization': 'Bearer ' + _authToken,
+          'Content-Type': 'application/json',
+          'Prefer': 'resolution=merge-duplicates'
+        },
         body: JSON.stringify({ key: key, value: data, updated_at: new Date().toISOString() })
       }).catch(function(e) { console.error('cloudSave error:', e); });
     }

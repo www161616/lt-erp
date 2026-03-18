@@ -1726,10 +1726,19 @@
     function renderImportGroupBuy() {
       let html = `
         <div style="width:100%; height:100%; display:flex; flex-direction:column;">
-          <iframe src="ImportGroupBuy.html" style="width:100%; flex:1; border:none; border-radius:0 0 8px 8px;"></iframe>
+          <iframe id="importGroupBuyFrame" src="ImportGroupBuy.html" style="width:100%; flex:1; border:none; border-radius:0 0 8px 8px;"></iframe>
         </div>
       `;
       document.getElementById('mainContainer').innerHTML = html;
+
+      // iframe 載入完成後傳 token
+      const iframe = document.getElementById('importGroupBuyFrame');
+      iframe.onload = () => {
+        const token = HEADERS['Authorization']?.replace('Bearer ', '');
+        if (token) {
+          iframe.contentWindow.postMessage({ authToken: token }, '*');
+        }
+      };
     }
 
     // ============================
