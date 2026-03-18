@@ -3388,7 +3388,7 @@ function showBillingDetail(orderId) {
     html += `
       <tr style="border-bottom:1px solid #f3f4f6; ${hasReturn?'background:#fce7f3;':''}">
         <td style="padding:10px 16px; color:#6b7280; font-size:12px;">${item.productId}</td>
-        <td style="padding:10px 16px; font-weight:500;">${item.name}${hasReturn?` <span style="font-size:11px; color:#ef4444; background:#fee2e2; padding:1px 6px; border-radius:8px; margin-left:4px;">退 ${item.returnQty}</span>`:''}
+        <td style="padding:10px 16px; font-weight:500;">${item.name}${hasReturn?` <span style="font-size:11px; color:#ef4444; background:#fee2e2; padding:1px 6px; border-radius:8px; margin-left:4px;">退 ${item.returnQty}</span>`:''}${((item.note||'').match(/超發 \+(\d+)/))?` <span style="font-size:11px; color:#c05621; background:#fef3c7; padding:1px 6px; border-radius:8px; margin-left:4px;">超發 +${(item.note||'').match(/超發 \+(\d+)/)[1]}</span>`:''}
         </td>
         <td style="padding:10px 16px; text-align:center;">${effectiveQty}</td>
         <td style="padding:10px 16px; text-align:right; color:#6b7280;">$${item.unitPrice.toLocaleString()}</td>
