@@ -2655,19 +2655,11 @@ function removeTfItem(idx) {
   renderTfItems();
 }
 
-async function generateTfId() {
-  const now = Date.now();
+function generateTfId() {
   const today = new Date();
   const dateStr = today.getFullYear().toString() + String(today.getMonth()+1).padStart(2,'0') + String(today.getDate()).padStart(2,'0');
-  const prefix = 'TF' + dateStr + '-';
-  try {
-    const res = await fetch(`${SB_URL}/transfer_orders?id=like.${prefix}%25&select=id&order=id.desc&limit=1`, { headers: SB_HEADERS });
-    if (!res.ok) return prefix + now.toString().slice(-6);
-    const rows = await res.json();
-    if (!rows || rows.length === 0) return prefix + '001';
-    const lastSeq = parseInt(rows[0].id.split('-').pop()) || 0;
-    return prefix + String(lastSeq + 1).padStart(3,'0');
-  } catch(e) { return prefix + now.toString().slice(-6); }
+  const timeStr = String(today.getHours()).padStart(2,'0') + String(today.getMinutes()).padStart(2,'0') + String(today.getSeconds()).padStart(2,'0');
+  return 'TF' + dateStr + '-' + timeStr;
 }
 
 async function submitTransfer() {
