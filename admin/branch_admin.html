@@ -3879,8 +3879,24 @@
       // 同步採購進度至分店前台
       syncProcurementToPortal();
 
+      // 查詢待補欠品數量
+      let pendingBOCount = 0;
+      try {
+        const boRes = await fetch(`${SB_URL}/backorders?status=eq.pending&action=eq.pending&select=id`, { headers: HEADERS });
+        if (boRes.ok) pendingBOCount = (await boRes.json()).length;
+      } catch(e) {}
+
       let html = `
         <div class="panel" style="height: 100%; display: flex; flex-direction: column;">
+        ${pendingBOCount > 0 ? `
+          <div onclick="switchTab('demandBackorder'); setTimeout(()=>{demandBackorderTab='backorder'; renderDemandBackorderStation();}, 200);" style="background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:12px 18px; margin-bottom:12px; cursor:pointer; display:flex; align-items:center; gap:10px;">
+            <span style="font-size:22px;">⚠️</span>
+            <div>
+              <div style="font-size:14px; font-weight:700; color:#c53030;">有 ${pendingBOCount} 筆欠品待補發</div>
+              <div style="font-size:12px; color:#718096;">採購叫貨時請留意待補商品，點擊查看欠品清單 →</div>
+            </div>
+          </div>
+        ` : ''}
 
           <div style="display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
             <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap;">
