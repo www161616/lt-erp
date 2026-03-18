@@ -191,7 +191,7 @@
 
     async function cloudLoadAll() {
       try {
-        const resp = await fetch(`${SB_URL}/shared_kv?key=in.("branchOrderList","branchOrders","branchDataList","branchTypeMap","portalAllRequests","portalTransferList","portalMutualAidBoard","portalSalesOrders","importedStoreNames","importedPersonalNames")`, { headers: HEADERS });
+        const resp = await fetch(`${SB_URL}/shared_kv?key=in.("branchOrderList","branchOrders","branchDataList","branchTypeMap","portalAllRequests","portalTransferList","portalMutualAidBoard","portalSalesOrders","importedStoreNames","importedPersonalNames","lt_savedWaves","lt_backorderMeta")`, { headers: HEADERS });
         if (resp.ok) {
           const rows = await resp.json();
           rows.forEach(r => {
@@ -2512,7 +2512,10 @@
       renderMatrixTable();
     }
     let mockSavedWaves = JSON.parse(localStorage.getItem('lt_savedWaves') || '[]'); // 歷史紀錄
-    function saveMockSavedWaves() { localStorage.setItem('lt_savedWaves', JSON.stringify(mockSavedWaves)); }
+    function saveMockSavedWaves() {
+      localStorage.setItem('lt_savedWaves', JSON.stringify(mockSavedWaves));
+      cloudSave('lt_savedWaves');
+    }
     // mockBackorderMeta：欠品追蹤頁暫用（問題⑤下一階段遷移至 Supabase backorders）
     let mockBackorderMeta = JSON.parse(localStorage.getItem('lt_backorderMeta') || '{}');
     function saveBackorderMeta() { localStorage.setItem('lt_backorderMeta', JSON.stringify(mockBackorderMeta)); }
