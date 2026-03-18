@@ -295,6 +295,7 @@
       <div class="menu-item" id="menuRequest" onclick="switchPage('pageRequest', this)">📋 需求表<span id="notifyRequest" style="display:none; margin-left:6px; background:#dc2626; color:white; font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px; min-width:16px; text-align:center;">0</span></div>
       <div class="menu-item" id="menuTransfer" onclick="switchPage('pageTransfer', this)">🔄 店轉店登記<span id="notifyTransfer" style="display:none; margin-left:6px; background:#dc2626; color:white; font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px; min-width:16px; text-align:center;">0</span></div>
       <div class="menu-item" id="menuAid" onclick="switchPage('pageAid', this)">🤝 互助交流<span id="notifyAid" style="display:none; margin-left:6px; background:#dc2626; color:white; font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px; min-width:16px; text-align:center;">0</span></div>
+      <div class="menu-item" onclick="switchPage('pageBackorder', this)">⚠️ 欠品清單<span id="notifyBackorder" style="display:none; margin-left:6px; background:#dc2626; color:white; font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px; min-width:16px; text-align:center; animation:pulse 1.5s infinite;">0</span></div>
       <div class="menu-item" onclick="switchPage('pageBilling', this)">📦 今日進貨單</div>
       <div class="menu-item" onclick="switchPage('pageHistory', this)">📜 所有進貨單</div>
 <div class="menu-item" id="menuLedger" onclick="switchPage('pageLedger', this)">💰 流水帳/訂包管理</div>
@@ -867,6 +868,14 @@
 
       
 
+<div id="pageBackorder" class="page">
+  <div style="background:white; border-radius:8px; border:1px solid var(--border); padding:18px 24px; margin-bottom:20px; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
+    <div style="font-size:17px; font-weight:700; color:#c53030; margin-bottom:4px;">⚠️ 欠品待補清單</div>
+    <div style="font-size:13px; color:#6b7280;">以下商品在揀貨分發時數量不足，總倉標記為「待補」。</div>
+  </div>
+  <div id="backorderContent" style="color:#9ca3af; text-align:center; padding:40px;">載入中...</div>
+</div>
+
 <div id="pageBilling" class="page">
 
   <!-- 月份選擇列 -->
@@ -1348,6 +1357,7 @@
         renderOrderPage();
         updateShortageBadge();
         updateNotificationBadges();
+        updateBackorderBadge(); // 欠品紅點
         loadProductDB(); // 載入商品資料庫（需求表/店轉店用）
       } catch(e) {
         Swal.fire('連線錯誤', e.message, 'error');
@@ -1850,6 +1860,7 @@
       pageTransfer: '🔄 店轉店登記',
       pageLedger:   '💰 流水帳/訂包管理',
       pageHistory:  '📜 所有進貨單',
+      pageBackorder:'⚠️ 欠品清單',
       pageBilling:  '📦 今日進貨單',
       pageCommon:   '⭐ 常用功能',
       pagePriceSearch: '💲 商品查價',
@@ -1887,6 +1898,7 @@
         if (pageId === 'pageSummary') initSummaryPage();
         if (pageId === 'pageRequest') renderRequestPage();
         if (pageId === 'pageTransfer') initTransferPage();
+        if (pageId === 'pageBackorder') initBackorderPage();
         if (pageId === 'pageBilling') initBillingPage();
         if (pageId === 'pageLedger') initLedgerPage();
         if (pageId === 'pageHistory') initHistoryPage();
@@ -3125,6 +3137,124 @@ const MONTHLY_FEE = 5000;
 function calcPortalOrderAmount(order) {
   if (order.finalAmount !== null) return order.finalAmount;
   return order.items.reduce((s, i) => s + i.qty * i.unitPrice, 0);
+}
+
+// ============================
+// 欠品待補清單（分店端）
+// ============================
+async function initBackorderPage() {
+  const container = document.getElementById('backorderContent');
+  container.innerHTML = '<div style="padding:40px; text-align:center; color:#9ca3af;"><i class="fas fa-spinner fa-spin"></i> 載入中...</div>';
+
+  try {
+    const store = currentStore?.name;
+    if (!store) { container.innerHTML = '<div style="padding:40px; text-align:center; color:#9ca3af;">無法取得店家資訊</div>'; return; }
+
+    const res = await fetch(`${SB_URL}/backorders?store=eq.${encodeURIComponent(store)}&order=created_at.desc`, { headers: SB_HEADERS });
+    const data = res.ok ? await res.json() : [];
+
+    const pending = data.filter(r => r.status === 'pending' || r.status === 'shipped');
+    const done = data.filter(r => r.status === 'done' || r.status === 'cancelled');
+
+    // Update badge
+    const badge = document.getElementById('notifyBackorder');
+    if (badge) {
+      if (pending.length > 0) { badge.textContent = pending.length; badge.style.display = ''; }
+      else { badge.style.display = 'none'; }
+    }
+
+    if (data.length === 0) {
+      container.innerHTML = '<div style="padding:40px; text-align:center; color:#9ca3af; font-size:14px;">目前沒有欠品紀錄 👍</div>';
+      return;
+    }
+
+    const statusLabel = { pending: '⏳ 待補發', shipped: '🚚 已補發', done: '✅ 已完成', cancelled: '❌ 取消' };
+    const statusBg = { pending: '#fef3c7', shipped: '#d1fae5', done: '#f3f4f6', cancelled: '#f3f4f6' };
+    const statusColor = { pending: '#92400e', shipped: '#047857', done: '#718096', cancelled: '#718096' };
+
+    function renderRows(rows, showStatus) {
+      return rows.map(r => {
+        const dateStr = r.created_at ? new Date(r.created_at).toLocaleDateString('zh-TW') : '';
+        const actionLabel = r.action === 'pending' ? '待補' : r.action === 'noRestock' ? '不補' : r.action === 'oversell' ? '超發' : r.action;
+        const actionColor = r.action === 'pending' ? '#b7791f' : r.action === 'noRestock' ? '#718096' : '#7c3aed';
+        return `<tr style="border-bottom:1px solid #f3f4f6;">
+          <td style="padding:10px 14px; font-weight:600;">${r.product_name || r.product_id}</td>
+          <td style="padding:10px 14px; color:#6b7280; font-size:12px;">${r.product_id}</td>
+          <td style="padding:10px 14px; text-align:center;">${r.expected_qty}</td>
+          <td style="padding:10px 14px; text-align:center;">${r.actual_qty}</td>
+          <td style="padding:10px 14px; text-align:center; font-weight:700; color:#c53030;">${r.diff}</td>
+          <td style="padding:10px 14px; text-align:center;"><span style="color:${actionColor}; font-weight:600; font-size:12px;">${actionLabel}</span></td>
+          ${showStatus ? `<td style="padding:10px 14px; text-align:center;"><span style="background:${statusBg[r.status]}; color:${statusColor[r.status]}; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;">${statusLabel[r.status] || r.status}</span></td>` : ''}
+          <td style="padding:10px 14px; color:#6b7280; font-size:12px;">${dateStr}</td>
+          <td style="padding:10px 14px; color:#6b7280; font-size:11px;">${r.wave_id}</td>
+        </tr>`;
+      }).join('');
+    }
+
+    let html = '';
+
+    // 待處理
+    if (pending.length > 0) {
+      html += `<div style="font-size:15px; font-weight:700; color:#c53030; margin-bottom:10px;">⚠️ 待處理（${pending.length} 筆）</div>
+        <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:hidden; margin-bottom:20px; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
+          <table style="width:100%; border-collapse:collapse; font-size:13px;">
+            <thead><tr style="background:#fff5f5;">
+              <th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border);">商品名稱</th>
+              <th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border);">商品編號</th>
+              <th style="padding:10px 14px; text-align:center; border-bottom:1px solid var(--border);">應發</th>
+              <th style="padding:10px 14px; text-align:center; border-bottom:1px solid var(--border);">實發</th>
+              <th style="padding:10px 14px; text-align:center; border-bottom:1px solid var(--border);">差額</th>
+              <th style="padding:10px 14px; text-align:center; border-bottom:1px solid var(--border);">處理</th>
+              <th style="padding:10px 14px; text-align:center; border-bottom:1px solid var(--border);">狀態</th>
+              <th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border);">日期</th>
+              <th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border);">揀貨單</th>
+            </tr></thead>
+            <tbody>${renderRows(pending, true)}</tbody>
+          </table>
+        </div>`;
+    }
+
+    // 已完成
+    if (done.length > 0) {
+      html += `<details style="margin-top:10px;">
+        <summary style="font-size:14px; font-weight:600; color:#718096; cursor:pointer; margin-bottom:8px;">📁 已完成紀錄（${done.length} 筆）</summary>
+        <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:hidden; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
+          <table style="width:100%; border-collapse:collapse; font-size:13px;">
+            <thead><tr style="background:#f8f9fa;">
+              <th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border);">商品名稱</th>
+              <th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border);">商品編號</th>
+              <th style="padding:10px 14px; text-align:center; border-bottom:1px solid var(--border);">應發</th>
+              <th style="padding:10px 14px; text-align:center; border-bottom:1px solid var(--border);">實發</th>
+              <th style="padding:10px 14px; text-align:center; border-bottom:1px solid var(--border);">差額</th>
+              <th style="padding:10px 14px; text-align:center; border-bottom:1px solid var(--border);">處理</th>
+              <th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border);">日期</th>
+              <th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border);">揀貨單</th>
+            </tr></thead>
+            <tbody>${renderRows(done, false)}</tbody>
+          </table>
+        </div>
+      </details>`;
+    }
+
+    container.innerHTML = html;
+  } catch(e) {
+    console.error('initBackorderPage error:', e);
+    container.innerHTML = '<div style="padding:40px; text-align:center; color:#c53030;">載入失敗，請重試</div>';
+  }
+}
+
+async function updateBackorderBadge() {
+  const store = currentStore?.name;
+  if (!store) return;
+  try {
+    const res = await fetch(`${SB_URL}/backorders?store=eq.${encodeURIComponent(store)}&status=in.(pending,shipped)&select=id`, { headers: SB_HEADERS });
+    const rows = res.ok ? await res.json() : [];
+    const badge = document.getElementById('notifyBackorder');
+    if (badge) {
+      if (rows.length > 0) { badge.textContent = rows.length; badge.style.display = ''; }
+      else { badge.style.display = 'none'; }
+    }
+  } catch(e) {}
 }
 
 function initBillingPage() {

@@ -3798,6 +3798,35 @@
 
         if (successCount === 0) throw new Error('所有分店開立均失敗，請檢查客戶資料對接。');
 
+        // 2b. 把所有有差異的品項寫入 backorders 表（補足未開過修正面板的缺口）
+        const boPayload = [];
+        wave.matrix.forEach(row => {
+          if (!row.branchData) return;
+          const pid = (row.productId || row.id).replace(/_.*$/, '');
+          Object.entries(row.branchData).forEach(([bName, data]) => {
+            const expected = data.expected || 0;
+            const actual   = data.actual ?? expected;
+            const diff     = actual - expected;
+            if (diff === 0) return;
+            const cached = correctionCache[waveId] && correctionCache[waveId][pid] && correctionCache[waveId][pid][bName];
+            const action  = cached ? (cached.action || 'pending') : (diff > 0 ? 'oversell' : 'pending');
+            boPayload.push({
+              wave_id: waveId, product_id: pid, product_name: row.name,
+              store: bName, expected_qty: expected, actual_qty: actual, action: action
+            });
+          });
+        });
+        if (boPayload.length > 0) {
+          try {
+            const boRes = await fetch(`${SB_URL}/backorders`, {
+              method: 'POST',
+              headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
+              body: JSON.stringify(boPayload)
+            });
+            if (!boRes.ok) console.warn('backorders upsert warning:', await boRes.text());
+          } catch(e) { console.warn('backorders upsert error:', e); }
+        }
+
         // 3. 更新揀貨單狀態
         wave.status = 'completed';
         wave.converted = true;
