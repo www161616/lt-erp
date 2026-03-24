@@ -644,6 +644,11 @@
     </button>
   </div>
 
+  <div id="tfBatchBar" style="display:none; align-items:center; gap:12px; background:#fefcbf; border:1px solid #ecc94b; border-radius:8px; padding:10px 16px; margin-bottom:12px;">
+    <span id="tfBatchCount" style="font-weight:700; color:#92400e; flex:1;"></span>
+    <button onclick="batchPrintTf()" style="padding:6px 14px; background:#be185d; color:white; border:none; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;">🖨️ 批次列印</button>
+    <button onclick="clearTfSelection()" style="padding:6px 14px; background:white; color:#6b7280; border:1px solid #d1d5db; border-radius:6px; font-size:13px; cursor:pointer; font-family:inherit;">✕ 清除</button>
+  </div>
   <div id="tfPanel-mine"></div>
   <div id="tfPanel-incoming" style="display:none;"></div>
   <div id="tfPanel-history" style="display:none;"></div>
@@ -2534,6 +2539,7 @@ function matchBranchName(storeName) {
 
 let transferList = [];
 let currentTfTab = 'mine';
+let tfSelectedIds = new Set();
 
 async function loadTransferList() {
   const store = currentStore?.name;
@@ -2779,7 +2785,7 @@ function renderTransferPage() {
   if (currentTfTab === 'mine') {
     const mine = transferList.filter(t => t.from_store === myName);
     let html = mine.length === 0
-      ? `<tr><td colspan="7" style="padding:24px; text-align:center; color:#9ca3af;">目前沒有登記紀錄</td></tr>`
+      ? `<tr><td colspan="8" style="padding:24px; text-align:center; color:#9ca3af;">目前沒有登記紀錄</td></tr>`
       : mine.map(t => {
           const st = t.admin_status || 'pending';
           const isCancelled = st === 'cancelled';
@@ -2792,7 +2798,9 @@ function renderTransferPage() {
           const rcvNoteHtml2 = t.receive_note ? `<div style="font-size:11px; color:#b45309; margin-top:2px;">收貨備註：${t.receive_note}</div>` : '';
           const rowStyle = isCancelled ? 'border-bottom:1px solid #f3f4f6; background:#f9fafb; opacity:0.6;' : 'border-bottom:1px solid #f3f4f6;';
           const textDeco = isCancelled ? 'text-decoration:line-through; color:#9ca3af;' : '';
+          const chk = !isCancelled ? `<input type="checkbox" ${tfSelectedIds.has(t.id)?'checked':''} onchange="toggleTfSelect('${t.id}',this.checked)" style="width:16px;height:16px;cursor:pointer;accent-color:#be185d;">` : '';
           return `<tr style="${rowStyle}">
+            <td style="padding:10px 8px 10px 16px; width:36px;">${chk}</td>
             <td style="padding:10px 16px; color:#6b7280; ${textDeco}">${t.id}${discBadge2}</td>
             <td style="padding:10px 16px; ${textDeco}">→ ${t.to_store}</td>
             <td style="padding:10px 16px; font-size:13px; ${textDeco}">${tfItemSummary(t)}</td>
@@ -2810,6 +2818,7 @@ function renderTransferPage() {
       <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:hidden; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
         <table style="width:100%; border-collapse:collapse; font-size:13px;">
           <thead><tr style="background:#fff0f6;">
+            <th style="padding:10px 8px 10px 16px; border-bottom:1px solid var(--border); width:36px;"></th>
             <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">單號</th>
             <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; min-width:120px;">轉入店</th>
             <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">商品</th>
@@ -2860,15 +2869,19 @@ function renderTransferPage() {
   } else if (currentTfTab === 'history') {
     const related = transferList.filter(t => t.from_store === myName || t.to_store === myName);
     let html = related.length === 0
-      ? `<tr><td colspan="7" style="padding:24px; text-align:center; color:#9ca3af;">沒有歷史紀錄</td></tr>`
+      ? `<tr><td colspan="8" style="padding:24px; text-align:center; color:#9ca3af;">沒有歷史紀錄</td></tr>`
       : related.map(t => {
           const direction = t.from_store === myName ? `→ ${t.to_store}` : `← ${t.from_store}`;
+          const isMyOut = t.from_store === myName;
           const st = t.admin_status || 'pending';
+          const isCancelled = st === 'cancelled';
           const statusBadge = `<span style="background:${adminStatusBg[st]||'#f3f4f6'}; color:${adminStatusColor[st]||'#374151'}; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; white-space:nowrap;">${adminStatusLabel[st]||st}</span>`;
           const noteHtml = t.warehouse_note ? `<div style="font-size:11px; color:#2563eb; margin-top:2px;">總倉：${t.warehouse_note}</div>` : '';
           const discBadge = t.has_discrepancy ? ' <span style="background:#fef3c7; color:#b45309; padding:1px 6px; border-radius:8px; font-size:10px; font-weight:700;">⚠️ 有差異</span>' : '';
           const rcvNoteHtml = t.receive_note ? `<div style="font-size:11px; color:#b45309; margin-top:2px;">收貨備註：${t.receive_note}</div>` : '';
+          const chk = (isMyOut && !isCancelled) ? `<input type="checkbox" ${tfSelectedIds.has(t.id)?'checked':''} onchange="toggleTfSelect('${t.id}',this.checked)" style="width:16px;height:16px;cursor:pointer;accent-color:#be185d;">` : '';
           return `<tr style="border-bottom:1px solid #f3f4f6;">
+            <td style="padding:10px 8px 10px 16px; width:36px;">${chk}</td>
             <td style="padding:10px 16px; color:#6b7280;">${t.id}${discBadge}</td>
             <td style="padding:10px 16px; font-weight:500;">${direction}</td>
             <td style="padding:10px 16px; font-size:13px;">${tfItemSummary(t)}</td>
@@ -2883,6 +2896,7 @@ function renderTransferPage() {
       <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:hidden; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
         <table style="width:100%; border-collapse:collapse; font-size:13px;">
           <thead><tr style="background:#f8f9fa;">
+            <th style="padding:10px 8px 10px 16px; border-bottom:1px solid var(--border); width:36px;"></th>
             <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">單號</th>
             <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">方向</th>
             <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">商品</th>
@@ -3179,6 +3193,123 @@ async function cancelTf(id) {
   Swal.fire({ icon:'success', title:'已作廢', text:`單號 ${id} 已標記為作廢`, timer:1500, showConfirmButton:false });
   await loadTransferList();
   renderTransferPage();
+}
+
+function toggleTfSelect(id, checked) {
+  checked ? tfSelectedIds.add(id) : tfSelectedIds.delete(id);
+  updateTfBatchBar();
+}
+
+function updateTfBatchBar() {
+  const bar = document.getElementById('tfBatchBar');
+  if (tfSelectedIds.size > 0) {
+    bar.style.display = 'flex';
+    document.getElementById('tfBatchCount').textContent = `已選取 ${tfSelectedIds.size} 筆轉貨單`;
+  } else {
+    bar.style.display = 'none';
+  }
+}
+
+function clearTfSelection() {
+  tfSelectedIds.clear();
+  updateTfBatchBar();
+  renderTransferPage();
+}
+
+function batchPrintTf() {
+  if (tfSelectedIds.size === 0) return;
+  const myName = currentStore?.name || '';
+
+  // 取得選取的單據
+  const selected = transferList.filter(t => tfSelectedIds.has(t.id));
+  if (selected.length === 0) return;
+
+  // 依 to_store 分組，合併品項
+  const grouped = {};
+  selected.forEach(t => {
+    const store = t.to_store;
+    if (!grouped[store]) grouped[store] = { to_store: store, from_store: myName, items: {}, temp_notes: new Set(), orderIds: [] };
+    grouped[store].orderIds.push(t.id);
+    if (t.temp_note) grouped[store].temp_notes.add(t.temp_note);
+    (t.items || []).forEach(item => {
+      const key = (item.product_code || '') + '|' + item.product_name;
+      if (!grouped[store].items[key]) {
+        grouped[store].items[key] = { product_code: item.product_code || '', product_name: item.product_name, qty: 0 };
+      }
+      grouped[store].items[key].qty += item.qty;
+    });
+  });
+
+  const today = new Date();
+  const dateStr = `${today.getMonth()+1}/${today.getDate()}`;
+
+  // 組裝列印頁面（多店用 page-break 分頁）
+  const pages = Object.values(grouped).map(g => {
+    const items = Object.values(g.items);
+    const tn = g.temp_notes.size === 1 ? [...g.temp_notes][0] : '';
+    const tempMark = (v) => v === tn ? `<span style="border:2px solid #000; border-radius:50%; padding:0 6px; font-weight:bold;">${v}</span>` : v;
+
+    const itemRows = items.map(i =>
+      `<tr>
+        <td style="border:1px solid #000; padding:6px 8px; font-size:15px;">
+          <div style="font-size:12px; color:#666; font-weight:bold;">編號 ${i.product_code}</div>
+          <div style="font-size:16px; font-weight:bold; margin-top:2px;">${i.product_name}</div>
+        </td>
+        <td style="border:1px solid #000; padding:6px 8px; text-align:center; font-size:18px; font-weight:bold; width:60px;">x${i.qty}</td>
+      </tr>`
+    ).join('');
+
+    const emptyCount = Math.max(0, 6 - items.length);
+    const emptyRows = Array(emptyCount).fill(
+      `<tr><td style="border:1px solid #000; padding:6px 8px; height:45px;"><span style="font-size:12px; color:#999; font-weight:bold;">編號</span></td><td style="border:1px solid #000; padding:6px 8px; width:60px;"></td></tr>`
+    ).join('');
+
+    return `<div style="page-break-after:always;">
+      <table style="width:100%; border-collapse:collapse; margin-bottom:6px;">
+        <tr>
+          <td style="border:1px solid #000; padding:8px; font-size:15px; font-weight:bold; width:90px;">轉出店家</td>
+          <td style="border:1px solid #000; padding:8px; font-size:20px; font-weight:bold;">${g.from_store}</td>
+          <td style="border:1px solid #000; padding:8px; font-size:18px; font-weight:bold; width:55px; text-align:center;">${dateStr}</td>
+        </tr>
+        <tr>
+          <td style="border:1px solid #000; padding:8px; font-size:15px; font-weight:bold;">轉入店家</td>
+          <td colspan="2" style="border:1px solid #000; padding:8px; font-size:20px; font-weight:bold;">${g.to_store}</td>
+        </tr>
+      </table>
+      <div style="text-align:center; padding:6px 0; font-size:16px; border:1px solid #000; border-bottom:none; letter-spacing:12px;">
+        ${tempMark('常溫')}　${tempMark('冷藏')}　${tempMark('冷凍')}
+      </div>
+      <table style="width:100%; border-collapse:collapse;">
+        <tr>
+          <td style="border:1px solid #000; padding:6px 8px; font-size:14px; font-weight:bold; text-align:center;">商品編號/商品名稱</td>
+          <td style="border:1px solid #000; padding:6px 8px; font-size:14px; font-weight:bold; text-align:center; width:60px;">數量</td>
+        </tr>
+        ${itemRows}
+        ${emptyRows}
+      </table>
+      <div style="margin-top:4px; font-size:11px; color:#999;">合併單號：${g.orderIds.join('、')}</div>
+    </div>`;
+  }).join('');
+
+  const win = window.open('', '_blank', 'width=350,height=700');
+  win.document.write(`
+    <!DOCTYPE html><html><head><meta charset="UTF-8">
+    <style>
+      @page { margin: 2mm; size: 80mm auto; }
+      body { font-family: 'Microsoft JhengHei', sans-serif; font-size: 16px; width: 76mm; margin: 0; padding: 4px; }
+      table { width:100%; border-collapse:collapse; }
+      .no-print { position:fixed; top:8px; right:8px; z-index:99; }
+      .no-print button { padding:8px 16px; font-size:14px; border:none; border-radius:6px; cursor:pointer; font-weight:bold; margin-left:6px; }
+      @media print { .no-print { display:none; } }
+    </style></head><body>
+    <div class="no-print">
+      <button onclick="window.print()" style="background:#be185d; color:white;">🖨️ 列印</button>
+      <button onclick="window.close()" style="background:#e2e8f0; color:#333;">✕ 關閉</button>
+    </div>
+    ${pages}
+    </body></html>
+  `);
+  win.document.close();
 }
 
 function printTransfer(id) {
