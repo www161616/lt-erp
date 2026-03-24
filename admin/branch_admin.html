@@ -6948,6 +6948,7 @@
             <button class="btn" style="padding:5px 12px; font-size:12px; background:#718096;" onclick="toggleSelectAllSO()">☑ 全選</button>
             <button class="btn" style="padding:5px 12px; font-size:12px; background:#047857;" onclick="batchIssueSO()">✅ 批次開立</button>
             <button class="btn btn-print" style="padding:5px 12px; font-size:12px;" onclick="batchPrintSO()">🖨️ 批次列印</button>
+            <button class="btn" style="padding:5px 12px; font-size:12px; background:#b7791f;" onclick="batchSalesReturn()">📤 批次銷退</button>
             <button class="btn" style="padding:5px 12px; font-size:12px; background:#c53030;" onclick="batchDeleteSO()">🗑️ 批次刪除</button>
             <span id="soSelectCount" style="font-size:12px; color:#718096; display:none;">已選 0 筆</span>
           </div>
@@ -7252,6 +7253,7 @@
             <div style="display:flex; gap:4px; justify-content:center;">
               <button class="btn btn-print" style="padding:3px 8px; font-size:11px;" onclick="event.stopPropagation();printSalesOrderDetail('${o.id}')">🖨️</button>
               ${o.status === 'confirmed' || o.status === 'pending' ? `<button class="btn" style="padding:3px 8px; font-size:11px; background:#047857;" onclick="event.stopPropagation();issueOfficialSalesOrder('${o.id}')">開立正式銷貨單</button>` : ''}
+              ${o.status === 'issued' || o.status === 'closed' ? `<button class="btn" style="padding:3px 8px; font-size:11px; background:#b7791f;" onclick="event.stopPropagation();openSalesReturn('${o.id}')">📤 銷貨退回</button>` : ''}
               ${o.status === 'disputed' ? `<button class="btn" style="padding:3px 8px; font-size:11px; background:#c53030;" onclick="event.stopPropagation();showSalesOrderDetail('${o.id}')">處理退貨</button>` : ''}
               <button class="btn" style="padding:3px 8px; font-size:11px; background:#c53030;" onclick="event.stopPropagation();deleteSalesOrder('${o.id}')">🗑️</button>
             </div>
@@ -8823,6 +8825,305 @@
     });
   }
 
+
+  // ============================
+  // 銷貨退回
+  // ============================
+  async function openSalesReturn(id) {
+    const o = mockSalesOrders.find(s => s.id === id);
+    if (!o) return;
+
+    const itemRows = o.items.map(function(item, idx) {
+      return '<tr>' +
+        '<td style="padding:8px 10px; border-bottom:1px solid #f3f4f6; font-size:13px;">' +
+          '<div style="font-weight:700;">' + item.name + '</div>' +
+          '<div style="font-size:11px; color:#9ca3af;">' + (item.productId || '') + '</div>' +
+        '</td>' +
+        '<td style="padding:8px 10px; border-bottom:1px solid #f3f4f6; text-align:center; font-weight:700;">' + item.qty + '</td>' +
+        '<td style="padding:8px 10px; border-bottom:1px solid #f3f4f6; text-align:center;">' +
+          '<input type="number" id="retQty-' + idx + '" min="0" max="' + item.qty + '" value="0" style="width:65px; padding:5px; border:1.5px solid #e2e8f0; border-radius:6px; font-size:14px; font-weight:700; text-align:center; font-family:inherit;">' +
+        '</td>' +
+      '</tr>';
+    }).join('');
+
+    var result = await Swal.fire({
+      title: '📤 銷貨退回 — ' + o.storeName,
+      html: '<div style="text-align:left; font-size:13px; margin-bottom:8px; color:#6b7280;">原單：<b>' + id + '</b>，勾選要退回的品項並填數量：</div>' +
+        '<div style="max-height:300px; overflow-y:auto;">' +
+          '<table style="width:100%; border-collapse:collapse;">' +
+            '<thead><tr style="background:#fef3c7;">' +
+              '<th style="padding:8px 10px; text-align:left; font-size:12px; color:#6b7280;">品名</th>' +
+              '<th style="padding:8px 10px; text-align:center; font-size:12px; color:#6b7280;">原數量</th>' +
+              '<th style="padding:8px 10px; text-align:center; font-size:12px; color:#6b7280;">退回數量</th>' +
+            '</tr></thead>' +
+            '<tbody>' + itemRows + '</tbody>' +
+          '</table>' +
+        '</div>' +
+        '<div style="margin-top:12px; text-align:left;">' +
+          '<label style="font-size:13px; font-weight:600; color:#374151;">退回原因（必填）</label>' +
+          '<textarea id="retReason" rows="2" placeholder="例如：品質問題、訂錯商品、數量錯誤..." style="width:100%; margin-top:4px; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px; font-size:13px; font-family:inherit; resize:vertical; box-sizing:border-box;"></textarea>' +
+        '</div>',
+      width: 520,
+      showCancelButton: true,
+      confirmButtonText: '確認開立退回單',
+      cancelButtonText: '取消',
+      confirmButtonColor: '#b7791f',
+      preConfirm: function() {
+        var retItems = [];
+        o.items.forEach(function(item, idx) {
+          var qty = Number(document.getElementById('retQty-' + idx).value) || 0;
+          if (qty > 0) retItems.push({ product_id: item.productId ? item.productId.split('_')[0] : null, product_name: item.name, qty: qty, unit_price: item.unitPrice, cost: item.cost || 0 });
+        });
+        var reason = (document.getElementById('retReason').value || '').trim();
+        if (retItems.length === 0) { Swal.showValidationMessage('請至少填一項退回數量'); return false; }
+        if (!reason) { Swal.showValidationMessage('請填寫退回原因'); return false; }
+        return { items: retItems, reason: reason };
+      }
+    });
+
+    if (!result.isConfirmed) return;
+
+    var retItems = result.value.items;
+    var reason = result.value.reason;
+    var subtotal = retItems.reduce(function(s, i) { return s + i.qty * i.unit_price; }, 0);
+
+    // 找客戶 ID
+    var custRes = await fetch(SB_URL + '/customers?name=ilike.*' + encodeURIComponent(o.storeName) + '*&select=id,name,tax_type&limit=1', { headers: HEADERS });
+    var custData = await custRes.json();
+    var cust = custData.length > 0 ? custData[0] : { id: null, name: o.storeName, tax_type: '免稅' };
+
+    // 用原單日期解析
+    var origDate = o.createdAt ? o.createdAt.replace(/\//g, '-').substring(0, 10) : new Date().toISOString().split('T')[0];
+
+    var orderData = {
+      order_id: null,
+      order_date: new Date().toISOString().split('T')[0],
+      customer_id: cust.id,
+      customer_name: cust.name,
+      subtotal: -subtotal,
+      tax_amount: 0,
+      grand_total: -subtotal,
+      tax_type: cust.tax_type || '免稅',
+      shipping_fee: 0,
+      deduction: 0,
+      note: '銷退：原單 ' + id + ' | 原因：' + reason,
+      items: retItems.map(function(i) {
+        return { product_id: i.product_id, product_name: i.product_name, unit: '件', qty: -i.qty, price: i.unit_price, cost: i.cost, note: '銷退 ' + id };
+      })
+    };
+
+    Swal.fire({ title: '開立中...', allowOutsideClick: false, didOpen: function() { Swal.showLoading(); } });
+
+    try {
+      var res = await fetch(SB_URL + '/rpc/web_save_sales_order', {
+        method: 'POST',
+        headers: HEADERS,
+        body: JSON.stringify({ p_order_data: orderData })
+      });
+
+      if (!res.ok) throw new Error(await res.text());
+      var resData = await res.json();
+      var newId = resData.order_id || resData.id || '';
+
+      // 更新 order_type 為 return
+      await fetch(SB_URL + '/sales_orders?id=eq.' + newId, {
+        method: 'PATCH',
+        headers: HEADERS,
+        body: JSON.stringify({ order_type: 'return' })
+      });
+
+      // 同步到 portal（讓分店看到退回單）
+      mockSalesOrders.push({
+        id: newId,
+        waveId: 'RETURN-' + id,
+        storeName: o.storeName,
+        createdAt: new Date().toLocaleString('zh-TW', { hour12: false }),
+        storeConfirmedAt: null,
+        status: 'issued',
+        issuedAt: new Date().toLocaleString('zh-TW', { hour12: false }),
+        finalAmount: -subtotal,
+        orderType: 'return',
+        note: '銷退：原單 ' + id + ' | 原因：' + reason,
+        items: retItems.map(function(i) {
+          return { productId: i.product_id, name: i.product_name, qty: -i.qty, unitPrice: i.unit_price, returnQty: 0, returnStatus: 'none', returnReason: '', returnDate: '', damaged: false, note: '銷退' };
+        })
+      });
+      syncSalesOrdersToPortal();
+
+      logActivity('開立銷貨退回單', newId, { originalOrder: id, store: o.storeName, amount: -subtotal, reason: reason });
+
+      Swal.fire({
+        icon: 'success',
+        title: '銷貨退回單已開立',
+        html: '退回單號：<b>' + newId + '</b><br>原單：' + id + '<br>退回金額：<b style="color:#c53030;">-$' + subtotal.toLocaleString() + '</b>',
+        confirmButtonColor: '#b7791f'
+      }).then(function() { renderAccountingStation(); });
+
+    } catch (e) {
+      Swal.fire('開立失敗', e.message, 'error');
+    }
+  }
+
+  async function batchSalesReturn() {
+    var ids = getCheckedSOIds();
+    if (ids.length === 0) { Swal.fire('提醒', '請先勾選要退貨的銷貨單', 'warning'); return; }
+
+    var orders = ids.map(function(id) { return mockSalesOrders.find(function(s) { return s.id === id; }); }).filter(Boolean);
+    var issuedOrders = orders.filter(function(o) { return o.status === 'issued' || o.status === 'closed'; });
+
+    if (issuedOrders.length === 0) { Swal.fire('提醒', '勾選的單據中沒有已開立的銷貨單', 'warning'); return; }
+
+    // 找出共同商品（出現在所有選取訂單中的）
+    var productMap = {};
+    issuedOrders.forEach(function(o) {
+      o.items.forEach(function(item) {
+        var key = item.productId ? item.productId.split('_')[0] : item.name;
+        if (!productMap[key]) productMap[key] = { id: key, name: item.name, unitPrice: item.unitPrice, cost: item.cost || 0, count: 0, maxQty: 0 };
+        productMap[key].count++;
+        productMap[key].maxQty = Math.max(productMap[key].maxQty, item.qty);
+      });
+    });
+
+    var allProducts = Object.values(productMap).sort(function(a, b) { return b.count - a.count; });
+
+    var productRows = allProducts.map(function(p, idx) {
+      var inAll = p.count === issuedOrders.length;
+      return '<tr>' +
+        '<td style="padding:6px 10px; border-bottom:1px solid #f3f4f6;">' +
+          '<input type="checkbox" id="bRetChk-' + idx + '" ' + (inAll ? 'checked' : '') + ' style="width:16px; height:16px; cursor:pointer; accent-color:#b7791f;">' +
+        '</td>' +
+        '<td style="padding:6px 10px; border-bottom:1px solid #f3f4f6; font-size:13px; font-weight:700;">' + p.name +
+          (inAll ? '' : ' <span style="font-size:10px; color:#9ca3af;">(' + p.count + '/' + issuedOrders.length + '店)</span>') +
+        '</td>' +
+        '<td style="padding:6px 10px; border-bottom:1px solid #f3f4f6; text-align:center;">' +
+          '<input type="number" id="bRetQty-' + idx + '" min="0" value="0" style="width:65px; padding:5px; border:1.5px solid #e2e8f0; border-radius:6px; font-size:14px; font-weight:700; text-align:center; font-family:inherit;">' +
+        '</td>' +
+      '</tr>';
+    }).join('');
+
+    var storeList = issuedOrders.map(function(o) { return o.storeName; }).join('、');
+
+    var result = await Swal.fire({
+      title: '📤 批次銷貨退回',
+      html: '<div style="text-align:left; font-size:13px; margin-bottom:8px;">' +
+        '<div style="color:#6b7280; margin-bottom:6px;">已選 <b>' + issuedOrders.length + '</b> 間店：' + storeList + '</div>' +
+        '<div style="color:#b45309; font-size:12px; margin-bottom:8px;">勾選要退的商品並填退回數量（每店統一退同樣數量）</div>' +
+        '</div>' +
+        '<div style="max-height:300px; overflow-y:auto;">' +
+          '<table style="width:100%; border-collapse:collapse;">' +
+            '<thead><tr style="background:#fef3c7;">' +
+              '<th style="padding:6px 10px; width:36px;"></th>' +
+              '<th style="padding:6px 10px; text-align:left; font-size:12px; color:#6b7280;">商品</th>' +
+              '<th style="padding:6px 10px; text-align:center; font-size:12px; color:#6b7280;">每店退回數量</th>' +
+            '</tr></thead>' +
+            '<tbody>' + productRows + '</tbody>' +
+          '</table>' +
+        '</div>' +
+        '<div style="margin-top:12px; text-align:left;">' +
+          '<label style="font-size:13px; font-weight:600; color:#374151;">退回原因（必填）</label>' +
+          '<textarea id="bRetReason" rows="2" placeholder="例如：品質問題、廠商召回..." style="width:100%; margin-top:4px; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px; font-size:13px; font-family:inherit; resize:vertical; box-sizing:border-box;"></textarea>' +
+        '</div>',
+      width: 560,
+      showCancelButton: true,
+      confirmButtonText: '確認批次退回 (' + issuedOrders.length + ' 店)',
+      cancelButtonText: '取消',
+      confirmButtonColor: '#b7791f',
+      preConfirm: function() {
+        var retProducts = [];
+        allProducts.forEach(function(p, idx) {
+          var checked = document.getElementById('bRetChk-' + idx).checked;
+          var qty = Number(document.getElementById('bRetQty-' + idx).value) || 0;
+          if (checked && qty > 0) retProducts.push({ id: p.id, name: p.name, qty: qty, unitPrice: p.unitPrice, cost: p.cost });
+        });
+        var reason = (document.getElementById('bRetReason').value || '').trim();
+        if (retProducts.length === 0) { Swal.showValidationMessage('請至少勾選一項商品並填退回數量'); return false; }
+        if (!reason) { Swal.showValidationMessage('請填寫退回原因'); return false; }
+        return { products: retProducts, reason: reason };
+      }
+    });
+
+    if (!result.isConfirmed) return;
+
+    var retProducts = result.value.products;
+    var reason = result.value.reason;
+
+    Swal.fire({ title: '批次開立退回單...', allowOutsideClick: false, didOpen: function() { Swal.showLoading(); } });
+
+    // 查客戶表
+    var custRes = await fetch(SB_URL + '/customers?select=id,name,tax_type', { headers: HEADERS });
+    var customers = await custRes.json();
+
+    var ok = 0, fail = 0, errors = [];
+
+    for (var i = 0; i < issuedOrders.length; i++) {
+      var o = issuedOrders[i];
+      // 只退該店有的商品
+      var storeRetItems = [];
+      retProducts.forEach(function(rp) {
+        var match = o.items.find(function(it) { return (it.productId ? it.productId.split('_')[0] : it.name) === rp.id; });
+        if (match) {
+          var retQty = Math.min(rp.qty, match.qty);
+          if (retQty > 0) storeRetItems.push({ product_id: rp.id, product_name: rp.name, qty: retQty, unit_price: match.unitPrice, cost: match.cost || 0 });
+        }
+      });
+
+      if (storeRetItems.length === 0) continue;
+
+      var subtotal = storeRetItems.reduce(function(s, it) { return s + it.qty * it.unit_price; }, 0);
+      var cust = customers.find(function(c) { return c.name.includes(o.storeName) || o.storeName.includes(c.name); }) || { id: null, name: o.storeName, tax_type: '免稅' };
+
+      try {
+        var orderData = {
+          order_id: null,
+          order_date: new Date().toISOString().split('T')[0],
+          customer_id: cust.id,
+          customer_name: cust.name,
+          subtotal: -subtotal,
+          tax_amount: 0,
+          grand_total: -subtotal,
+          tax_type: cust.tax_type || '免稅',
+          shipping_fee: 0,
+          deduction: 0,
+          note: '銷退：原單 ' + o.id + ' | 原因：' + reason,
+          items: storeRetItems.map(function(it) {
+            return { product_id: it.product_id, product_name: it.product_name, unit: '件', qty: -it.qty, price: it.unit_price, cost: it.cost, note: '銷退 ' + o.id };
+          })
+        };
+
+        var res = await fetch(SB_URL + '/rpc/web_save_sales_order', { method: 'POST', headers: HEADERS, body: JSON.stringify({ p_order_data: orderData }) });
+        if (!res.ok) { errors.push(o.storeName + ': ' + (await res.text())); fail++; continue; }
+        var resData = await res.json();
+        var newId = resData.order_id || resData.id || '';
+
+        await fetch(SB_URL + '/sales_orders?id=eq.' + newId, { method: 'PATCH', headers: HEADERS, body: JSON.stringify({ order_type: 'return' }) });
+
+        mockSalesOrders.push({
+          id: newId, waveId: 'RETURN-' + o.id, storeName: o.storeName,
+          createdAt: new Date().toLocaleString('zh-TW', { hour12: false }),
+          storeConfirmedAt: null, status: 'issued',
+          issuedAt: new Date().toLocaleString('zh-TW', { hour12: false }),
+          finalAmount: -subtotal, orderType: 'return',
+          note: '銷退：原單 ' + o.id + ' | 原因：' + reason,
+          items: storeRetItems.map(function(it) {
+            return { productId: it.product_id, name: it.product_name, qty: -it.qty, unitPrice: it.unit_price, returnQty: 0, returnStatus: 'none', returnReason: '', returnDate: '', damaged: false, note: '銷退' };
+          })
+        });
+
+        ok++;
+        Swal.update({ title: '批次開立中... ' + ok + '/' + issuedOrders.length });
+      } catch (e) { errors.push(o.storeName + ': ' + e.message); fail++; }
+    }
+
+    syncSalesOrdersToPortal();
+    logActivity('批次銷貨退回', issuedOrders.map(function(o) { return o.id; }).join(', '), { count: ok, reason: reason, products: retProducts.map(function(p) { return p.name; }).join(', ') });
+
+    var msg = '成功開立 <b>' + ok + '</b> 筆退回單';
+    if (fail > 0) msg += '<br>失敗 <b>' + fail + '</b> 筆';
+    if (errors.length > 0) msg += '<br><div style="text-align:left; font-size:11px; color:#c53030; margin-top:8px;">' + errors.join('<br>') + '</div>';
+
+    Swal.fire({ icon: fail ? 'warning' : 'success', title: '批次銷退完成', html: msg, confirmButtonColor: '#b7791f' })
+      .then(function() { renderAccountingStation(); });
+  }
 
   // ============================
   // （員工管理與分店管理已移至 index.html）

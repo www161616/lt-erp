@@ -246,7 +246,7 @@
       document.getElementById('exportListBtn').disabled = true;
 
       try {
-        let queryUrl = `${SB_URL}/sales_orders?select=id,order_date,customer_id,customer_name,grand_total,payment_status`;
+        let queryUrl = `${SB_URL}/sales_orders?select=id,order_date,customer_id,customer_name,grand_total,payment_status,order_type`;
         
         if(dateFrom) queryUrl += `&order_date=gte.${dateFrom}`;
         if(dateTo) queryUrl += `&order_date=lte.${dateTo}`;
@@ -266,9 +266,10 @@
             orderId: o.id,
             date: o.order_date,
             customerId: o.customer_id,
-            customerName: o.customer_name || '未知客戶', 
-            total: o.grand_total,                        
-            paymentStatus: o.payment_status || '未收款'
+            customerName: o.customer_name || '未知客戶',
+            total: o.grand_total,
+            paymentStatus: o.payment_status || '未收款',
+            orderType: o.order_type || 'normal'
         }));
 
         renderList(formattedOrders);
@@ -300,8 +301,13 @@
            statusBadge = '<div class="badge-tag st-unpaid">未收款</div>';
         }
 
+        const isReturn = o.orderType === 'return';
+        const returnBadge = isReturn ? '<div class="badge-tag" style="background:#fef3c7; color:#b45309; border-color:#f59e0b;">銷退</div>' : '';
+        const amtColor = isReturn ? 'color:#c53030;' : '';
+        const cardBorder = isReturn ? 'border-left:3px solid #f59e0b;' : '';
+
         html += `
-          <div class="order-card" id="card-${o.orderId}" onclick="selectOrder('${o.orderId}')">
+          <div class="order-card" id="card-${o.orderId}" onclick="selectOrder('${o.orderId}')" style="${cardBorder}">
             <div class="card-top">
               <span class="card-id">${o.orderId}</span>
               <span class="card-date">${o.date}</span>
@@ -309,9 +315,9 @@
             <div class="card-mid">
               <div>
                 <div class="card-cust">${o.customerName}</div>
-                ${statusBadge}
+                ${returnBadge}${statusBadge}
               </div>
-              <span class="card-amt">$${(o.total||0).toLocaleString()}</span>
+              <span class="card-amt" style="${amtColor}">$${(o.total||0).toLocaleString()}</span>
             </div>
           </div>
         `;
