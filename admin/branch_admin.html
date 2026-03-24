@@ -631,9 +631,9 @@
     let currentPickingTask = null; 
 
     function renderPickingStation() {
-      const restockBanner = (pendingRestockWaveId || pendingDemandInqId)
+      const restockBanner = (pendingRestockWaveId || pendingDemandInqIds.length > 0)
         ? `<div style="background:#fef2f2; border:1px solid #fca5a5; border-radius:8px; padding:10px 16px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
-            <span style="color:#c53030; font-weight:700; font-size:14px;">⚠️ ${pendingRestockWaveId ? '補發模式（來源：' + pendingRestockWaveId + '）' : '需求補發模式'}</span>
+            <span style="color:#c53030; font-weight:700; font-size:14px;">⚠️ ${pendingRestockWaveId ? '補發模式（來源：' + pendingRestockWaveId + '）' : '需求補發模式（' + pendingDemandInqIds.length + ' 筆）'}</span>
             <button class="btn" style="background:#c53030; padding:6px 16px; font-size:13px;" onclick="cancelRestockMode()">✕ 取消補發模式</button>
           </div>`
         : '';
@@ -811,17 +811,19 @@
         }
       }
       // 如果是從需求建立的，還原需求狀態
-      if (pendingDemandInqId) {
-        var dInq = mockInquiries.find(function(i) { return i.id === pendingDemandInqId; });
-        if (dInq) {
-          dInq.status = 'pending';
-          dInq.reply = '';
-          dInq.repliedAt = '';
-          syncReplyToPortal(dInq);
-        }
+      if (pendingDemandInqIds.length > 0) {
+        pendingDemandInqIds.forEach(function(did) {
+          var dInq = mockInquiries.find(function(i) { return i.id === did; });
+          if (dInq) {
+            dInq.status = 'pending';
+            dInq.reply = '';
+            dInq.repliedAt = '';
+            syncReplyToPortal(dInq);
+          }
+        });
       }
       pendingRestockWaveId = null;
-      pendingDemandInqId = null;
+      pendingDemandInqIds = [];
       Swal.fire({ icon: 'info', title: '已取消', text: '返回欠品管理', timer: 1500, showConfirmButton: false })
         .then(function() { switchTab('backorder'); });
     }
@@ -2525,7 +2527,7 @@
     }
 
     let pendingRestockWaveId = null; // 如果正在建立補發揀貨單，記錄原始 wave_id
-    let pendingDemandInqId = null;  // 如果從需求建立揀貨，記錄需求 ID（儲存後才標記 replied）
+    let pendingDemandInqIds = [];  // 如果從需求建立揀貨，記錄需求 ID 們（儲存後才標記 replied）
 
     // 取得目前可見的店名欄位（根據 hideZeroCols 過濾）
     function getVisibleStoreNames() {
@@ -3031,16 +3033,19 @@
         saveMockSavedWaves();
 
         // 如果是從需求建立的，現在才標記 replied
-        if (pendingDemandInqId) {
-          var dInq = mockInquiries.find(function(i) { return i.id === pendingDemandInqId; });
-          if (dInq) {
-            dInq.status = 'replied';
-            dInq.reply = '已建立補發揀貨單';
-            var dnow = new Date();
-            dInq.repliedAt = dnow.getFullYear() + '/' + String(dnow.getMonth()+1).padStart(2,'0') + '/' + String(dnow.getDate()).padStart(2,'0') + ' ' + String(dnow.getHours()).padStart(2,'0') + ':' + String(dnow.getMinutes()).padStart(2,'0');
-            syncReplyToPortal(dInq);
-          }
-          pendingDemandInqId = null;
+        if (pendingDemandInqIds.length > 0) {
+          var dnow = new Date();
+          var dts = dnow.getFullYear() + '/' + String(dnow.getMonth()+1).padStart(2,'0') + '/' + String(dnow.getDate()).padStart(2,'0') + ' ' + String(dnow.getHours()).padStart(2,'0') + ':' + String(dnow.getMinutes()).padStart(2,'0');
+          pendingDemandInqIds.forEach(function(did) {
+            var dInq = mockInquiries.find(function(i) { return i.id === did; });
+            if (dInq) {
+              dInq.status = 'replied';
+              dInq.reply = '已建立補發揀貨單';
+              dInq.repliedAt = dts;
+              syncReplyToPortal(dInq);
+            }
+          });
+          pendingDemandInqIds = [];
         }
 
         // 建立完成，留在原頁，進入編輯模式
@@ -5566,9 +5571,19 @@
       // 確保分店資料已初始化
       initPickingData();
 
-      // 檢查是否已在大表中
+      // 如果同商品已在大表中，合併數量
       if (activePickingMatrix.some(r => r.id === inq.productId)) {
-        Swal.fire('提示', '此商品已在分貨站大表中，請直接修改數量。', 'info')
+        const existing = activePickingMatrix.find(r => r.id === inq.productId);
+        if (existing.branchData[inq.storeId]) {
+          existing.branchData[inq.storeId].expected += inq.qty;
+          existing.branchData[inq.storeId].actual += inq.qty;
+        } else {
+          existing.branchData[inq.storeId] = { expected: inq.qty, actual: inq.qty };
+        }
+        existing.expectedSum += inq.qty;
+        existing.actualSum += inq.qty;
+        pendingDemandInqIds.push(inqId);
+        Swal.fire('已合併', `已將 ${inq.storeId} ${inq.qty} 件合併至揀貨單`, 'success')
           .then(() => switchTab('picking'));
         return;
       }
@@ -5602,7 +5617,7 @@
       });
 
       // 延遲標記：先記住 inqId，儲存揀貨單後才改 replied
-      pendingDemandInqId = inqId;
+      pendingDemandInqIds.push(inqId);
 
       switchTab('picking');
     });
