@@ -4894,7 +4894,7 @@
       <div style="display:flex; flex-direction:column; gap:15px; height:100%;">
         <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--border); padding-bottom:10px; flex-shrink:0;">
           <div style="font-size:16px; font-weight:bold; color:#2d3748;">🚨 欠品追蹤與補發</div>
-          <div style="display:flex; gap:8px; align-items:center;">
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
             <label style="font-size:13px; color:#718096;">篩選：</label>
             <select id="backorderFilter" onchange="refreshBackorderTable()" style="padding:6px 10px; border:1px solid var(--border); border-radius:4px; font-family:inherit; font-size:13px;">
               <option value="all">全部異常</option>
@@ -4904,6 +4904,16 @@
               <option value="done">已完成</option>
             </select>
             <button class="btn" style="background:#f1f5f9; color:#718096; border:1px solid #718096; font-size:13px;" onclick="refreshBackorderTable()">🔄 重新整理</button>
+            <span style="color:#e2e8f0;">│</span>
+            <select id="boBatchStatus" style="padding:6px 10px; border:1px solid var(--border); border-radius:4px; font-family:inherit; font-size:13px;">
+              <option value="pending">⏳ 待處理</option>
+              <option value="shipped">✅ 已出貨</option>
+              <option value="done">🎉 已完成</option>
+              <option value="out_of_stock">❌ 斷貨</option>
+            </select>
+            <button class="btn" style="padding:5px 12px; font-size:12px; background:#2b6cb0;" onclick="batchUpdateBOStatus()">套用狀態</button>
+            <button class="btn" style="padding:5px 12px; font-size:12px; background:#c53030;" onclick="batchDeleteBO()">🗑️ 批次刪除</button>
+            <span id="boSelectCount" style="font-size:12px; color:#718096; display:none;">已選 0 筆</span>
           </div>
         </div>
         <div id="backorderSummary" style="flex-shrink:0;"></div>
@@ -4911,6 +4921,7 @@
           <table style="width:100%; border-collapse:collapse; font-size:13px;">
             <thead style="position:sticky; top:0; z-index:1; background:#eef1f5; box-shadow:0 1px 2px rgba(0,0,0,0.1);">
               <tr>
+                <th style="padding:10px 6px; text-align:center; width:28px;"><input type="checkbox" onchange="document.querySelectorAll('.bo-check').forEach(c=>c.checked=this.checked); updateBOSelectCount();" style="width:15px; height:15px; cursor:pointer;"></th>
                 <th style="padding:10px 12px; white-space:nowrap; min-width:135px;">揀貨單號 / 日期</th>
                 <th style="padding:10px 12px; min-width:150px;">商品</th>
                 <th style="padding:10px 12px; text-align:center; width:50px;">應發</th>
@@ -4970,7 +4981,7 @@
     const tbody = document.getElementById('backorderTableBody');
     if (!tbody) return;
     if (anomalies.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:40px; color:#718096;">目前無符合條件的異常紀錄</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:40px; color:#718096;">目前無符合條件的異常紀錄</td></tr>';
       return;
     }
 
@@ -5016,6 +5027,7 @@
         : `<span style="font-size:12px; color:#718096;">—</span>`;
 
       return `<tr style="border-bottom:1px solid #e2e8f0; ${rowBg}">
+        <td style="padding:8px 6px; text-align:center; width:28px;"><input type="checkbox" class="bo-check" value="${a.key}" data-wave="${a.waveId}" data-product="${a.productId}" onchange="updateBOSelectCount()" style="width:15px; height:15px; cursor:pointer;"></td>
         <td style="padding:8px 12px; white-space:nowrap;">
           <div style="font-family:monospace; color:#2b6cb0; font-size:12px;">${a.waveId}</div>
           <div style="color:#718096; font-size:11px; margin-top:2px;">${a.waveDate}</div>
@@ -5045,6 +5057,75 @@
         <td style="padding:8px; text-align:center;">${operationBtn}</td>
       </tr>`;
     }).join('');
+  }
+
+  function updateBOSelectCount() {
+    var n = document.querySelectorAll('.bo-check:checked').length;
+    var el = document.getElementById('boSelectCount');
+    if (el) { el.style.display = n > 0 ? '' : 'none'; el.textContent = '已選 ' + n + ' 筆'; }
+    var el2 = document.getElementById('boSelectCount2');
+    if (el2) el2.textContent = '已選 ' + n + ' 筆';
+  }
+
+  async function batchDeleteBO() {
+    var checked = Array.from(document.querySelectorAll('.bo-check:checked'));
+    if (checked.length === 0) { Swal.fire('提醒', '請先勾選要刪除的紀錄', 'warning'); return; }
+    var result = await Swal.fire({
+      title: '批次刪除 ' + checked.length + ' 筆？',
+      html: '<span style="color:#c53030;">此操作無法復原。</span>',
+      icon: 'warning', showCancelButton: true,
+      confirmButtonText: '刪除 ' + checked.length + ' 筆', cancelButtonText: '取消', confirmButtonColor: '#c53030'
+    });
+    if (!result.isConfirmed) return;
+    Swal.fire({ title: '刪除中...', allowOutsideClick: false, didOpen: function() { Swal.showLoading(); } });
+    var ok = 0, fail = 0;
+    for (var i = 0; i < checked.length; i++) {
+      var waveId = checked[i].dataset.wave;
+      var productId = checked[i].dataset.product;
+      try {
+        var res = await fetch(SB_URL + '/backorders?wave_id=eq.' + encodeURIComponent(waveId) + '&product_id=eq.' + encodeURIComponent(productId), { method: 'DELETE', headers: HEADERS });
+        if (res.ok) ok++; else fail++;
+      } catch(e) { fail++; }
+    }
+    Swal.fire({ icon: fail ? 'warning' : 'success', title: '刪除完成', html: '成功 ' + ok + ' 筆' + (fail ? '<br>失敗 ' + fail + ' 筆' : ''), timer: 1500, showConfirmButton: false });
+    refreshBackorderTable();
+  }
+
+  async function batchUpdateBOStatus() {
+    var checked = Array.from(document.querySelectorAll('.bo-check:checked'));
+    if (checked.length === 0) { Swal.fire('提醒', '請先勾選要更新的紀錄', 'warning'); return; }
+    var newStatus = document.getElementById('boBatchStatus').value;
+    var statusLabel = { pending: '待處理', shipped: '已出貨', done: '已完成', out_of_stock: '斷貨' };
+    var result = await Swal.fire({
+      title: '批次更新 ' + checked.length + ' 筆狀態？',
+      html: '將更新為：<b>' + (statusLabel[newStatus] || newStatus) + '</b>',
+      icon: 'question', showCancelButton: true,
+      confirmButtonText: '確認更新', cancelButtonText: '取消', confirmButtonColor: '#2b6cb0'
+    });
+    if (!result.isConfirmed) return;
+    Swal.fire({ title: '更新中...', allowOutsideClick: false, didOpen: function() { Swal.showLoading(); } });
+    var ok = 0, fail = 0;
+    for (var i = 0; i < checked.length; i++) {
+      var waveId = checked[i].dataset.wave;
+      var productId = checked[i].dataset.product;
+      var key = checked[i].value;
+      try {
+        var res = await fetch(SB_URL + '/backorders?wave_id=eq.' + encodeURIComponent(waveId) + '&product_id=eq.' + encodeURIComponent(productId), {
+          method: 'PATCH', headers: HEADERS,
+          body: JSON.stringify({ status: newStatus })
+        });
+        if (res.ok) {
+          ok++;
+          // 同步本地 mockBackorderMeta
+          if (!mockBackorderMeta[key]) mockBackorderMeta[key] = {};
+          mockBackorderMeta[key].status = newStatus;
+        } else fail++;
+      } catch(e) { fail++; }
+    }
+    localStorage.setItem('lt_backorderMeta', JSON.stringify(mockBackorderMeta));
+    cloudSave('lt_backorderMeta');
+    Swal.fire({ icon: fail ? 'warning' : 'success', title: '更新完成', html: '成功 ' + ok + ' 筆' + (fail ? '<br>失敗 ' + fail + ' 筆' : ''), timer: 1500, showConfirmButton: false });
+    refreshBackorderTable();
   }
 
   let backorderData = []; // Supabase backorders 表的資料快取
@@ -5395,14 +5476,60 @@
       </table>`;
   }
 
-  async function renderBackorderTab(container) {
-    const filter = document.getElementById('db-bo-filter')?.value || 'all';
-    container.innerHTML = '<div style="text-align:center; padding:40px; color:#718096;"><i class="fas fa-spinner fa-spin"></i> 載入中...</div>';
+  let _boTabCache = []; // 快取 DB 載入的全部資料，前端篩選不重打 DB
+  let _boTabContainer = null;
 
-    const data = await loadBackorderData(filter);
+  function buildBOFilterBar() {
+    var actionVal = document.getElementById('bo-action-filter')?.value || 'all';
+    var statusVal = document.getElementById('bo-status-filter')?.value || 'all';
+    var kwVal = document.getElementById('bo-kw-filter')?.value || '';
+    return '<div style="display:flex; align-items:center; gap:8px; padding:8px 12px; background:#f0f7ff; border-bottom:1px solid #e2e8f0; flex-wrap:wrap;">' +
+      '<span style="font-size:12px; color:#2b6cb0; font-weight:700;">篩選：</span>' +
+      '<select id="bo-action-filter" onchange="renderBackorderTab(null,true)" style="padding:4px 8px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px; font-family:inherit;">' +
+        '<option value="all"' + (actionVal==='all'?' selected':'') + '>全部操作</option>' +
+        '<option value="pending"' + (actionVal==='pending'?' selected':'') + '>待補</option>' +
+        '<option value="noRestock"' + (actionVal==='noRestock'?' selected':'') + '>不補</option>' +
+        '<option value="oversell"' + (actionVal==='oversell'?' selected':'') + '>超賣</option>' +
+      '</select>' +
+      '<select id="bo-status-filter" onchange="renderBackorderTab(null,true)" style="padding:4px 8px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px; font-family:inherit;">' +
+        '<option value="all"' + (statusVal==='all'?' selected':'') + '>全部狀態</option>' +
+        '<option value="pending"' + (statusVal==='pending'?' selected':'') + '>待處理</option>' +
+        '<option value="shipped"' + (statusVal==='shipped'?' selected':'') + '>已出貨</option>' +
+        '<option value="done"' + (statusVal==='done'?' selected':'') + '>已完成</option>' +
+        '<option value="cancelled"' + (statusVal==='cancelled'?' selected':'') + '>取消</option>' +
+      '</select>' +
+      '<input type="text" id="bo-kw-filter" value="' + kwVal.replace(/"/g, '&quot;') + '" placeholder="搜尋商品..." oninput="renderBackorderTab(null,true)" style="padding:4px 8px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px; width:120px; font-family:inherit;">' +
+      '<span id="bo-filter-count" style="font-size:11px; color:#718096;"></span>' +
+    '</div>';
+  }
+
+  async function renderBackorderTab(container, skipFetch) {
+    if (container) _boTabContainer = container;
+    else container = _boTabContainer;
+    if (!container) return;
+
+    if (!skipFetch) {
+      const filter = document.getElementById('db-bo-filter')?.value || 'all';
+      container.innerHTML = '<div style="text-align:center; padding:40px; color:#718096;"><i class="fas fa-spinner fa-spin"></i> 載入中...</div>';
+      _boTabCache = await loadBackorderData(filter);
+    }
+
+    // 前端二次篩選
+    var actionFilter = document.getElementById('bo-action-filter')?.value || 'all';
+    var statusFilter = document.getElementById('bo-status-filter')?.value || 'all';
+    var kwFilter = (document.getElementById('bo-kw-filter')?.value || '').trim().toLowerCase();
+
+    var data = _boTabCache;
+    if (actionFilter !== 'all') data = data.filter(function(r) { return r.action === actionFilter; });
+    if (statusFilter !== 'all') data = data.filter(function(r) { return r.status === statusFilter; });
+    if (kwFilter) data = data.filter(function(r) { return (r.product_name || '').toLowerCase().includes(kwFilter) || (r.product_id || '').toLowerCase().includes(kwFilter); });
+
+    var _boFilteredCount = data.length;
+    var _boCountText = _boFilteredCount === _boTabCache.length ? '共 ' + _boTabCache.length + ' 筆' : '篩選結果 ' + _boFilteredCount + ' / 共 ' + _boTabCache.length + ' 筆';
 
     if (data.length === 0) {
-      container.innerHTML = '<div style="text-align:center; padding:40px; color:#718096;">目前無異常紀錄</div>';
+      container.innerHTML = buildBOFilterBar() + '<div style="text-align:center; padding:40px; color:#718096;">目前無符合條件的紀錄（' + _boCountText + '）</div>';
+      var ce = document.getElementById('bo-filter-count'); if (ce) ce.textContent = _boCountText;
       return;
     }
 
@@ -5429,7 +5556,7 @@
           <td style="padding:10px 14px; text-align:center;">${g.pending > 0 ? `<span style="background:#fef3c7; color:#92400e; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;">待補 ${g.pending}</span>` : '<span style="color:#718096; font-size:12px;">—</span>'}</td>
         </tr>`;
       }).join('');
-      container.innerHTML = `
+      container.innerHTML = buildBOFilterBar() + `
         <table style="width:100%; border-collapse:collapse; font-size:13px;">
           <thead style="position:sticky; top:0; z-index:1; background:#eef1f5; box-shadow:0 1px 2px rgba(0,0,0,0.1);">
             <tr>
@@ -5443,6 +5570,7 @@
           </thead>
           <tbody>${rows}</tbody>
         </table>`;
+      var ce2 = document.getElementById('bo-filter-count'); if (ce2) ce2.textContent = _boCountText;
       return;
     }
 
@@ -5486,6 +5614,7 @@
       const restockInfo = r.restock_wave_id ? `<div style="font-size:10px; color:#047857;">補發：${r.restock_wave_id}</div>` : '';
 
       return `<tr style="border-bottom:1px solid #e2e8f0; ${rowBg}">
+        <td style="padding:8px 6px; text-align:center; width:28px;" onclick="event.stopPropagation();"><input type="checkbox" class="bo-check" value="${r.id}" onchange="updateBOSelectCount()" style="width:15px; height:15px; cursor:pointer;"></td>
         <td style="padding:8px 12px; white-space:nowrap;"><div style="font-family:monospace; color:#2b6cb0; font-size:12px;">${r.wave_id}</div><div style="color:#718096; font-size:11px;">${dateStr}</div>${restockInfo}</td>
         <td style="padding:8px 12px;"><div style="font-weight:bold; color:#2d3748;">${r.product_name || r.product_id}</div><div style="font-size:11px; color:#718096;">${r.product_id}</div></td>
         <td style="padding:8px; text-align:center; font-weight:bold;">${r.expected_qty}</td>
@@ -5498,10 +5627,22 @@
       </tr>`;
     }).join('');
 
-    container.innerHTML = `
+    container.innerHTML = buildBOFilterBar() + `
+      <div id="boBatchBar" style="display:flex; align-items:center; gap:8px; padding:8px 12px; background:#f8f9fa; border-bottom:1px solid #e2e8f0; flex-wrap:wrap;">
+        <span id="boSelectCount2" style="font-size:12px; color:#718096;">已選 0 筆</span>
+        <select id="boBatchStatus2" style="padding:4px 8px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px; font-family:inherit;">
+          <option value="pending">⏳ 待處理</option>
+          <option value="shipped">🚚 已出貨</option>
+          <option value="done">✅ 已完成</option>
+          <option value="cancelled">❌ 取消</option>
+        </select>
+        <button class="btn" style="padding:4px 10px; font-size:11px; background:#2b6cb0;" onclick="batchUpdateBO2()">套用狀態</button>
+        <button class="btn" style="padding:4px 10px; font-size:11px; background:#c53030;" onclick="batchDeleteBO2()">🗑️ 批次刪除</button>
+      </div>
       <table style="width:100%; border-collapse:collapse; font-size:13px;">
         <thead style="position:sticky; top:0; z-index:1; background:#eef1f5; box-shadow:0 1px 2px rgba(0,0,0,0.1);">
           <tr>
+            <th style="padding:8px 6px; text-align:center; width:28px;"><input type="checkbox" onchange="document.querySelectorAll('.bo-check').forEach(function(c){c.checked=this.checked}.bind(this)); updateBOSelectCount();" style="width:15px; height:15px; cursor:pointer;"></th>
             <th style="padding:8px 12px; white-space:nowrap; min-width:120px;">揀貨單</th>
             <th style="padding:8px 12px; min-width:120px;">商品</th>
             <th style="padding:8px; text-align:center; width:50px;">應發</th>
@@ -5515,6 +5656,30 @@
         </thead>
         <tbody>${rows}</tbody>
       </table>`;
+    var ce3 = document.getElementById('bo-filter-count'); if (ce3) ce3.textContent = _boCountText;
+  }
+
+  async function batchDeleteBO2() {
+    var ids = Array.from(document.querySelectorAll('.bo-check:checked')).map(function(c) { return c.value; });
+    if (ids.length === 0) { Swal.fire('提醒', '請先勾選', 'warning'); return; }
+    var result = await Swal.fire({ title: '批次刪除 ' + ids.length + ' 筆？', html: '<span style="color:#c53030;">無法復原</span>', icon: 'warning', showCancelButton: true, confirmButtonText: '刪除', cancelButtonText: '取消', confirmButtonColor: '#c53030' });
+    if (!result.isConfirmed) return;
+    var idList = ids.map(function(id) { return '"' + id + '"'; }).join(',');
+    var res = await fetch(SB_URL + '/backorders?id=in.(' + idList + ')', { method: 'DELETE', headers: HEADERS });
+    if (!res.ok) { Swal.fire('刪除失敗', await res.text(), 'error'); return; }
+    Swal.fire({ icon: 'success', title: '已刪除 ' + ids.length + ' 筆', timer: 1200, showConfirmButton: false });
+    renderDemandBackorderStation();
+  }
+
+  async function batchUpdateBO2() {
+    var ids = Array.from(document.querySelectorAll('.bo-check:checked')).map(function(c) { return c.value; });
+    if (ids.length === 0) { Swal.fire('提醒', '請先勾選', 'warning'); return; }
+    var newStatus = document.getElementById('boBatchStatus2').value;
+    var idList = ids.map(function(id) { return '"' + id + '"'; }).join(',');
+    var res = await fetch(SB_URL + '/backorders?id=in.(' + idList + ')', { method: 'PATCH', headers: HEADERS, body: JSON.stringify({ status: newStatus }) });
+    if (!res.ok) { Swal.fire('更新失敗', await res.text(), 'error'); return; }
+    Swal.fire({ icon: 'success', title: '已更新 ' + ids.length + ' 筆', timer: 1200, showConfirmButton: false });
+    renderDemandBackorderStation();
   }
 
   function toggleDemandComplete(id) {
