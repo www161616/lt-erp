@@ -266,10 +266,10 @@
           date: o.order_date,
           supplierId: o.supplier_id,
           supplierName: o.supplier_name || '未知供應商',
-          total: Number(o.grand_total || o.subtotal || 0),
-          subtotal: Number(o.subtotal || 0),
-          taxAmount: Number(o.tax_amount || 0),
-          grandTotal: Number(o.grand_total || o.subtotal || 0),
+          total: Math.round(Number(o.grand_total || o.subtotal || 0)),
+          subtotal: Math.round(Number(o.subtotal || 0)),
+          taxAmount: Math.round(Number(o.tax_amount || 0)),
+          grandTotal: Math.round(Number(o.grand_total || o.subtotal || 0)),
           status: o.payment_status || '未付款',
           note: o.note || '',
           handler: o.handler || '',
@@ -371,9 +371,9 @@
           date: order.order_date,
           supplierId: order.supplier_id,
           supplierName: order.supplier_name || '未知供應商',
-          totalAmount: Number(order.subtotal || 0),
-          taxAmount: Number(order.tax_amount || 0),
-          grandTotal: Number(order.grand_total || order.subtotal || 0),
+          totalAmount: Math.round(Number(order.subtotal || 0)),
+          taxAmount: Math.round(Number(order.tax_amount || 0)),
+          grandTotal: Math.round(Number(order.grand_total || order.subtotal || 0)),
           status: order.payment_status || '未付款',
           note: order.note || '',
           handler: order.handler || '',
@@ -404,7 +404,7 @@
       
       let itemRows = '';
       o.items.forEach((it, i) => {
-        const lineTotal = it.qty * it.cost;
+        const lineTotal = Math.round(it.qty * it.cost);
         itemRows += `
           <tr>
             <td>${i + 1}</td>
@@ -491,7 +491,7 @@
       }
 
       const itemRows = o.items.map((it, i) => {
-        const lineTotal = it.qty * it.cost;
+        const lineTotal = Math.round(it.qty * it.cost);
         return `<tr>
           <td class="text-center">${i+1}</td>
           <td style="font-family:monospace;">${it.productId || ''}</td>
@@ -563,7 +563,7 @@
       let csv = '\uFEFF項次,商品編號,品名,數量,單位,單價成本,小計\n';
       let grandTotal = 0;
       o.items.forEach((it, i) => {
-        const lineTotal = it.qty * it.cost;
+        const lineTotal = Math.round(it.qty * it.cost);
         grandTotal += lineTotal;
         const safeId = '="' + String(it.productId).replace(/"/g, '""') + '"';
         const safeName = it.productName ? `"${it.productName.replace(/"/g, '""')}"` : '';

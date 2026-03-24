@@ -476,7 +476,32 @@
         }
         updateSupplierInfo();
       }
-      if (data.note) document.getElementById('note').value = data.note;
+
+      // 還原稅別（從 subtotal / taxAmount 推算，覆蓋供應商預設值）
+      const dbTax = Number(data.taxAmount || 0);
+      const dbSubtotal = Number(data.totalAmount || 0);
+      if (dbTax === 0) {
+        document.getElementById('taxType').value = '0';
+      } else {
+        // 含稅: tax = subtotal - round(subtotal/1.05)
+        const inclusiveTax = dbSubtotal - Math.round(dbSubtotal / 1.05);
+        if (Math.abs(inclusiveTax - dbTax) <= 1) {
+          document.getElementById('taxType').value = 'inclusive';
+        } else {
+          document.getElementById('taxType').value = '0.05';
+        }
+      }
+
+      // 還原扣款（從 note 解析）
+      let noteText = data.note || '';
+      const deductMatch = noteText.match(/其他扣款[:：]\s*-?\$?(\d+)/);
+      if (deductMatch) {
+        document.getElementById('otherDeduction').value = deductMatch[1];
+        // 清除 note 中的扣款標記，避免重複附加
+        noteText = noteText.replace(/\s*[｜|]\s*其他扣款[:：]\s*-?\$?\d+/g, '').trim();
+      }
+      document.getElementById('note').value = noteText;
+
       if (data.paymentMethod) {
         const pmSel = document.getElementById('paymentMethod');
         for (let i = 0; i < pmSel.options.length; i++) {
@@ -717,7 +742,7 @@
           <td style="text-align:center; font-size:12px;">${it.unit || '個'}</td>
           <td><input type="number" id="qty-${i}" class="qty-input" value="${it.qty}" min="1" onkeydown="handleQtyEnter(event, ${i})" onchange="updateQty(${i}, this.value)"></td>
           <td><input type="number" id="cost-${i}" class="price-edit-input" value="${it.cost}" onkeydown="handleCostEnter(event, ${i})" onchange="updateCost(${i}, this.value)"></td>
-          <td style="font-weight:700; color:var(--text);" id="row-total-${i}">$${(it.qty*it.cost).toLocaleString()}</td>
+          <td style="font-weight:700; color:var(--text);" id="row-total-${i}">$${Math.round(it.qty*it.cost).toLocaleString()}</td>
           <td><button class="remove-btn" onclick="cart.splice(${i},1);renderCart()">×</button></td>
         </tr>`;
       });
@@ -729,13 +754,13 @@
        let newQty = Number(val);
        if (newQty < 1) newQty = 1;
        cart[index].qty = newQty;
-       document.getElementById(`row-total-${index}`).innerText = '$' + (cart[index].qty * cart[index].cost).toLocaleString();
+       document.getElementById(`row-total-${index}`).innerText = '$' + Math.round(cart[index].qty * cart[index].cost).toLocaleString();
        calc();
     }
 
     function updateCost(index, val) {
        cart[index].cost = Number(val);
-       document.getElementById(`row-total-${index}`).innerText = '$' + (cart[index].qty * cart[index].cost).toLocaleString();
+       document.getElementById(`row-total-${index}`).innerText = '$' + Math.round(cart[index].qty * cart[index].cost).toLocaleString();
        calc();
     }
 
@@ -757,7 +782,7 @@
 
     function calc() {
       hasUnsavedChanges = true;
-      const totalRaw = cart.reduce((s, i) => s + (i.cost * i.qty), 0);
+      const totalRaw = Math.round(cart.reduce((s, i) => s + (i.cost * i.qty), 0));
       const taxMode = document.getElementById('taxType').value;
       const deduction = Number(document.getElementById('otherDeduction').value) || 0;
 
@@ -792,7 +817,7 @@
        const sName = supplierSelect.options[supplierSelect.selectedIndex].text;
 
        const taxMode = document.getElementById('taxType').value;
-       const st = cart.reduce((s, i) => s + (i.cost * i.qty), 0);
+       const st = Math.round(cart.reduce((s, i) => s + (i.cost * i.qty), 0));
        const deduction = Number(document.getElementById('otherDeduction').value) || 0;
        let tx, gt;
        if (taxMode === 'inclusive') {
@@ -859,7 +884,7 @@
            const detailRows = odata.items.map((it, idx) => ({
              id: `${editingOrderId}-${String(idx + 1).padStart(2, '0')}`,
              order_id: editingOrderId, product_id: it.product_id, product_name: it.product_name,
-             qty: it.qty, unit: it.unit, cost: it.unit_cost, subtotal: it.qty * it.unit_cost, note: it.note
+             qty: it.qty, unit: it.unit, cost: it.unit_cost, subtotal: Math.round(it.qty * it.unit_cost), note: it.note
            }));
            const insRes = await fetch(`${SB_URL}/purchase_details`, {
              method: 'POST', headers: { ...HEADERS, 'Prefer': 'return=minimal' },
@@ -1129,6 +1154,24 @@
     async function saveNewSupplier() {
       var name = document.getElementById('qs_name').value.trim();
       if (!name) { Swal.fire('錯誤', '請輸入供應商名稱', 'error'); return; }
+
+      // 防呆：檢查是否有同名供應商
+      try {
+        const chk = await fetch(`${SB_URL}/suppliers?name=eq.${encodeURIComponent(name)}&select=id,name&limit=5`, { headers: HEADERS });
+        const dup = await chk.json();
+        if (dup.length > 0) {
+          const r = await Swal.fire({
+            icon: 'warning',
+            title: '發現同名供應商！',
+            html: `已存在：<b>${dup.map(d => d.id + ' ' + d.name).join('、')}</b><br><br>確定還是要新增嗎？`,
+            showCancelButton: true,
+            confirmButtonText: '確定新增',
+            cancelButtonText: '取消',
+            confirmButtonColor: '#475569'
+          });
+          if (!r.isConfirmed) return;
+        }
+      } catch(e) { /* 查詢失敗不阻擋 */ }
 
       var loader = document.getElementById('loadingOverlay');
       if(loader) loader.classList.remove('hidden');

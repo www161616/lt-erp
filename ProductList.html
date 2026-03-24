@@ -57,6 +57,15 @@
 
     .result-count { font-size: 13px; color: #64748b; padding: 8px 0 4px 4px; }
 
+    /* 批次編輯 */
+    .edit-input { width: 100%; padding: 4px 6px; border: 1px solid #93c5fd; border-radius: 3px; font-size: 13px; font-family: inherit; background: #eff6ff; color: var(--text); box-sizing: border-box; }
+    .edit-input:focus { border-color: var(--primary); outline: none; background: #fff; }
+    .edit-num { text-align: right; font-family: monospace; }
+    tr.editing-row { background: #eff6ff !important; }
+    tr.editing-row:hover { background: #dbeafe !important; }
+    .edit-changed { background: #fef3c7 !important; border-color: #f59e0b !important; }
+    .bulk-edit-btns { display: inline-flex; gap: 8px; align-items: center; }
+
     /* 排序 */
     th.sortable { cursor: pointer; user-select: none; }
     th.sortable:hover { background: #eef0f3; color: var(--primary); }
@@ -97,9 +106,16 @@
   <!-- 批次操作列（勾選後顯示） -->
   <div class="bulk-bar" id="bulkBar">
     <span class="bulk-count" id="bulkCount">已選取 0 個商品</span>
-    <button class="btn btn-warning" onclick="bulkDisable()"><i class="fas fa-ban"></i> 批次停用</button>
-    <button class="btn btn-danger" onclick="bulkDelete()"><i class="fas fa-trash"></i> 批次刪除</button>
-    <button class="btn btn-outline" onclick="clearSelection()"><i class="fas fa-times"></i> 取消選取</button>
+    <span id="bulkNormalBtns">
+      <button class="btn" onclick="enterEditMode()"><i class="fas fa-edit"></i> 批次編輯</button>
+      <button class="btn btn-warning" onclick="bulkDisable()"><i class="fas fa-ban"></i> 批次停用</button>
+      <button class="btn btn-danger" onclick="bulkDelete()"><i class="fas fa-trash"></i> 批次刪除</button>
+      <button class="btn btn-outline" onclick="clearSelection()"><i class="fas fa-times"></i> 取消選取</button>
+    </span>
+    <span id="bulkEditBtns" class="bulk-edit-btns" style="display:none;">
+      <button class="btn" onclick="saveBulkEdits()"><i class="fas fa-save"></i> 儲存修改</button>
+      <button class="btn btn-outline" onclick="exitEditMode()"><i class="fas fa-undo"></i> 取消編輯</button>
+    </span>
   </div>
 
   <div id="resultCount" class="result-count"></div>
@@ -264,6 +280,7 @@
   }
 
   function gotoPage(n) {
+    if (editMode) { Swal.fire('提示', '請先儲存或取消編輯', 'info'); return; }
     currentPage = n;
     renderTable(getFiltered());
     document.getElementById('productTable').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -312,6 +329,7 @@
   }
 
   function sortBy(field) {
+    if (editMode) { Swal.fire('提示', '請先儲存或取消編輯', 'info'); return; }
     if (sortField === field) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
     else { sortField = field; sortDir = 'asc'; }
     updateSortHeaders();
@@ -333,6 +351,7 @@
   }
 
   function filterTable() {
+    if (editMode) return;
     currentPage = 1;
     renderTable(getFiltered());
   }
@@ -619,7 +638,218 @@
     }
   }
 
-  // ========== 11. 匯出 Excel ==========
+  // ========== 11. 批次編輯（inline） ==========
+  let editMode = false;
+  let editOriginalData = {};
+
+  const FIELD_LABELS = { category:'類別', name:'名稱', spec:'規格', unit:'單位', price:'售價', price_branch:'分店價', price_wholesale:'批發價', price_group:'團購價', cost:'成本', supplier:'供應商', status:'狀態' };
+  const NUM_FIELDS = ['price','price_branch','price_wholesale','price_group','cost'];
+
+  function enterEditMode() {
+    editMode = true;
+    editOriginalData = {};
+
+    document.querySelectorAll('#tableBody tr').forEach(tr => {
+      const cb = tr.querySelector('.row-check');
+      if (!cb || !cb.checked) return;
+      const id = cb.value;
+      const p = allProducts.find(x => x.id === id);
+      if (!p) return;
+
+      editOriginalData[id] = { ...p };
+      tr.classList.add('editing-row');
+      cb.disabled = true;
+
+      const makeTxt = (field, val) => {
+        const inp = document.createElement('input');
+        inp.type = 'text'; inp.className = 'edit-input';
+        inp.dataset.field = field; inp.dataset.id = id;
+        inp.value = val || '';
+        inp.addEventListener('input', markChanged);
+        return inp;
+      };
+      const makeNum = (field, val) => {
+        const inp = document.createElement('input');
+        inp.type = 'number'; inp.className = 'edit-input edit-num';
+        inp.dataset.field = field; inp.dataset.id = id;
+        inp.value = (val !== null && val !== undefined && val !== 0) ? val : '';
+        inp.min = '0'; inp.step = '1';
+        inp.addEventListener('input', markChanged);
+        return inp;
+      };
+
+      const c = tr.cells;
+      // col 2: category
+      c[2].textContent = ''; c[2].appendChild(makeTxt('category', p.category));
+      // col 3: name
+      c[3].textContent = ''; c[3].appendChild(makeTxt('name', p.name));
+      // col 4: spec
+      c[4].textContent = ''; c[4].appendChild(makeTxt('spec', p.spec));
+      // col 5: unit
+      c[5].textContent = ''; c[5].appendChild(makeTxt('unit', p.unit));
+      // col 6-10: prices
+      NUM_FIELDS.forEach((f, i) => {
+        c[6 + i].textContent = ''; c[6 + i].appendChild(makeNum(f, p[f]));
+      });
+      // col 11: supplier
+      c[11].textContent = ''; c[11].appendChild(makeTxt('supplier', p.supplier));
+      // col 13: status
+      const sel = document.createElement('select');
+      sel.className = 'edit-input'; sel.dataset.field = 'status'; sel.dataset.id = id;
+      sel.innerHTML = '<option value="啟用">啟用</option><option value="停用">停用</option>';
+      sel.value = p.status === '停用' ? '停用' : '啟用';
+      sel.addEventListener('change', markChanged);
+      c[13].textContent = ''; c[13].appendChild(sel);
+      // col 14: hide edit button
+      c[14].textContent = '';
+    });
+
+    // 切換按鈕列
+    document.getElementById('bulkNormalBtns').style.display = 'none';
+    document.getElementById('bulkEditBtns').style.display = 'inline-flex';
+    // 停用全選 checkbox
+    document.getElementById('selectAll').disabled = true;
+    // 停用工具列
+    document.querySelectorAll('.toolbar button, .toolbar select, .toolbar input, .toolbar a').forEach(el => el.style.pointerEvents = 'none');
+  }
+
+  function markChanged(e) {
+    const inp = e.target;
+    const id = inp.dataset.id;
+    const field = inp.dataset.field;
+    const orig = editOriginalData[id];
+    if (!orig) return;
+    let origVal, newVal;
+    if (NUM_FIELDS.includes(field)) {
+      origVal = (orig[field] !== null && orig[field] !== undefined) ? Number(orig[field]) : null;
+      newVal = inp.value.trim() === '' ? null : Number(inp.value);
+    } else {
+      origVal = orig[field] || '';
+      newVal = inp.value.trim();
+    }
+    inp.classList.toggle('edit-changed', newVal !== origVal && String(newVal) !== String(origVal));
+  }
+
+  function exitEditMode() {
+    editMode = false;
+    editOriginalData = {};
+    // 恢復工具列
+    document.querySelectorAll('.toolbar button, .toolbar select, .toolbar input, .toolbar a').forEach(el => el.style.pointerEvents = '');
+    document.getElementById('selectAll').disabled = false;
+    document.getElementById('bulkNormalBtns').style.display = '';
+    document.getElementById('bulkEditBtns').style.display = 'none';
+    // 重新渲染還原表格
+    filterTable();
+  }
+
+  async function saveBulkEdits() {
+    // 收集變更
+    const changes = [];
+    document.querySelectorAll('#tableBody tr.editing-row').forEach(tr => {
+      const cb = tr.querySelector('.row-check');
+      const id = cb ? cb.value : null;
+      const orig = editOriginalData[id];
+      if (!orig) return;
+
+      const fields = {};
+      const oldFields = {};
+      tr.querySelectorAll('.edit-input').forEach(inp => {
+        const field = inp.dataset.field;
+        let newVal, oldVal;
+        if (NUM_FIELDS.includes(field)) {
+          newVal = inp.value.trim() === '' ? null : Number(inp.value);
+          oldVal = (orig[field] !== null && orig[field] !== undefined) ? Number(orig[field]) : null;
+        } else {
+          newVal = inp.value.trim() || null;
+          oldVal = orig[field] || null;
+        }
+        if (String(newVal) !== String(oldVal)) {
+          fields[field] = newVal;
+          oldFields[field] = oldVal;
+        }
+      });
+      if (Object.keys(fields).length > 0) {
+        changes.push({ id, name: orig.name, fields, oldFields });
+      }
+    });
+
+    if (changes.length === 0) {
+      Swal.fire('提示', '沒有任何欄位被修改', 'info');
+      return;
+    }
+
+    // 驗證：商品名稱不可為空
+    const emptyName = changes.find(c => c.fields.name === null || c.fields.name === '');
+    if (emptyName) {
+      Swal.fire('錯誤', `商品 ${emptyName.id} 的名稱不可為空`, 'error');
+      return;
+    }
+
+    // 預覽變更
+    let html = `<div style="text-align:left;font-size:13px;max-height:400px;overflow-y:auto;">`;
+    html += `<p>共 <b>${changes.length}</b> 筆商品有修改：</p>`;
+    html += `<table style="width:100%;border-collapse:collapse;font-size:12px;">`;
+    html += `<tr style="background:#f1f5f9;"><th style="padding:4px 6px;border:1px solid #ddd;">商品</th><th style="padding:4px 6px;border:1px solid #ddd;">變更內容</th></tr>`;
+    changes.forEach(c => {
+      const parts = Object.keys(c.fields).map(f => {
+        const lbl = FIELD_LABELS[f] || f;
+        const ov = c.oldFields[f] ?? '(空)';
+        const nv = c.fields[f] ?? '(空)';
+        return `${lbl}: ${ov} → ${nv}`;
+      });
+      html += `<tr><td style="padding:3px 6px;border:1px solid #ddd;white-space:nowrap;">${c.id}</td><td style="padding:3px 6px;border:1px solid #ddd;">${parts.join('、')}</td></tr>`;
+    });
+    html += `</table></div>`;
+
+    const confirmed = await Swal.fire({
+      title: `確認儲存 ${changes.length} 筆修改？`,
+      html, icon: 'question', showCancelButton: true,
+      confirmButtonText: '確認儲存', cancelButtonText: '取消', width: 700
+    });
+    if (!confirmed.isConfirmed) return;
+
+    // 批次 PATCH
+    Swal.fire({ title: '儲存中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    let ok = 0, fail = 0;
+    const batchSize = 50;
+    for (let i = 0; i < changes.length; i += batchSize) {
+      const batch = changes.slice(i, i + batchSize);
+      await Promise.all(batch.map(c =>
+        fetch(`${SB_URL}/products?id=eq.${encodeURIComponent(c.id)}`, {
+          method: 'PATCH',
+          headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+          body: JSON.stringify(c.fields)
+        }).then(r => {
+          if (r.ok) {
+            ok++;
+            const p = allProducts.find(x => x.id === c.id);
+            if (p) Object.assign(p, c.fields);
+          } else fail++;
+        }).catch(() => fail++)
+      ));
+    }
+
+    editMode = false;
+    editOriginalData = {};
+    selectedIds.clear();
+    // 恢復工具列
+    document.querySelectorAll('.toolbar button, .toolbar select, .toolbar input, .toolbar a').forEach(el => el.style.pointerEvents = '');
+    document.getElementById('selectAll').disabled = false;
+    document.getElementById('bulkNormalBtns').style.display = '';
+    document.getElementById('bulkEditBtns').style.display = 'none';
+    filterTable();
+    updateBulkBar();
+
+    Swal.fire({
+      icon: fail ? 'warning' : 'success',
+      title: '批次編輯完成',
+      html: `成功更新 <b>${ok}</b> 筆` + (fail ? `<br>失敗 <b>${fail}</b> 筆` : ''),
+      timer: fail ? undefined : 2000,
+      showConfirmButton: fail > 0
+    });
+  }
+
+  // ========== 12. 匯出 Excel ==========
   async function exportProducts() {
     if (!allProducts.length) { Swal.fire('提示', '沒有商品資料可匯出', 'info'); return; }
     const script = document.createElement('script');
