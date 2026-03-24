@@ -164,7 +164,7 @@
     // ============================
     // Supabase 連線設定
     // ============================
-    const MOCK_MODE = true; // 🧪 測試模式開關：true=模擬運行(不寫入DB), false=正式連線
+    const MOCK_MODE = false; // 🧪 測試模式開關：true=模擬運行(不寫入DB), false=正式連線
     const SB_URL = 'https://asugjynpocwygggttxyo.supabase.co/rest/v1';
     const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFzdWdqeW5wb2N3eWdnZ3R0eHlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNzU3MjksImV4cCI6MjA4ODk1MTcyOX0.LzcRQAl80rZxKKD8NIYWGvylfwCbs1ek5LtKpmZodBc';
     const SB_BASE = 'https://asugjynpocwygggttxyo.supabase.co';
@@ -3809,7 +3809,37 @@
               headers: HEADERS,
               body: JSON.stringify({ p_order_data: orderData })
             });
-            if (res.ok) successCount++;
+            if (res.ok) {
+              const soData = await res.json();
+              const soId = soData.order_id || soData.id || `SO${dateStr.replace(/-/g,'')}${String(mockSalesOrders.length + 1).padStart(3,'0')}`;
+              const issuedTime = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+              // 同步到 mockSalesOrders（讓 portal 今日進貨單也看得到）
+              mockSalesOrders.push({
+                id: soId,
+                waveId: waveId,
+                storeName: branch,
+                createdAt: issuedTime,
+                storeConfirmedAt: null,
+                status: 'pending',
+                issuedAt: issuedTime,
+                finalAmount: grand_total,
+                note: `來自揀貨單 ${waveId}`,
+                items: items.map(it => ({
+                  productId: it.product_id.replace(/_.*$/, ''),
+                  name: it.product_name,
+                  expectedQty: it.expectedQty || it.qty,
+                  qty: it.qty,
+                  unitPrice: it.price,
+                  returnQty: 0,
+                  returnStatus: 'none',
+                  returnReason: '',
+                  returnDate: '',
+                  damaged: false,
+                  note: it.note
+                }))
+              });
+              successCount++;
+            }
           }
         }
 
@@ -5083,6 +5113,16 @@
         if (soRes.ok) {
           const soData = await soRes.json();
           soId = soData.order_id || soData.id || '';
+          // 同步到 mockSalesOrders（讓 portal 看得到）
+          const issuedTime = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+          mockSalesOrders.push({
+            id: soId, waveId: 'RESTOCK-' + backorderId, storeName: store,
+            createdAt: issuedTime, storeConfirmedAt: null, status: 'pending',
+            issuedAt: issuedTime, finalAmount: grand_total,
+            note: '欠品補發 backorder#' + backorderId,
+            items: [{ productId, name: productName || productId, expectedQty: shortageQty, qty: shortageQty, unitPrice, returnQty: 0, returnStatus: 'none', returnReason: '', returnDate: '', damaged: false, note: '補發' }]
+          });
+          syncSalesOrdersToPortal();
         }
       }
 
