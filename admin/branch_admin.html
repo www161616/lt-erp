@@ -7097,11 +7097,18 @@
         <div style="width:55%; display:flex; flex-direction:column; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden;">
           <div style="padding:10px; background:#f7fafc; border-bottom:1px solid #e2e8f0;">
             <div style="font-weight:bold; font-size:14px; color:#2d3748; margin-bottom:8px;">銷貨明細</div>
-            <div style="display:flex; gap:8px; align-items:center;">
+            <div style="display:flex; gap:8px; align-items:center; margin-bottom:6px;">
               <label style="font-size:12px; color:#4a5568; white-space:nowrap;">客戶：</label>
               <select id="soCustomerSelect" style="flex:1; padding:5px 8px; border:1px solid #d1d5db; border-radius:4px; font-size:13px; font-family:inherit;">
                 <option value="">-- 請選擇客戶 --</option>
                 ${custOptions}
+              </select>
+            </div>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <label style="font-size:12px; color:#4a5568; white-space:nowrap;">類型：</label>
+              <select id="soCreateType" style="flex:1; padding:5px 8px; border:1px solid #d1d5db; border-radius:4px; font-size:13px; font-family:inherit;">
+                <option value="pending">📋 暫存待確認（等分店確認收貨）</option>
+                <option value="issued">✅ 直接開立（補開舊單/已確認）</option>
               </select>
             </div>
           </div>
@@ -7125,6 +7132,7 @@
     const customerName = document.getElementById('soCustomerSelect')?.value;
     if (!customerName) { Swal.fire('提醒', '請選擇客戶', 'warning'); return; }
     if (soCart.length === 0) { Swal.fire('提醒', '請至少加入一項商品', 'warning'); return; }
+    const createType = document.getElementById('soCreateType')?.value || 'pending';
 
     const cust = allCustomers.find(c => c.name === customerName) || { id: null, name: customerName, tax_type: '免稅' };
     const now = new Date();
@@ -7134,37 +7142,63 @@
     const tax_amount = Math.round(subtotal * taxRate);
     const grand_total = subtotal + tax_amount;
     const issuedTime = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-    const soId = `SO-${dateStr.replace(/-/g,'')}-${String(mockSalesOrders.length + 1).padStart(3,'0')}`;
+
+    Swal.fire({ title: '建立中...', allowOutsideClick: false, didOpen: function() { Swal.showLoading(); } });
+
+    // 呼叫 RPC 寫入 DB
+    var soId = '';
+    var dbId = '';
+    try {
+      var orderData = {
+        order_id: null,
+        order_date: dateStr,
+        customer_id: cust.id,
+        customer_name: cust.name,
+        subtotal: subtotal,
+        tax_amount: tax_amount,
+        grand_total: grand_total,
+        tax_type: cust.tax_type || '免稅',
+        shipping_fee: 0,
+        deduction: 0,
+        note: '手動新增',
+        items: soCart.map(function(it) {
+          return { product_id: it.id ? it.id.split('_')[0] : null, product_name: it.name, qty: it.qty, unit: '件', price: it.unitPrice, cost: it.cost || 0, note: '' };
+        })
+      };
+      var res = await fetch(SB_URL + '/rpc/web_save_sales_order', { method: 'POST', headers: HEADERS, body: JSON.stringify({ p_order_data: orderData }) });
+      if (res.ok) {
+        var resData = await res.json();
+        dbId = resData.order_id || resData.id || '';
+        soId = dbId;
+      } else {
+        throw new Error(await res.text());
+      }
+    } catch(e) {
+      console.error('手動新增寫入 DB 失敗:', e);
+      soId = 'SO-' + dateStr.replace(/-/g, '') + '-' + String(mockSalesOrders.length + 1).padStart(3, '0');
+    }
+
+    var status = createType === 'issued' ? 'issued' : 'pending';
 
     mockSalesOrders.push({
       id: soId,
+      dbId: dbId || '',
       waveId: 'MANUAL',
       storeName: customerName,
       createdAt: issuedTime,
       storeConfirmedAt: null,
-      status: 'pending',
-      issuedAt: issuedTime,
+      status: status,
+      issuedAt: status === 'issued' ? issuedTime : null,
       finalAmount: grand_total,
       note: '手動新增',
-      items: soCart.map(it => ({
-        productId: it.id,
-        name: it.name,
-        expectedQty: it.qty,
-        qty: it.qty,
-        unitPrice: it.unitPrice,
-        returnQty: 0,
-        returnStatus: 'none',
-        returnReason: '',
-        returnDate: '',
-        damaged: false,
-        note: ''
-      }))
+      items: soCart.map(function(it) {
+        return { productId: it.id, name: it.name, expectedQty: it.qty, qty: it.qty, unitPrice: it.unitPrice, returnQty: 0, returnStatus: 'none', returnReason: '', returnDate: '', damaged: false, note: '' };
+      })
     });
 
-    localStorage.setItem('portalSalesOrders', JSON.stringify(mockSalesOrders));
-    cloudSave('portalSalesOrders');
-    logActivity('手動新增銷貨單', soId, { customer: customerName, amount: grand_total, items: soCart.length });
-    Swal.fire({ title: '建立成功', text: `銷貨單 ${soId}，金額 $${grand_total.toLocaleString()}`, icon: 'success', timer: 2000, showConfirmButton: false });
+    syncSalesOrdersToPortal();
+    logActivity('手動新增銷貨單', soId, { customer: customerName, amount: grand_total, items: soCart.length, type: createType });
+    Swal.fire({ title: '建立成功', html: '銷貨單 <b>' + soId + '</b><br>金額 $' + grand_total.toLocaleString() + (status === 'issued' ? '<br><span style="color:#047857;">✅ 已直接開立</span>' : '<br><span style="color:#92400e;">📋 暫存待分店確認</span>'), icon: 'success', timer: 2500, showConfirmButton: false });
     renderAccountingStation();
   }
 
