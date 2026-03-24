@@ -3495,9 +3495,14 @@
       if (popup) {
         const container = popup.querySelector('.swal2-html-container');
         if (container) {
-          const scrollTop = container.scrollTop;
+          // 保存外層和內層（表格容器）的 scrollTop
+          const outerScroll = container.scrollTop;
+          const innerDiv = container.querySelector('div[style*="overflow"]');
+          const innerScroll = innerDiv ? innerDiv.scrollTop : 0;
           container.innerHTML = buildCorrectionPanelHTML(wave);
-          container.scrollTop = scrollTop;
+          container.scrollTop = outerScroll;
+          const newInner = container.querySelector('div[style*="overflow"]');
+          if (newInner) newInner.scrollTop = innerScroll;
         }
       }
     }
@@ -7576,8 +7581,8 @@
         <td style="padding:8px 12px; text-align:center;">${(o.status==='pending'||o.status==='confirmed') ? `<input type="number" min="0" value="${item.qty}" style="width:55px; text-align:center; padding:3px; border:1px solid #cbd5e0; border-radius:4px; font-size:13px; font-weight:bold;" onchange="updateSOItemQty('${o.id}',${idx},this.value)">` : item.qty}</td>
         <td style="padding:8px 12px; text-align:right; color:#718096;">${(o.status==='pending'||o.status==='confirmed') ? `$<input type="number" min="0" value="${item.unitPrice}" style="width:65px; text-align:right; padding:3px; border:1px solid #cbd5e0; border-radius:4px; font-size:13px; color:#718096;" onchange="updateSOItemPrice('${o.id}',${idx},this.value)">` : `$${item.unitPrice}`}</td>
         <td style="padding:8px 12px; text-align:center; color:#718096; font-size:13px;">${deduct>0?`<span style="color:#c53030;">-${deduct}</span>`:'—'}</td>
-        <td style="padding:8px 12px; text-align:center; font-weight:bold;">${effective}</td>
-        <td style="padding:8px 12px; text-align:right; font-weight:bold; color:#0369a1;">$${subtotal.toLocaleString()}</td>
+        <td style="padding:8px 12px; text-align:center; font-weight:bold;" id="so-eff-${idx}">${effective}</td>
+        <td style="padding:8px 12px; text-align:right; font-weight:bold; color:#0369a1;" id="so-sub-${idx}">$${subtotal.toLocaleString()}</td>
         <td style="padding:8px 12px;">${returnCell}</td>
       </tr>`;
     }).join('');
@@ -7646,7 +7651,7 @@
               <tfoot>
                 <tr style="background:#f0f7ff; font-weight:bold;">
                   <td colspan="6" style="padding:10px 12px; text-align:right; color:#2b6cb0;">合計金額：</td>
-                  <td style="padding:10px 12px; text-align:right; color:#2b6cb0; font-size:16px;">$${amount.toLocaleString()}</td>
+                  <td style="padding:10px 12px; text-align:right; color:#2b6cb0; font-size:16px;" id="so-total">$${amount.toLocaleString()}</td>
                   <td style="padding:10px 12px;"></td>
                 </tr>
               </tfoot>
@@ -7667,7 +7672,7 @@
     if (!o || (o.status !== 'pending' && o.status !== 'confirmed')) return;
     o.items[itemIdx].qty = parseInt(newVal) || 0;
     syncSalesOrdersToPortal();
-    showSalesOrderDetail(soId);
+    refreshSODetailInPlace(o);
   }
 
   function updateSOItemPrice(soId, itemIdx, newVal) {
@@ -7675,7 +7680,24 @@
     if (!o || (o.status !== 'pending' && o.status !== 'confirmed')) return;
     o.items[itemIdx].unitPrice = parseInt(newVal) || 0;
     syncSalesOrdersToPortal();
-    showSalesOrderDetail(soId);
+    refreshSODetailInPlace(o);
+  }
+
+  function refreshSODetailInPlace(o) {
+    // 更新每行小計和合計，不重渲染整頁
+    o.items.forEach(function(item, idx) {
+      var deduct = 0;
+      if (item.returnStatus === 'received') deduct = item.adminReturnQty || item.returnQty;
+      else if (item.returnStatus === 'waived') deduct = item.returnQty;
+      var effective = item.qty - deduct;
+      var subtotal = effective * item.unitPrice;
+      var effCell = document.getElementById('so-eff-' + idx);
+      var subCell = document.getElementById('so-sub-' + idx);
+      if (effCell) effCell.textContent = effective;
+      if (subCell) subCell.textContent = '$' + subtotal.toLocaleString();
+    });
+    var totalCell = document.getElementById('so-total');
+    if (totalCell) totalCell.textContent = '$' + calcOrderAmount(o).toLocaleString();
   }
 
   function printSalesOrderDetail(id) {
