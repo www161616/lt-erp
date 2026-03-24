@@ -3147,8 +3147,79 @@ async function confirmTf(id) {
     });
     if (!res.ok) { Swal.fire('更新失敗', await res.text(), 'error'); return; }
 
-    const msg = hasDiff ? '已確認收到（有數量差異）' : '已確認收到！';
-    Swal.fire({ icon: 'success', title: msg, timer: 1500, showConfirmButton: false });
+    if (!hasDiff) {
+      Swal.fire({ icon: 'success', title: '已確認收到！', timer: 1500, showConfirmButton: false });
+    } else {
+      // 列出差異品項（只顯示實收 < 應收的）
+      const diffItems = tf.items.map((item, idx) => {
+        const rcv = receivedItems[idx].received_qty;
+        const shortage = item.qty - rcv;
+        if (shortage <= 0) return null;
+        return { product_code: item.product_code || '', product_name: item.product_name, qty: item.qty, received: rcv, shortage, temp: item.temp || '', price: item.price || 0 };
+      }).filter(Boolean);
+
+      const diffRows = diffItems.map(d =>
+        `<tr>
+          <td style="padding:6px 10px; border-bottom:1px solid #f3f4f6; font-size:13px; font-weight:700;">${d.product_name}</td>
+          <td style="padding:6px 10px; border-bottom:1px solid #f3f4f6; text-align:center;">${d.qty}</td>
+          <td style="padding:6px 10px; border-bottom:1px solid #f3f4f6; text-align:center; color:#dc2626; font-weight:700;">${d.received}</td>
+          <td style="padding:6px 10px; border-bottom:1px solid #f3f4f6; text-align:center; color:#b45309; font-weight:700;">${d.shortage}</td>
+        </tr>`
+      ).join('');
+
+      if (diffItems.length > 0) {
+        const補發 = await Swal.fire({
+          icon: 'warning',
+          title: '收貨有差異',
+          html: `<div style="text-align:left; font-size:13px; margin-bottom:10px;">以下品項實收不足：</div>
+            <table style="width:100%; border-collapse:collapse; font-size:13px;">
+              <thead><tr style="background:#fef3c7;">
+                <th style="padding:6px 10px; text-align:left;">品名</th>
+                <th style="padding:6px 10px; text-align:center;">應收</th>
+                <th style="padding:6px 10px; text-align:center;">實收</th>
+                <th style="padding:6px 10px; text-align:center;">差額</th>
+              </tr></thead>
+              <tbody>${diffRows}</tbody>
+            </table>`,
+          showCancelButton: true,
+          confirmButtonText: '📦 建立補發單',
+          cancelButtonText: '不用補發',
+          confirmButtonColor: '#be185d',
+          width: 480
+        });
+
+        if (補發.isConfirmed) {
+          try {
+            const newTfId = generateTfId();
+            // 建主單
+            const orderRes = await fetch(`${SB_URL}/transfer_orders`, {
+              method: 'POST',
+              headers: { ...SB_HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+              body: JSON.stringify({ id: newTfId, from_store: tf.from_store, to_store: tf.to_store, status: 'pending', admin_status: 'pending', temp_note: tf.temp_note || '', note: `補發：原單 ${id}` })
+            });
+            if (!orderRes.ok) throw new Error('建立補發主單失敗');
+
+            // 建明細
+            const newItems = diffItems.map(d => ({
+              transfer_id: newTfId, product_code: d.product_code, product_name: d.product_name,
+              temp: d.temp, qty: d.shortage, price: d.price, amount: d.shortage * d.price, note: `補發 ${id}`
+            }));
+            const itemRes = await fetch(`${SB_URL}/transfer_items`, {
+              method: 'POST',
+              headers: { ...SB_HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+              body: JSON.stringify(newItems)
+            });
+            if (!itemRes.ok) throw new Error('建立補發明細失敗');
+
+            Swal.fire({ icon: 'success', title: '補發單已建立', html: `單號 <b>${newTfId}</b>`, confirmButtonColor: '#be185d' });
+          } catch (err) {
+            Swal.fire('建立補發單失敗', err.message, 'error');
+          }
+        }
+      } else {
+        Swal.fire({ icon: 'success', title: '已確認收到（有數量差異）', timer: 1500, showConfirmButton: false });
+      }
+    }
   } catch (e) {
     Swal.fire('更新失敗', e.message, 'error');
     return;
