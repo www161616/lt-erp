@@ -240,6 +240,10 @@
         <i class="fas fa-home"></i> 儀表板 <span id="calBadge" style="display:none;font-size:10px;background:var(--danger);color:white;padding:1px 6px;border-radius:10px;margin-left:4px;">0</span>
       </a>
 
+      <a class="nav-item" data-url="PendingReview.html" data-title="待審單據" style="border-left:3px solid #c05621; margin-bottom:4px;">
+        <i class="fas fa-clipboard-check"></i> 待審單據 <span id="pendingBadge" style="display:none;font-size:10px;background:var(--danger);color:white;padding:1px 6px;border-radius:10px;margin-left:4px;">0</span>
+      </a>
+
       <div class="nav-group-label" data-group="orders" onclick="toggleGroup(this)">開單作業 <span class="arrow">▾</span></div>
       <div class="nav-group-items" data-group="orders">
         <a class="nav-item" data-url="SalesOrder.html" data-title="開新銷貨單"><i class="fas fa-file-invoice"></i> 開新銷貨單</a>
@@ -405,6 +409,17 @@
             <div class="stat-top"><div class="stat-icon">🪙</div><div class="stat-tag">即時</div></div>
             <div class="stat-value" style="color:var(--warning)" id="st-petty">-</div>
             <div class="stat-label">零用金結餘</div>
+          </div>
+        </div>
+
+        <!-- 待審單據提醒 -->
+        <div id="pendingAlert" style="display:none; background:linear-gradient(135deg,#fffbeb,#fef3c7); border:1px solid #fde68a; border-left:4px solid #f59e0b; border-radius:8px; padding:14px 20px; margin-bottom:15px; cursor:pointer; transition:0.2s;" onclick="loadPage('PendingReview.html','待審單據')" onmouseover="this.style.boxShadow='0 2px 8px rgba(245,158,11,0.2)'" onmouseout="this.style.boxShadow='none'">
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <span style="font-size:16px; font-weight:bold; color:#92400e;">📋 有待審單據</span>
+              <span id="pendingAlertDetail" style="font-size:13px; color:#a16207; margin-left:10px;"></span>
+            </div>
+            <span style="font-size:13px; color:#92400e; font-weight:bold;">點擊審核 →</span>
           </div>
         </div>
 
@@ -583,6 +598,7 @@
 
       initDateTime();
       refreshDashboard();
+      checkPendingReview();
       // 從 Supabase 載入記事與待辦
       await loadCalEvents();
       calRender();
@@ -629,6 +645,7 @@
         iframe.style.display = 'none';
         iframe.src = '';
         refreshDashboard();
+        checkPendingReview();
       } else {
         dashboard.style.display = 'none';
         iframe.style.display = 'block';
@@ -788,6 +805,47 @@
         console.error('Dashboard Error:', e);
         document.getElementById('todayStr').textContent='⚠️ 部分資料載入失敗';
       }
+    }
+
+    // ===== 待審單據檢查 =====
+    async function checkPendingReview() {
+      try {
+        let salesCount = 0, purchaseCount = 0;
+        const [kvRes, ipRes] = await Promise.all([
+          fetch(`${SB_URL}/shared_kv?key=eq.portalSalesOrders&select=value`, { headers: getHeaders() }),
+          fetch(`${SB_URL}/internal_purchases?status=eq.待審核&select=id`, { headers: getHeaders() })
+        ]);
+        if (kvRes.ok) {
+          const kvData = await kvRes.json();
+          const allOrders = kvData.length > 0 ? (kvData[0].value || []) : [];
+          salesCount = allOrders.filter(o => o.status === 'pending' || o.status === 'confirmed').length;
+        }
+        if (ipRes.ok) {
+          const ipData = await ipRes.json();
+          purchaseCount = ipData.length;
+        }
+        const total = salesCount + purchaseCount;
+        // 更新 sidebar badge
+        const badge = document.getElementById('pendingBadge');
+        if (badge) {
+          badge.textContent = total;
+          badge.style.display = total > 0 ? '' : 'none';
+        }
+        // 更新儀表板提醒
+        const alert = document.getElementById('pendingAlert');
+        const detail = document.getElementById('pendingAlertDetail');
+        if (alert && detail) {
+          if (total > 0) {
+            let parts = [];
+            if (salesCount > 0) parts.push(`銷貨單 ${salesCount} 筆`);
+            if (purchaseCount > 0) parts.push(`進貨單 ${purchaseCount} 筆`);
+            detail.textContent = parts.join('、');
+            alert.style.display = '';
+          } else {
+            alert.style.display = 'none';
+          }
+        }
+      } catch(e) { console.error('checkPendingReview error:', e); }
     }
 
     // ===== Calendar =====
