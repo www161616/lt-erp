@@ -4060,6 +4060,14 @@ function confirmReceived(orderId) {
     order.storeConfirmedAt = ts;
     localStorage.setItem('portalSalesOrders', JSON.stringify(allSO));
     cloudSave('portalSalesOrders');
+    // 同步到 DB（有 dbId 才 PATCH）
+    if (order.dbId) {
+      fetch(SB_URL + '/sales_orders?id=eq.' + order.dbId, {
+        method: 'PATCH',
+        headers: { ...SB_HEADERS, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ store_confirmed_at: new Date().toISOString() })
+      }).catch(function(e) { console.error('PATCH store_confirmed_at failed:', e); });
+    }
     // 更新本地
     portalOrders = allSO.filter(o => o.storeName === currentStore?.name);
     Swal.fire({ title: '已確認收貨！', text: '總倉將會開立正式銷貨單', icon: 'success', timer: 1500, showConfirmButton: false });
