@@ -7996,7 +7996,8 @@
           const filled = qty > 0;
           const cellBg = isClosed ? (filled ? '#e0f2fe' : '#fef2f2') : (filled ? '' : '');
           const cellColor = filled ? 'color:#2b6cb0; font-weight:600;' : (isClosed ? 'color:#fca5a5;' : 'color:#d1d5db;');
-          return `<td style="${tdCell} ${cellColor} ${cellBg ? 'background:'+cellBg+';' : ''}">${filled ? qty : (isClosed ? '✕' : '-')}</td>`;
+          const cellDisplay = filled ? qty : (isClosed ? '✕' : '-');
+          return `<td style="${tdCell} ${cellColor} ${cellBg ? 'background:'+cellBg+';' : ''} cursor:pointer;" ondblclick="editSummaryQty(this,'${n}','${item.id}',${qty})" title="雙擊編輯">${cellDisplay}</td>`;
         }).join('');
         const personalCells = summaryPersonalNames.map(n => {
           const qty = (branchOrders[n] && branchOrders[n][item.id]) || 0;
@@ -8111,6 +8112,48 @@
       logActivity(`批次${label}`, 'SUMMARY', { count: checked.length });
       filterAdminSummary(false, asPageNum);
       Swal.fire({ title: `已${label}`, text: `共 ${checked.length} 筆`, icon: 'success', timer: 1500, showConfirmButton: false });
+    });
+  }
+
+  function editSummaryQty(td, storeName, itemId, currentQty) {
+    var input = document.createElement('input');
+    input.type = 'number';
+    input.min = '0';
+    input.value = currentQty || '';
+    input.style.cssText = 'width:42px; text-align:center; font-size:13px; font-weight:700; padding:2px; border:2px solid #2b6cb0; border-radius:4px; font-family:inherit; background:#eff6ff;';
+    td.textContent = '';
+    td.appendChild(input);
+    input.focus();
+    input.select();
+
+    function save() {
+      var newQty = parseInt(input.value) || 0;
+      var branchOrders = JSON.parse(localStorage.getItem('branchOrders') || '{}');
+      if (!branchOrders[storeName]) branchOrders[storeName] = {};
+      branchOrders[storeName][itemId] = newQty;
+      localStorage.setItem('branchOrders', JSON.stringify(branchOrders));
+      cloudSave('branchOrders');
+      // 更新格子顯示
+      td.textContent = newQty > 0 ? newQty : '-';
+      td.style.color = newQty > 0 ? '#2b6cb0' : '#d1d5db';
+      td.style.fontWeight = newQty > 0 ? '600' : '';
+      // 更新合計
+      var row = td.closest('tr');
+      if (row) {
+        var cells = row.querySelectorAll('td');
+        var lastCell = cells[cells.length - 1];
+        var importedStores = JSON.parse(localStorage.getItem('importedStoreNames') || 'null') || branchNames;
+        var importedPersonals = JSON.parse(localStorage.getItem('importedPersonalNames') || 'null') || [];
+        var allNames = importedStores.concat(importedPersonals);
+        var total = allNames.reduce(function(s, n) { return s + ((branchOrders[n] && branchOrders[n][itemId]) || 0); }, 0);
+        if (lastCell) lastCell.textContent = total || '-';
+      }
+    }
+
+    input.addEventListener('blur', save);
+    input.addEventListener('keydown', function(e) {
+      if (e.key === 'Enter') { e.preventDefault(); input.blur(); }
+      if (e.key === 'Escape') { td.textContent = currentQty > 0 ? currentQty : '-'; }
     });
   }
 
