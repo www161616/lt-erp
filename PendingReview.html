@@ -307,7 +307,7 @@
         deduction: 0,
         note: `來自調度中心 ${o.id}${o.note ? ' | ' + o.note : ''}`,
         items: o.items.map(it => ({
-          product_id: it.productId,
+          product_id: it.productId ? it.productId.split('_')[0] : null,
           product_name: it.name,
           qty: it.qty,
           unit: '件',
