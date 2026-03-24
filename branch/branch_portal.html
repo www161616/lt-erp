@@ -3763,6 +3763,7 @@ function showBillingDetail(orderId) {
     <div style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
       <div style="font-size:12px; color:#6b7280;">建立時間：${r.createdAt}${r.issuedAt?'　開立時間：'+r.issuedAt:''}${r.storeConfirmedAt?'　確認到貨：'+r.storeConfirmedAt:''}</div>
       <div style="display:flex; align-items:center; gap:8px;">
+        ${r.items.some(i => i.returnStatus && i.returnStatus !== 'none') ? `<button onclick="printReturnSlip('${r.id}')" style="padding:6px 16px; background:#b45309; color:white; border:none; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;">🖨️ 列印退貨單</button>` : ''}
         ${r.status === 'pending' ? `<button onclick="confirmReceived('${r.id}')" style="padding:6px 16px; background:#047857; color:white; border:none; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;">✅ 確認收貨</button>` : ''}
         <span style="background:${sc.bg}; color:${sc.text}; padding:3px 12px; border-radius:8px; font-size:12px; font-weight:700;">${sc.label}</span>
       </div>
@@ -4075,6 +4076,71 @@ function submitReturnReport(orderId, itemIdx, data) {
 
   // 同步更新本地 portalOrders
   portalOrders = allSO.filter(o => o.storeName === currentStore?.name);
+}
+
+function printReturnSlip(orderId) {
+  const r = portalOrders.find(o => o.id === orderId);
+  if (!r) return;
+  const returnItems = r.items.filter(i => i.returnStatus && i.returnStatus !== 'none');
+  if (returnItems.length === 0) return;
+
+  const today = new Date();
+  const dateStr = `${today.getMonth()+1}/${today.getDate()}`;
+  const typeLabel = { missing: '未收到', return: '退貨' };
+
+  const itemRows = returnItems.map(i =>
+    `<tr>
+      <td style="border:1px solid #000; padding:6px 8px; font-size:15px;">
+        <div style="font-size:16px; font-weight:bold;">${i.name}</div>
+        <div style="font-size:12px; color:#666; margin-top:2px;">${typeLabel[i.reportType] || '退貨'}：${i.returnReason || ''}</div>
+      </td>
+      <td style="border:1px solid #000; padding:6px 8px; text-align:center; font-size:18px; font-weight:bold; width:60px;">x${i.returnQty || 0}</td>
+    </tr>`
+  ).join('');
+
+  const win = window.open('', '_blank', 'width=350,height=700');
+  win.document.write(`
+    <!DOCTYPE html><html><head><meta charset="UTF-8">
+    <style>
+      @page { margin: 2mm; size: 80mm auto; }
+      body { font-family: 'Microsoft JhengHei', sans-serif; font-size: 16px; width: 76mm; margin: 0; padding: 4px; }
+      table { width:100%; border-collapse:collapse; }
+      .no-print { position:fixed; top:8px; right:8px; z-index:99; }
+      .no-print button { padding:8px 16px; font-size:14px; border:none; border-radius:6px; cursor:pointer; font-weight:bold; margin-left:6px; }
+      @media print { .no-print { display:none; } }
+    </style></head><body>
+    <div class="no-print">
+      <button onclick="window.print()" style="background:#be185d; color:white;">🖨️ 列印</button>
+      <button onclick="window.close()" style="background:#e2e8f0; color:#333;">✕ 關閉</button>
+    </div>
+    <div style="text-align:center; font-size:20px; font-weight:bold; padding:8px 0; border-bottom:2px solid #000;">退貨單</div>
+    <table style="margin:8px 0;">
+      <tr>
+        <td style="border:1px solid #000; padding:8px; font-size:14px; font-weight:bold; width:70px;">店　名</td>
+        <td style="border:1px solid #000; padding:8px; font-size:18px; font-weight:bold;">${r.storeName || currentStore?.name || ''}</td>
+      </tr>
+      <tr>
+        <td style="border:1px solid #000; padding:8px; font-size:14px; font-weight:bold;">日　期</td>
+        <td style="border:1px solid #000; padding:8px; font-size:16px; font-weight:bold;">${dateStr}</td>
+      </tr>
+      <tr>
+        <td style="border:1px solid #000; padding:8px; font-size:14px; font-weight:bold;">銷貨單號</td>
+        <td style="border:1px solid #000; padding:8px; font-size:14px; font-weight:bold; color:#2b6cb0;">${r.id}</td>
+      </tr>
+    </table>
+    <table>
+      <tr>
+        <td style="border:1px solid #000; padding:6px 8px; font-size:14px; font-weight:bold; text-align:center;">品名 / 原因</td>
+        <td style="border:1px solid #000; padding:6px 8px; font-size:14px; font-weight:bold; text-align:center; width:60px;">數量</td>
+      </tr>
+      ${itemRows}
+    </table>
+    <div style="margin-top:16px; padding:10px 8px; border-top:2px solid #000; font-size:15px; font-weight:bold;">
+      退回總倉簽收：＿＿＿＿＿＿＿＿
+    </div>
+    </body></html>
+  `);
+  win.document.close();
 }
 
 // ============================
