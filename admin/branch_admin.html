@@ -6814,7 +6814,7 @@
           qty: r.qty || 0,
           price: r.price || 0,
           message: r.note || '（需求單）',
-          status: r.status === 'done' ? 'replied' : 'pending',
+          status: (r.status === 'done' || r.status === 'replied') ? 'replied' : (r.status || 'pending'),
           reply: r.reply || '',
           createdAt: (createdDate.getMonth()+1).toString().padStart(2,'0') + '/' + createdDate.getDate().toString().padStart(2,'0') + ' ' + createdDate.getHours().toString().padStart(2,'0') + ':' + createdDate.getMinutes().toString().padStart(2,'0'),
           repliedAt: r.repliedAt || '',
