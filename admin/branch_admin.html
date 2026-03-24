@@ -5555,43 +5555,44 @@
 
   let mockTransfers = [];
 
-  function syncTransfersFromPortal() {
+  async function syncTransfersFromPortal() {
     try {
-      const raw = localStorage.getItem('portalTransferList');
-      if (!raw) { mockTransfers = []; return; }
-      const list = JSON.parse(raw);
-      mockTransfers = list.map(t => ({
+      const res = await fetch(`${SB_URL}/transfer_orders?select=*,items:transfer_items(*)&order=created_at.desc`, { headers: HEADERS });
+      if (!res.ok) { mockTransfers = []; return; }
+      const data = await res.json();
+      mockTransfers = data.map(t => ({
         id: t.id,
-        fromStore: t.fromStore || '',
-        toStore: t.toStore || '',
-        items: (t.items || []).map(i => ({ code: i.code||'', name: i.name||'', qty: i.qty||0, temp: i.temp||'', price: i.price||0, expiry: i.note||'' })),
-        tempNote: t.tempNote || '常溫',
+        fromStore: t.from_store || '',
+        toStore: t.to_store || '',
+        items: (t.items || []).map(i => ({ code: i.product_code||'', name: i.product_name||'', qty: i.qty||0, temp: i.temp||'', price: i.price||0, expiry: i.note||'' })),
+        tempNote: t.temp_note || '常溫',
         note: t.note || '',
-        status: t.adminStatus || 'pending',
-        warehouseNote: t.warehouseNote || '',
-        confirmed: t.confirmed || false,
-        createdAt: t.createdAt ? new Date(t.createdAt).toLocaleString('zh-TW', {year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : ''
+        status: t.admin_status || 'pending',
+        warehouseNote: t.warehouse_note || '',
+        confirmed: t.status === 'confirmed',
+        cancelReason: t.cancel_reason || '',
+        hasDiscrepancy: t.has_discrepancy || false,
+        receiveNote: t.receive_note || '',
+        createdAt: t.created_at ? new Date(t.created_at).toLocaleString('zh-TW', {year:'numeric',month:'2-digit',day:'2-digit',hour:'2-digit',minute:'2-digit'}) : ''
       }));
     } catch(e) { console.error('syncTransfers error:', e); mockTransfers = []; }
   }
 
-  function syncTransferToPortal(id, updates) {
+  async function syncTransferToPortal(id, updates) {
     try {
-      const raw = localStorage.getItem('portalTransferList');
-      if (!raw) return;
-      const list = JSON.parse(raw);
-      const t = list.find(t => t.id === id);
-      if (t) {
-        Object.assign(t, updates);
-        localStorage.setItem('portalTransferList', JSON.stringify(list));
-        cloudSave('portalTransferList');
-      }
+      const dbUpdates = {};
+      if (updates.adminStatus !== undefined) dbUpdates.admin_status = updates.adminStatus;
+      if (updates.warehouseNote !== undefined) dbUpdates.warehouse_note = updates.warehouseNote;
+      await fetch(`${SB_URL}/transfer_orders?id=eq.${id}`, {
+        method: 'PATCH',
+        headers: HEADERS,
+        body: JSON.stringify(dbUpdates)
+      });
     } catch(e) { console.error('syncTransferToPortal error:', e); }
   }
 
   async function renderTransferStation() {
-    await cloudLoadAll();
-    syncTransfersFromPortal();
+    await syncTransfersFromPortal();
     const html = `
       <div style="display:flex; flex-direction:column; gap:15px; height:100%;">
         <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--border); padding-bottom:10px; flex-shrink:0;">
@@ -5604,6 +5605,7 @@
               <option value="arrived">已到總倉</option>
               <option value="shipped">已配送</option>
               <option value="received">已收到</option>
+              <option value="cancelled">已作廢</option>
             </select>
             <span style="color:#e2e8f0;">│</span>
             <button class="btn" style="padding:5px 12px; font-size:12px; background:#718096;" onclick="toggleSelectAllTF()">☑ 全選</button>
@@ -5664,8 +5666,8 @@
     `;
   }
 
-  function refreshTransferTable() {
-    syncTransfersFromPortal();
+  async function refreshTransferTable() {
+    await syncTransfersFromPortal();
     renderTransferSummary();
     const filter = document.getElementById('transferFilter')?.value || 'all';
     const data = filter === 'all' ? mockTransfers : mockTransfers.filter(t => t.status === filter);
@@ -5677,9 +5679,9 @@
       return;
     }
 
-    const statusLabel = { pending:'⏳ 待審核', arrived:'📦 已到總倉', shipped:'🚚 已配送', received:'✅ 已收到' };
-    const statusColor = { pending:'#b7791f', arrived:'#2b6cb0', shipped:'#047857', received:'#718096' };
-    const statusBg    = { pending:'#fef3c7', arrived:'#f0f7ff', shipped:'#f0f7ff', received:'#eef1f5' };
+    const statusLabel = { pending:'⏳ 待審核', arrived:'📦 已到總倉', shipped:'🚚 已配送', received:'✅ 已收到', cancelled:'❌ 已作廢' };
+    const statusColor = { pending:'#b7791f', arrived:'#2b6cb0', shipped:'#047857', received:'#718096', cancelled:'#9ca3af' };
+    const statusBg    = { pending:'#fef3c7', arrived:'#f0f7ff', shipped:'#f0f7ff', received:'#eef1f5', cancelled:'#f3f4f6' };
     const tempColor   = { '冷凍':'#2b6cb0', '冷藏':'#0891b2', '常溫':'#b7791f', '混合':'#7c3aed' };
 
     tbody.innerHTML = [...data].reverse().map(t => {
@@ -5732,15 +5734,15 @@
       html: `單號 <b>${id}</b><br>${t.fromStore} → ${t.toStore}<br><br>狀態將更新為：<b style="color:#2b6cb0;">${labelMap[newStatus]}</b>`,
       icon: 'question', showCancelButton: true,
       confirmButtonText: '確認', cancelButtonText: '取消'
-    }).then(res => {
+    }).then(async (res) => {
       if (!res.isConfirmed) return;
       t.status = newStatus;
-      syncTransferToPortal(id, { adminStatus: newStatus });
+      await syncTransferToPortal(id, { adminStatus: newStatus });
 
       // ✨ 紀錄操作：店轉店狀態更新
       logActivity('更新店轉店狀態', id, { status: labelMap[newStatus], from: t.fromStore, to: t.toStore });
 
-      refreshTransferTable();
+      await refreshTransferTable();
     });
   }
 
@@ -5748,7 +5750,7 @@
     const t = mockTransfers.find(t => t.id === id);
     if (t) {
       t.warehouseNote = value;
-      syncTransferToPortal(id, { warehouseNote: value });
+      syncTransferToPortal(id, { warehouseNote: value });  // async fire-and-forget
     }
   }
 
@@ -5763,7 +5765,7 @@
         <td style="padding:8px 10px; border:1px solid #e2e8f0; text-align:center; font-weight:bold; color:#0369a1; font-size:15px;">${i.qty}</td>
         <td style="padding:8px 10px; border:1px solid #e2e8f0; color:#b7791f; font-size:12px;">${i.expiry||'—'}</td>
       </tr>`).join('');
-    const statusLabel = { pending:'⏳ 待審核', arrived:'📦 已到總倉', shipped:'🚚 已配送', received:'✅ 已收到' };
+    const statusLabel = { pending:'⏳ 待審核', arrived:'📦 已到總倉', shipped:'🚚 已配送', received:'✅ 已收到', cancelled:'❌ 已作廢' };
     Swal.fire({
       title: `${t.id}　${t.fromStore} → ${t.toStore}`,
       html: `
@@ -6612,15 +6614,14 @@
       html: '<span style="color:#c53030;">此操作無法復原，portal 端也會同步消失。</span>',
       icon: 'warning', showCancelButton: true,
       confirmButtonText: '刪除 ' + ids.length + ' 筆', cancelButtonText: '取消', confirmButtonColor: '#c53030'
-    }).then(res => {
+    }).then(async (res) => {
       if (!res.isConfirmed) return;
-      const allTf = JSON.parse(localStorage.getItem('portalTransferList') || '[]');
-      const filtered = allTf.filter(t => !ids.includes(t.id));
-      localStorage.setItem('portalTransferList', JSON.stringify(filtered));
-      cloudSave('portalTransferList');
-      syncTransfersFromPortal();
+      const idList = ids.map(id => `"${id}"`).join(',');
+      // 先刪明細再刪主單
+      await fetch(`${SB_URL}/transfer_items?transfer_id=in.(${idList})`, { method: 'DELETE', headers: HEADERS });
+      await fetch(`${SB_URL}/transfer_orders?id=in.(${idList})`, { method: 'DELETE', headers: HEADERS });
       Swal.fire({ title: '已刪除 ' + ids.length + ' 筆', icon: 'success', timer: 1200, showConfirmButton: false });
-      refreshTransferTable();
+      await refreshTransferTable();
     });
   }
 
