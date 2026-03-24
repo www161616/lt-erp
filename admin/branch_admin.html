@@ -7194,6 +7194,10 @@
                 ${custOptions}
               </select>
             </div>
+            <div style="display:flex; gap:8px; align-items:center; margin-bottom:6px;">
+              <label style="font-size:12px; color:#4a5568; white-space:nowrap;">日期：</label>
+              <input type="date" id="soOrderDate" value="${new Date().toISOString().split('T')[0]}" style="flex:1; padding:5px 8px; border:1px solid #d1d5db; border-radius:4px; font-size:13px; font-family:inherit;">
+            </div>
             <div style="display:flex; gap:8px; align-items:center;">
               <label style="font-size:12px; color:#4a5568; white-space:nowrap;">類型：</label>
               <select id="soCreateType" style="flex:1; padding:5px 8px; border:1px solid #d1d5db; border-radius:4px; font-size:13px; font-family:inherit;">
@@ -7226,7 +7230,7 @@
 
     const cust = allCustomers.find(c => c.name === customerName) || { id: null, name: customerName, tax_type: '免稅' };
     const now = new Date();
-    const dateStr = now.toISOString().split('T')[0];
+    const dateStr = document.getElementById('soOrderDate')?.value || now.toISOString().split('T')[0];
     const subtotal = soCart.reduce((s, i) => s + i.qty * i.unitPrice, 0);
     const taxRate = cust.tax_type === '外加5%' ? 0.05 : 0;
     const tax_amount = Math.round(subtotal * taxRate);
