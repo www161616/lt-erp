@@ -631,9 +631,16 @@
     let currentPickingTask = null; 
 
     function renderPickingStation() {
+      const restockBanner = (pendingRestockWaveId || pendingDemandInqId)
+        ? `<div style="background:#fef2f2; border:1px solid #fca5a5; border-radius:8px; padding:10px 16px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;">
+            <span style="color:#c53030; font-weight:700; font-size:14px;">⚠️ ${pendingRestockWaveId ? '補發模式（來源：' + pendingRestockWaveId + '）' : '需求補發模式'}</span>
+            <button class="btn" style="background:#c53030; padding:6px 16px; font-size:13px;" onclick="cancelRestockMode()">✕ 取消補發模式</button>
+          </div>`
+        : '';
       let html = `
+        ${restockBanner}
         <div style="display: flex; gap: 20px; height: 100%;">
-          
+
           <div class="panel" style="flex: 1; min-width: 300px; background: #eef1f5;">
             <div class="panel-title" style="color:#b7791f; border-color:#b7791f;">1. 刷入/搜尋到貨商品</div>
             
@@ -790,6 +797,35 @@
     }
 
     // 儲存並結算分貨 (拋轉銷貨與欠品單)
+    function cancelRestockMode() {
+      // 從 activePickingMatrix 移除補發/需求帶入的商品
+      if (pendingRestockWaveId) {
+        var restockWave = mockSavedWaves.find(function(w) { return w.id === pendingRestockWaveId; });
+        if (restockWave) {
+          var restockPids = restockWave.matrix.map(function(r) { return r.id; });
+          for (var i = activePickingMatrix.length - 1; i >= 0; i--) {
+            if (restockPids.indexOf(activePickingMatrix[i].id) >= 0) {
+              activePickingMatrix.splice(i, 1);
+            }
+          }
+        }
+      }
+      // 如果是從需求建立的，還原需求狀態
+      if (pendingDemandInqId) {
+        var dInq = mockInquiries.find(function(i) { return i.id === pendingDemandInqId; });
+        if (dInq) {
+          dInq.status = 'pending';
+          dInq.reply = '';
+          dInq.repliedAt = '';
+          syncReplyToPortal(dInq);
+        }
+      }
+      pendingRestockWaveId = null;
+      pendingDemandInqId = null;
+      Swal.fire({ icon: 'info', title: '已取消', text: '返回欠品管理', timer: 1500, showConfirmButton: false })
+        .then(function() { switchTab('backorder'); });
+    }
+
     function savePickingTask() {
       // 檢查是否有欠品或超發，提示管理員
       const shortages = currentPickingTask.branches.filter(b => b.actual < b.expected);
@@ -2489,6 +2525,7 @@
     }
 
     let pendingRestockWaveId = null; // 如果正在建立補發揀貨單，記錄原始 wave_id
+    let pendingDemandInqId = null;  // 如果從需求建立揀貨，記錄需求 ID（儲存後才標記 replied）
 
     // 取得目前可見的店名欄位（根據 hideZeroCols 過濾）
     function getVisibleStoreNames() {
@@ -2992,6 +3029,19 @@
         });
 
         saveMockSavedWaves();
+
+        // 如果是從需求建立的，現在才標記 replied
+        if (pendingDemandInqId) {
+          var dInq = mockInquiries.find(function(i) { return i.id === pendingDemandInqId; });
+          if (dInq) {
+            dInq.status = 'replied';
+            dInq.reply = '已建立補發揀貨單';
+            var dnow = new Date();
+            dInq.repliedAt = dnow.getFullYear() + '/' + String(dnow.getMonth()+1).padStart(2,'0') + '/' + String(dnow.getDate()).padStart(2,'0') + ' ' + String(dnow.getHours()).padStart(2,'0') + ':' + String(dnow.getMinutes()).padStart(2,'0');
+            syncReplyToPortal(dInq);
+          }
+          pendingDemandInqId = null;
+        }
 
         // 建立完成，留在原頁，進入編輯模式
         currentEditingWaveId = newWaveId;
@@ -5523,12 +5573,8 @@
         branchData: branchData
       });
 
-      // 標記需求為已回覆
-      inq.status = 'replied';
-      inq.reply = '已建立補發揀貨單';
-      const now = new Date();
-      inq.repliedAt = now.getFullYear() + '/' + String(now.getMonth()+1).padStart(2,'0') + '/' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
-      syncReplyToPortal(inq);
+      // 延遲標記：先記住 inqId，儲存揀貨單後才改 replied
+      pendingDemandInqId = inqId;
 
       switchTab('picking');
     });
