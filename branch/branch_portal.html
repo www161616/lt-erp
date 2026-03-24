@@ -4257,14 +4257,14 @@ const BUN_MENU = [
   { no:15, name:'紅豆包',     price:14,   cat:'包子' },
   { no:16, name:'芝麻包',     price:14,   cat:'包子' },
   { no:17, name:'梅干菜肉',   price:14,   cat:'包子' },
-  { no:18, name:'芋頭地瓜',   price:15,   cat:'包子' },
+  { no:18, name:'芋頭地瓜',   price:14.5, cat:'包子' },
   { no:19, name:'五穀雜糧',   price:14.5, cat:'包子' },
   { no:20, name:'德國香腸',   price:18,   cat:'其他' },
   { no:21, name:'剝皮辣椒',   price:18.5, cat:'其他' },
   { no:22, name:'紅糖起司',   price:17,   cat:'其他' },
   { no:23, name:'牛奶起司',   price:17,   cat:'其他' },
   { no:24, name:'寶寶小饅頭', price:77,   cat:'其他' },
-  { no:25, name:'鮮奶小饅頭', price:77,   cat:'其他' },
+  { no:25, name:'鮮奶小饅頭', price:82,   cat:'其他' },
   { no:26, name:'養生五行饅', price:77,   cat:'其他' }
 ];
 const BUN_FOOTER = '熱熱直接放保麗龍(不用包裝)謝謝';
@@ -4292,6 +4292,13 @@ function initBunPage() {
   const today = new Date();
   const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
   document.getElementById('bunOrderDate').value = todayStr;
+  // 用最新單價重算所有紀錄的 total（修正歷史價格變動）
+  let recalced = false;
+  bunRecords.forEach(r => {
+    const newTotal = bunCalcTotal(r.qtyMap);
+    if (r.total !== newTotal) { r.total = newTotal; recalced = true; }
+  });
+  if (recalced) saveBunData();
   // 格子只建一次
   if (!bunGridRendered) { renderBunMenuGrid(); bunGridRendered = true; }
   refreshBunMonthAndRecords();
