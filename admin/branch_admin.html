@@ -1004,7 +1004,7 @@
         html += `<tr style="border-bottom:1px solid #eee;">
           <td style="padding:8px; text-align:center; color:#999;">${i+1}</td>
           <td style="padding:8px;"><b>${it.name}</b><br><span style="font-size:11px; color:#999;">${it.id}</span></td>
-          <td style="padding:8px; text-align:center;"><input type="text" value="${it.supplier || ''}" placeholder="供應商" style="width:90px; padding:4px; border:1px solid var(--border); border-radius:4px; font-size:12px; font-family:inherit;" onchange="ipCart[${i}].supplier=this.value"></td>
+          <td style="padding:8px; text-align:center;"><input type="text" list="ipSupplierList" value="${it.supplier || ''}" placeholder="供應商" style="width:100px; padding:4px; border:1px solid var(--border); border-radius:4px; font-size:12px; font-family:inherit;" onchange="ipCart[${i}].supplier=this.value"></td>
           <td style="padding:8px; text-align:center; font-size:12px;">${it.unit}</td>
           <td style="padding:8px; text-align:center;"><input type="number" id="ipQty-${i}" value="${it.qty}" min="1" style="width:55px; text-align:center; padding:4px; border:1px solid #718096; border-radius:4px; font-weight:600; color:#718096;" onchange="ipCart[${i}].qty=Number(this.value);ipCalcTotal()" onkeydown="ipEnterNext(event,'ipQty',${i})"></td>
           <td style="padding:8px; text-align:center;"><input type="number" id="ipCost-${i}" value="${it.cost}" style="width:65px; text-align:right; padding:4px; border:1px solid var(--accent); border-radius:4px; font-weight:700; color:var(--accent); background:#fff9f0;" onchange="ipCart[${i}].cost=Number(this.value);ipCalcTotal()" onkeydown="ipEnterNext(event,'ipCost',${i})"></td>
@@ -1016,7 +1016,8 @@
           <td style="padding:8px; text-align:center;"><button onclick="ipCart.splice(${i},1);ipRenderCart()" style="background:none; border:none; color:#c53030; cursor:pointer; font-size:16px;">×</button></td>
         </tr>`;
       });
-      div.innerHTML = html + '</tbody></table>';
+      var supplierOptions = allSuppliers.map(function(s) { return '<option value="' + s.name + '">'; }).join('');
+      div.innerHTML = html + '</tbody></table><datalist id="ipSupplierList">' + supplierOptions + '</datalist>';
       ipCalcTotal();
       ipFilterProducts();
     }
@@ -1655,12 +1656,12 @@
     function ipExportDetail() {
       if (!ipCurrentDetail) return;
       const o = ipCurrentDetail;
-      let csv = '\uFEFF項次,商品編號,品名,數量,單位,單價成本,小計\n';
+      let csv = '\uFEFF項次,商品編號,品名,數量,單位,單價成本,售價,分店價,批發價,團購價,小計\n';
       o.items.forEach((it, i) => {
         const lt = it.qty * it.cost;
-        csv += `${i+1},="${ String(it.productId).replace(/"/g,'""') }","${(it.productName||'').replace(/"/g,'""')}",${it.qty},"${it.unit||'個'}",${it.cost},${lt}\n`;
+        csv += `${i+1},="${ String(it.productId).replace(/"/g,'""') }","${(it.productName||'').replace(/"/g,'""')}",${it.qty},"${it.unit||'個'}",${it.cost},${it.price||0},${it.price_branch||0},${it.price_wholesale||0},${it.price_group||0},${lt}\n`;
       });
-      csv += `,,,,,,\n,,,,,總計,${o.grandTotal}\n`;
+      csv += `,,,,,,,,,,\n,,,,,,,,,,總計,${o.grandTotal}\n`;
       ipDownloadCSV(csv, `內部採購單_${o.orderId}_${o.date}`);
     }
 
