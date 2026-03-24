@@ -191,7 +191,7 @@
 
     async function cloudLoadAll() {
       try {
-        const resp = await fetch(`${SB_URL}/shared_kv?key=in.("branchOrderList","branchOrders","branchDataList","branchTypeMap","portalAllRequests","portalTransferList","portalMutualAidBoard","portalSalesOrders","importedStoreNames","importedPersonalNames","lt_savedWaves","lt_backorderMeta")`, { headers: HEADERS });
+        const resp = await fetch(`${SB_URL}/shared_kv?key=in.("branchOrderList","branchOrders","branchDataList","branchTypeMap","portalAllRequests","portalTransferList","portalMutualAidBoard","portalSalesOrders","importedStoreNames","importedPersonalNames","lt_savedWaves","lt_backorderMeta","branchOrdersLocked")`, { headers: HEADERS });
         if (resp.ok) {
           const rows = await resp.json();
           rows.forEach(r => {
@@ -7943,6 +7943,7 @@
   function filterAdminSummary(showAll, page) {
     const publishedList = JSON.parse(localStorage.getItem('branchOrderList') || '[]');
     const branchOrders  = JSON.parse(localStorage.getItem('branchOrders') || '{}');
+    const branchOrdersLocked = JSON.parse(localStorage.getItem('branchOrdersLocked') || '{}');
     const importedStores = JSON.parse(localStorage.getItem('importedStoreNames') || 'null');
     const importedPersonals = JSON.parse(localStorage.getItem('importedPersonalNames') || 'null');
     const summaryStoreNames = importedStores || branchNames;
@@ -7997,7 +7998,9 @@
           const cellBg = isClosed ? (filled ? '#e0f2fe' : '#fef2f2') : (filled ? '' : '');
           const cellColor = filled ? 'color:#2b6cb0; font-weight:600;' : (isClosed ? 'color:#fca5a5;' : 'color:#d1d5db;');
           const cellDisplay = filled ? qty : (isClosed ? '✕' : '-');
-          return `<td style="${tdCell} ${cellColor} ${cellBg ? 'background:'+cellBg+';' : ''} cursor:pointer;" ondblclick="editSummaryQty(this,'${n}','${item.id}',${qty})" title="雙擊編輯">${cellDisplay}</td>`;
+          var locked = branchOrdersLocked[n] && branchOrdersLocked[n][item.id];
+          var lockIcon = locked ? ' 🔒' : '';
+          return `<td style="${tdCell} ${cellColor} ${cellBg ? 'background:'+cellBg+';' : ''} ${locked ? 'background:#fef3c7;' : ''} cursor:pointer;" onclick="editSummaryQty(this,'${n}','${item.id}',${qty})" title="點擊編輯">${cellDisplay}${lockIcon}</td>`;
         }).join('');
         const personalCells = summaryPersonalNames.map(n => {
           const qty = (branchOrders[n] && branchOrders[n][item.id]) || 0;
@@ -8116,6 +8119,7 @@
   }
 
   function editSummaryQty(td, storeName, itemId, currentQty) {
+    if (td.querySelector('input')) return; // 已經在編輯中
     var input = document.createElement('input');
     input.type = 'number';
     input.min = '0';
@@ -8128,15 +8132,28 @@
 
     function save() {
       var newQty = parseInt(input.value) || 0;
+      // 寫入 branchOrders
       var branchOrders = JSON.parse(localStorage.getItem('branchOrders') || '{}');
       if (!branchOrders[storeName]) branchOrders[storeName] = {};
       branchOrders[storeName][itemId] = newQty;
       localStorage.setItem('branchOrders', JSON.stringify(branchOrders));
       cloudSave('branchOrders');
+      // 寫入鎖定標記
+      var locked = JSON.parse(localStorage.getItem('branchOrdersLocked') || '{}');
+      if (!locked[storeName]) locked[storeName] = {};
+      if (newQty > 0) {
+        locked[storeName][itemId] = true;
+      } else {
+        delete locked[storeName][itemId];
+      }
+      localStorage.setItem('branchOrdersLocked', JSON.stringify(locked));
+      cloudSave('branchOrdersLocked');
       // 更新格子顯示
-      td.textContent = newQty > 0 ? newQty : '-';
+      var lockIcon = newQty > 0 ? ' 🔒' : '';
+      td.textContent = (newQty > 0 ? newQty : '-') + lockIcon;
       td.style.color = newQty > 0 ? '#2b6cb0' : '#d1d5db';
       td.style.fontWeight = newQty > 0 ? '600' : '';
+      td.style.background = newQty > 0 ? '#fef3c7' : '';
       // 更新合計
       var row = td.closest('tr');
       if (row) {

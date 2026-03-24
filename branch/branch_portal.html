@@ -1028,7 +1028,7 @@
 
     async function cloudLoadAll() {
       try {
-        const resp = await fetch(`${SB_URL}/shared_kv?key=in.("branchOrderList","branchOrders","branchDataList","branchTypeMap","portalAllRequests","portalMutualAidBoard","portalTrackingData","portalBulletin","portalSalesOrders")`, { headers: SB_HEADERS });
+        const resp = await fetch(`${SB_URL}/shared_kv?key=in.("branchOrderList","branchOrders","branchDataList","branchTypeMap","portalAllRequests","portalMutualAidBoard","portalTrackingData","portalBulletin","portalSalesOrders","branchOrdersLocked")`, { headers: SB_HEADERS });
         if (resp.ok) {
           const rows = await resp.json();
           rows.forEach(r => {
@@ -1268,19 +1268,26 @@
       pageItems.forEach(p => {
         const isClosed = p.status === 'closed';
         const isExpired = !isClosed && p.endDate < today;
-        const canOrder = !isClosed;
+        const lockedData = JSON.parse(localStorage.getItem('branchOrdersLocked') || '{}');
+        const myName = currentStore?.name || '';
+        const isLocked = lockedData[myName] && lockedData[myName][p.id];
+        const canOrder = !isClosed && !isLocked;
 
-        const disableReason = '總倉已結單，無法訂購';
+        const disableReason = isLocked ? '🔒 總倉已指定數量' : '總倉已結單，無法訂購';
         const inputProps = canOrder
           ? `oninput="sanitizeQty(this);" onfocus="this.style.borderColor='var(--primary)'" onblur="this.style.borderColor='var(--border)';autoSaveSingleQty(this)"`
           : `disabled title="${disableReason}"`;
         const inputStyle = canOrder
           ? `background:white; border:2px solid var(--border); cursor:text;`
-          : `background:#f3f4f6; border:2px solid #d1d5db; cursor:not-allowed; color:#9ca3af;`;
+          : isLocked
+            ? `background:#fef3c7; border:2px solid #f59e0b; cursor:not-allowed; color:#92400e;`
+            : `background:#f3f4f6; border:2px solid #d1d5db; cursor:not-allowed; color:#9ca3af;`;
 
         const statusBadge = isClosed
           ? '<span style="background:#fef2f2; color:#ef4444; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:700; margin-left:4px;">已結單</span>'
-          : '';
+          : isLocked
+            ? '<span style="background:#fef3c7; color:#92400e; padding:2px 6px; border-radius:4px; font-size:11px; font-weight:700; margin-left:4px;">🔒 總倉指定</span>'
+            : '';
 
         const importedQty = myStoreOrders[p.id] || 0;
         const cached = orderQtyCache[p.id] || (importedQty > 0 ? String(importedQty) : '');
