@@ -5319,6 +5319,8 @@
             <input type="file" id="csvImportInput" accept=".csv" style="display:none;" onchange="importDemandCSV(this)">
             <button class="btn" style="padding:8px 16px; font-size:13px; background:#718096;" onclick="toggleSelectAllDB()">☑ 全選</button>
             <button class="btn" style="padding:8px 16px; font-size:13px; background:#c53030;" onclick="batchDeleteDB()">🗑️ 批次刪除</button>
+            <button class="btn" style="padding:8px 16px; font-size:13px; background:#276749;" onclick="exportDemandExcel()">📊 匯出 Excel</button>
+            <button class="btn btn-print" style="padding:8px 16px; font-size:13px;" onclick="printDemandSelected()">🖨️ 列印</button>
             <span id="dbSelectCount" style="font-size:12px; color:#718096; display:none;">已選 0 筆</span>
           </div>
           <div style="display:flex; gap:6px; align-items:center;">
@@ -5433,7 +5435,7 @@
         '<td style="padding:5px 4px; text-align:center;">' +
           (inq.completed
             ? '<button class="btn" style="padding:2px 6px; font-size:10px; background:#718096;" onclick="event.stopPropagation();toggleDemandComplete(\'' + inq.id + '\')">↩ 取消完成</button>'
-            : '<button class="btn" style="padding:2px 6px; font-size:10px; background:#047857;" onclick="event.stopPropagation();toggleDemandComplete(\'' + inq.id + '\')">✅ 標記完成</button>') +
+            : '<button class="btn" style="padding:2px 6px; font-size:10px; background:#047857;" onclick="event.stopPropagation();toggleDemandComplete(\'' + inq.id + '\')">✅ 完成</button>') +
         '</td>' +
         '<td style="padding:5px 4px; text-align:center; white-space:nowrap;">' +
           (isPending ? '<button class="btn" style="padding:3px 7px; font-size:11px; background:#2b6cb0;" onclick="event.stopPropagation();replyInquiry(\'' + inq.id + '\')">回覆</button>' : '<button class="btn" style="padding:3px 7px; font-size:11px; background:#718096;" onclick="event.stopPropagation();openInquiryDetail(\'' + inq.id + '\')">檢視</button>') +
@@ -5697,6 +5699,60 @@
       cloudSave('portalAllRequests');
     }
     renderDemandBackorderStation();
+  }
+
+  function getCheckedDemandItems() {
+    var ids = Array.from(document.querySelectorAll('.db-check:checked')).map(function(c) { return c.value; });
+    return mockInquiries.filter(function(inq) { return ids.indexOf(inq.id) >= 0; });
+  }
+
+  function exportDemandExcel() {
+    var items = getCheckedDemandItems();
+    if (items.length === 0) { Swal.fire('提醒', '請先勾選要匯出的筆數', 'warning'); return; }
+    var rows = items.map(function(inq) {
+      return { '時間': inq.createdAt, '分店': inq.storeId, '商品編號': inq.productId || '', '商品名稱': inq.productName, '數量': inq.qty || 0, '單價': inq.price || 0 };
+    });
+    var ws = XLSX.utils.json_to_sheet(rows);
+    var wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '店家需求');
+    XLSX.writeFile(wb, '店家需求_' + new Date().toISOString().split('T')[0] + '.xlsx');
+  }
+
+  function printDemandSelected() {
+    var items = getCheckedDemandItems();
+    if (items.length === 0) { Swal.fire('提醒', '請先勾選要列印的筆數', 'warning'); return; }
+    var rows = items.map(function(inq) {
+      return '<tr>' +
+        '<td style="border:1px solid #000; padding:6px 8px; font-size:13px;">' + (inq.createdAt || '') + '</td>' +
+        '<td style="border:1px solid #000; padding:6px 8px; font-size:13px; font-weight:700;">' + (inq.storeId || '') + '</td>' +
+        '<td style="border:1px solid #000; padding:6px 8px; font-size:12px; font-family:monospace;">' + (inq.productId || '') + '</td>' +
+        '<td style="border:1px solid #000; padding:6px 8px; font-size:13px;">' + (inq.productName || '') + '</td>' +
+        '<td style="border:1px solid #000; padding:6px 8px; text-align:center; font-size:14px; font-weight:700;">' + (inq.qty || 0) + '</td>' +
+        '<td style="border:1px solid #000; padding:6px 8px; text-align:right; font-size:13px;">$' + (inq.price || 0).toLocaleString() + '</td>' +
+      '</tr>';
+    }).join('');
+    var win = window.open('', '_blank');
+    win.document.write(
+      '<!DOCTYPE html><html><head><meta charset="UTF-8"><style>' +
+      '@page { margin: 5mm; } body { font-family: "Microsoft JhengHei", sans-serif; } table { width:100%; border-collapse:collapse; }' +
+      '.no-print { position:fixed; top:8px; right:8px; z-index:99; } .no-print button { padding:8px 16px; font-size:14px; border:none; border-radius:6px; cursor:pointer; font-weight:bold; margin-left:6px; }' +
+      '@media print { .no-print { display:none; } }' +
+      '</style></head><body>' +
+      '<div class="no-print"><button onclick="window.print()" style="background:#2b6cb0; color:white;">🖨️ 列印</button><button onclick="window.close()" style="background:#e2e8f0; color:#333;">✕ 關閉</button></div>' +
+      '<div style="text-align:center; font-size:18px; font-weight:bold; margin-bottom:10px;">店家需求列表（' + items.length + ' 筆）</div>' +
+      '<div style="text-align:center; font-size:12px; color:#666; margin-bottom:10px;">列印日期：' + new Date().toLocaleDateString('zh-TW') + '</div>' +
+      '<table>' +
+      '<thead><tr style="background:#f0f0f0;">' +
+        '<th style="border:1px solid #000; padding:8px; font-size:13px;">時間</th>' +
+        '<th style="border:1px solid #000; padding:8px; font-size:13px;">分店</th>' +
+        '<th style="border:1px solid #000; padding:8px; font-size:13px;">商品編號</th>' +
+        '<th style="border:1px solid #000; padding:8px; font-size:13px;">商品名稱</th>' +
+        '<th style="border:1px solid #000; padding:8px; font-size:13px;">數量</th>' +
+        '<th style="border:1px solid #000; padding:8px; font-size:13px;">單價</th>' +
+      '</tr></thead>' +
+      '<tbody>' + rows + '</tbody></table></body></html>'
+    );
+    win.document.close();
   }
 
   function deleteDemandItem(id) {
