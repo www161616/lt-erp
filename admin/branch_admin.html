@@ -3822,6 +3822,7 @@
               // 同步到 mockSalesOrders（讓 portal 今日進貨單也看得到）
               mockSalesOrders.push({
                 id: soId,
+                dbId: soId,
                 waveId: waveId,
                 storeName: branch,
                 createdAt: issuedTime,
@@ -5122,7 +5123,7 @@
           // 同步到 mockSalesOrders（讓 portal 看得到）
           const issuedTime = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
           mockSalesOrders.push({
-            id: soId, waveId: 'RESTOCK-' + backorderId, storeName: store,
+            id: soId, dbId: soId, waveId: 'RESTOCK-' + backorderId, storeName: store,
             createdAt: issuedTime, storeConfirmedAt: null, status: 'pending',
             issuedAt: issuedTime, finalAmount: grand_total,
             note: '欠品補發 backorder#' + backorderId,
