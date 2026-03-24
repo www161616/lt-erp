@@ -2788,15 +2788,17 @@ function renderTransferPage() {
           const statusBadge = `<span style="background:${adminStatusBg[st]||'#f3f4f6'}; color:${adminStatusColor[st]||'#374151'}; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; white-space:nowrap;">${adminStatusLabel[st]||st}</span>`;
           const noteHtml = t.warehouse_note ? `<div style="font-size:11px; color:#2563eb; margin-top:2px;">總倉：${t.warehouse_note}</div>` : '';
           const cancelNote = t.cancel_reason ? `<div style="font-size:11px; color:#ef4444; margin-top:2px;">原因：${t.cancel_reason}</div>` : '';
+          const discBadge2 = t.has_discrepancy ? ' <span style="background:#fef3c7; color:#b45309; padding:1px 6px; border-radius:8px; font-size:10px; font-weight:700;">⚠️ 有差異</span>' : '';
+          const rcvNoteHtml2 = t.receive_note ? `<div style="font-size:11px; color:#b45309; margin-top:2px;">收貨備註：${t.receive_note}</div>` : '';
           const rowStyle = isCancelled ? 'border-bottom:1px solid #f3f4f6; background:#f9fafb; opacity:0.6;' : 'border-bottom:1px solid #f3f4f6;';
           const textDeco = isCancelled ? 'text-decoration:line-through; color:#9ca3af;' : '';
           return `<tr style="${rowStyle}">
-            <td style="padding:10px 16px; color:#6b7280; ${textDeco}">${t.id}</td>
+            <td style="padding:10px 16px; color:#6b7280; ${textDeco}">${t.id}${discBadge2}</td>
             <td style="padding:10px 16px; ${textDeco}">→ ${t.to_store}</td>
             <td style="padding:10px 16px; font-size:13px; ${textDeco}">${tfItemSummary(t)}</td>
             <td style="padding:10px 16px; text-align:center;">${tfTempBadge(t.temp_note)}</td>
             <td style="padding:10px 16px; color:#6b7280; white-space:nowrap; ${textDeco}">${tfDateStr(t)}</td>
-            <td style="padding:10px 16px; text-align:center;">${statusBadge}${noteHtml}${cancelNote}</td>
+            <td style="padding:10px 16px; text-align:center;">${statusBadge}${noteHtml}${cancelNote}${rcvNoteHtml2}</td>
             <td style="padding:10px 16px; text-align:center; white-space:nowrap;">
               ${!isCancelled ? `<button onclick="printTransfer('${t.id}')" style="padding:4px 10px; background:#fff0f6; color:#be185d; border:1px solid #be185d; border-radius:4px; font-size:12px; cursor:pointer; font-family:inherit; margin-right:4px;">🖨️ 列印</button>` : ''}
               ${canDelete ? `<button onclick="deleteTf('${t.id}')" style="padding:4px 10px; background:#fff; color:#ef4444; border:1px solid #ef4444; border-radius:4px; font-size:12px; cursor:pointer; font-family:inherit; margin-right:4px;">刪除</button>` : ''}
@@ -2864,12 +2866,14 @@ function renderTransferPage() {
           const st = t.admin_status || 'pending';
           const statusBadge = `<span style="background:${adminStatusBg[st]||'#f3f4f6'}; color:${adminStatusColor[st]||'#374151'}; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; white-space:nowrap;">${adminStatusLabel[st]||st}</span>`;
           const noteHtml = t.warehouse_note ? `<div style="font-size:11px; color:#2563eb; margin-top:2px;">總倉：${t.warehouse_note}</div>` : '';
+          const discBadge = t.has_discrepancy ? ' <span style="background:#fef3c7; color:#b45309; padding:1px 6px; border-radius:8px; font-size:10px; font-weight:700;">⚠️ 有差異</span>' : '';
+          const rcvNoteHtml = t.receive_note ? `<div style="font-size:11px; color:#b45309; margin-top:2px;">收貨備註：${t.receive_note}</div>` : '';
           return `<tr style="border-bottom:1px solid #f3f4f6;">
-            <td style="padding:10px 16px; color:#6b7280;">${t.id}</td>
+            <td style="padding:10px 16px; color:#6b7280;">${t.id}${discBadge}</td>
             <td style="padding:10px 16px; font-weight:500;">${direction}</td>
             <td style="padding:10px 16px; font-size:13px;">${tfItemSummary(t)}</td>
             <td style="padding:10px 16px; color:#6b7280; white-space:nowrap;">${tfDateStr(t)}</td>
-            <td style="padding:10px 16px; text-align:center;">${statusBadge}${noteHtml}</td>
+            <td style="padding:10px 16px; text-align:center;">${statusBadge}${noteHtml}${rcvNoteHtml}</td>
             <td style="padding:10px 16px; text-align:center;">
               <button onclick="printTransfer('${t.id}')" style="padding:4px 10px; background:#fff0f6; color:#be185d; border:1px solid #be185d; border-radius:4px; font-size:12px; cursor:pointer; font-family:inherit;">🖨️ 列印</button>
             </td>
@@ -3049,15 +3053,93 @@ async function loadSettlementData() {
 }
 
 async function confirmTf(id) {
-  const result = await Swal.fire({ title:'確認收到貨物？', text: id, icon:'question', showCancelButton:true, confirmButtonText:'確認', cancelButtonText:'取消', confirmButtonColor:'#be185d' });
-  if (!result.isConfirmed) return;
-  const res = await fetch(`${SB_URL}/transfer_orders?id=eq.${id}`, {
-    method: 'PATCH',
-    headers: { ...SB_HEADERS, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status: 'confirmed', confirmed_at: new Date().toISOString() })
+  const tf = transferList.find(t => t.id === id);
+  if (!tf || !tf.items || tf.items.length === 0) {
+    Swal.fire('錯誤', '找不到此筆轉貨單明細', 'error');
+    return;
+  }
+
+  // 建立品項表格 HTML
+  const itemRows = tf.items.map((item, idx) => {
+    return `<tr>
+      <td style="padding:8px 10px; border-bottom:1px solid #f3f4f6; font-size:13px;">
+        <div style="font-weight:700;">${item.product_name}</div>
+        <div style="font-size:11px; color:#9ca3af;">${item.product_code || ''}</div>
+      </td>
+      <td style="padding:8px 10px; border-bottom:1px solid #f3f4f6; text-align:center; font-weight:700;">${item.qty}</td>
+      <td style="padding:8px 10px; border-bottom:1px solid #f3f4f6; text-align:center;">
+        <input type="number" id="rcvQty-${idx}" min="0" value="${item.qty}"
+          oninput="this.style.background=(Number(this.value)!=${item.qty})?'#fef3c7':'#fff'"
+          style="width:70px; padding:6px 8px; border:1.5px solid #e2e8f0; border-radius:6px; font-size:14px; font-weight:700; text-align:center; font-family:inherit;">
+      </td>
+    </tr>`;
+  }).join('');
+
+  const result = await Swal.fire({
+    title: `📦 確認收貨 ${id}`,
+    html: `<div style="text-align:left; font-size:13px; margin-bottom:8px; color:#6b7280;">來自 <b>${tf.from_store}</b>，請核對實收數量：</div>
+      <div style="max-height:300px; overflow-y:auto;">
+        <table style="width:100%; border-collapse:collapse;">
+          <thead><tr style="background:#fff0f6;">
+            <th style="padding:8px 10px; text-align:left; font-size:12px; color:#6b7280;">品名</th>
+            <th style="padding:8px 10px; text-align:center; font-size:12px; color:#6b7280;">應收</th>
+            <th style="padding:8px 10px; text-align:center; font-size:12px; color:#6b7280;">實收</th>
+          </tr></thead>
+          <tbody>${itemRows}</tbody>
+        </table>
+      </div>
+      <div style="margin-top:12px; text-align:left;">
+        <label style="font-size:13px; font-weight:600; color:#374151;">備註（選填）</label>
+        <textarea id="rcvNote" rows="2" placeholder="例如：有 2 件壓壞、品項送錯..." style="width:100%; margin-top:4px; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px; font-size:13px; font-family:inherit; resize:vertical; box-sizing:border-box;"></textarea>
+      </div>`,
+    width: 500,
+    showCancelButton: true,
+    confirmButtonText: '✅ 確認收到',
+    cancelButtonText: '取消',
+    confirmButtonColor: '#be185d',
+    preConfirm: () => {
+      const receivedItems = tf.items.map((item, idx) => {
+        const rcv = Number(document.getElementById(`rcvQty-${idx}`).value) || 0;
+        return { id: item.id, received_qty: rcv, diff: rcv - item.qty };
+      });
+      return { items: receivedItems, note: (document.getElementById('rcvNote').value || '').trim() };
+    }
   });
-  if (!res.ok) { Swal.fire('更新失敗', await res.text(), 'error'); return; }
-  Swal.fire({ icon:'success', title:'已確認收到！', timer:1500, showConfirmButton:false });
+
+  if (!result.isConfirmed) return;
+
+  const { items: receivedItems, note } = result.value;
+  const hasDiff = receivedItems.some(i => i.diff !== 0);
+
+  try {
+    // 1. 更新每個明細的 received_qty
+    for (const ri of receivedItems) {
+      await fetch(`${SB_URL}/transfer_items?id=eq.${ri.id}`, {
+        method: 'PATCH',
+        headers: { ...SB_HEADERS, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ received_qty: ri.received_qty })
+      });
+    }
+
+    // 2. 更新主單狀態
+    const patchData = { status: 'confirmed', confirmed_at: new Date().toISOString() };
+    if (note) patchData.receive_note = note;
+    if (hasDiff) patchData.has_discrepancy = true;
+
+    const res = await fetch(`${SB_URL}/transfer_orders?id=eq.${id}`, {
+      method: 'PATCH',
+      headers: { ...SB_HEADERS, 'Content-Type': 'application/json' },
+      body: JSON.stringify(patchData)
+    });
+    if (!res.ok) { Swal.fire('更新失敗', await res.text(), 'error'); return; }
+
+    const msg = hasDiff ? '已確認收到（有數量差異）' : '已確認收到！';
+    Swal.fire({ icon: 'success', title: msg, timer: 1500, showConfirmButton: false });
+  } catch (e) {
+    Swal.fire('更新失敗', e.message, 'error');
+    return;
+  }
+
   await loadTransferList();
   renderTransferPage();
 }
