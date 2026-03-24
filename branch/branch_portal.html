@@ -2765,9 +2765,9 @@ function renderTransferPage() {
   const now = new Date();
   const myName = currentStore?.name;
 
-  const adminStatusLabel = { pending:'⏳ 待總倉審核', arrived:'📦 已到總倉', shipped:'🚚 已配送', received:'✅ 已收到' };
-  const adminStatusColor = { pending:'#be185d', arrived:'#2563eb', shipped:'#047857', received:'#475569' };
-  const adminStatusBg    = { pending:'#fce7f3', arrived:'#dbeafe', shipped:'#d1fae5', received:'#f3f4f6' };
+  const adminStatusLabel = { pending:'⏳ 待總倉審核', arrived:'📦 已到總倉', shipped:'🚚 已配送', received:'✅ 已收到', cancelled:'❌ 已作廢' };
+  const adminStatusColor = { pending:'#be185d', arrived:'#2563eb', shipped:'#047857', received:'#475569', cancelled:'#9ca3af' };
+  const adminStatusBg    = { pending:'#fce7f3', arrived:'#dbeafe', shipped:'#d1fae5', received:'#f3f4f6', cancelled:'#f3f4f6' };
 
   function tfDateStr(t) { return new Date(t.created_at).toLocaleString('zh-TW', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }); }
   function tfItemSummary(t) { return (t.items||[]).map(i => `${i.product_name} x${i.qty}${i.price ? ' ($'+i.price+')' : ''}`).join('、'); }
@@ -2782,19 +2782,25 @@ function renderTransferPage() {
       ? `<tr><td colspan="7" style="padding:24px; text-align:center; color:#9ca3af;">目前沒有登記紀錄</td></tr>`
       : mine.map(t => {
           const st = t.admin_status || 'pending';
-          const canEdit = (now - new Date(t.created_at))/1000/3600 < 24 && st === 'pending';
+          const isCancelled = st === 'cancelled';
+          const canDelete = (now - new Date(t.created_at))/1000/3600 < 24 && st === 'pending';
+          const canCancel = !isCancelled && st !== 'received';
           const statusBadge = `<span style="background:${adminStatusBg[st]||'#f3f4f6'}; color:${adminStatusColor[st]||'#374151'}; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; white-space:nowrap;">${adminStatusLabel[st]||st}</span>`;
           const noteHtml = t.warehouse_note ? `<div style="font-size:11px; color:#2563eb; margin-top:2px;">總倉：${t.warehouse_note}</div>` : '';
-          return `<tr style="border-bottom:1px solid #f3f4f6;">
-            <td style="padding:10px 16px; color:#6b7280;">${t.id}</td>
-            <td style="padding:10px 16px;">→ ${t.to_store}</td>
-            <td style="padding:10px 16px; font-size:13px;">${tfItemSummary(t)}</td>
+          const cancelNote = t.cancel_reason ? `<div style="font-size:11px; color:#ef4444; margin-top:2px;">原因：${t.cancel_reason}</div>` : '';
+          const rowStyle = isCancelled ? 'border-bottom:1px solid #f3f4f6; background:#f9fafb; opacity:0.6;' : 'border-bottom:1px solid #f3f4f6;';
+          const textDeco = isCancelled ? 'text-decoration:line-through; color:#9ca3af;' : '';
+          return `<tr style="${rowStyle}">
+            <td style="padding:10px 16px; color:#6b7280; ${textDeco}">${t.id}</td>
+            <td style="padding:10px 16px; ${textDeco}">→ ${t.to_store}</td>
+            <td style="padding:10px 16px; font-size:13px; ${textDeco}">${tfItemSummary(t)}</td>
             <td style="padding:10px 16px; text-align:center;">${tfTempBadge(t.temp_note)}</td>
-            <td style="padding:10px 16px; color:#6b7280; white-space:nowrap;">${tfDateStr(t)}</td>
-            <td style="padding:10px 16px; text-align:center;">${statusBadge}${noteHtml}</td>
+            <td style="padding:10px 16px; color:#6b7280; white-space:nowrap; ${textDeco}">${tfDateStr(t)}</td>
+            <td style="padding:10px 16px; text-align:center;">${statusBadge}${noteHtml}${cancelNote}</td>
             <td style="padding:10px 16px; text-align:center; white-space:nowrap;">
-              <button onclick="printTransfer('${t.id}')" style="padding:4px 10px; background:#fff0f6; color:#be185d; border:1px solid #be185d; border-radius:4px; font-size:12px; cursor:pointer; font-family:inherit; margin-right:4px;">🖨️ 列印</button>
-              ${canEdit ? `<button onclick="deleteTf('${t.id}')" style="padding:4px 10px; background:#fff; color:#ef4444; border:1px solid #ef4444; border-radius:4px; font-size:12px; cursor:pointer; font-family:inherit;">刪除</button>` : ''}
+              ${!isCancelled ? `<button onclick="printTransfer('${t.id}')" style="padding:4px 10px; background:#fff0f6; color:#be185d; border:1px solid #be185d; border-radius:4px; font-size:12px; cursor:pointer; font-family:inherit; margin-right:4px;">🖨️ 列印</button>` : ''}
+              ${canDelete ? `<button onclick="deleteTf('${t.id}')" style="padding:4px 10px; background:#fff; color:#ef4444; border:1px solid #ef4444; border-radius:4px; font-size:12px; cursor:pointer; font-family:inherit; margin-right:4px;">刪除</button>` : ''}
+              ${canCancel ? `<button onclick="cancelTf('${t.id}')" style="padding:4px 10px; background:#fff; color:#f59e0b; border:1px solid #f59e0b; border-radius:4px; font-size:12px; cursor:pointer; font-family:inherit;">作廢</button>` : ''}
             </td>
           </tr>`;
         }).join('');
@@ -2815,7 +2821,7 @@ function renderTransferPage() {
       </div>`;
 
   } else if (currentTfTab === 'incoming') {
-    const incoming = transferList.filter(t => t.to_store === myName && (t.admin_status || 'pending') !== 'received');
+    const incoming = transferList.filter(t => t.to_store === myName && (t.admin_status || 'pending') !== 'received' && (t.admin_status || 'pending') !== 'cancelled');
     let html = incoming.length === 0
       ? `<tr><td colspan="6" style="padding:24px; text-align:center; color:#9ca3af;">目前沒有待確認的轉入 👍</td></tr>`
       : incoming.map(t => {
@@ -3062,6 +3068,33 @@ async function deleteTf(id) {
   // 刪主單（ON DELETE CASCADE 會自動刪明細）
   const res = await fetch(`${SB_URL}/transfer_orders?id=eq.${id}`, { method: 'DELETE', headers: SB_HEADERS });
   if (!res.ok) { Swal.fire('刪除失敗', await res.text(), 'error'); return; }
+  await loadTransferList();
+  renderTransferPage();
+}
+
+async function cancelTf(id) {
+  const result = await Swal.fire({
+    title: '確定作廢此店轉店單？',
+    html: `單號 <b>${id}</b> 作廢後不會計入月結對帳。`,
+    input: 'text',
+    inputLabel: '作廢原因（必填）',
+    inputPlaceholder: '例如：方向搞反、重複建立...',
+    inputValidator: (val) => { if (!val || !val.trim()) return '請填寫作廢原因'; },
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: '確定作廢',
+    cancelButtonText: '取消',
+    confirmButtonColor: '#f59e0b'
+  });
+  if (!result.isConfirmed) return;
+  const reason = result.value.trim();
+  const res = await fetch(`${SB_URL}/transfer_orders?id=eq.${id}`, {
+    method: 'PATCH',
+    headers: { ...SB_HEADERS, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: 'cancelled', admin_status: 'cancelled', cancel_reason: reason })
+  });
+  if (!res.ok) { Swal.fire('作廢失敗', await res.text(), 'error'); return; }
+  Swal.fire({ icon:'success', title:'已作廢', text:`單號 ${id} 已標記為作廢`, timer:1500, showConfirmButton:false });
   await loadTransferList();
   renderTransferPage();
 }
