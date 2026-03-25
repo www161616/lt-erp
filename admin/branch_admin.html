@@ -6318,7 +6318,6 @@
   }
 
   // ============================
-  // ============================
   // 📦 到貨追蹤
   // ============================
   async function checkArrivalBadge() {
@@ -6336,6 +6335,9 @@
   }
 
   let _arrivalData = [];
+  let _atPageNum = 1;
+  const AT_PER_PAGE = 100;
+  let _atRendered = false;
 
   async function renderArrivalTrackingStation() {
     var container = document.getElementById('mainContainer');
@@ -6368,8 +6370,11 @@
     // 2. 從 DB 讀取
     await loadArrivalData();
 
-    // 3. 渲染
-    renderArrivalPage();
+    // 3. 渲染骨架（只做一次）
+    _atRendered = false;
+    _atPageNum = 1;
+    renderArrivalSkeleton();
+    updateArrivalTable();
   }
 
   async function loadArrivalData() {
@@ -6379,24 +6384,59 @@
     } catch(e) { _arrivalData = []; }
   }
 
-  function renderArrivalPage() {
+  function renderArrivalSkeleton() {
     var container = document.getElementById('mainContainer');
+    var currentStatus = document.getElementById('at-status-filter')?.value || 'active';
+    var currentKw = document.getElementById('at-kw-filter')?.value || '';
+    var opts = [['active','未到倉'],['all','全部'],['待追蹤','待追蹤'],['催貨中','催貨中'],['已到倉','已到倉'],['斷貨','斷貨']];
+    var selectHtml = opts.map(function(o) { return '<option value="' + o[0] + '"' + (currentStatus === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('');
+    container.innerHTML = '<div style="display:flex; flex-direction:column; gap:15px; height:100%;">' +
+      '<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; border-bottom:2px solid var(--border); padding-bottom:10px;">' +
+        '<div style="font-size:16px; font-weight:bold; color:#2d3748;">📦 到貨追蹤</div>' +
+        '<select id="at-status-filter" onchange="_atPageNum=1;updateArrivalTable()" style="padding:6px 10px; border:1px solid var(--border); border-radius:4px; font-family:inherit; font-size:13px;">' + selectHtml + '</select>' +
+        '<input type="text" id="at-kw-filter" value="' + currentKw.replace(/"/g, '&quot;') + '" placeholder="搜尋商品/供應商" oninput="_atPageNum=1;updateArrivalTable()" style="padding:6px 10px; border:1px solid var(--border); border-radius:4px; font-size:13px; width:150px; font-family:inherit;">' +
+        '<span style="color:#e2e8f0;">│</span>' +
+        '<input type="checkbox" onchange="document.querySelectorAll(\'.at-check\').forEach(function(c){c.checked=this.checked}.bind(this));updateATSelectCount();" style="width:16px; height:16px; cursor:pointer;">' +
+        '<button class="btn" style="padding:5px 12px; font-size:12px; background:#059669;" onclick="batchATAction(\'arrived\')">📦 批次已到倉</button>' +
+        '<button class="btn" style="padding:5px 12px; font-size:12px; background:#2563eb;" onclick="batchATAction(\'followup\')">📞 批次催貨</button>' +
+        '<button class="btn" style="padding:5px 12px; font-size:12px; background:#dc2626;" onclick="batchATAction(\'outofstock\')">❌ 批次斷貨</button>' +
+        '<button class="btn" style="padding:5px 12px; font-size:12px; background:#718096;" onclick="renderArrivalTrackingStation()">🔄 重新整理</button>' +
+        '<span id="atSelectCount" style="font-size:12px; color:#718096;"></span>' +
+      '</div>' +
+      '<div id="atSummaryCards" style="display:flex; gap:10px; flex-wrap:wrap; flex-shrink:0;"></div>' +
+      '<div id="atPaginationTop" style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;"></div>' +
+      '<div style="flex:1; overflow:auto; border:1px solid var(--border); border-radius:8px; min-height:0;">' +
+        '<table style="width:100%; border-collapse:collapse; font-size:13px;">' +
+          '<thead style="position:sticky; top:0; z-index:1; background:#eef1f5; box-shadow:0 1px 2px rgba(0,0,0,0.1);"><tr>' +
+            '<th style="padding:8px 6px; text-align:center; width:28px;"></th>' +
+            '<th style="padding:10px 12px; text-align:left; min-width:150px;">商品</th>' +
+            '<th style="padding:10px 12px; text-align:left; min-width:80px;">供應商</th>' +
+            '<th style="padding:10px 12px; text-align:left;">結單日</th>' +
+            '<th style="padding:10px 8px; text-align:center; width:70px;">天數</th>' +
+            '<th style="padding:10px 8px; text-align:center; width:80px;">狀態</th>' +
+            '<th style="padding:10px 12px; text-align:left; min-width:150px;">最後催貨</th>' +
+            '<th style="padding:10px 8px; text-align:center; min-width:180px;">操作</th>' +
+          '</tr></thead>' +
+          '<tbody id="atTableBody"></tbody>' +
+        '</table>' +
+      '</div>' +
+      '<div id="atPaginationBot" style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;"></div>' +
+    '</div>';
+    _atRendered = true;
+  }
+
+  function updateArrivalTable() {
+    if (!_atRendered) return;
     var statusFilter = document.getElementById('at-status-filter')?.value || 'active';
     var kwFilter = (document.getElementById('at-kw-filter')?.value || '').trim().toLowerCase();
-
-    var today = new Date();
-    today.setHours(0,0,0,0);
+    var today = new Date(); today.setHours(0,0,0,0);
 
     var data = _arrivalData;
     if (statusFilter === 'active') data = data.filter(function(r) { return r.status !== '已到倉'; });
     else if (statusFilter !== 'all') data = data.filter(function(r) { return r.status === statusFilter; });
     if (kwFilter) data = data.filter(function(r) { return (r.product_name || '').toLowerCase().includes(kwFilter) || (r.product_id || '').toLowerCase().includes(kwFilter) || (r.supplier || '').toLowerCase().includes(kwFilter); });
 
-    // 計算天數
-    data.forEach(function(r) {
-      var ed = new Date(r.end_date);
-      r._days = Math.floor((today - ed) / 86400000);
-    });
+    data.forEach(function(r) { r._days = Math.floor((today - new Date(r.end_date)) / 86400000); });
 
     // 統計
     var cnt45 = data.filter(function(r) { return r._days >= 45 && r.status !== '已到倉'; }).length;
@@ -6404,24 +6444,67 @@
     var cnt15 = data.filter(function(r) { return r._days >= 15 && r._days < 30 && r.status !== '已到倉'; }).length;
     var cntNew = data.filter(function(r) { return r._days < 15 && r.status !== '已到倉'; }).length;
 
-    var rows = data.map(function(r) {
+    var cardsEl = document.getElementById('atSummaryCards');
+    if (cardsEl) cardsEl.innerHTML =
+      '<div style="background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:8px 14px; min-width:90px; text-align:center;"><div style="font-size:11px; color:#dc2626; font-weight:bold;">🔴 45天+</div><div style="font-size:20px; font-weight:bold; color:#dc2626;">' + cnt45 + '</div></div>' +
+      '<div style="background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; padding:8px 14px; min-width:90px; text-align:center;"><div style="font-size:11px; color:#ea580c; font-weight:bold;">🟠 30-45天</div><div style="font-size:20px; font-weight:bold; color:#ea580c;">' + cnt30 + '</div></div>' +
+      '<div style="background:#fefce8; border:1px solid #fde68a; border-radius:8px; padding:8px 14px; min-width:90px; text-align:center;"><div style="font-size:11px; color:#d97706; font-weight:bold;">🟡 15-30天</div><div style="font-size:20px; font-weight:bold; color:#d97706;">' + cnt15 + '</div></div>' +
+      '<div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:8px 14px; min-width:90px; text-align:center;"><div style="font-size:11px; color:#059669; font-weight:bold;">🟢 15天內</div><div style="font-size:20px; font-weight:bold; color:#059669;">' + cntNew + '</div></div>' +
+      '<span style="font-size:12px; color:#718096; align-self:center;">共 ' + data.length + ' 筆</span>';
+
+    // 分頁
+    var totalPages = Math.max(1, Math.ceil(data.length / AT_PER_PAGE));
+    if (_atPageNum > totalPages) _atPageNum = totalPages;
+    if (_atPageNum < 1) _atPageNum = 1;
+    var pageData = data.slice((_atPageNum - 1) * AT_PER_PAGE, _atPageNum * AT_PER_PAGE);
+
+    var pgHtml = '';
+    if (totalPages > 1) {
+      var pgBtnStyle = 'padding:4px 10px; border:1px solid #dde3ec; border-radius:4px; cursor:pointer; font-size:12px; font-family:inherit;';
+      var pgActiveStyle = 'padding:4px 10px; border:1px solid #2b6cb0; border-radius:4px; cursor:pointer; font-size:12px; font-family:inherit; background:#2b6cb0; color:white; font-weight:700;';
+      pgHtml = '<button onclick="_atPageNum=1;updateArrivalTable()" style="' + pgBtnStyle + '" ' + (_atPageNum===1?'disabled':'') + '>⏮</button>' +
+        '<button onclick="_atPageNum=' + (_atPageNum-1) + ';updateArrivalTable()" style="' + pgBtnStyle + '" ' + (_atPageNum===1?'disabled':'') + '>◀</button>';
+      // 頁碼按鈕（最多 5 個）
+      var pgStart = Math.max(1, _atPageNum - 2);
+      var pgEnd = Math.min(totalPages, pgStart + 4);
+      if (pgStart > 1) pgHtml += '<span style="font-size:12px; color:#718096;">...</span>';
+      for (var p = pgStart; p <= pgEnd; p++) {
+        pgHtml += '<button onclick="_atPageNum=' + p + ';updateArrivalTable()" style="' + (p === _atPageNum ? pgActiveStyle : pgBtnStyle) + '">' + p + '</button>';
+      }
+      if (pgEnd < totalPages) pgHtml += '<span style="font-size:12px; color:#718096;">...</span>';
+      pgHtml += '<button onclick="_atPageNum=' + (_atPageNum+1) + ';updateArrivalTable()" style="' + pgBtnStyle + '" ' + (_atPageNum===totalPages?'disabled':'') + '>▶</button>' +
+        '<button onclick="_atPageNum=' + totalPages + ';updateArrivalTable()" style="' + pgBtnStyle + '" ' + (_atPageNum===totalPages?'disabled':'') + '>⏭</button>' +
+        '<span style="font-size:12px; color:#718096; margin-left:4px;">共 ' + data.length + ' 筆</span>' +
+        '<span style="margin-left:6px; font-size:12px;">跳至 <input type="number" min="1" max="' + totalPages + '" value="' + _atPageNum + '" style="width:48px; padding:3px; text-align:center; border:1px solid #dde3ec; border-radius:4px; font-size:12px;" onkeydown="if(event.key===\'Enter\'){_atPageNum=parseInt(this.value)||1;updateArrivalTable();}"> 頁</span>';
+    }
+    var pgTop = document.getElementById('atPaginationTop');
+    var pgBot = document.getElementById('atPaginationBot');
+    if (pgTop) pgTop.innerHTML = pgHtml;
+    if (pgBot) pgBot.innerHTML = pgHtml;
+
+    // 表格 tbody
+    var tbody = document.getElementById('atTableBody');
+    if (!tbody) return;
+    if (pageData.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:40px; color:#718096;">目前無追蹤記錄</td></tr>';
+      return;
+    }
+
+    tbody.innerHTML = pageData.map(function(r) {
       var days = r._days;
       var dayColor = days >= 45 ? '#dc2626' : days >= 30 ? '#ea580c' : days >= 15 ? '#d97706' : '#059669';
       var dayBg = days >= 45 ? '#fef2f2' : days >= 30 ? '#fff7ed' : days >= 15 ? '#fefce8' : '#f0fdf4';
       var lastLog = (r.follow_up_logs && r.follow_up_logs.length > 0) ? r.follow_up_logs[r.follow_up_logs.length - 1] : null;
       var lastLogHtml = lastLog ? '<span style="font-size:11px; color:#2563eb;">' + lastLog.date + '</span> ' + (lastLog.note || '').substring(0, 20) : '<span style="color:#9ca3af; font-size:11px;">無</span>';
-      var statusMap = { '待追蹤': { c: '#6b7280', bg: '#f3f4f6' }, '催貨中': { c: '#2563eb', bg: '#eff6ff' }, '已到倉': { c: '#059669', bg: '#f0fdf4' }, '斷貨': { c: '#dc2626', bg: '#fef2f2' } };
-      var st = statusMap[r.status] || statusMap['待追蹤'];
+      var stMap = { '待追蹤': { c: '#6b7280', bg: '#f3f4f6' }, '催貨中': { c: '#2563eb', bg: '#eff6ff' }, '已到倉': { c: '#059669', bg: '#f0fdf4' }, '斷貨': { c: '#dc2626', bg: '#fef2f2' } };
+      var st = stMap[r.status] || stMap['待追蹤'];
       var rowBg = r.status === '斷貨' ? 'background:#fef2f2;' : r.status === '已到倉' ? 'background:#f0fdf4; opacity:0.6;' : '';
-
-      var btns = '';
-      if (r.status !== '已到倉') {
-        btns = '<button class="btn" style="padding:3px 8px; font-size:11px; background:#2563eb;" onclick="atFollowUp(' + r.id + ')">催貨</button> ' +
-          '<button class="btn" style="padding:3px 8px; font-size:11px; background:#059669;" onclick="atArrived(' + r.id + ')">已到倉</button> ' +
-          '<button class="btn" style="padding:3px 8px; font-size:11px; background:#dc2626;" onclick="atOutOfStock(' + r.id + ')">斷貨</button>';
-      }
-
+      var btns = r.status !== '已到倉' ?
+        '<button class="btn" style="padding:3px 8px; font-size:11px; background:#2563eb;" onclick="atFollowUp(' + r.id + ')">催貨</button> ' +
+        '<button class="btn" style="padding:3px 8px; font-size:11px; background:#059669;" onclick="atArrived(' + r.id + ')">已到倉</button> ' +
+        '<button class="btn" style="padding:3px 8px; font-size:11px; background:#dc2626;" onclick="atOutOfStock(' + r.id + ')">斷貨</button>' : '';
       return '<tr style="border-bottom:1px solid #e2e8f0; ' + rowBg + '">' +
+        '<td style="padding:8px 6px; text-align:center;" onclick="event.stopPropagation();"><input type="checkbox" class="at-check" value="' + r.id + '" onchange="updateATSelectCount()" style="width:15px; height:15px; cursor:pointer;"></td>' +
         '<td style="padding:8px 12px;"><div style="font-weight:700;">' + (r.product_name || '') + '</div><div style="font-size:11px; color:#718096;">' + (r.product_id || '') + '</div></td>' +
         '<td style="padding:8px 12px; font-size:13px;">' + (r.supplier || '—') + '</td>' +
         '<td style="padding:8px 12px; font-size:13px; white-space:nowrap;">' + (r.end_date || '') + '</td>' +
@@ -6431,45 +6514,63 @@
         '<td style="padding:8px; text-align:center; white-space:nowrap;">' + btns + '</td>' +
       '</tr>';
     }).join('');
-
-    if (data.length === 0) rows = '<tr><td colspan="7" style="text-align:center; padding:40px; color:#718096;">目前無追蹤記錄</td></tr>';
-
-    container.innerHTML = '<div style="display:flex; flex-direction:column; gap:15px; height:100%;">' +
-      '<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; border-bottom:2px solid var(--border); padding-bottom:10px;">' +
-        '<div style="font-size:16px; font-weight:bold; color:#2d3748;">📦 到貨追蹤</div>' +
-        '<select id="at-status-filter" onchange="renderArrivalPage()" style="padding:6px 10px; border:1px solid var(--border); border-radius:4px; font-family:inherit; font-size:13px;">' +
-          '<option value="active"' + (statusFilter==='active'?' selected':'') + '>未到倉</option>' +
-          '<option value="all"' + (statusFilter==='all'?' selected':'') + '>全部</option>' +
-          '<option value="待追蹤"' + (statusFilter==='待追蹤'?' selected':'') + '>待追蹤</option>' +
-          '<option value="催貨中"' + (statusFilter==='催貨中'?' selected':'') + '>催貨中</option>' +
-          '<option value="已到倉"' + (statusFilter==='已到倉'?' selected':'') + '>已到倉</option>' +
-          '<option value="斷貨"' + (statusFilter==='斷貨'?' selected':'') + '>斷貨</option>' +
-        '</select>' +
-        '<input type="text" id="at-kw-filter" value="' + (kwFilter || '') + '" placeholder="搜尋商品/供應商" oninput="renderArrivalPage()" style="padding:6px 10px; border:1px solid var(--border); border-radius:4px; font-size:13px; width:150px; font-family:inherit;">' +
-        '<button class="btn" style="padding:5px 12px; font-size:12px; background:#718096;" onclick="renderArrivalTrackingStation()">🔄 重新整理</button>' +
-      '</div>' +
-      '<div style="display:flex; gap:10px; flex-wrap:wrap; flex-shrink:0;">' +
-        '<div style="background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:10px 16px; min-width:100px; text-align:center; cursor:pointer;" onclick="document.getElementById(\'at-status-filter\').value=\'active\';renderArrivalPage();"><div style="font-size:11px; color:#dc2626; font-weight:bold;">🔴 45天以上</div><div style="font-size:22px; font-weight:bold; color:#dc2626;">' + cnt45 + '</div></div>' +
-        '<div style="background:#fff7ed; border:1px solid #fed7aa; border-radius:8px; padding:10px 16px; min-width:100px; text-align:center; cursor:pointer;"><div style="font-size:11px; color:#ea580c; font-weight:bold;">🟠 30-45天</div><div style="font-size:22px; font-weight:bold; color:#ea580c;">' + cnt30 + '</div></div>' +
-        '<div style="background:#fefce8; border:1px solid #fde68a; border-radius:8px; padding:10px 16px; min-width:100px; text-align:center; cursor:pointer;"><div style="font-size:11px; color:#d97706; font-weight:bold;">🟡 15-30天</div><div style="font-size:22px; font-weight:bold; color:#d97706;">' + cnt15 + '</div></div>' +
-        '<div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:10px 16px; min-width:100px; text-align:center; cursor:pointer;"><div style="font-size:11px; color:#059669; font-weight:bold;">🟢 15天內</div><div style="font-size:22px; font-weight:bold; color:#059669;">' + cntNew + '</div></div>' +
-      '</div>' +
-      '<div style="flex:1; overflow:auto; border:1px solid var(--border); border-radius:8px; min-height:0;">' +
-        '<table style="width:100%; border-collapse:collapse; font-size:13px;">' +
-          '<thead style="position:sticky; top:0; z-index:1; background:#eef1f5; box-shadow:0 1px 2px rgba(0,0,0,0.1);"><tr>' +
-            '<th style="padding:10px 12px; text-align:left; min-width:150px;">商品</th>' +
-            '<th style="padding:10px 12px; text-align:left; min-width:80px;">供應商</th>' +
-            '<th style="padding:10px 12px; text-align:left;">結單日</th>' +
-            '<th style="padding:10px 8px; text-align:center; width:70px;">天數</th>' +
-            '<th style="padding:10px 8px; text-align:center; width:80px;">狀態</th>' +
-            '<th style="padding:10px 12px; text-align:left; min-width:150px;">最後催貨</th>' +
-            '<th style="padding:10px 8px; text-align:center; min-width:180px;">操作</th>' +
-          '</tr></thead>' +
-          '<tbody>' + rows + '</tbody>' +
-        '</table>' +
-      '</div>' +
-    '</div>';
   }
+
+  function updateATSelectCount() {
+    var n = document.querySelectorAll('.at-check:checked').length;
+    var el = document.getElementById('atSelectCount');
+    if (el) el.textContent = n > 0 ? '已選 ' + n + ' 筆' : '';
+  }
+
+  async function batchATAction(action) {
+    var ids = Array.from(document.querySelectorAll('.at-check:checked')).map(function(c) { return Number(c.value); });
+    if (ids.length === 0) { Swal.fire('提醒', '請先勾選', 'warning'); return; }
+
+    if (action === 'followup') {
+      var result = await Swal.fire({ title: '批次催貨 ' + ids.length + ' 筆', input: 'textarea', inputLabel: '催貨備註（套用全部勾選）', inputPlaceholder: '例如：已電話催，廠商說下週出...', inputValidator: function(v) { if (!v || !v.trim()) return '請填寫備註'; }, showCancelButton: true, confirmButtonText: '送出', cancelButtonText: '取消', confirmButtonColor: '#2563eb' });
+      if (!result.isConfirmed) return;
+      var note = result.value.trim();
+      var dateStr = new Date().toISOString().split('T')[0];
+      Swal.fire({ title: '更新中...', allowOutsideClick: false, didOpen: function() { Swal.showLoading(); } });
+      for (var i = 0; i < ids.length; i++) {
+        var r = _arrivalData.find(function(x) { return x.id === ids[i]; });
+        if (!r) continue;
+        var logs = r.follow_up_logs || [];
+        logs.push({ date: dateStr, note: note });
+        await fetch(SB_URL + '/procurement_followup?id=eq.' + ids[i], { method: 'PATCH', headers: HEADERS, body: JSON.stringify({ status: '催貨中', follow_up_logs: logs }) });
+      }
+    } else if (action === 'arrived') {
+      var result = await Swal.fire({ title: '批次標記已到倉 ' + ids.length + ' 筆？', icon: 'question', showCancelButton: true, confirmButtonText: '確認', cancelButtonText: '取消', confirmButtonColor: '#059669' });
+      if (!result.isConfirmed) return;
+      Swal.fire({ title: '更新中...', allowOutsideClick: false, didOpen: function() { Swal.showLoading(); } });
+      var dateStr = new Date().toISOString().split('T')[0];
+      var idList = ids.join(',');
+      await fetch(SB_URL + '/procurement_followup?id=in.(' + idList + ')', { method: 'PATCH', headers: HEADERS, body: JSON.stringify({ status: '已到倉', arrived_at: dateStr }) });
+    } else if (action === 'outofstock') {
+      var result = await Swal.fire({ title: '批次標記斷貨 ' + ids.length + ' 筆？', html: '將自動發佈斷貨公告', icon: 'warning', showCancelButton: true, confirmButtonText: '確認斷貨', cancelButtonText: '取消', confirmButtonColor: '#dc2626' });
+      if (!result.isConfirmed) return;
+      Swal.fire({ title: '更新中...', allowOutsideClick: false, didOpen: function() { Swal.showLoading(); } });
+      var idList = ids.join(',');
+      await fetch(SB_URL + '/procurement_followup?id=in.(' + idList + ')', { method: 'PATCH', headers: HEADERS, body: JSON.stringify({ status: '斷貨' }) });
+      // 批次發公告
+      var bulletins = JSON.parse(localStorage.getItem('portalBulletin') || '[]');
+      var now = new Date();
+      var ts = now.getFullYear() + '/' + String(now.getMonth()+1).padStart(2,'0') + '/' + String(now.getDate()).padStart(2,'0') + ' ' + String(now.getHours()).padStart(2,'0') + ':' + String(now.getMinutes()).padStart(2,'0');
+      ids.forEach(function(id) {
+        var r = _arrivalData.find(function(x) { return x.id === id; });
+        if (r) bulletins.unshift({ id: 'BL' + Date.now() + id, title: '⚠️ 【斷貨通知】' + (r.product_name || ''), content: '廠商確認斷貨。商品：' + (r.product_name || '') + '（' + (r.product_id || '') + '）', createdAt: ts, pinned: false });
+      });
+      localStorage.setItem('portalBulletin', JSON.stringify(bulletins));
+      cloudSave('portalBulletin');
+    }
+
+    await loadArrivalData();
+    updateArrivalTable();
+    checkArrivalBadge();
+    Swal.fire({ icon: 'success', title: '完成', timer: 1200, showConfirmButton: false });
+  }
+
+  function renderArrivalPage() { updateArrivalTable(); }
 
   async function atFollowUp(id) {
     var result = await Swal.fire({
