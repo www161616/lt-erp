@@ -2526,12 +2526,18 @@ async function loadProductDB() {
 
 // 從 branchDataList 讀取（與總倉一致），若無則用預設
 const _tfStoreNames = JSON.parse(localStorage.getItem('importedStoreNames') || '[]');
-const TF_STORES = (JSON.parse(localStorage.getItem('branchDataList') || 'null') || [
-  {name:'總倉'},
+const _tfBase = JSON.parse(localStorage.getItem('branchDataList') || 'null') || [
   {name:'三峽'},{name:'中和'},{name:'文山'},{name:'四號'},{name:'永和'},{name:'忠順'},
   {name:'淡水'},{name:'環球'},{name:'平鎮'},{name:'古華'},{name:'林口'},{name:'南平'},
   {name:'泰山'},{name:'萬華'},{name:'板橋'},{name:'湖口'},{name:'經國'},{name:'松山'}
-]).filter(function(b) { return b.name === '總倉' || (_tfStoreNames.length > 0 ? _tfStoreNames.includes(b.name) : true); })
+];
+if (!_tfBase.some(function(b) { return b.name === '總倉'; })) _tfBase.unshift({name:'總倉'});
+const TF_STORES = _tfBase
+  .filter(function(b) {
+    if (b.name === '總倉') return true;
+    if (b.name === '龍潭') return false;
+    return _tfStoreNames.length > 0 ? _tfStoreNames.includes(b.name) : true;
+  })
   .map(b => ({ id: b.name, name: b.name }));
 
 // 將 currentStore.name 對齊 branchDataList 的名稱（例如 "永和店" → "永和"）
