@@ -3555,10 +3555,12 @@
           const outerScroll = container.scrollTop;
           const innerDiv = container.querySelector('div[style*="overflow"]');
           const innerScroll = innerDiv ? innerDiv.scrollTop : 0;
+          container.style.visibility = 'hidden';
           container.innerHTML = buildCorrectionPanelHTML(wave);
           container.scrollTop = outerScroll;
           const newInner = container.querySelector('div[style*="overflow"]');
           if (newInner) newInner.scrollTop = innerScroll;
+          container.style.visibility = 'visible';
         }
       }
     }
@@ -5950,22 +5952,70 @@
 
   async function renderTransferStation() {
     await syncTransfersFromPortal();
+    syncSalesOrdersFromPortal();
+
+    // 待收退貨區塊
+    var returnItems = [];
+    mockSalesOrders.forEach(function(o) {
+      o.items.forEach(function(item, idx) {
+        if (item.returnStatus === 'accepted') {
+          returnItems.push({ orderId: o.id, storeName: o.storeName, itemIdx: idx, name: item.name, qty: item.adminReturnQty || item.returnQty, expectedDate: item.expectedReturnDate || '—' });
+        }
+      });
+    });
+    var returnHtml = '';
+    if (returnItems.length > 0) {
+      var returnRows = returnItems.map(function(r) {
+        return '<tr style="border-bottom:1px solid #e2e8f0;">' +
+          '<td style="padding:8px 12px; font-family:monospace; color:#2b6cb0; font-size:12px;">' + r.orderId + '</td>' +
+          '<td style="padding:8px 12px; font-weight:600;">' + r.storeName + '</td>' +
+          '<td style="padding:8px 12px;">' + r.name + '</td>' +
+          '<td style="padding:8px 12px; text-align:center; font-weight:700; color:#c53030;">' + r.qty + '</td>' +
+          '<td style="padding:8px 12px; color:#718096;">' + r.expectedDate + '</td>' +
+          '<td style="padding:8px 12px; text-align:center;"><button class="btn" style="padding:4px 10px; font-size:12px; background:#047857;" onclick="adminMarkReturnReceived(\'' + r.orderId + '\',' + r.itemIdx + ')">✅ 確認收到</button></td>' +
+        '</tr>';
+      }).join('');
+      returnHtml = '<div style="background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:12px 16px; margin-bottom:15px;">' +
+        '<div style="font-size:15px; font-weight:bold; color:#c53030; margin-bottom:10px;">📦 待收退貨（' + returnItems.length + ' 筆）</div>' +
+        '<table style="width:100%; border-collapse:collapse; font-size:13px;"><thead><tr style="background:#fff5f5;">' +
+          '<th style="padding:8px 12px; text-align:left;">銷貨單號</th><th style="padding:8px 12px; text-align:left;">分店</th><th style="padding:8px 12px; text-align:left;">商品</th><th style="padding:8px 12px; text-align:center;">退貨數量</th><th style="padding:8px 12px; text-align:left;">預計退回日</th><th style="padding:8px 12px; text-align:center;">操作</th>' +
+        '</tr></thead><tbody>' + returnRows + '</tbody></table></div>';
+    }
+
+    // 篩選器的店家選項
+    var fromStores = [...new Set(mockTransfers.map(function(t) { return t.fromStore; }))].sort();
+    var toStores = [...new Set(mockTransfers.map(function(t) { return t.toStore; }))].sort();
+
     const html = `
       <div style="display:flex; flex-direction:column; gap:15px; height:100%;">
-        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--border); padding-bottom:10px; flex-shrink:0;">
-          <div style="font-size:16px; font-weight:bold; color:#2d3748;">🔄 店轉店審核總表</div>
-          <div style="display:flex; gap:8px; align-items:center;">
-            <label style="font-size:13px; color:#718096;">篩選：</label>
-            <select id="transferFilter" onchange="refreshTransferTable()" style="padding:6px 10px; border:1px solid var(--border); border-radius:4px; font-family:inherit; font-size:13px;">
-              <option value="all">全部單據</option>
+        ${returnHtml}
+        <div style="border-bottom:2px solid var(--border); padding-bottom:10px; flex-shrink:0;">
+          <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+            <div style="font-size:16px; font-weight:bold; color:#2d3748; margin-right:4px;">🔄 店轉店審核總表</div>
+            <select id="transferFilter" onchange="filterTransferTable()" style="padding:6px 10px; border:1px solid var(--border); border-radius:4px; font-family:inherit; font-size:13px;">
+              <option value="all">全部狀態</option>
               <option value="pending">待審核</option>
               <option value="arrived">已到總倉</option>
               <option value="shipped">已配送</option>
               <option value="received">已收到</option>
               <option value="cancelled">已作廢</option>
             </select>
+            <select id="tfFromFilter" onchange="filterTransferTable()" style="padding:6px 10px; border:1px solid var(--border); border-radius:4px; font-family:inherit; font-size:13px;">
+              <option value="">全部轉出</option>
+              ${fromStores.map(function(s) { return '<option value="' + s + '">' + s + '</option>'; }).join('')}
+            </select>
+            <select id="tfToFilter" onchange="filterTransferTable()" style="padding:6px 10px; border:1px solid var(--border); border-radius:4px; font-family:inherit; font-size:13px;">
+              <option value="">全部轉入</option>
+              ${toStores.map(function(s) { return '<option value="' + s + '">' + s + '</option>'; }).join('')}
+            </select>
+            <input type="date" id="tfDateFrom" onchange="filterTransferTable()" style="padding:5px 8px; border:1px solid var(--border); border-radius:4px; font-size:12px; width:130px;">
+            <span style="font-size:12px; color:#718096;">~</span>
+            <input type="date" id="tfDateTo" onchange="filterTransferTable()" style="padding:5px 8px; border:1px solid var(--border); border-radius:4px; font-size:12px; width:130px;">
+            <input type="text" id="tfProductFilter" placeholder="商品搜尋" oninput="filterTransferTable()" style="padding:6px 10px; border:1px solid var(--border); border-radius:4px; font-size:13px; width:120px; font-family:inherit;">
             <span style="color:#e2e8f0;">│</span>
             <button class="btn" style="padding:5px 12px; font-size:12px; background:#718096;" onclick="toggleSelectAllTF()">☑ 全選</button>
+            <button class="btn" style="padding:5px 12px; font-size:12px; background:#2b6cb0;" onclick="batchTFStatus('arrived')">📦 批次到倉</button>
+            <button class="btn" style="padding:5px 12px; font-size:12px; background:#047857;" onclick="batchTFStatus('shipped')">🚚 批次配送</button>
             <button class="btn" style="padding:5px 12px; font-size:12px; background:#c53030;" onclick="batchDeleteTF()">🗑️ 批次刪除</button>
             <span id="tfSelectCount" style="font-size:12px; color:#718096; display:none;">已選 0 筆</span>
           </div>
@@ -6023,16 +6073,36 @@
     `;
   }
 
+  function filterTransferTable() {
+    renderTransferSummary();
+    var filter = document.getElementById('transferFilter')?.value || 'all';
+    var fromFilter = document.getElementById('tfFromFilter')?.value || '';
+    var toFilter = document.getElementById('tfToFilter')?.value || '';
+    var productKw = (document.getElementById('tfProductFilter')?.value || '').trim().toLowerCase();
+    var dateFrom = document.getElementById('tfDateFrom')?.value || '';
+    var dateTo = document.getElementById('tfDateTo')?.value || '';
+
+    var data = mockTransfers;
+    if (filter !== 'all') data = data.filter(function(t) { return t.status === filter; });
+    if (fromFilter) data = data.filter(function(t) { return t.fromStore === fromFilter; });
+    if (toFilter) data = data.filter(function(t) { return t.toStore === toFilter; });
+    if (productKw) data = data.filter(function(t) { return t.items.some(function(i) { return (i.name || '').toLowerCase().includes(productKw); }); });
+    if (dateFrom) data = data.filter(function(t) { return t.createdAt >= dateFrom; });
+    if (dateTo) data = data.filter(function(t) { return t.createdAt.substring(0, 10) <= dateTo; });
+
+    renderTransferRows(data);
+  }
+
   async function refreshTransferTable() {
     await syncTransfersFromPortal();
-    renderTransferSummary();
-    const filter = document.getElementById('transferFilter')?.value || 'all';
-    const data = filter === 'all' ? mockTransfers : mockTransfers.filter(t => t.status === filter);
+    filterTransferTable();
+  }
 
+  function renderTransferRows(data) {
     const tbody = document.getElementById('transferTableBody');
     if (!tbody) return;
     if (data.length === 0) {
-      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:40px; color:#718096;">目前無符合條件的單據</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:40px; color:#718096;">目前無符合條件的單據</td></tr>';
       return;
     }
 
@@ -6099,6 +6169,33 @@
       // ✨ 紀錄操作：店轉店狀態更新
       logActivity('更新店轉店狀態', id, { status: labelMap[newStatus], from: t.fromStore, to: t.toStore });
 
+      await refreshTransferTable();
+    });
+  }
+
+  async function batchTFStatus(newStatus) {
+    var ids = Array.from(document.querySelectorAll('.tf-check:checked')).map(function(c) { return c.value; });
+    if (ids.length === 0) { Swal.fire('提醒', '請先勾選', 'warning'); return; }
+    var requiredStatus = newStatus === 'arrived' ? 'pending' : newStatus === 'shipped' ? 'arrived' : null;
+    var eligible = ids.filter(function(id) {
+      var t = mockTransfers.find(function(x) { return x.id === id; });
+      return t && (!requiredStatus || t.status === requiredStatus);
+    });
+    if (eligible.length === 0) {
+      var needLabel = newStatus === 'arrived' ? '待審核' : '已到總倉';
+      Swal.fire('提醒', '勾選的單據中沒有狀態為「' + needLabel + '」的', 'warning');
+      return;
+    }
+    var labelMap = { arrived: '📦 確認到倉', shipped: '🚚 確認配送' };
+    Swal.fire({ title: '批次更新 ' + eligible.length + ' 筆？', html: '將更新為：<b>' + (labelMap[newStatus] || newStatus) + '</b>', icon: 'question', showCancelButton: true, confirmButtonText: '確認', cancelButtonText: '取消', confirmButtonColor: '#2b6cb0' }).then(async function(res) {
+      if (!res.isConfirmed) return;
+      Swal.fire({ title: '更新中...', allowOutsideClick: false, didOpen: function() { Swal.showLoading(); } });
+      var ok = 0;
+      for (var i = 0; i < eligible.length; i++) {
+        var t = mockTransfers.find(function(x) { return x.id === eligible[i]; });
+        if (t) { t.status = newStatus; await syncTransferToPortal(eligible[i], { adminStatus: newStatus }); ok++; }
+      }
+      Swal.fire({ icon: 'success', title: '已更新 ' + ok + ' 筆', timer: 1500, showConfirmButton: false });
       await refreshTransferTable();
     });
   }
