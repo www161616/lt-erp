@@ -3054,6 +3054,7 @@
         });
 
         saveMockSavedWaves();
+        syncWaveToSupabase(mockSavedWaves.find(function(w) { return w.id === currentEditingWaveId; }));
 
         // ✨ 紀錄操作：修改歷史揀貨單
         logActivity('修改歷史揀貨單', currentEditingWaveId, { items: activePickingMatrix.length });
@@ -3100,6 +3101,7 @@
         });
 
         saveMockSavedWaves();
+        syncWaveToSupabase(mockSavedWaves.find(function(w) { return w.id === newWaveId; }));
 
         // 如果是從需求建立的，現在才標記 replied
         if (pendingDemandInqIds.length > 0) {
@@ -3130,6 +3132,53 @@
         });
         renderPickingActionPanel(newWaveId);
       }
+    }
+
+    async function syncWaveToSupabase(wave) {
+      try {
+        var wavePayload = {
+          id: wave.id,
+          wave_date: wave.date ? wave.date.slice(0, 10).replace(/\//g, '-') : new Date().toISOString().split('T')[0],
+          delivery_date: wave.delivery_date || null,
+          status: wave.status || 'pending',
+          note: wave.restockForWave ? '補發：來源 ' + wave.restockForWave : ''
+        };
+        var wRes = await fetch(SB_URL + '/br_picking_waves', {
+          method: 'POST',
+          headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+          body: JSON.stringify(wavePayload)
+        });
+        if (!wRes.ok) { console.error('br_picking_waves upsert failed:', await wRes.text()); return; }
+
+        await fetch(SB_URL + '/br_picking_items?wave_id=eq.' + wave.id, { method: 'DELETE', headers: HEADERS });
+
+        var items = [];
+        wave.matrix.forEach(function(row) {
+          if (!row.branchData) return;
+          Object.entries(row.branchData).forEach(function([store, bd]) {
+            var actual = bd.actual ?? bd.expected ?? 0;
+            var expected = bd.expected || 0;
+            if (expected <= 0 && actual <= 0) return;
+            items.push({
+              wave_id: wave.id, store_id: store,
+              product_id: (row.productId || row.id || '').replace(/_.*$/, ''), product_name: row.name || '',
+              temp: row.temp || row.category || '',
+              target_qty: expected, actual_qty: actual,
+              shortage_qty: Math.max(0, expected - actual),
+              shortage_status: 'normal', note: ''
+            });
+          });
+        });
+
+        if (items.length > 0) {
+          var iRes = await fetch(SB_URL + '/br_picking_items', {
+            method: 'POST',
+            headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+            body: JSON.stringify(items)
+          });
+          if (!iRes.ok) console.error('br_picking_items insert failed:', await iRes.text());
+        }
+      } catch(e) { console.error('syncWaveToSupabase error:', e); }
     }
 
     function renderPickingActionPanel(waveId) {
@@ -4071,6 +4120,7 @@
         }
 
         saveMockSavedWaves();
+        syncWaveToSupabase(wave);
         syncSalesOrdersToPortal();
 
         // ✨ 紀錄操作：暫存銷貨單

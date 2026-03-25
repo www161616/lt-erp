@@ -296,6 +296,7 @@
       <div class="menu-item" id="menuTransfer" onclick="switchPage('pageTransfer', this)">🔄 店轉店登記<span id="notifyTransfer" style="display:none; margin-left:6px; background:#dc2626; color:white; font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px; min-width:16px; text-align:center;">0</span></div>
       <div class="menu-item" id="menuAid" onclick="switchPage('pageAid', this)">🤝 互助交流<span id="notifyAid" style="display:none; margin-left:6px; background:#dc2626; color:white; font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px; min-width:16px; text-align:center;">0</span></div>
       <div class="menu-item" onclick="switchPage('pageBackorder', this)">⚠️ 欠品清單<span id="notifyBackorder" style="display:none; margin-left:6px; background:#dc2626; color:white; font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px; min-width:16px; text-align:center; animation:pulse 1.5s infinite;">0</span></div>
+      <div class="menu-item" onclick="switchPage('pageDeliveryPreview', this)">🚚 明日到貨預告</div>
       <div class="menu-item" onclick="switchPage('pageBilling', this)">📦 今日進貨單</div>
       <div class="menu-item" onclick="switchPage('pageHistory', this)">📜 所有進貨單</div>
 <div class="menu-item" id="menuLedger" onclick="switchPage('pageLedger', this)">💰 流水帳/訂包管理</div>
@@ -886,6 +887,10 @@
   <div id="backorderContent" style="color:#9ca3af; text-align:center; padding:40px;">載入中...</div>
 </div>
 
+<div id="pageDeliveryPreview" class="page">
+  <div style="padding:16px 20px; border-bottom:1px solid var(--border); font-size:15px; font-weight:700; color:var(--primary);">🚚 明日到貨預告</div>
+  <div id="deliveryPreviewContainer" style="padding:16px;"></div>
+</div>
 <div id="pageBilling" class="page">
 
   <!-- 月份選擇列 -->
@@ -1031,7 +1036,7 @@
 
     async function cloudLoadAll() {
       try {
-        const resp = await fetch(`${SB_URL}/shared_kv?key=in.("branchOrderList","branchOrders","branchDataList","branchTypeMap","portalAllRequests","portalMutualAidBoard","portalTrackingData","portalBulletin","portalSalesOrders","branchOrdersLocked")`, { headers: SB_HEADERS });
+        const resp = await fetch(`${SB_URL}/shared_kv?key=in.("branchOrderList","branchOrders","branchDataList","branchTypeMap","portalAllRequests","portalMutualAidBoard","portalTrackingData","portalBulletin","portalSalesOrders","branchOrdersLocked","lt_savedWaves")`, { headers: SB_HEADERS });
         if (resp.ok) {
           const rows = await resp.json();
           rows.forEach(r => {
@@ -1921,6 +1926,7 @@
       pageLedger:   '💰 流水帳/訂包管理',
       pageHistory:  '📜 所有進貨單',
       pageBackorder:'⚠️ 欠品清單',
+      pageDeliveryPreview: '🚚 明日到貨預告',
       pageBilling:  '📦 今日進貨單',
       pageCommon:   '⭐ 常用功能',
       pageArrival:     '📦 到貨狀況',
@@ -1960,6 +1966,7 @@
         if (pageId === 'pageRequest') renderRequestPage();
         if (pageId === 'pageTransfer') initTransferPage();
         if (pageId === 'pageBackorder') initBackorderPage();
+        if (pageId === 'pageDeliveryPreview') renderDeliveryPreview();
         if (pageId === 'pageBilling') initBillingPage();
         if (pageId === 'pageLedger') initLedgerPage();
         if (pageId === 'pageHistory') initHistoryPage();
@@ -3666,6 +3673,92 @@ async function updateBackorderBadge() {
       else { badge.style.display = 'none'; }
     }
   } catch(e) {}
+}
+
+// ============================
+// 🚚 明日到貨預告
+// ============================
+function renderDeliveryPreview() {
+  var container = document.getElementById('deliveryPreviewContainer');
+  if (!container) return;
+  var rawName = currentStore?.name;
+  if (!rawName) { container.innerHTML = '<div style="text-align:center;padding:40px;color:#9ca3af;">請先登入</div>'; return; }
+  var myName = matchBranchName(rawName);
+
+  var waves = JSON.parse(localStorage.getItem('lt_savedWaves') || '[]');
+  var tomorrow = new Date();
+  tomorrow.setDate(tomorrow.getDate() + 1);
+  var tomorrowStr = tomorrow.toISOString().split('T')[0];
+
+  var todayWaves = waves.filter(function(w) { return w.delivery_date === tomorrowStr; });
+
+  if (todayWaves.length === 0) {
+    container.innerHTML = '<div style="display:flex; justify-content:flex-end; margin-bottom:10px;"><button onclick="cloudLoadAll().then(function(){renderDeliveryPreview()})" style="padding:6px 14px; background:#f1f5f9; color:#374151; border:1px solid #e2e8f0; border-radius:6px; font-size:12px; cursor:pointer; font-family:inherit;">🔄 重新整理</button></div>' +
+      '<div style="text-align:center; padding:60px 20px; color:#9ca3af;">' +
+      '<div style="font-size:48px; margin-bottom:12px;">📭</div>' +
+      '<div style="font-size:15px;">明日（' + tomorrowStr + '）目前沒有到貨預告</div>' +
+      '<div style="font-size:12px; margin-top:8px;">如有疑問請聯絡總倉</div></div>';
+    return;
+  }
+
+  var itemMap = {};
+  todayWaves.forEach(function(wave) {
+    wave.matrix.forEach(function(row) {
+      var bd = row.branchData && (row.branchData[myName] || row.branchData[myName.replace(/店$/, '')] || row.branchData[myName + '店']);
+      var qty = bd ? (bd.actual ?? bd.expected ?? 0) : 0;
+      if (qty <= 0) return;
+      var key = row.id || row.name;
+      if (!itemMap[key]) { itemMap[key] = { name: row.name, temp: row.temp || row.category || '', qty: 0, isConfirmed: false }; }
+      itemMap[key].qty += qty;
+      if (wave.status === 'completed') itemMap[key].isConfirmed = true;
+    });
+  });
+
+  var items = Object.values(itemMap);
+  if (items.length === 0) {
+    container.innerHTML = '<div style="display:flex; justify-content:flex-end; margin-bottom:10px;"><button onclick="cloudLoadAll().then(function(){renderDeliveryPreview()})" style="padding:6px 14px; background:#f1f5f9; color:#374151; border:1px solid #e2e8f0; border-radius:6px; font-size:12px; cursor:pointer; font-family:inherit;">🔄 重新整理</button></div>' +
+      '<div style="text-align:center; padding:60px 20px; color:#9ca3af;">' +
+      '<div style="font-size:48px; margin-bottom:12px;">📭</div>' +
+      '<div style="font-size:15px;">明日（' + tomorrowStr + '）沒有配送到本店的商品</div></div>';
+    return;
+  }
+
+  var tempStyle = {
+    '冷凍': { bg:'#eff6ff', color:'#1d4ed8', label:'❄️ 冷凍' },
+    '冷藏': { bg:'#ecfdf5', color:'#047857', label:'🧊 冷藏' },
+    '常溫': { bg:'#fffbeb', color:'#92400e', label:'🌡️ 常溫' },
+    '1': { bg:'#eff6ff', color:'#1d4ed8', label:'❄️ 冷凍' },
+    '2': { bg:'#ecfdf5', color:'#047857', label:'🧊 冷藏' },
+    '3': { bg:'#fffbeb', color:'#92400e', label:'🌡️ 常溫' }
+  };
+
+  var rows = items.map(function(item) {
+    var ts = tempStyle[item.temp] || { bg:'#f3f4f6', color:'#6b7280', label: item.temp || '—' };
+    var statusBadge = item.isConfirmed
+      ? '<span style="background:#d1fae5;color:#047857;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700;">✅ 已確認</span>'
+      : '<span style="background:#fef3c7;color:#92400e;padding:2px 8px;border-radius:8px;font-size:11px;font-weight:700;">⏳ 預計</span>';
+    return '<tr style="border-bottom:1px solid var(--border);">' +
+      '<td style="padding:12px 16px; font-weight:700; font-size:14px;">' + item.name + '</td>' +
+      '<td style="padding:12px 16px; text-align:center;"><span style="background:' + ts.bg + ';color:' + ts.color + ';padding:2px 10px;border-radius:8px;font-size:12px;font-weight:700;">' + ts.label + '</span></td>' +
+      '<td style="padding:12px 16px; text-align:center; font-size:18px; font-weight:700; color:var(--primary);">' + item.qty + '</td>' +
+      '<td style="padding:12px 16px; text-align:center;">' + statusBadge + '</td>' +
+    '</tr>';
+  }).join('');
+
+  container.innerHTML = '<div style="display:flex; justify-content:flex-end; margin-bottom:10px;"><button onclick="cloudLoadAll().then(function(){renderDeliveryPreview()})" style="padding:6px 14px; background:#f1f5f9; color:#374151; border:1px solid #e2e8f0; border-radius:6px; font-size:12px; cursor:pointer; font-family:inherit;">🔄 重新整理</button></div>' +
+    '<div style="margin-bottom:12px; padding:10px 14px; background:#f0f7ff; border-radius:8px; font-size:13px; color:#1e40af; font-weight:600;">📅 配送日：' + tomorrowStr + '　共 ' + items.length + ' 項商品</div>' +
+    '<div style="background:white; border:1px solid var(--border); border-radius:8px; overflow:hidden;">' +
+      '<table style="width:100%; border-collapse:collapse; font-size:13px;">' +
+        '<thead><tr style="background:#f8fafc;">' +
+          '<th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">品名</th>' +
+          '<th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; width:90px;">溫層</th>' +
+          '<th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; width:70px;">數量</th>' +
+          '<th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; width:90px;">狀態</th>' +
+        '</tr></thead>' +
+        '<tbody>' + rows + '</tbody>' +
+      '</table>' +
+    '</div>' +
+    '<div style="margin-top:10px; font-size:11px; color:#9ca3af; text-align:right;">⏳ 預計＝數量可能調整　✅ 已確認＝銷貨單已開立</div>';
 }
 
 function initBillingPage() {
