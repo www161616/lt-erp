@@ -2790,9 +2790,9 @@ function renderTransferPage() {
   const now = new Date();
   const myName = currentStore?.name;
 
-  const adminStatusLabel = { pending:'⏳ 待總倉審核', arrived:'📦 已到總倉', shipped:'🚚 已配送', received:'✅ 已收到', cancelled:'❌ 已作廢' };
-  const adminStatusColor = { pending:'#be185d', arrived:'#2563eb', shipped:'#047857', received:'#475569', cancelled:'#9ca3af' };
-  const adminStatusBg    = { pending:'#fce7f3', arrived:'#dbeafe', shipped:'#d1fae5', received:'#f3f4f6', cancelled:'#f3f4f6' };
+  const adminStatusLabel = { pending:'⏳ 待總倉審核', arrived:'📦 已到總倉', shipped:'🚚 已配送', received:'✅ 已收到', cancelled:'❌ 已作廢', pending_supplement:'⚠️ 待確認補發' };
+  const adminStatusColor = { pending:'#be185d', arrived:'#2563eb', shipped:'#047857', received:'#475569', cancelled:'#9ca3af', pending_supplement:'#b45309' };
+  const adminStatusBg    = { pending:'#fce7f3', arrived:'#dbeafe', shipped:'#d1fae5', received:'#f3f4f6', cancelled:'#f3f4f6', pending_supplement:'#fef3c7' };
 
   function tfDateStr(t) { return new Date(t.created_at).toLocaleString('zh-TW', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }); }
   function tfItemSummary(t) { return (t.items||[]).map(i => `${i.product_name} x${i.qty}${i.price ? ' ($'+i.price+')' : ''}`).join('、'); }
@@ -2830,6 +2830,7 @@ function renderTransferPage() {
               ${!isCancelled ? `<button onclick="printTransfer('${t.id}')" style="padding:4px 10px; background:#fff0f6; color:#be185d; border:1px solid #be185d; border-radius:4px; font-size:12px; cursor:pointer; font-family:inherit; margin-right:4px;">🖨️ 列印</button>` : ''}
               ${canDelete ? `<button onclick="deleteTf('${t.id}')" style="padding:4px 10px; background:#fff; color:#ef4444; border:1px solid #ef4444; border-radius:4px; font-size:12px; cursor:pointer; font-family:inherit; margin-right:4px;">刪除</button>` : ''}
               ${canCancel ? `<button onclick="cancelTf('${t.id}')" style="padding:4px 10px; background:#fff; color:#f59e0b; border:1px solid #f59e0b; border-radius:4px; font-size:12px; cursor:pointer; font-family:inherit;">作廢</button>` : ''}
+              ${st === 'pending_supplement' ? `<button onclick="confirmSupplement('${t.id}')" style="padding:4px 10px; background:#d97706; color:white; border:none; border-radius:4px; font-size:12px; font-weight:700; cursor:pointer; font-family:inherit;">📦 確認補發</button>` : ''}
             </td>
           </tr>`;
         }).join('');
@@ -2851,7 +2852,7 @@ function renderTransferPage() {
       </div>`;
 
   } else if (currentTfTab === 'incoming') {
-    const incoming = transferList.filter(t => t.to_store === myName && (t.admin_status || 'pending') !== 'received' && (t.admin_status || 'pending') !== 'cancelled');
+    const incoming = transferList.filter(t => t.to_store === myName && (t.admin_status || 'pending') !== 'received' && (t.admin_status || 'pending') !== 'cancelled' && (t.admin_status || 'pending') !== 'pending_supplement');
     let html = incoming.length === 0
       ? `<tr><td colspan="6" style="padding:24px; text-align:center; color:#9ca3af;">目前沒有待確認的轉入 👍</td></tr>`
       : incoming.map(t => {
@@ -3187,7 +3188,7 @@ async function confirmTf(id) {
       ).join('');
 
       if (diffItems.length > 0) {
-        const補發 = await Swal.fire({
+        const supplementResult = await Swal.fire({
           icon: 'warning',
           title: '收貨有差異',
           html: `<div style="text-align:left; font-size:13px; margin-bottom:10px;">以下品項實收不足：</div>
@@ -3207,14 +3208,14 @@ async function confirmTf(id) {
           width: 480
         });
 
-        if (補發.isConfirmed) {
+        if (supplementResult.isConfirmed) {
           try {
             const newTfId = generateTfId();
             // 建主單
             const orderRes = await fetch(`${SB_URL}/transfer_orders`, {
               method: 'POST',
               headers: { ...SB_HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-              body: JSON.stringify({ id: newTfId, from_store: tf.from_store, to_store: tf.to_store, status: 'pending', admin_status: 'pending', temp_note: tf.temp_note || '', note: `補發：原單 ${id}` })
+              body: JSON.stringify({ id: newTfId, from_store: tf.from_store, to_store: tf.to_store, status: 'pending', admin_status: 'pending_supplement', temp_note: tf.temp_note || '', note: `補發請求：原單 ${id}，收貨方實收不足，請確認後補發` })
             });
             if (!orderRes.ok) throw new Error('建立補發主單失敗');
 
@@ -3230,7 +3231,7 @@ async function confirmTf(id) {
             });
             if (!itemRes.ok) throw new Error('建立補發明細失敗');
 
-            Swal.fire({ icon: 'success', title: '補發單已建立', html: `單號 <b>${newTfId}</b>`, confirmButtonColor: '#be185d' });
+            Swal.fire({ icon: 'success', title: '補發請求已送出', html: `單號 <b>${newTfId}</b><br><span style="font-size:13px;color:#6b7280;">已通知 ${tf.from_store} 確認補發</span>`, confirmButtonColor: '#be185d' });
           } catch (err) {
             Swal.fire('建立補發單失敗', err.message, 'error');
           }
@@ -3246,6 +3247,41 @@ async function confirmTf(id) {
 
   await loadTransferList();
   renderTransferPage();
+}
+
+async function confirmSupplement(id) {
+  var action = await Swal.fire({
+    title: '補發請求處理',
+    html: '單號 <b>' + id + '</b><br><span style="font-size:13px;color:#6b7280;">對方收貨數量不足，請選擇處理方式</span>',
+    icon: 'warning',
+    showDenyButton: true,
+    showCancelButton: true,
+    confirmButtonText: '✅ 確認補發',
+    denyButtonText: '❌ 無法補發',
+    cancelButtonText: '取消',
+    confirmButtonColor: '#d97706',
+    denyButtonColor: '#6b7280'
+  });
+  if (!action.isConfirmed && !action.isDenied) return;
+  var newAdminStatus = action.isConfirmed ? 'pending' : 'cancelled';
+  var patchBody = { admin_status: newAdminStatus };
+  if (action.isDenied) patchBody.cancel_reason = '送出方確認無法補發';
+  try {
+    var res = await fetch(SB_URL + '/transfer_orders?id=eq.' + id, {
+      method: 'PATCH',
+      headers: { ...SB_HEADERS, 'Content-Type': 'application/json' },
+      body: JSON.stringify(patchBody)
+    });
+    if (!res.ok) throw new Error(await res.text());
+    Swal.fire({
+      icon: action.isConfirmed ? 'success' : 'info',
+      title: action.isConfirmed ? '已確認補發' : '已標記無法補發',
+      text: action.isConfirmed ? '此單已進入待出貨狀態' : '此補發單已取消',
+      timer: 1500, showConfirmButton: false
+    });
+    await loadTransferList();
+    renderTransferPage();
+  } catch(e) { Swal.fire('失敗', e.message, 'error'); }
 }
 
 async function deleteTf(id) {
