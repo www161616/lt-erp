@@ -191,13 +191,18 @@
       return;
     }
 
-    list.innerHTML = pendingSalesOrders.map(o => {
+    list.innerHTML = `<div style="display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid #e2e8f0; margin-bottom:8px;">
+      <input type="checkbox" onchange="document.querySelectorAll('.so-check').forEach(function(c){c.checked=this.checked}.bind(this)); updateSOPendingCount();" style="width:16px; height:16px; cursor:pointer;">
+      <button class="btn btn-approve" style="padding:5px 14px; font-size:13px;" onclick="batchApproveSales()">✅ 批次確認開立</button>
+      <span id="soPendingCount" style="font-size:12px; color:#64748b;"></span>
+    </div>` + pendingSalesOrders.map(o => {
       const amount = o.finalAmount || o.items.reduce((s, i) => s + i.qty * i.unitPrice, 0);
       const source = o.waveId === 'MANUAL' ? '手動開立' : `揀貨單 ${o.waveId}`;
       return `
         <div class="order-card" onclick="showSalesDetail('${o.id}')">
           <div class="order-card-header">
             <div>
+              <input type="checkbox" class="so-check" value="${o.id}" onclick="event.stopPropagation();" onchange="updateSOPendingCount()" style="width:15px; height:15px; cursor:pointer; margin-right:6px;">
               <span class="order-card-id">${o.id}</span>
               <span class="status-badge status-pending" style="margin-left:8px;">待審核</span>
             </div>
@@ -436,12 +441,17 @@
       return;
     }
 
-    list.innerHTML = pendingPurchaseOrders.map(o => {
+    list.innerHTML = `<div style="display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid #e2e8f0; margin-bottom:8px;">
+      <input type="checkbox" onchange="document.querySelectorAll('.po-check').forEach(function(c){c.checked=this.checked}.bind(this)); updatePOPendingCount();" style="width:16px; height:16px; cursor:pointer;">
+      <button class="btn btn-approve" style="padding:5px 14px; font-size:13px;" onclick="batchApprovePurchase()">✅ 批次確認轉入</button>
+      <span id="poPendingCount" style="font-size:12px; color:#64748b;"></span>
+    </div>` + pendingPurchaseOrders.map(o => {
       const amount = Number(o.grand_total || o.subtotal || 0);
       return `
         <div class="order-card" onclick="showPurchaseDetail('${o.id}')">
           <div class="order-card-header">
             <div>
+              <input type="checkbox" class="po-check" value="${o.id}" onclick="event.stopPropagation();" onchange="updatePOPendingCount()" style="width:15px; height:15px; cursor:pointer; margin-right:6px;">
               <span class="order-card-id">${o.id}</span>
               <span class="status-badge status-pending" style="margin-left:8px;">待審核</span>
             </div>
@@ -596,6 +606,89 @@
       console.error('approvePurchaseOrder error:', e);
       Swal.fire('轉入失敗', e.message, 'error');
     }
+  }
+
+  // 計數
+  function updateSOPendingCount() {
+    var n = document.querySelectorAll('.so-check:checked').length;
+    var el = document.getElementById('soPendingCount');
+    if (el) el.textContent = n > 0 ? '已選 ' + n + ' 筆' : '';
+  }
+  function updatePOPendingCount() {
+    var n = document.querySelectorAll('.po-check:checked').length;
+    var el = document.getElementById('poPendingCount');
+    if (el) el.textContent = n > 0 ? '已選 ' + n + ' 筆' : '';
+  }
+
+  // 批次確認開立銷貨單
+  async function batchApproveSales() {
+    var ids = Array.from(document.querySelectorAll('.so-check:checked')).map(function(c) { return c.value; });
+    if (ids.length === 0) { Swal.fire('提醒', '請先勾選要開立的銷貨單', 'warning'); return; }
+    var result = await Swal.fire({ title: '批次確認開立 ' + ids.length + ' 筆？', icon: 'question', showCancelButton: true, confirmButtonText: '確認開立', cancelButtonText: '取消', confirmButtonColor: '#047857' });
+    if (!result.isConfirmed) return;
+    Swal.fire({ title: '批次開立中...', allowOutsideClick: false, didOpen: function() { Swal.showLoading(); } });
+    var ok = 0, fail = 0;
+    for (var i = 0; i < ids.length; i++) {
+      var o = pendingSalesOrders.find(function(x) { return x.id === ids[i]; });
+      if (!o) { fail++; continue; }
+      try {
+        var cust = allCustomers.find(function(c) { return c.name.includes(o.storeName); }) || { id: null, name: o.storeName, tax_type: '免稅' };
+        var createdAt = o.createdAt || o.issuedAt || '';
+        var dateStr = createdAt ? createdAt.replace(/\//g, '-').substring(0, 10) : new Date().toISOString().split('T')[0];
+        var subtotal = o.items.reduce(function(s, it) { return s + it.qty * it.unitPrice; }, 0);
+        var taxRate = cust.tax_type === '外加5%' ? 0.05 : 0;
+        var tax_amount = Math.round(subtotal * taxRate);
+        var grand_total = subtotal + tax_amount;
+        var orderData = {
+          order_id: null, order_date: dateStr, customer_id: cust.id, customer_name: cust.name,
+          subtotal: subtotal, tax_amount: tax_amount, grand_total: grand_total,
+          tax_type: cust.tax_type || '免稅', shipping_fee: 0, deduction: 0,
+          note: '來自調度中心 ' + o.id + (o.note ? ' | ' + o.note : ''),
+          items: o.items.map(function(it) { return { product_id: it.productId ? it.productId.split('_')[0] : null, product_name: it.name, qty: it.qty, unit: '件', price: it.unitPrice, cost: it.cost || 0, note: it.note || '' }; })
+        };
+        var res = await fetch(SB_URL + '/rpc/web_save_sales_order', { method: 'POST', headers: HEADERS, body: JSON.stringify({ p_order_data: orderData }) });
+        if (!res.ok) throw new Error(await res.text());
+        await updateSharedKvOrderStatus(ids[i], 'issued');
+        ok++;
+        Swal.update({ title: '批次開立中... ' + (ok + fail) + '/' + ids.length });
+      } catch(e) { console.error('batch SO error:', ids[i], e); fail++; }
+    }
+    await loadPendingSales();
+    Swal.fire({ icon: fail ? 'warning' : 'success', title: '批次開立完成', html: '成功 <b>' + ok + '</b> 筆' + (fail ? '<br>失敗 <b>' + fail + '</b> 筆' : '') });
+  }
+
+  // 批次確認轉入進貨單
+  async function batchApprovePurchase() {
+    var ids = Array.from(document.querySelectorAll('.po-check:checked')).map(function(c) { return c.value; });
+    if (ids.length === 0) { Swal.fire('提醒', '請先勾選要轉入的進貨單', 'warning'); return; }
+    var result = await Swal.fire({ title: '批次確認轉入 ' + ids.length + ' 筆？', icon: 'question', showCancelButton: true, confirmButtonText: '確認轉入', cancelButtonText: '取消', confirmButtonColor: '#047857' });
+    if (!result.isConfirmed) return;
+    Swal.fire({ title: '批次轉入中...', allowOutsideClick: false, didOpen: function() { Swal.showLoading(); } });
+    var ok = 0, fail = 0;
+    for (var i = 0; i < ids.length; i++) {
+      var o = pendingPurchaseOrders.find(function(x) { return x.id === ids[i]; });
+      if (!o) { fail++; continue; }
+      try {
+        var detRes = await fetch(SB_URL + '/internal_purchase_details?order_id=eq.' + ids[i] + '&select=*&order=id.asc', { headers: HEADERS });
+        if (!detRes.ok) throw new Error('讀取明細失敗');
+        var details = await detRes.json();
+        var amount = Number(o.grand_total || o.subtotal || 0);
+        var orderData = {
+          order_date: o.order_date, supplier_id: o.supplier_id, supplier_name: o.supplier_name || '',
+          total_amount: Number(o.subtotal || 0), tax_amount: Number(o.tax_amount || 0), grand_total: amount,
+          handler: o.handler || '調度中心', payment_status: '未付款', payment_method: '',
+          note: '轉自內部採購 ' + o.id + (o.note ? ' | ' + o.note : ''),
+          items: details.map(function(it) { return { product_id: it.product_id, product_name: it.product_name || '', spec: '', qty: Number(it.qty), unit: it.unit || '個', unit_cost: Number(it.cost || 0), note: it.note || '' }; })
+        };
+        var res = await fetch(SB_URL + '/rpc/web_save_purchase_order', { method: 'POST', headers: HEADERS, body: JSON.stringify({ p_order_data: orderData }) });
+        if (!res.ok) throw new Error(await res.text());
+        await fetch(SB_URL + '/internal_purchases?id=eq.' + ids[i], { method: 'PATCH', headers: { ...HEADERS, 'Prefer': 'return=minimal' }, body: JSON.stringify({ status: '已轉單' }) });
+        ok++;
+        Swal.update({ title: '批次轉入中... ' + (ok + fail) + '/' + ids.length });
+      } catch(e) { console.error('batch PO error:', ids[i], e); fail++; }
+    }
+    await loadPendingPurchases();
+    Swal.fire({ icon: fail ? 'warning' : 'success', title: '批次轉入完成', html: '成功 <b>' + ok + '</b> 筆' + (fail ? '<br>失敗 <b>' + fail + '</b> 筆' : '') });
   }
 
   // 駁回進貨單
