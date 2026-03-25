@@ -10410,6 +10410,172 @@
   function ppaEsc(v) { return (v || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
   // ===== 匯率 / 運費率（從 supplier_xiaolan.html 漂漂館讀取，唯讀）=====
+  // 漂漂館新增表單
+  let ppFormOpen = false;
+  let ppNewStagingList = [];
+  let ppFormCache = {};
+
+  const PP_STATUS_OPTS = ['待處理','已向廠商叫貨','貨已到倉','廠商斷貨','廠商短缺'];
+  const PP_STATUS_COLOR = {
+    '待處理':'#718096',
+    '已向廠商叫貨':'#2b6cb0',
+    '貨已到倉':'#276749',
+    '廠商斷貨':'#c53030',
+    '廠商短缺':'#b7791f'
+  };
+  function ppUpdateStagingQty(idx, val) {
+    var item = ppNewStagingList[idx];
+    if (!item) return;
+    item.qty = Number(val) || 0;
+    item.specs = item.specLabel ? (item.specLabel + ' x' + item.qty) : (item.qty > 0 ? 'x' + item.qty : '');
+  }
+  function ppRemoveStaging(idx) {
+    ppNewStagingList.splice(idx, 1);
+    renderPPAGrid();
+  }
+  function ppCalcCostHint() {
+    var s = ppaLoadSettings();
+    var er = s.exRate || 0;
+    var sr = s.shipRate || 0;
+    var cn = Number(document.getElementById('ppf-cnPrice')?.value) || 0;
+    var w = Number(document.getElementById('ppf-weight')?.value) || 0;
+    var cost = er > 0 ? Math.round((cn + w * sr) * er) : 0;
+    var el = document.getElementById('ppf-unitCost');
+    if (el) el.textContent = '$' + cost.toLocaleString();
+  }
+  function ppClearForm() {
+    ppFormCache = {};
+    renderPPAGrid();
+  }
+  function ppAddToStaging() {
+    var code = (document.getElementById('ppf-code')?.value || '').trim();
+    var name = (document.getElementById('ppf-name')?.value || '').trim();
+    var price = Number(document.getElementById('ppf-price')?.value) || 0;
+    if (!code) { Swal.fire('提醒','請填商品底碼','warning'); return; }
+    if (!name) { Swal.fire('提醒','請填商品名稱','warning'); return; }
+    if (!price) { Swal.fire('提醒','請填售價','warning'); return; }
+
+    var closeDate = document.getElementById('ppf-closeDate')?.value || '';
+    var url = (document.getElementById('ppf-url')?.value || '').trim();
+    var cnPrice = Number(document.getElementById('ppf-cnPrice')?.value) || 0;
+    var weight = Number(document.getElementById('ppf-weight')?.value) || 0;
+    var s = ppaLoadSettings();
+    var er = s.exRate || 0;
+    var sr = s.shipRate || 0;
+    var unitCost = er > 0 ? Math.round((cnPrice + weight * sr) * er) : 0;
+
+    // 規格拆分
+    var variantsRaw = (document.getElementById('ppf-variants')?.value || '').trim();
+    var variants = variantsRaw ? variantsRaw.split(/[,，、/／]+/).map(function(v) { return v.trim(); }).filter(Boolean) : [];
+
+    if (variants.length > 0) {
+      variants.forEach(function(v, idx) {
+        ppNewStagingList.push({
+          code: code + (idx + 1),
+          name: name + '-' + v,
+          specLabel: v,
+          qty: 0,
+          price: price,
+          branchPrice: 0,
+          unitCost: unitCost,
+          cnPrice: cnPrice,
+          weight: weight,
+          closeDate: closeDate,
+          url: url,
+          specs: v + ' x0'
+        });
+      });
+    } else {
+      ppNewStagingList.push({
+        code: code,
+        name: name,
+        specLabel: '',
+        qty: 0,
+        price: price,
+        branchPrice: 0,
+        unitCost: unitCost,
+        cnPrice: cnPrice,
+        weight: weight,
+        closeDate: closeDate,
+        url: url,
+        specs: ''
+      });
+    }
+
+    // 清空表單但保留結單日和1688連結
+    ppFormCache = {
+      closeDate: closeDate,
+      url: url,
+      code: '', name: '', price: '', cnPrice: '0', weight: '0', variants: ''
+    };
+    renderPPAGrid();
+    setTimeout(function() { document.getElementById('ppf-code')?.focus(); }, 50);
+  }
+
+  async function ppWriteToSystem() {
+    if (ppNewStagingList.length === 0) return;
+
+    // 步驟一：查 products 已存在的編號
+    var ids = ppNewStagingList.map(function(i) { return '"' + i.code + '"'; }).join(',');
+    var existingIds = new Set();
+    try {
+      var chk = await fetch(SB_URL + '/products?id=in.(' + ids + ')&select=id', { headers: HEADERS });
+      if (chk.ok) { (await chk.json()).forEach(function(r) { existingIds.add(r.id); }); }
+    } catch(e) {}
+
+    var newItems = ppNewStagingList.filter(function(i) { return !existingIds.has(i.code); });
+    var skipped = ppNewStagingList.filter(function(i) { return existingIds.has(i.code); });
+
+    if (skipped.length > 0) {
+      var confirm = await Swal.fire({
+        title: '部分編號已存在',
+        html: '以下編號將跳過：<b>' + skipped.map(function(i) { return i.code; }).join(', ') + '</b><br><br>確認繼續寫入其餘 ' + newItems.length + ' 筆？',
+        icon: 'warning', showCancelButton: true, confirmButtonText: '繼續', cancelButtonText: '取消', confirmButtonColor: '#7c3aed'
+      });
+      if (!confirm.isConfirmed) return;
+    }
+
+    Swal.fire({ title: '寫入中...', allowOutsideClick: false, didOpen: function() { Swal.showLoading(); } });
+
+    // 步驟三：POST 新品到 products
+    var prodSaved = 0;
+    if (newItems.length > 0) {
+      try {
+        var payload = newItems.map(function(item) {
+          return { id: item.code, name: item.name, category: '漂漂館', unit: '個', price: item.price, price_branch: item.branchPrice, price_wholesale: 0, price_group: 0, cost: item.unitCost, supplier: '小瀾', status: '啟用' };
+        });
+        var res = await fetch(SB_URL + '/products', { method: 'POST', headers: HEADERS, body: JSON.stringify(payload) });
+        if (!res.ok) { Swal.fire('products 寫入失敗', await res.text(), 'error'); return; }
+        prodSaved = newItems.length;
+      } catch(e) { Swal.fire('products 寫入錯誤', e.message, 'error'); return; }
+    }
+
+    // 步驟四：POST 到 xiaolan_piaopiao（全部都寫）
+    var ppaSaved = 0;
+    try {
+      var ppaPayload = ppNewStagingList.map(function(item) {
+        return { close_date: item.closeDate || null, product_id: item.code, price: item.price, specs: item.specs || '', cn_price: item.cnPrice, weight: item.weight, unit_cost: item.unitCost, supplier_url: item.url || null, done: false, shortage: '', order_1688: '', tracking: '', eta: '' };
+      });
+      var ppaRes = await fetch(SB_URL + '/xiaolan_piaopiao', {
+        method: 'POST',
+        headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify(ppaPayload)
+      });
+      if (!ppaRes.ok) { Swal.fire('漂漂館寫入失敗', await ppaRes.text(), 'error'); return; }
+      ppaSaved = ppNewStagingList.length;
+    } catch(e) { Swal.fire('漂漂館寫入錯誤', e.message, 'error'); return; }
+
+    // 步驟五：清空並刷新
+    ppNewStagingList = [];
+    ppFormOpen = false;
+    var msg = '';
+    if (prodSaved > 0) msg += '✅ 寫入 ERP 商品主檔：<b>' + prodSaved + '</b> 件<br>';
+    if (skipped.length > 0) msg += '⏭️ 已存在跳過：<b>' + skipped.length + '</b> 件<br>';
+    msg += '🌸 寫入漂漂館：<b>' + ppaSaved + '</b> 件';
+    Swal.fire({ title: '寫入完成！', html: msg, icon: 'success' });
+    renderPPAssistant();
+  }
+
   function ppaLoadSettings() {
     try { return JSON.parse(localStorage.getItem('xiaolan_pp_settings') || '{}'); } catch { return {}; }
   }
@@ -10487,15 +10653,82 @@
     // 月份選項
     const months = [...new Set(ppAssistantRows.filter(r=>r.close_date).map(r=>(r.close_date||'').slice(0,7)).filter(Boolean))].sort().reverse();
 
-    const statusMap = { '已訂':'#38a169', '斷貨':'#c53030', '未訂':'#718096' };
+    // statusMap removed — 改用全域 PP_STATUS_COLOR
     const ppaSettings = ppaLoadSettings();
     const paginationHtml = buildPPAPagination(all.length, totalPages);
 
+    // 折疊式新增表單
+    const s = ppaLoadSettings();
+    const _er = s.exRate || 0;
+    const _sr = s.shipRate || 0;
+    // specRows removed - now using comma-separated input
+    const stagingHtml = ppNewStagingList.length > 0 ? `
+      <div style="margin-top:10px; border:1px solid #e9d5ff; border-radius:6px; overflow:hidden;">
+        <div style="padding:6px 10px; background:#faf5ff; font-size:12px; font-weight:700; color:#7c3aed;">待寫入清單（${ppNewStagingList.length} 筆）</div>
+        <table style="width:100%; border-collapse:collapse; font-size:12px;">
+          <thead><tr style="background:#f5f3ff;">
+            <th style="padding:4px 8px; text-align:left;">編號</th><th style="padding:4px 8px; text-align:left;">名稱</th>
+            <th style="padding:4px 8px;">規格</th><th style="padding:4px 8px;">數量</th>
+            <th style="padding:4px 8px; text-align:right;">售價</th><th style="padding:4px 8px; text-align:right;">分店價</th>
+            <th style="padding:4px 8px; text-align:right;">成本</th><th style="padding:4px 8px;"></th>
+          </tr></thead>
+          <tbody>${ppNewStagingList.map(function(item, idx) {
+            return '<tr style="border-bottom:1px solid #f3f4f6;">' +
+              '<td style="padding:4px 8px; font-family:monospace; color:#2b6cb0;">' + item.code + '</td>' +
+              '<td style="padding:4px 8px; font-weight:600;">' + item.name + '</td>' +
+              '<td style="padding:4px 8px; text-align:center;">' + (item.specLabel || '—') + '</td>' +
+              '<td style="padding:4px 8px; text-align:center;"><input type="number" value="' + (item.qty || 0) + '" onchange="ppUpdateStagingQty(' + idx + ',this.value)" style="width:60px;padding:2px 4px;border:1px solid #d1d5db;border-radius:3px;font-size:12px;text-align:center;"></td>' +
+              '<td style="padding:4px 8px; text-align:right;">$' + (item.price || 0) + '</td>' +
+              '<td style="padding:4px 8px; text-align:right;"><input type="number" value="' + (item.branchPrice || 0) + '" onchange="ppNewStagingList[' + idx + '].branchPrice=Number(this.value)||0;" style="width:70px;padding:2px 4px;border:1px solid #d1d5db;border-radius:3px;font-size:12px;text-align:right;"></td>' +
+              '<td style="padding:4px 8px; text-align:right; color:#7c3aed; font-weight:700;">$' + (item.unitCost || 0) + '</td>' +
+              '<td style="padding:4px 8px; text-align:center;"><button onclick="ppRemoveStaging(' + idx + ')" style="background:none; border:none; color:#c53030; cursor:pointer; font-size:14px;">✕</button></td>' +
+            '</tr>';
+          }).join('')}</tbody>
+        </table>
+        <div style="padding:8px 10px; display:flex; gap:8px;">
+          <button class="btn" style="background:#7c3aed; color:#fff; flex:1;" onclick="ppWriteToSystem()">🌸 寫入漂漂館（${ppNewStagingList.length} 筆）</button>
+          <button class="btn" style="background:#718096; color:#fff;" onclick="ppNewStagingList=[];renderPPAGrid();">清空</button>
+        </div>
+      </div>` : '';
+
+    const formHtml = ppFormOpen ? `
+      <div style="background:#faf5ff; border:1px solid #e9d5ff; border-radius:8px; padding:14px; margin-bottom:12px;">
+        <div style="display:flex; gap:10px; margin-bottom:8px;">
+          <div style="flex:1;"><label style="font-size:11px; font-weight:700; color:#5b21b6;">結單日</label><input type="date" id="ppf-closeDate" value="${ppFormCache.closeDate || new Date().toISOString().split('T')[0]}" style="width:100%; padding:5px; border:1px solid #d1d5db; border-radius:4px; font-size:13px;"></div>
+        </div>
+        <div style="display:flex; gap:10px; margin-bottom:8px;">
+          <div style="flex:1;"><label style="font-size:11px; font-weight:700; color:#5b21b6;">商品底碼 *</label><input type="text" id="ppf-code" value="${ppFormCache.code||''}" placeholder="有規格時自動加尾碼" style="width:100%; padding:5px; border:1px solid #d1d5db; border-radius:4px; font-size:13px; font-family:monospace;"></div>
+          <div style="flex:2;"><label style="font-size:11px; font-weight:700; color:#5b21b6;">商品名稱 *</label><input type="text" id="ppf-name" value="${ppFormCache.name||''}" placeholder="例：小香風藍色系空氣棉套裝" style="width:100%; padding:5px; border:1px solid #d1d5db; border-radius:4px; font-size:13px;"></div>
+          <div style="flex:1;"><label style="font-size:11px; font-weight:700; color:#5b21b6;">售價 *</label><input type="number" id="ppf-price" value="${ppFormCache.price||''}" placeholder="0" style="width:100%; padding:5px; border:1px solid #d1d5db; border-radius:4px; font-size:13px;"></div>
+        </div>
+        <div style="margin-bottom:8px;">
+          <label style="font-size:11px; font-weight:700; color:#5b21b6;">規格（逗號/頓號/斜線分隔，留空=單筆）</label>
+          <input type="text" id="ppf-variants" value="${ppFormCache.variants||''}" placeholder="例：紅色,白色,黑色" style="width:100%; padding:5px; border:1px solid #d1d5db; border-radius:4px; font-size:13px; margin-top:4px;">
+        </div>
+        <div style="display:flex; gap:10px; margin-bottom:8px; align-items:flex-end;">
+          <div style="flex:1;"><label style="font-size:11px; font-weight:700; color:#5b21b6;">大陸金額 (¥)</label><input type="number" id="ppf-cnPrice" value="${ppFormCache.cnPrice||'0'}" oninput="ppCalcCostHint()" step="0.1" style="width:100%; padding:5px; border:1px solid #d1d5db; border-radius:4px; font-size:13px;"></div>
+          <div style="flex:1;"><label style="font-size:11px; font-weight:700; color:#5b21b6;">重量 (kg)</label><input type="number" id="ppf-weight" value="${ppFormCache.weight||'0'}" oninput="ppCalcCostHint()" step="0.1" style="width:100%; padding:5px; border:1px solid #d1d5db; border-radius:4px; font-size:13px;"></div>
+          <div style="flex:1;"><label style="font-size:11px; font-weight:700; color:#5b21b6;">成本（自動）</label><div id="ppf-unitCost" style="padding:6px; background:#f3f4f6; border-radius:4px; font-size:14px; font-weight:700; color:#7c3aed; text-align:center;">$0</div></div>
+        </div>
+        <div style="margin-bottom:8px;">
+          <label style="font-size:11px; font-weight:700; color:#5b21b6;">1688連結（選填）</label>
+          <input type="text" id="ppf-url" value="${ppFormCache.url||''}" placeholder="https://..." style="width:100%; padding:5px; border:1px solid #d1d5db; border-radius:4px; font-size:13px; margin-top:4px;">
+        </div>
+        <div style="display:flex; gap:8px;">
+          <button class="btn" style="flex:1; background:#7c3aed; color:#fff;" onclick="ppAddToStaging()">加入清單</button>
+          <button class="btn" style="background:#718096; color:#fff;" onclick="ppClearForm()">清空</button>
+        </div>
+        ${stagingHtml}
+      </div>` : (ppNewStagingList.length > 0 ? `<div style="margin-bottom:12px;">${stagingHtml}</div>` : '');
+
     let html = `<div class="panel">
+      <div style="margin-bottom:12px;">
+        <button class="btn" style="background:${ppFormOpen?'#718096':'#7c3aed'}; color:#fff; width:100%; padding:8px;" onclick="ppFormOpen=!ppFormOpen;renderPPAGrid();">${ppFormOpen ? '▲ 收起新增表單' : '＋ 新增漂漂館商品'}${ppNewStagingList.length > 0 ? ' <span style="background:#fef3c7; color:#92400e; padding:1px 6px; border-radius:10px; font-size:11px; margin-left:6px;">待寫入 '+ppNewStagingList.length+' 筆</span>' : ''}</button>
+      </div>
+      ${formHtml}
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
         <h3 style="margin:0;">漂漂館區</h3>
         <div style="display:flex;gap:8px;">
-          <button class="btn" style="background:#27ae60;color:#fff;" onclick="addPPARows(5)">+5 行</button>
           ${newLen > 0 ? '<button class="btn" style="background:#2b6cb0;color:#fff;" onclick="savePPANewRows()">儲存新增 ('+newLen+')</button>' : ''}
           <button class="btn" style="background:#c53030;color:#fff;" onclick="deletePPASelected()">刪除勾選</button>
         </div>
@@ -10528,7 +10761,7 @@
           <th style="width:115px;padding:6px;border:1px solid #e2e8f0;background:#edf2f7;">大陸售價</th>
           <th style="width:100px;padding:6px;border:1px solid #e2e8f0;background:#edf2f7;">重量</th>
           <th style="width:85px;padding:6px;border:1px solid #e2e8f0;background:#edf2f7;">單件進貨價</th>
-          <th style="width:65px;padding:6px;border:1px solid #e2e8f0;background:#eef2ff;">叫貨</th>
+          <th style="width:105px;padding:6px;border:1px solid #e2e8f0;background:#eef2ff;">採購進度</th>
           <th style="width:120px;padding:6px;border:1px solid #e2e8f0;background:#eef2ff;">1688編號</th>
           <th style="width:110px;padding:6px;border:1px solid #e2e8f0;background:#eef2ff;">物流編號</th>
           <th style="width:80px;padding:6px;border:1px solid #e2e8f0;background:#eef2ff;">預計到貨</th>
@@ -10539,8 +10772,9 @@
       const isNew = i < newLen;
       const idx = isNew ? `n${i}` : `s${r.id}`;
       const doneStyle = r.done ? 'background:#f0fdf4;' : '';
-      const st = r.tracking === '斷貨' ? '斷貨' : r.order_1688 ? '已訂' : '未訂';
-      const stColor = statusMap[st] || '#718096';
+      const statusLines = (r.order_status || '').replace(/\r\n/g,'\n').split('\n');
+      const st = statusLines[0] || '待處理';
+      const stColor = PP_STATUS_COLOR[st] || '#718096';
 
       // 單件進貨價（即時計算）
       if (!r.unit_cost && r.cn_price > 0) ppaCalcUnitCost(r);
@@ -10613,7 +10847,7 @@
           html += `<td${rs} style="${tdS}${vtop}"><input type="number" value="${r.cn_price||''}" data-field="cn_price" data-idx="${idx}" onchange="onPPAChange(this)" style="width:100%;font-size:12px;padding:3px 5px;border:1px solid #e2e8f0;border-radius:3px;"></td>`;
           html += `<td${rs} style="${tdS}${vtop}"><input type="number" value="${r.weight||''}" data-field="weight" data-idx="${idx}" onchange="onPPAChange(this)" step="0.1" style="width:100%;font-size:12px;padding:3px 5px;border:1px solid #e2e8f0;border-radius:3px;"></td>`;
           html += `<td${rs} style="${tdS}${vtop}">${calcHtml}</td>`;
-          html += `<td${rs} style="${tdS}background:#f7fafc;text-align:center;${vtop}"><span style="color:${stColor};font-weight:600;font-size:11px;">${st}</span></td>`;
+          html += `<td${rs} style="${tdS}background:#f7fafc;${vtop}">${isNew ? '<span style="font-size:11px;color:#a0aec0;">儲存後可改</span>' : `<select data-id="${r.id}" onchange="onPPAStatusChange(this)" style="font-size:11px;padding:2px 4px;border:1px solid #e2e8f0;border-radius:4px;color:${stColor};font-weight:600;width:100%;background:#f7fafc;">${PP_STATUS_OPTS.map(o => `<option value="${o}" ${st===o?'selected':''}>${o}</option>`).join('')}</select>`}</td>`;
           html += `<td${rs} style="${tdS}background:#f7fafc;font-size:11px;color:#4a5568;${vtop}">${ppaEsc(r.order_1688)}</td>`;
           html += `<td${rs} style="${tdS}background:#f7fafc;font-size:11px;color:#4a5568;${vtop}">${ppaEsc(r.tracking)}</td>`;
           html += `<td${rs} style="${tdS}background:#f7fafc;font-size:11px;color:#4a5568;${vtop}">${ppaEsc(r.eta)}</td>`;
@@ -10632,6 +10866,7 @@
     </div>`;
     container.innerHTML = html;
     enableTableResize(container.querySelector('table'));
+    setTimeout(function() { if (ppFormOpen) ppCalcCostHint(); }, 0);
   }
 
   function getPPARow(idx) {
@@ -10713,6 +10948,24 @@
     onPPAChange(el);
   }
 
+  async function onPPAStatusChange(el) {
+    var id = parseInt(el.dataset.id);
+    var val = el.value;
+    el.style.color = PP_STATUS_COLOR[val] || '#718096';
+    var row = ppAssistantRows.find(function(r) { return r.id === id; });
+    if (!row) return;
+    var lines = (row.order_status || '').replace(/\r\n/g, '\n').split('\n');
+    lines[0] = val;
+    row.order_status = lines.join('\n');
+    try {
+      await fetch(SB_URL + '/xiaolan_piaopiao?id=eq.' + id, {
+        method: 'PATCH',
+        headers: { ...HEADERS, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ order_status: row.order_status })
+      });
+    } catch(e) { console.error('採購進度更新失敗', e); }
+  }
+
   function onPPAUrlChange(el) {
     onPPAChange(el);
     const url = el.value.trim();
@@ -10751,7 +11004,7 @@
     }
   }
   function addPPARows(n) {
-    for (let i = 0; i < n; i++) newPPARows.push({ close_date:'', product_id:'', price:0, specs:'', order_status:'', supplier_url:'', done:false, shortage:'', cn_price:0, weight:0, unit_cost:0, order_1688:'', tracking:'', eta:'' });
+    for (let i = 0; i < n; i++) newPPARows.push({ close_date:'', product_id:'', price:0, specs:'', order_status:'待處理', supplier_url:'', done:false, shortage:'', cn_price:0, weight:0, unit_cost:0, order_1688:'', tracking:'', eta:'' });
     ppaPage = 1;
     renderPPAGrid();
   }
@@ -10766,7 +11019,7 @@
     if (toInsert.length === 0) return Swal.fire('提示','沒有需要儲存的新增資料','info');
     try {
       const clean = toInsert.map(r => {
-        const {_dirty,order_status,...rest} = r;
+        const {_dirty,...rest} = r;
         if (rest.cn_price > 0) { ppaCalcUnitCost(rest); }
         return rest;
       });
@@ -10785,7 +11038,7 @@
     try {
       if (toInsert.length > 0) {
         const clean = toInsert.map(r => {
-          const {_dirty,order_status,...rest} = r;
+          const {_dirty,...rest} = r;
           return rest;
         });
         const res = await fetch(`${SB_URL}/xiaolan_piaopiao`, { method:'POST', headers:{...HEADERS,'Content-Type':'application/json','Prefer':'return=minimal'}, body:JSON.stringify(clean) });
@@ -10793,7 +11046,7 @@
         saved = toInsert.length;
       }
       for (const r of toUpdate) {
-        const {_dirty,id,created_at,order_status,...rest} = r;
+        const {_dirty,id,created_at,...rest} = r;
         await fetch(`${SB_URL}/xiaolan_piaopiao?id=eq.${id}`, { method:'PATCH', headers:{...HEADERS,'Content-Type':'application/json'}, body:JSON.stringify(rest) });
         updated++;
       }
