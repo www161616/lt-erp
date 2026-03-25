@@ -8022,14 +8022,35 @@
       if (item.returnStatus === 'none') {
         returnCell = `<span style="color:#718096; font-size:12px;">—</span>`;
       } else if (item.returnStatus === 'requested') {
-        returnCell = `
-          <div style="font-size:12px; color:#c53030; font-weight:bold;">⚠️ 分店申請退 ${item.returnQty} 件</div>
-          <div style="font-size:11px; color:#718096; margin:2px 0;">原因：${item.returnReason}</div>
-          ${editable ? `<div style="margin-top:6px; display:flex; gap:4px; flex-wrap:wrap;">
-            <button class="btn" style="padding:3px 8px; font-size:11px; background:#2b6cb0;" onclick="adminAcceptReturn('${id}',${idx})">接受退回</button>
-            <button class="btn" style="padding:3px 8px; font-size:11px; background:#2b6cb0;" onclick="adminWaiveReturn('${id}',${idx})">接受免退回</button>
-            <button class="btn" style="padding:3px 8px; font-size:11px; background:#c53030;" onclick="adminRejectReturn('${id}',${idx})">不接受退回</button>
-          </div>` : '<div style="font-size:11px; color:#b7791f; margin-top:4px;">待調度中心處理</div>'}`;
+        const rType = item.reportType || 'return';
+        if (rType === 'shortage' || rType === 'missing') {
+          returnCell = `
+            <div style="font-size:12px; color:#92400e; font-weight:bold;">⚠️ 少收到 ${item.returnQty} 件，待補發</div>
+            <div style="font-size:11px; color:#718096; margin:2px 0;">原因：${item.returnReason}</div>
+            ${editable ? `<div style="margin-top:6px; display:flex; gap:4px; flex-wrap:wrap;">
+              <button class="btn" style="padding:3px 8px; font-size:11px; background:#b7791f;" onclick="adminMarkShortage('${id}',${idx})">標記補發</button>
+              <button class="btn" style="padding:3px 8px; font-size:11px; background:#c53030;" onclick="adminRejectReturn('${id}',${idx})">不接受</button>
+            </div>` : ''}`;
+        } else if (rType === 'damaged') {
+          returnCell = `
+            <div style="font-size:12px; color:#dc2626; font-weight:bold;">💥 壞損 ${item.returnQty} 件</div>
+            <div style="font-size:11px; color:#718096; margin:2px 0;">原因：${item.returnReason}</div>
+            ${editable ? `<div style="margin-top:6px; display:flex; gap:4px; flex-wrap:wrap;">
+              <button class="btn" style="padding:3px 8px; font-size:11px; background:#2b6cb0;" onclick="adminAcceptReturn('${id}',${idx})">需退回</button>
+              <button class="btn" style="padding:3px 8px; font-size:11px; background:#b7791f;" onclick="adminWaiveReturn('${id}',${idx})">免退回扣款</button>
+              <button class="btn" style="padding:3px 8px; font-size:11px; background:#c53030;" onclick="adminRejectReturn('${id}',${idx})">不接受</button>
+            </div>` : ''}`;
+        } else {
+          // return（退貨需退回）— 原有邏輯
+          returnCell = `
+            <div style="font-size:12px; color:#be185d; font-weight:bold;">📦 申請退回 ${item.returnQty} 件</div>
+            <div style="font-size:11px; color:#718096; margin:2px 0;">原因：${item.returnReason}</div>
+            ${editable ? `<div style="margin-top:6px; display:flex; gap:4px; flex-wrap:wrap;">
+              <button class="btn" style="padding:3px 8px; font-size:11px; background:#2b6cb0;" onclick="adminAcceptReturn('${id}',${idx})">接受退回</button>
+              <button class="btn" style="padding:3px 8px; font-size:11px; background:#2b6cb0;" onclick="adminWaiveReturn('${id}',${idx})">接受免退回</button>
+              <button class="btn" style="padding:3px 8px; font-size:11px; background:#c53030;" onclick="adminRejectReturn('${id}',${idx})">不接受退回</button>
+            </div>` : ''}`;
+        }
       } else if (item.returnStatus === 'accepted') {
         returnCell = `
           <div style="font-size:12px; color:#2b6cb0; font-weight:bold;">✔ 已接受，等待退回 ${item.adminReturnQty} 件</div>
@@ -8260,6 +8281,25 @@
       item.adminReturnQty = res.value.qty;
       item.expectedReturnDate = res.value.date || '待確認';
       syncSalesOrdersToPortal();
+      showSalesOrderDetail(orderId);
+    });
+  }
+
+  function adminMarkShortage(orderId, itemIdx) {
+    var o = mockSalesOrders.find(function(s) { return s.id === orderId; });
+    if (!o) return;
+    var item = o.items[itemIdx];
+    Swal.fire({
+      title: '標記補發',
+      html: '品項：<b>' + item.name + '</b><br>少收到 <b>' + item.returnQty + '</b> 件，將標記為待補發。<br><span style="font-size:12px; color:#718096;">不扣除銷貨金額，後續由揀貨站建立補發單。</span>',
+      icon: 'question', showCancelButton: true,
+      confirmButtonText: '確認標記', cancelButtonText: '取消', confirmButtonColor: '#b7791f'
+    }).then(function(res) {
+      if (!res.isConfirmed) return;
+      item.returnStatus = 'received';
+      item.adminReturnQty = 0; // 不扣款
+      syncSalesOrdersToPortal();
+      // 不呼叫 syncSalesOrderAmountToDB（少收到不扣款）
       showSalesOrderDetail(orderId);
     });
   }

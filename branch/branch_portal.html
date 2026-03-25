@@ -3739,8 +3739,9 @@ function showBillingDetail(orderId) {
       actionHtml = '<span style="font-size:11px; color:#9ca3af;">—</span>';
     } else if (!item.returnStatus || item.returnStatus === 'none') {
       actionHtml = `<div style="display:flex; flex-direction:column; gap:3px; align-items:center;">
-        <button onclick="openReturnReport(\x27${r.id}\x27,${idx},\x27missing\x27)" style="padding:2px 6px;font-size:10px;background:#fef2f2;color:#dc2626;border:1px solid #fca5a5;border-radius:3px;cursor:pointer;font-weight:600;white-space:nowrap;">沒收到</button>
+        <button onclick="openReturnReport(\x27${r.id}\x27,${idx},\x27shortage\x27)" style="padding:2px 6px;font-size:10px;background:#fef3c7;color:#92400e;border:1px solid #ecc94b;border-radius:3px;cursor:pointer;font-weight:600;white-space:nowrap;">少收到</button>
         <button onclick="openReturnReport(\x27${r.id}\x27,${idx},\x27return\x27)" style="padding:2px 6px;font-size:10px;background:#fce7f3;color:#be185d;border:1px solid #f9a8d4;border-radius:3px;cursor:pointer;font-weight:600;white-space:nowrap;">退貨</button>
+        <button onclick="openReturnReport(\x27${r.id}\x27,${idx},\x27damaged\x27)" style="padding:2px 6px;font-size:10px;background:#fef2f2;color:#dc2626;border:1px solid #fca5a5;border-radius:3px;cursor:pointer;font-weight:600;white-space:nowrap;">壞損</button>
       </div>`;
     } else if (item.returnStatus === 'requested') {
       actionHtml = '<span style="font-size:10px; color:#be185d; font-weight:600;">⏳ 已回報</span>';
@@ -4006,10 +4007,13 @@ function openReturnReport(orderId, itemIdx, type) {
   const r = portalOrders.find(r => r.id === orderId);
   if (!r || !r.items[itemIdx]) return;
   const item = r.items[itemIdx];
-  const title = type === 'missing' ? '🚫 商品未收到' : '📦 申請退貨';
+  const titleMap = { shortage: '⚠️ 少收到', return: '📦 申請退貨', damaged: '💥 壞損回報', missing: '🚫 商品未收到' };
+  const placeholderMap = { shortage: '例：只收到 3 件，少了 2 件...', return: '例：商品品質問題、訂錯商品...', damaged: '例：商品破損、包裝損壞...', missing: '例：配送時未包含此商品...' };
+  const colorMap = { shortage: '#92400e', return: '#be185d', damaged: '#dc2626', missing: '#dc2626' };
+  const title = (titleMap[type] || '📦 回報') + ' — ' + item.name;
 
   Swal.fire({
-    title: title + ' — ' + item.name,
+    title: title,
     width: '98vw',
     html: `
       <div style="text-align:left; font-size:14px; line-height:1.8;">
@@ -4020,14 +4024,14 @@ function openReturnReport(orderId, itemIdx, type) {
         </div>
         <div>
           <label style="font-weight:600;">原因說明：</label>
-          <textarea id="returnReasonInput" rows="3" placeholder="${type === 'missing' ? '例：配送時未包含此商品...' : '例：商品破損、品質問題...'}"
+          <textarea id="returnReasonInput" rows="3" placeholder="${placeholderMap[type] || '請說明原因...'}"
             style="width:100%; padding:8px; border:1px solid #d1d5db; border-radius:4px; font-size:13px; margin-top:4px; resize:none; box-sizing:border-box;"></textarea>
         </div>
       </div>`,
     showCancelButton: true,
     cancelButtonText: '取消',
     confirmButtonText: '送出回報',
-    confirmButtonColor: type === 'missing' ? '#dc2626' : '#d97706',
+    confirmButtonColor: colorMap[type] || '#d97706',
     preConfirm: () => {
       const qty = parseInt(document.getElementById('returnQtyInput').value) || 0;
       const reason = document.getElementById('returnReasonInput').value.trim();
@@ -4142,7 +4146,7 @@ function printReturnSlip(orderId) {
 
   const today = new Date();
   const dateStr = `${today.getMonth()+1}/${today.getDate()}`;
-  const typeLabel = { missing: '未收到', return: '退貨' };
+  const typeLabel = { missing: '未收到', shortage: '少收到（待補發）', return: '退貨（需退回）', damaged: '壞損' };
 
   const itemRows = returnItems.map(i =>
     `<tr>
