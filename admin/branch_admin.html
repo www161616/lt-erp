@@ -3741,7 +3741,21 @@
     async function generateSalesOrder(waveId) {
       const wave = mockSavedWaves.find(w => w.id === waveId);
       if (!wave) return;
-      
+
+      // 檢查是否已開過
+      if (wave.salesOrderGenerated) {
+        const reConfirm = await Swal.fire({
+          title: '⚠️ 此揀貨單已開過銷貨單',
+          html: `揀貨單 <b>${waveId}</b> 已於 ${wave.salesOrderDate || '之前'} 開立過銷貨單。<br><br><span style="color:#c53030; font-weight:bold;">重新開立會產生重複的銷貨單！</span><br><span style="font-size:12px; color:#718096;">請確認是否真的需要重新開立。</span>`,
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonText: '確定重新開立',
+          cancelButtonText: '取消',
+          confirmButtonColor: '#c53030'
+        });
+        if (!reConfirm.isConfirmed) return;
+      }
+
       const storeCount = new Set();
       wave.matrix.forEach(r => { if (r.branchData) Object.entries(r.branchData).forEach(([b, d]) => { if ((d.actual ?? 0) > 0) storeCount.add(b); }); });
 
@@ -7119,7 +7133,12 @@
   let mockSalesOrders = JSON.parse(localStorage.getItem('portalSalesOrders') || '[]');
 
   function syncSalesOrdersToPortal() {
-    localStorage.setItem('portalSalesOrders', JSON.stringify(mockSalesOrders));
+    // 只同步分店需要操作的單（pending/confirmed/disputed）
+    // issued/closed 的單分店不需要再操作，不同步以控制資料量
+    var toSync = mockSalesOrders.filter(function(o) {
+      return o.status === 'pending' || o.status === 'confirmed' || o.status === 'disputed';
+    });
+    localStorage.setItem('portalSalesOrders', JSON.stringify(toSync));
     cloudSave('portalSalesOrders');
   }
 
