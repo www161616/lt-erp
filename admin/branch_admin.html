@@ -134,9 +134,9 @@
     <div class="menu-item" id="menu-cnReturns" onclick="switchTab('cnReturns', this)">🔄 退換貨處理</div>
 
     <div id="label-warehouse" style="padding: 10px 20px; font-size: 11px; color: var(--text2); margin-top: 10px;">倉儲與物流</div>
-    <div class="menu-item" id="menu-picking" onclick="switchTab('picking', this)">①📦 新增揀貨單</div>
-    <div class="menu-item" id="menu-pickingHistory" onclick="switchTab('pickingHistory', this)">②📋 揀貨修改/開單</div>
-    <div class="menu-item" id="menu-accounting" onclick="switchTab('accounting', this)">③💳 銷貨單管理</div>
+    <div class="menu-item" id="menu-picking" onclick="switchTab('picking', this)">📦 新增揀貨單</div>
+    <div class="menu-item" id="menu-pickingHistory" onclick="switchTab('pickingHistory', this)">📋 揀貨歷史查詢</div>
+    <div class="menu-item" id="menu-accounting" onclick="switchTab('accounting', this)">💳 銷貨單管理</div>
     <div class="menu-item" id="menu-demandBackorder" onclick="switchTab('demandBackorder', this)">📋 需求與欠品管理</div>
     <div class="menu-item" id="menu-transfer" onclick="switchTab('transfer', this)">🔄 店轉店與退倉審核</div>
     <div class="menu-item" id="menu-aid" onclick="switchTab('aid', this)">🤝 互助交流板</div>
@@ -492,7 +492,7 @@
         title.innerText = '當前功能：批次撿貨工作站';
         renderPickingStation();
       } else if (tabId === 'pickingHistory') {
-        title.innerText = '當前功能：揀貨紀錄與開單';
+        title.innerText = '當前功能：揀貨歷史查詢';
         renderPickingHistoryStation();
       } else if (tabId === 'campaign') {
         title.innerText = '當前功能：檔期與商品管理';
@@ -2656,6 +2656,10 @@
                   <button class="btn" style="background:#276749; padding:6px 12px; font-size:12px;" onclick="downloadBroadcastText()">📢 下載播報單</button>
                   <span style="font-size:11px; color:#b45309; background:#fef3c7; padding:3px 8px; border-radius:4px;">*勾選需要列印的項目再按列印</span>
                   <button class="btn btn-print" onclick="printPickingMatrix()">🖨️ 列印紙本</button>
+                  <div style="display:flex; align-items:center; gap:6px;">
+                    <label style="font-size:12px; font-weight:700; color:#2d3748; white-space:nowrap;">📅 配送日</label>
+                    <input type="date" id="pickDeliveryDate" style="padding:5px 8px; border:1px solid var(--border); border-radius:4px; font-size:13px; font-family:inherit;">
+                  </div>
                   <button class="btn" id="btnSaveMatrix" style="background:#2b6cb0;" onclick="savePickingMatrix()">💾 ${currentEditingWaveId ? '更新揀貨單' : '建立揀貨單'}</button>
                 </div>
               </div>
@@ -2666,10 +2670,11 @@
             </div>
 
           </div>
+          <div id="pickingActionPanelContainer" style="flex-shrink:0;"></div>
         </div>
       `;
       document.getElementById('mainContainer').innerHTML = html;
-      
+
       // 編輯模式處理
       if (currentEditingWaveId) {
         document.getElementById('waveStatusLabel').innerHTML = `📝 正在編輯歷史紀錄：<span style="color:#2b6cb0;">${currentEditingWaveId}</span>`;
@@ -2677,6 +2682,15 @@
       }
       // 永遠渲染大表（因為表頭也由 renderMatrixTable 動態產生）
       renderMatrixTable();
+
+      // 配送日預設值
+      const _tomorrow = new Date();
+      _tomorrow.setDate(_tomorrow.getDate() + 1);
+      const _tomorrowStr = _tomorrow.toISOString().split('T')[0];
+      const _dInput = document.getElementById('pickDeliveryDate');
+      if (_dInput) {
+        _dInput.value = (currentEditingWaveId && mockSavedWaves.find(w => w.id === currentEditingWaveId)?.delivery_date) || _tomorrowStr;
+      }
     }
 
     // 清空畫面重置
@@ -3025,6 +3039,7 @@
 
         // 2. 更新該單據的矩陣資料
         targetWave.matrix = JSON.parse(JSON.stringify(activePickingMatrix));
+        targetWave.delivery_date = document.getElementById('pickDeliveryDate')?.value || targetWave.delivery_date || '';
 
         // 3. 將新的數據加回全域到貨資料
         activePickingMatrix.forEach(newRow => {
@@ -3051,6 +3066,7 @@
           timer: 1500,
           showConfirmButton: false
         });
+        renderPickingActionPanel(updatedWaveId);
 
       } else {
         // ========== 建立全新紀錄模式 ==========
@@ -3064,6 +3080,7 @@
           salesOrderDate: null,
           isRestock: pendingRestockWaveId ? true : false,
           restockForWave: pendingRestockWaveId || null,
+          delivery_date: document.getElementById('pickDeliveryDate')?.value || '',
           matrix: JSON.parse(JSON.stringify(activePickingMatrix))
         });
 
@@ -3106,12 +3123,42 @@
         if (saveBtn) saveBtn.innerHTML = '💾 更新揀貨單';
         Swal.fire({
           title: '揀貨單已建立！',
-          html: `單號：<b>${newWaveId}</b><br>可繼續增減品項，按「更新揀貨單」儲存變更。<br>如需修正數量，請至「揀貨紀錄」操作。`,
+          html: `單號：<b>${newWaveId}</b><br>可繼續增減品項，按「更新揀貨單」儲存變更。<br>如需修正數量或開立銷貨單，請使用下方操作區。`,
           icon: 'success',
           confirmButtonText: '了解',
           confirmButtonColor: '#2b6cb0'
         });
+        renderPickingActionPanel(newWaveId);
       }
+    }
+
+    function renderPickingActionPanel(waveId) {
+      var wave = mockSavedWaves.find(function(w) { return w.id === waveId; });
+      if (!wave) return;
+      var container = document.getElementById('pickingActionPanelContainer');
+      if (!container) return;
+      var panel = document.getElementById('pickingActionPanel');
+      if (!panel) {
+        panel = document.createElement('div');
+        panel.id = 'pickingActionPanel';
+        panel.style.cssText = 'padding:16px; background:#f0f7ff; border:1px solid #bfdbfe; border-radius:8px;';
+        container.appendChild(panel);
+      }
+      var deliveryDate = wave.delivery_date ? '<span style="color:#2b6cb0; font-weight:700;">' + wave.delivery_date + '</span>' : '<span style="color:#c53030;">未設定</span>';
+      var isCompleted = wave.status === 'completed';
+      panel.innerHTML = '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">' +
+        '<div>' +
+          '<div style="font-size:13px; font-weight:700; color:#1e40af; margin-bottom:4px;">✅ 揀貨單 <span style="font-family:monospace;">' + waveId + '</span> 已儲存</div>' +
+          '<div style="font-size:12px; color:#4b5563;">📅 配送日：' + deliveryDate + '　📦 品項：' + wave.matrix.length + ' 項　' +
+            (isCompleted ? '<span style="color:#047857; font-weight:700;">✅ 已開立銷貨單</span>' : '<span style="color:#b7791f;">⏳ 尚未開立銷貨單</span>') +
+          '</div>' +
+        '</div>' +
+        '<div style="display:flex; gap:8px; flex-wrap:wrap;">' +
+          '<button class="btn" style="background:#b7791f; padding:8px 16px; font-size:13px;" onclick="openCorrectionPanel(\'' + waveId + '\')">✏️ 修正數量</button>' +
+          (!isCompleted ? '<button class="btn" style="background:#2b6cb0; padding:8px 16px; font-size:13px;" onclick="generateSalesOrder(\'' + waveId + '\')">📋 暫存銷貨單</button>' : '') +
+          '<button class="btn btn-print" style="padding:8px 16px; font-size:13px;" onclick="printPickingWave(\'' + waveId + '\')">🖨️ 列印</button>' +
+        '</div>' +
+      '</div>';
     }
 
     // 4b. 列印揀貨單（與 printPickingMatrix 同樣精簡橫向表格）
@@ -3354,7 +3401,7 @@
             : `<button class="btn" style="background:#b7791f; padding:5px 10px; font-size:12px;" onclick="openCorrectionPanel('${wave.id}')">✏️ 修正數量</button>`;
 
         return `<tr style="border-bottom:1px solid #e2e8f0; ${wave.status==='completed'?'background:#eef1f5;':''}">
-          <td style="padding:10px 12px; color:#718096; font-size:13px; white-space:nowrap;">${wave.date}</td>
+          <td style="padding:10px 12px; color:#718096; font-size:13px; white-space:nowrap;">${wave.date}${wave.delivery_date ? `<div style="font-size:12px; color:#2b6cb0; margin-top:3px; font-weight:700;">📅 配送：${wave.delivery_date}</div>` : ''}</td>
           <td style="padding:10px 12px; font-family:monospace; color:#2b6cb0; font-weight:bold; font-size:13px;">
             ${wave.id}<br>${statusBadge}
           </td>
@@ -4040,6 +4087,9 @@
         });
 
         refreshHistoryTable(); // 重新渲染清單
+        if (document.getElementById('pickingActionPanel')) {
+          renderPickingActionPanel(waveId);
+        }
       } catch (e) {
         Swal.fire('開立失敗', e.message, 'error');
       }
