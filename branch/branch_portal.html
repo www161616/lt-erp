@@ -926,6 +926,7 @@
         <div style="font-size:14px; font-weight:700; color:var(--primary);" id="billingDetailTitle">點單號查看明細</div>
         <div id="billingDetailBtns" style="display:none; gap:6px;">
           <button onclick="printCurrentBillingDetail()" style="padding:6px 14px; background:#0e7490; color:white; border:none; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit;">🖨️ 列印</button>
+          <button id="btnPrintReturn" onclick="printReturnSlipFromBtn()" style="display:none; padding:6px 14px; background:#b45309; color:white; border:none; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit;">🖨️ 退貨單</button>
           <button onclick="exportCurrentBillingExcel()" style="padding:6px 14px; background:#047857; color:white; border:none; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit;">📥 匯出Excel</button>
         </div>
       </div>
@@ -3770,13 +3771,16 @@ function showBillingDetail(orderId) {
     <div style="padding:12px 16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; gap:8px; flex-wrap:wrap;">
       <div style="font-size:12px; color:#6b7280;">建立時間：${r.createdAt}${r.issuedAt?'　開立時間：'+r.issuedAt:''}${r.storeConfirmedAt?'　確認到貨：'+r.storeConfirmedAt:''}</div>
       <div style="display:flex; align-items:center; gap:8px;">
-        ${r.items.some(i => i.returnStatus && i.returnStatus !== 'none') ? `<button onclick="printReturnSlip('${r.id}')" style="padding:6px 16px; background:#b45309; color:white; border:none; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;">🖨️ 列印退貨單</button>` : ''}
         ${r.status === 'pending' ? `<button onclick="confirmReceived('${r.id}')" style="padding:6px 16px; background:#047857; color:white; border:none; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;">✅ 確認收貨</button>` : ''}
+        ${r.status === 'confirmed' && !r.dbId ? `<button onclick="revokeConfirm('${r.id}')" style="padding:6px 16px; background:#b7791f; color:white; border:none; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;">↩ 撤銷確認</button>` : ''}
         <span style="background:${sc.bg}; color:${sc.text}; padding:3px 12px; border-radius:8px; font-size:12px; font-weight:700;">${sc.label}</span>
       </div>
     </div>`;
 
   document.getElementById('billingDetailInner').innerHTML = html;
+  // 退貨單按鈕顯示/隱藏
+  var btnRet = document.getElementById('btnPrintReturn');
+  if (btnRet) btnRet.style.display = r.items.some(function(i) { return i.returnStatus && i.returnStatus !== 'none'; }) ? '' : 'none';
 }
 
 function printCurrentBillingDetail() {
@@ -4091,6 +4095,43 @@ function submitReturnReport(orderId, itemIdx, data) {
 
   // 同步更新本地 portalOrders
   portalOrders = allSO.filter(o => o.storeName === currentStore?.name);
+}
+
+function printReturnSlipFromBtn() {
+  var orderId = document.getElementById('billingDetailBtns')?.getAttribute('data-order-id');
+  if (orderId) printReturnSlip(orderId);
+}
+
+function revokeConfirm(orderId) {
+  Swal.fire({
+    title: '撤銷確認收貨？',
+    html: '狀態將改回「待確認到貨」，分店需要重新確認。',
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: '確認撤銷',
+    cancelButtonText: '取消',
+    confirmButtonColor: '#b7791f'
+  }).then(function(result) {
+    if (!result.isConfirmed) return;
+    var allSO = JSON.parse(localStorage.getItem('portalSalesOrders') || '[]');
+    var order = allSO.find(function(o) { return o.id === orderId; });
+    if (!order) return;
+    order.status = 'pending';
+    order.storeConfirmedAt = null;
+    localStorage.setItem('portalSalesOrders', JSON.stringify(allSO));
+    cloudSave('portalSalesOrders');
+    // 同步清除 DB 的 store_confirmed_at
+    if (order.dbId) {
+      fetch(SB_URL + '/sales_orders?id=eq.' + order.dbId, {
+        method: 'PATCH',
+        headers: { ...SB_HEADERS, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ store_confirmed_at: null })
+      }).catch(function(e) { console.error('revoke DB sync failed:', e); });
+    }
+    portalOrders = allSO.filter(function(o) { return o.storeName === currentStore?.name; });
+    Swal.fire({ icon: 'success', title: '已撤銷確認', timer: 1500, showConfirmButton: false });
+    renderBillingPage();
+  });
 }
 
 function printReturnSlip(orderId) {

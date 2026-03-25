@@ -8257,6 +8257,7 @@
       if (!res.isConfirmed) return;
       item.returnStatus = 'waived';
       syncSalesOrdersToPortal();
+      syncSalesOrderAmountToDB(orderId);
       showSalesOrderDetail(orderId);
     });
   }
@@ -8298,8 +8299,25 @@
       if (!res.isConfirmed) return;
       item.returnStatus = 'received';
       syncSalesOrdersToPortal();
+      syncSalesOrderAmountToDB(orderId);
       showSalesOrderDetail(orderId);
     });
+  }
+
+  async function syncSalesOrderAmountToDB(orderId) {
+    var o = mockSalesOrders.find(function(s) { return s.id === orderId; });
+    if (!o || !o.dbId) return;
+    var newAmount = calcOrderAmount(o);
+    try {
+      await fetch(SB_URL + '/sales_orders?id=eq.' + o.dbId, {
+        method: 'PATCH', headers: HEADERS,
+        body: JSON.stringify({ grand_total: newAmount, subtotal: newAmount })
+      });
+      await fetch(SB_URL + '/accounts_receivable?order_id=eq.' + o.dbId, {
+        method: 'PATCH', headers: HEADERS,
+        body: JSON.stringify({ total_amount: newAmount })
+      });
+    } catch(e) { console.error('syncSalesOrderAmountToDB error:', e); }
   }
 
   // ============================
