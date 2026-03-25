@@ -7570,7 +7570,13 @@
       const raw = localStorage.getItem('portalAllRequests');
       if (!raw) { mockInquiries = []; return; }
       const list = JSON.parse(raw);
-      mockInquiries = list.map(r => {
+      const seen = new Set();
+      const unique = list.filter(r => {
+        if (seen.has(r.id)) return false;
+        seen.add(r.id);
+        return true;
+      });
+      mockInquiries = unique.map(r => {
         const createdDate = r.createdAt ? new Date(r.createdAt) : new Date();
         return {
           id: r.id,
