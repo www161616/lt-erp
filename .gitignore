@@ -1,2 +1,11 @@
 # 參考資料（不部署到 GitHub Pages）
 docs/
+
+# 備份檔、暫存檔
+*_backup*.html
+*.xls
+*.xlsx
+*.jpg
+*.png
+.claude/
+EZTOOL*/
