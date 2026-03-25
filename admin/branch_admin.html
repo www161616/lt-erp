@@ -3874,7 +3874,8 @@
             });
             if (res.ok) {
               const soData = await res.json();
-              const soId = soData.order_id || soData.id || `SO${dateStr.replace(/-/g,'')}${String(mockSalesOrders.length + 1).padStart(3,'0')}`;
+              const soId = typeof soData === 'string' ? soData : (soData.order_id || soData.id || '');
+              if (!soId) { successCount++; continue; }
               const issuedTime = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
               // 同步到 mockSalesOrders（讓 portal 今日進貨單也看得到）
               mockSalesOrders.push({
@@ -5257,7 +5258,7 @@
         });
         if (soRes.ok) {
           const soData = await soRes.json();
-          soId = soData.order_id || soData.id || '';
+          soId = typeof soData === 'string' ? soData : (soData.order_id || soData.id || '');
           // 同步到 mockSalesOrders（讓 portal 看得到）
           const issuedTime = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
           mockSalesOrders.push({
