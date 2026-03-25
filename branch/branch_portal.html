@@ -299,6 +299,7 @@
       <div class="menu-item" onclick="switchPage('pageBilling', this)">📦 今日進貨單</div>
       <div class="menu-item" onclick="switchPage('pageHistory', this)">📜 所有進貨單</div>
 <div class="menu-item" id="menuLedger" onclick="switchPage('pageLedger', this)">💰 流水帳/訂包管理</div>
+      <div class="menu-item" onclick="switchPage('pageArrival', this)">📦 到貨狀況</div>
       <div class="menu-item" onclick="switchPage('pagePriceSearch', this)">💲 商品查價</div>
       <div class="menu-item" id="menuCommon" onclick="switchPage('pageCommon', this)">⭐ 常用功能</div>
 
@@ -824,6 +825,7 @@
           <div id="bulletinBoardArea"></div>
         </div>
 
+        <div id="pageArrival" class="page"></div>
         <div id="pagePriceSearch" class="page">
           <div id="priceSearchContainer"></div>
         </div>
@@ -1921,6 +1923,7 @@
       pageBackorder:'⚠️ 欠品清單',
       pageBilling:  '📦 今日進貨單',
       pageCommon:   '⭐ 常用功能',
+      pageArrival:     '📦 到貨狀況',
       pagePriceSearch: '💲 商品查價',
       pageAid:      '🤝 互助交流板',
       pageBulletin: '📢 公告欄',
@@ -1962,6 +1965,7 @@
         if (pageId === 'pageHistory') initHistoryPage();
         if (pageId === 'pageAid') initAidPage();
         if (pageId === 'pageBulletin') renderBulletinBoard();
+        if (pageId === 'pageArrival') renderArrivalStatusPage();
         if (pageId === 'pagePriceSearch') renderPriceSearchPage();
         // 進入頁面時標記已讀，並更新徽章
         markPageSeen(pageId);
@@ -2521,13 +2525,14 @@ async function loadProductDB() {
 
 
 // 從 branchDataList 讀取（與總倉一致），若無則用預設
+const _tfStoreNames = JSON.parse(localStorage.getItem('importedStoreNames') || '[]');
 const TF_STORES = (JSON.parse(localStorage.getItem('branchDataList') || 'null') || [
   {name:'總倉'},
   {name:'三峽'},{name:'中和'},{name:'文山'},{name:'四號'},{name:'永和'},{name:'忠順'},
   {name:'淡水'},{name:'環球'},{name:'平鎮'},{name:'古華'},{name:'林口'},{name:'南平'},
-  {name:'泰山'},{name:'萬華'},{name:'板橋'},{name:'湖口'},{name:'經國'},{name:'松山'},
-  {name:'龍潭'},{name:'買上隱'},{name:'山張'},{name:'全民'},{name:'大溪'}
-]).map(b => ({ id: b.name, name: b.name }));
+  {name:'泰山'},{name:'萬華'},{name:'板橋'},{name:'湖口'},{name:'經國'},{name:'松山'}
+]).filter(function(b) { return b.name === '總倉' || (_tfStoreNames.length > 0 ? _tfStoreNames.includes(b.name) : true); })
+  .map(b => ({ id: b.name, name: b.name }));
 
 // 將 currentStore.name 對齊 branchDataList 的名稱（例如 "永和店" → "永和"）
 function matchBranchName(storeName) {
@@ -5055,6 +5060,66 @@ function printBunReport() {
 // ============================
 let priceSearchPage = 1;
 const PRICE_PER = 50;
+
+// ============================
+// 📦 到貨狀況（唯讀）
+// ============================
+async function renderArrivalStatusPage() {
+  var container = document.getElementById('pageArrival');
+  container.innerHTML = '<div style="text-align:center; padding:40px; color:#9ca3af;">載入中...</div>';
+  try {
+    var res = await fetch(SB_URL + '/procurement_followup?order=end_date.asc', { headers: SB_HEADERS });
+    var data = res.ok ? await res.json() : [];
+  } catch(e) { var data = []; }
+
+  var today = new Date(); today.setHours(0,0,0,0);
+  data.forEach(function(r) {
+    var ed = new Date(r.end_date);
+    r._days = Math.floor((today - ed) / 86400000);
+  });
+
+  if (data.length === 0) {
+    container.innerHTML = '<div style="text-align:center; padding:40px; color:#9ca3af;">目前無到貨追蹤資料</div>';
+    return;
+  }
+
+  var rows = data.map(function(r) {
+    var days = r._days;
+    var dayColor = days >= 45 ? '#dc2626' : days >= 30 ? '#ea580c' : days >= 15 ? '#d97706' : '#059669';
+    var dayBg = days >= 45 ? '#fef2f2' : days >= 30 ? '#fff7ed' : days >= 15 ? '#fefce8' : '#f0fdf4';
+    var statusMap = { '待追蹤': '⏳ 待追蹤', '催貨中': '🔄 催貨中', '已到倉': '✅ 已到倉', '斷貨': '❌ 斷貨' };
+    var statusColor = { '待追蹤': '#6b7280', '催貨中': '#2563eb', '已到倉': '#059669', '斷貨': '#dc2626' };
+    var lastLog = (r.follow_up_logs && r.follow_up_logs.length > 0) ? r.follow_up_logs[r.follow_up_logs.length - 1] : null;
+    var lastLogHtml = lastLog ? lastLog.date + ' ' + (lastLog.note || '').substring(0, 30) : '—';
+    var rowBg = r.status === '斷貨' ? 'background:#fef2f2;' : r.status === '已到倉' ? 'background:#f0fdf4; opacity:0.6;' : '';
+
+    return '<tr style="border-bottom:1px solid #f3f4f6; ' + rowBg + '">' +
+      '<td style="padding:10px 14px;"><div style="font-weight:700;">' + (r.product_name || '') + '</div><div style="font-size:11px; color:#9ca3af;">' + (r.product_id || '') + '</div></td>' +
+      '<td style="padding:10px 14px; font-size:13px;">' + (r.supplier || '—') + '</td>' +
+      '<td style="padding:10px 14px; font-size:13px;">' + (r.end_date || '') + '</td>' +
+      '<td style="padding:10px 8px; text-align:center;"><span style="font-weight:700; color:' + dayColor + '; background:' + dayBg + '; padding:2px 8px; border-radius:10px; font-size:13px;">' + days + '天</span></td>' +
+      '<td style="padding:10px 8px; text-align:center; font-weight:700; color:' + (statusColor[r.status] || '#6b7280') + ';">' + (statusMap[r.status] || r.status) + '</td>' +
+      '<td style="padding:10px 14px; font-size:12px; color:#6b7280;">' + lastLogHtml + '</td>' +
+    '</tr>';
+  }).join('');
+
+  container.innerHTML = '<div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:hidden; box-shadow:0 2px 4px rgba(0,0,0,0.04);">' +
+    '<div style="padding:14px 20px; border-bottom:1px solid var(--border); font-size:15px; font-weight:700; color:var(--primary);">📦 到貨狀況</div>' +
+    '<div style="overflow:auto; max-height:70vh;">' +
+      '<table style="width:100%; border-collapse:collapse; font-size:13px;">' +
+        '<thead><tr style="background:#fff0f6;">' +
+          '<th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border);">商品</th>' +
+          '<th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border);">供應商</th>' +
+          '<th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border);">結單日</th>' +
+          '<th style="padding:10px 8px; text-align:center; border-bottom:1px solid var(--border);">天數</th>' +
+          '<th style="padding:10px 8px; text-align:center; border-bottom:1px solid var(--border);">狀態</th>' +
+          '<th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border);">最後催貨</th>' +
+        '</tr></thead>' +
+        '<tbody>' + rows + '</tbody>' +
+      '</table>' +
+    '</div>' +
+  '</div>';
+}
 
 function renderPriceSearchPage() {
   const container = document.getElementById('priceSearchContainer');
