@@ -3195,12 +3195,31 @@
       }
       var deliveryDate = wave.delivery_date ? '<span style="color:#2b6cb0; font-weight:700;">' + wave.delivery_date + '</span>' : '<span style="color:#c53030;">未設定</span>';
       var isCompleted = wave.status === 'completed';
+      var corr = correctionCache[waveId];
+      var corrParts = [];
+      if (corr) {
+        var osCnt = 0, pdCnt = 0, nrCnt = 0;
+        Object.values(corr).forEach(function(prod) {
+          Object.values(prod).forEach(function(s) {
+            if (s.action === 'oversell') osCnt++;
+            if (s.action === 'pending') pdCnt++;
+            if (s.action === 'noRestock') nrCnt++;
+          });
+        });
+        if (osCnt) corrParts.push('<span style="color:#7c3aed;">超發 ' + osCnt + ' 店</span>');
+        if (pdCnt) corrParts.push('<span style="color:#b7791f;">待補 ' + pdCnt + ' 店</span>');
+        if (nrCnt) corrParts.push('<span style="color:#c53030;">不補 ' + nrCnt + ' 店</span>');
+      }
+      var corrHtml = corrParts.length > 0
+        ? '<div style="font-size:12px; color:#4b5563; margin-top:4px;">✏️ 修正記錄：' + corrParts.join('　') + '</div>'
+        : '<div style="font-size:12px; color:#9ca3af; margin-top:4px;">✏️ 尚無修正記錄</div>';
       panel.innerHTML = '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">' +
         '<div>' +
           '<div style="font-size:13px; font-weight:700; color:#1e40af; margin-bottom:4px;">✅ 揀貨單 <span style="font-family:monospace;">' + waveId + '</span> 已儲存</div>' +
           '<div style="font-size:12px; color:#4b5563;">📅 配送日：' + deliveryDate + '　📦 品項：' + wave.matrix.length + ' 項　' +
             (isCompleted ? '<span style="color:#047857; font-weight:700;">✅ 已開立銷貨單</span>' : '<span style="color:#b7791f;">⏳ 尚未開立銷貨單</span>') +
           '</div>' +
+          corrHtml +
         '</div>' +
         '<div style="display:flex; gap:8px; flex-wrap:wrap;">' +
           '<button class="btn" style="background:#b7791f; padding:8px 16px; font-size:13px;" onclick="openCorrectionPanel(\'' + waveId + '\')">✏️ 修正數量</button>' +
