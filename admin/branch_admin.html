@@ -2947,9 +2947,10 @@
       const rows = printRows.map(row => {
         const cells = visibleNames.map(b => {
           const val = row.branchData && row.branchData[b] ? (row.branchData[b].expected || 0) : 0;
-          return `<td style="text-align:center;${val > 0 ? 'font-weight:bold;' : 'color:#ccc;'}">${val}</td>`;
+          return `<td style="text-align:left;${val > 0 ? 'font-weight:bold;' : 'color:#ccc;'}">${val}</td>`;
         }).join('');
-        return `<tr><td style="white-space:nowrap;">${row.name}</td>${cells}<td style="text-align:center;font-weight:bold;">${row.expectedSum}</td></tr>`;
+        const endDateStr = row.endDate ? row.endDate.replace(/\//g, '-').substring(5) : '';
+        return `<tr><td style="text-align:center; white-space:nowrap; font-size:11px; color:#444;">${endDateStr}</td><td style="white-space:nowrap;">${row.name}</td>${cells}<td style="text-align:left;font-weight:bold;">${row.expectedSum}</td></tr>`;
       }).join('');
 
       const now = new Date();
@@ -2959,6 +2960,7 @@
       win.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8">
         <title>揀貨分發表</title>
         <style>
+          @page { margin: 3mm; size: landscape; }
           body { font-family: 'Noto Sans TC', sans-serif; font-size: 12px; margin: 10px; }
           table { border-collapse: collapse; width: 100%; }
           th, td { border: 1px solid #999; padding: 2px 5px; line-height: 1.2; }
@@ -2971,7 +2973,7 @@
         <div class="sub">列印時間：${ts}　品項數：${printRows.length}</div>
         <button onclick="window.print()" style="margin-bottom:6px;padding:4px 14px;background:#2b6cb0;color:white;border:none;border-radius:4px;cursor:pointer;font-size:12px;">列印</button>
         <table>
-          <thead><tr><th style="text-align:left;">品名</th>${headers}<th>合計</th></tr></thead>
+          <thead><tr><th style="text-align:center; white-space:nowrap;">結單日</th><th style="text-align:left;">品名</th>${headers}<th style="text-align:left;">合計</th></tr></thead>
           <tbody>${rows}</tbody>
         </table>
         <\/body><\/html>`);
