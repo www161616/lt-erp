@@ -7657,12 +7657,8 @@
   let mockSalesOrders = JSON.parse(localStorage.getItem('portalSalesOrders') || '[]');
 
   function syncSalesOrdersToPortal() {
-    // 只同步分店需要操作的單（pending/confirmed/disputed）
-    // issued/closed 的單分店不需要再操作，不同步以控制資料量
-    var toSync = mockSalesOrders.filter(function(o) {
-      return o.status === 'pending' || o.status === 'confirmed' || o.status === 'disputed';
-    });
-    localStorage.setItem('portalSalesOrders', JSON.stringify(toSync));
+    // 同步全部銷貨單到雲端（含 issued/closed），確保跨裝置資料一致
+    localStorage.setItem('portalSalesOrders', JSON.stringify(mockSalesOrders));
     cloudSave('portalSalesOrders');
   }
 
@@ -7680,6 +7676,11 @@
         if (po.status === 'confirmed' && local.status === 'pending') {
           local.status = 'confirmed';
           local.storeConfirmedAt = po.storeConfirmedAt;
+        }
+        // 同步 PendingReview 審核後的 issued 狀態
+        if (po.status === 'issued' && local.status !== 'issued' && local.status !== 'closed') {
+          local.status = 'issued';
+          local.issuedAt = po.issuedAt;
         }
         // 同步退貨狀態
         let hasNewReturn = false;
