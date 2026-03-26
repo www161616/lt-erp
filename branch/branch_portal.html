@@ -3395,7 +3395,7 @@ function batchPrintTf() {
       </tr>`
     ).join('');
 
-    const emptyCount = Math.max(0, 6 - items.length);
+    const emptyCount = 0;
     const emptyRows = Array(emptyCount).fill(
       `<tr><td style="border:1px solid #000; padding:6px 8px; height:45px;"><span style="font-size:12px; color:#999; font-weight:bold;">編號</span></td><td style="border:1px solid #000; padding:6px 8px; width:60px;"></td></tr>`
     ).join('');
@@ -3469,7 +3469,7 @@ function printTransfer(id) {
   ).join('');
 
   // 空白備用行
-  const emptyCount = Math.max(0, 6 - items.length);
+  const emptyCount = 0;
   const emptyRows = Array(emptyCount).fill(
     `<tr>
       <td style="border:1px solid #000; padding:6px 8px; height:45px;"><span style="font-size:12px; color:#999; font-weight:bold;">編號</span></td>
