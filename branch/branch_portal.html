@@ -3699,7 +3699,11 @@ async function renderDeliveryPreview(selectedDate) {
       '<input type="date" id="deliveryPreviewDate" value="' + targetDate + '" onchange="renderDeliveryPreview(this.value)" style="padding:5px 10px; border:1px solid #e2e8f0; border-radius:6px; font-size:13px; font-family:inherit;">' +
       '<button onclick="renderDeliveryPreview(document.getElementById(\'deliveryPreviewDate\').value)" style="padding:5px 12px; background:var(--primary); color:white; border:none; border-radius:6px; font-size:12px; cursor:pointer; font-family:inherit;">查詢</button>' +
     '</div>' +
-    '<button onclick="renderDeliveryPreview(document.getElementById(\'deliveryPreviewDate\')?.value)" style="padding:6px 14px; background:#f1f5f9; color:#374151; border:1px solid #e2e8f0; border-radius:6px; font-size:12px; cursor:pointer; font-family:inherit;">🔄 重新整理</button>' +
+    '<div style="display:flex; gap:6px;">' +
+      '<button onclick="printDeliveryPreview()" style="padding:6px 14px; background:#fff0f6; color:#be185d; border:1px solid #be185d; border-radius:6px; font-size:12px; cursor:pointer; font-family:inherit;">🖨️ 列印</button>' +
+      '<button onclick="exportDeliveryPreviewExcel()" style="padding:6px 14px; background:#f0fdf4; color:#047857; border:1px solid #047857; border-radius:6px; font-size:12px; cursor:pointer; font-family:inherit;">📊 匯出 Excel</button>' +
+      '<button onclick="renderDeliveryPreview(document.getElementById(\'deliveryPreviewDate\')?.value)" style="padding:6px 14px; background:#f1f5f9; color:#374151; border:1px solid #e2e8f0; border-radius:6px; font-size:12px; cursor:pointer; font-family:inherit;">🔄 重新整理</button>' +
+    '</div>' +
   '</div>';
 
   container.innerHTML = toolbarHtml + '<div style="text-align:center; padding:40px; color:#9ca3af;">載入中...</div>';
@@ -3787,6 +3791,46 @@ async function renderDeliveryPreview(selectedDate) {
   } catch(e) {
     container.innerHTML = toolbarHtml + '<div style="text-align:center; padding:40px; color:#c53030;">載入失敗：' + e.message + '</div>';
   }
+}
+
+function printDeliveryPreview() {
+  var dateInput = document.getElementById('deliveryPreviewDate');
+  var targetDate = dateInput ? dateInput.value : '';
+  var myName = matchBranchName(currentStore?.name || '');
+  var tbody = document.querySelector('#deliveryPreviewContainer tbody');
+  if (!tbody || tbody.querySelectorAll('tr').length === 0) { Swal.fire('提示', '目前沒有可列印的資料', 'info'); return; }
+  var rows = Array.from(tbody.querySelectorAll('tr'));
+  var itemRows = rows.map(function(tr) {
+    var tds = tr.querySelectorAll('td');
+    if (tds.length < 3) return '';
+    return '<tr><td style="border:1px solid #000; padding:6px 8px;"><div style="font-size:13px; font-weight:bold;">' + tds[0].textContent.trim() + '</div></td><td style="border:1px solid #000; padding:6px 8px; text-align:center; font-size:18px; font-weight:bold; width:50px;">x' + tds[2].textContent.trim() + '</td></tr>';
+  }).join('');
+  var win = window.open('', '_blank', 'width=350,height=700');
+  win.document.write('<!DOCTYPE html><html><head><meta charset="UTF-8"><style>@page { margin: 2mm; size: 80mm auto; } body { font-family: "Microsoft JhengHei", sans-serif; font-size:14px; width:76mm; margin:0; padding:4px; } table { width:100%; border-collapse:collapse; } .no-print { position:fixed; top:8px; right:8px; z-index:99; } .no-print button { padding:8px 16px; font-size:14px; border:none; border-radius:6px; cursor:pointer; font-weight:bold; margin-left:6px; } @media print { .no-print { display:none; } }</style></head><body>' +
+    '<div class="no-print"><button onclick="window.print()" style="background:#be185d; color:white;">🖨️ 列印</button><button onclick="window.close()" style="background:#e2e8f0; color:#333;">✕ 關閉</button></div>' +
+    '<table style="margin-bottom:6px;"><tr><td style="border:1px solid #000; padding:8px; font-size:13px; font-weight:bold;">配送日</td><td style="border:1px solid #000; padding:8px; font-size:18px; font-weight:bold;">' + targetDate + '</td></tr></table>' +
+    '<table><tr><td style="border:1px solid #000; padding:6px 8px; font-size:13px; font-weight:bold; text-align:center;">商品名稱</td><td style="border:1px solid #000; padding:6px 8px; font-size:13px; font-weight:bold; text-align:center; width:50px;">數量</td></tr>' + itemRows + '</table></body></html>');
+  win.document.close();
+}
+
+function exportDeliveryPreviewExcel() {
+  var dateInput = document.getElementById('deliveryPreviewDate');
+  var targetDate = dateInput ? dateInput.value : '';
+  var myName = matchBranchName(currentStore?.name || '');
+  var tbody = document.querySelector('#deliveryPreviewContainer tbody');
+  if (!tbody || tbody.querySelectorAll('tr').length === 0) { Swal.fire('提示', '目前沒有可匯出的資料', 'info'); return; }
+  var rows = Array.from(tbody.querySelectorAll('tr'));
+  var data = [['配送日', '收貨店', '商品名稱', '溫層', '數量', '狀態']];
+  rows.forEach(function(tr) {
+    var tds = tr.querySelectorAll('td');
+    if (tds.length < 4) return;
+    data.push([targetDate, myName, tds[0].textContent.trim(), tds[1].textContent.trim(), tds[2].textContent.trim(), tds[3].textContent.trim()]);
+  });
+  var wb = XLSX.utils.book_new();
+  var ws = XLSX.utils.aoa_to_sheet(data);
+  ws['!cols'] = [{wch:12},{wch:10},{wch:30},{wch:8},{wch:8},{wch:10}];
+  XLSX.utils.book_append_sheet(wb, ws, '到貨預告');
+  XLSX.writeFile(wb, '到貨預告_' + myName + '_' + targetDate + '.xlsx');
 }
 
 function initBillingPage() {
