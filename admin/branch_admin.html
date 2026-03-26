@@ -2870,9 +2870,21 @@
           ? `<div style="font-size:11px; color:#b7791f; margin-top:2px;">📅 開團 ${arrival.startDate}　結單 ${arrival.endDate}</div>`
           : '';
 
+        const cleanPid = (row.productId || row.id || '').replace(/_.*$/, '');
+        const waveCorr = currentEditingWaveId ? correctionCache[currentEditingWaveId] : null;
+        const prodCorr = waveCorr ? (waveCorr[cleanPid] || waveCorr[row.id] || null) : null;
+
         const branchCells = visibleNames.map(b => {
           const expected = row.branchData && row.branchData[b] ? row.branchData[b].expected : 0;
-          return `<td style="text-align:center; padding:4px; font-size:13px; font-weight:${expected > 0 ? 'bold; color:#2d3748' : 'normal; color:#dde3ec'};">${expected}</td>`;
+          const storeCorr = prodCorr ? prodCorr[b] : null;
+          const diff = storeCorr ? storeCorr.diff : null;
+          let corrBadge = '';
+          if (storeCorr && diff !== null && diff !== 0) {
+            const badgeColor = diff > 0 ? '#7c3aed' : '#c53030';
+            const sign = diff > 0 ? '+' : '';
+            corrBadge = `<div style="font-size:10px; color:${badgeColor}; font-weight:700; line-height:1.2; margin-top:2px;">${sign}${diff}</div>`;
+          }
+          return `<td style="text-align:center; padding:4px; font-size:13px; font-weight:${expected > 0 ? 'bold; color:#2d3748' : 'normal; color:#dde3ec'};">${expected}${corrBadge}</td>`;
         }).join('');
 
         return `
@@ -3747,7 +3759,12 @@
         return;
       }
       openCorrectionWaveId = null;
-      Swal.fire({ title: '修正數量完成', text: `揀貨單 ${waveId} 已完成對帳。`, icon: 'success', timer: 1500, showConfirmButton: false });
+      Swal.fire({ title: '修正數量完成', text: `揀貨單 ${waveId} 已完成對帳。`, icon: 'success', timer: 1500, showConfirmButton: false }).then(function() {
+        Swal.close();
+        var panelWaveId = document.getElementById('pickingActionPanel') ? currentEditingWaveId : null;
+        if (panelWaveId) renderPickingActionPanel(panelWaveId);
+        renderMatrixTable();
+      });
       refreshHistoryTable();
     }
 
