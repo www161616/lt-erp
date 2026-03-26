@@ -935,11 +935,12 @@
         <div style="font-size:14px; font-weight:700; color:var(--primary);" id="billingDetailTitle">點單號查看明細</div>
         <div id="billingDetailBtns" style="display:none; gap:6px;">
           <button onclick="printCurrentBillingDetail()" style="padding:6px 14px; background:#0e7490; color:white; border:none; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit;">🖨️ 列印</button>
+          <button onclick="printBillingLabels()" style="padding:6px 14px; background:#7c3aed; color:white; border:none; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit;">🏷️ 印標籤</button>
           <button id="btnPrintReturn" onclick="printReturnSlipFromBtn()" style="display:none; padding:6px 14px; background:#b45309; color:white; border:none; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit;">🖨️ 退貨單</button>
           <button onclick="exportCurrentBillingExcel()" style="padding:6px 14px; background:#047857; color:white; border:none; border-radius:6px; font-size:12px; font-weight:600; cursor:pointer; font-family:inherit;">📥 匯出Excel</button>
         </div>
       </div>
-      <div id="billingDetailInner" style="padding:24px; text-align:center; color:#9ca3af; font-size:14px;">請點選銷貨單號</div>
+      <div id="billingDetailInner" style="padding:24px; color:#9ca3af; font-size:14px; text-align:center;">請點選銷貨單號</div>
     </div>
 
   </div>
@@ -3967,7 +3968,7 @@ function showBillingDetail(orderId) {
     html += `
       <tr style="border-bottom:1px solid #f3f4f6; ${hasReturn?'background:#fce7f3;':''}">
         <td style="padding:10px 16px; color:#6b7280; font-size:12px;">${item.productId}</td>
-        <td style="padding:10px 16px; font-weight:500;">${item.name}${hasReturn?` <span style="font-size:11px; color:#ef4444; background:#fee2e2; padding:1px 6px; border-radius:8px; margin-left:4px;">退 ${item.returnQty}</span>`:''}${((item.note||'').match(/超發 \+(\d+)/))?` <span style="font-size:11px; color:#c05621; background:#fef3c7; padding:1px 6px; border-radius:8px; margin-left:4px;">超發 +${(item.note||'').match(/超發 \+(\d+)/)[1]}</span>`:''}
+        <td style="padding:10px 16px; font-weight:500; color:#1f2937;">${item.name}${hasReturn?` <span style="font-size:11px; color:#ef4444; background:#fee2e2; padding:1px 6px; border-radius:8px; margin-left:4px;">退 ${item.returnQty}</span>`:''}${((item.note||'').match(/超發 \+(\d+)/))?` <span style="font-size:11px; color:#c05621; background:#fef3c7; padding:1px 6px; border-radius:8px; margin-left:4px;">超發 +${(item.note||'').match(/超發 \+(\d+)/)[1]}</span>`:''}
         </td>
         <td style="padding:10px 16px; text-align:center;">${effectiveQty}</td>
         <td style="padding:10px 16px; text-align:right; color:#6b7280;">$${item.unitPrice.toLocaleString()}</td>
@@ -3990,6 +3991,7 @@ function showBillingDetail(orderId) {
       </div>
     </div>`;
 
+  document.getElementById('billingDetailInner').style.textAlign = 'left';
   document.getElementById('billingDetailInner').innerHTML = html;
   // 退貨單按鈕顯示/隱藏
   var btnRet = document.getElementById('btnPrintReturn');
@@ -4036,6 +4038,38 @@ function printCurrentBillingDetail() {
   </table>
   <div class="total">共 ${items.length} 項，${totalQty} 件</div>
   </body></html>`);
+  win.document.close();
+}
+
+function printBillingLabels() {
+  var orderId = document.getElementById('billingDetailBtns')?.getAttribute('data-order-id');
+  if (!orderId) return;
+  var r = portalOrders.find(function(o) { return o.id === orderId; });
+  if (!r) return;
+  var items = (r.items || []).filter(function(i) { return i.qty > 0; });
+  if (items.length === 0) { Swal.fire('提示', '沒有可列印的商品', 'info'); return; }
+
+  var labels = items.map(function(item) {
+    var price = item.sellingPrice ? '$' + Number(item.sellingPrice).toLocaleString() : '';
+    return '<div class="label"><div class="name">' + item.name + '</div><div class="price">' + price + '</div></div>';
+  }).join('');
+
+  var win = window.open('', '_blank', 'width=350,height=600');
+  win.document.write(
+    '<!DOCTYPE html><html><head><meta charset="UTF-8"><style>' +
+    '@page { margin: 1mm; size: 80mm auto; }' +
+    'body { font-family: "Microsoft JhengHei", sans-serif; margin: 0; padding: 0; }' +
+    '.label { width: 76mm; padding: 6mm 4mm; border-bottom: 1px dashed #ccc; page-break-after: always; box-sizing: border-box; text-align: center; }' +
+    '.label:last-child { border-bottom: none; }' +
+    '.name { font-size: 18px; font-weight: bold; line-height: 1.4; margin-bottom: 6px; word-break: break-word; }' +
+    '.price { font-size: 28px; font-weight: bold; color: #be185d; letter-spacing: 2px; }' +
+    '.no-print { position:fixed; top:8px; right:8px; z-index:99; }' +
+    '.no-print button { padding:8px 16px; font-size:14px; border:none; border-radius:6px; cursor:pointer; font-weight:bold; margin-left:6px; }' +
+    '@media print { .no-print { display:none; } }' +
+    '</style></head><body>' +
+    '<div class="no-print"><button onclick="window.print()" style="background:#7c3aed; color:white;">🖨️ 列印</button><button onclick="window.close()" style="background:#e2e8f0; color:#333;">✕ 關閉</button></div>' +
+    labels + '</body></html>'
+  );
   win.document.close();
 }
 
