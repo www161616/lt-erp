@@ -8594,7 +8594,9 @@
           <div style="font-size:11px; color:#718096; margin-bottom:4px;">原因：${item.returnReason}</div>
           ${editable ? `<button class="btn" style="padding:3px 8px; font-size:11px; background:#2b6cb0;" onclick="adminMarkReturnReceived('${id}',${idx})">確認已收到退貨</button>` : ''}`;
       } else if (item.returnStatus === 'received') {
-        returnCell = `<div style="color:#2b6cb0; font-size:12px; font-weight:bold;">✅ 已收到退貨 ${item.adminReturnQty||item.returnQty} 件，金額已扣除</div><div style="font-size:11px; color:#718096;">原因：${item.returnReason}</div>`;
+        returnCell = item.adminReturnQty === 0
+          ? `<div style="color:#047857; font-size:12px; font-weight:bold;">✅ 已標記補發，不扣款</div><div style="font-size:11px; color:#718096;">原因：${item.returnReason}</div>`
+          : `<div style="color:#2b6cb0; font-size:12px; font-weight:bold;">✅ 已收到退貨 ${item.adminReturnQty||item.returnQty} 件，金額已扣除</div><div style="font-size:11px; color:#718096;">原因：${item.returnReason}</div>`;
       } else if (item.returnStatus === 'waived') {
         returnCell = `<div style="color:#2b6cb0; font-size:12px; font-weight:bold;">✅ 接受，免退回（壞損認定）</div><div style="font-size:11px; color:#718096;">原因：${item.returnReason}</div><div style="font-size:11px; color:#718096;">扣除 ${item.returnQty} 件，金額已調整</div>`;
       } else if (item.returnStatus === 'rejected') {
