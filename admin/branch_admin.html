@@ -3484,6 +3484,8 @@
         willClose: () => {
           openCorrectionWaveId = null;
           refreshHistoryTable();
+          const panelWaveId = document.getElementById('pickingActionPanel') ? currentEditingWaveId : null;
+          if (panelWaveId) renderPickingActionPanel(panelWaveId);
         }
       });
     }
