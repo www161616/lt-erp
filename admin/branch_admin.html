@@ -4009,6 +4009,7 @@
                   qty: qty,
                   unit: '件',
                   price: finalPrice,
+                  sellingPrice: dbPrice ? (dbPrice.price || 0) : (row.price || 0),
                   cost: finalCost,
                   note: note
                 });
@@ -4062,6 +4063,7 @@
                 expectedQty: it.expectedQty || it.qty,
                 qty: it.qty,
                 unitPrice: it.price,
+                sellingPrice: it.sellingPrice || 0,
                 returnQty: 0,
                 returnStatus: 'none',
                 returnReason: '',
@@ -4100,6 +4102,7 @@
                   expectedQty: it.expectedQty || it.qty,
                   qty: it.qty,
                   unitPrice: it.price,
+                  sellingPrice: it.sellingPrice || 0,
                   returnQty: 0,
                   returnStatus: 'none',
                   returnReason: '',
