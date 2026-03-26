@@ -2638,10 +2638,11 @@
               <div class="panel-title" style="color:#b7791f; border-color:#b7791f;">1. 搜尋商品並加入大表</div>
               
               <div style="margin-bottom: 10px;">
-                <select id="pickTempFilter" style="padding: 6px; border: 1px solid var(--border); border-radius: 4px; width: 100%; margin-bottom: 8px;">
-                  <option value="all">全部分類</option>
-                  ${productCategories.map(c => '<option value="' + c + '">' + c + '</option>').join('')}
-                </select>
+                <div style="display:flex; align-items:center; gap:6px; margin-bottom:8px;">
+                  <label style="font-size:12px; font-weight:700; color:#2d3748; white-space:nowrap;">結單日</label>
+                  <input type="date" id="pickEndDateFilter" style="flex:1; padding:6px; border:1px solid var(--border); border-radius:4px; font-size:13px; font-family:inherit;">
+                  <button class="btn" style="padding:5px 8px; background:#718096; font-size:12px;" onclick="document.getElementById('pickEndDateFilter').value=''; searchArrivals();">清除</button>
+                </div>
                 <div style="display: flex; gap: 5px;">
                   <input type="text" id="pickSearchKw" placeholder="商編或品項 (Enter搜尋)" onkeypress="if(event.key==='Enter') searchArrivals()" style="flex: 1; padding: 6px; border: 1px solid var(--border); border-radius: 4px;">
                   <button class="btn" style="background:#718096; padding: 6px 10px;" onclick="searchArrivals()">🔍</button>
@@ -2723,14 +2724,14 @@
 
     // 1. 搜尋商品
     function searchArrivals() {
-      const tempF = document.getElementById('pickTempFilter').value;
+      const endDateF = document.getElementById('pickEndDateFilter')?.value || '';
       const kw = document.getElementById('pickSearchKw').value.trim().toLowerCase();
       const resContainer = document.getElementById('pickSearchResults');
 
       let matches = pickingArrivals.filter(item => {
-        let tMatch = tempF === 'all' ? true : (item.category || item.temp || '') === tempF;
+        let dateMatch = endDateF ? (item.endDate || '').replace(/\//g, '-') === endDateF : true;
         let kMatch = kw === '' ? true : ((item.productId || item.id || '').toLowerCase().includes(kw) || item.name.toLowerCase().includes(kw));
-        return tMatch && kMatch;
+        return dateMatch && kMatch;
       });
 
       if (matches.length === 0) {
