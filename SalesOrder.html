@@ -701,7 +701,7 @@ function getActualPrice(pid) {
     const cust = allC.find(c => c.id === cId);
     if(cust && cust.priceGroup) {
        const grp = cust.priceGroup;
-       if(grp.indexOf("總倉") > -1 && p.priceBranch > 0) return p.priceBranch;
+       if((grp.indexOf("總倉") > -1 || grp.indexOf("分店") > -1) && p.priceBranch > 0) return p.priceBranch;
        if((grp.indexOf("店家") > -1 || grp.indexOf("批發") > -1) && p.priceWholesale > 0) return p.priceWholesale;
        if((grp.indexOf("餐廳") > -1 || grp.indexOf("團購") > -1) && p.priceGroupBuy > 0) return p.priceGroupBuy;
     }
@@ -774,7 +774,7 @@ function filterProd() {
         // 判斷 A 的層級
         const aHasSpecial = specialProdIds.includes(a.id);
         let aIsGroup = false;
-        if (priceGroup.includes("總倉") && a.priceBranch > 0) aIsGroup = true;
+        if ((priceGroup.includes("總倉") || priceGroup.includes("分店")) && a.priceBranch > 0) aIsGroup = true;
         if ((priceGroup.includes("店家") || priceGroup.includes("批發")) && a.priceWholesale > 0) aIsGroup = true;
         if ((priceGroup.includes("餐廳") || priceGroup.includes("團購")) && a.priceGroupBuy > 0) aIsGroup = true;
         const aLevel = aHasSpecial ? 1 : (aIsGroup ? 2 : 3);
@@ -782,7 +782,7 @@ function filterProd() {
         // 判斷 B 的層級
         const bHasSpecial = specialProdIds.includes(b.id);
         let bIsGroup = false;
-        if (priceGroup.includes("總倉") && b.priceBranch > 0) bIsGroup = true;
+        if ((priceGroup.includes("總倉") || priceGroup.includes("分店")) && b.priceBranch > 0) bIsGroup = true;
         if ((priceGroup.includes("店家") || priceGroup.includes("批發")) && b.priceWholesale > 0) bIsGroup = true;
         if ((priceGroup.includes("餐廳") || priceGroup.includes("團購")) && b.priceGroupBuy > 0) bIsGroup = true;
         const bLevel = bHasSpecial ? 1 : (bIsGroup ? 2 : 3);
@@ -833,7 +833,7 @@ function renderPList(list) {
       if (specialProdIds.includes(p.id)) {
         badges += '<span class="badge badge-special">特價</span>';
       } else if (cust && cust.priceGroup) {
-        if (cust.priceGroup.indexOf("總倉") > -1 && p.priceBranch > 0) badges += '<span class="badge badge-group">倉</span>';
+        if ((cust.priceGroup.indexOf("總倉") > -1 || cust.priceGroup.indexOf("分店") > -1) && p.priceBranch > 0) badges += '<span class="badge badge-group">倉</span>';
         else if ((cust.priceGroup.indexOf("店家") > -1 || cust.priceGroup.indexOf("批發") > -1) && p.priceWholesale > 0) badges += '<span class="badge badge-group" style="color:#795548; border-color:#d7ccc8; background:#efebe9;">' + (cust.priceGroup.indexOf("批發") > -1 ? '批' : '店') + '</span>';
         else if ((cust.priceGroup.indexOf("餐廳") > -1 || cust.priceGroup.indexOf("團購") > -1) && p.priceGroupBuy > 0) badges += '<span class="badge badge-group" style="color:#ff5722; border-color:#ffccbc; background:#fbe9e7;">' + (cust.priceGroup.indexOf("團購") > -1 ? '團' : '餐') + '</span>';
       }
