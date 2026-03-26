@@ -411,10 +411,12 @@
 
         <div id="pageSummary" class="page">
           <div style="background:white; border-radius:8px; border:1px solid var(--border); padding:12px 16px; margin-bottom:20px; display:flex; align-items:center; flex-wrap:wrap; gap:8px 12px; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
-            <span style="font-size:13px; font-weight:700; color:#6b7280; white-space:nowrap;">開團日</span>
-            <input type="date" id="summaryDateFrom" onchange="sumCurrentPage=1; renderSummaryPage()" style="padding:6px 8px; border:1.5px solid var(--border); border-radius:6px; font-size:12px; font-family:inherit;">
-            <span style="font-size:13px; color:#6b7280;">~</span>
-            <input type="date" id="summaryDateTo" onchange="sumCurrentPage=1; renderSummaryPage()" style="padding:6px 8px; border:1.5px solid var(--border); border-radius:6px; font-size:12px; font-family:inherit;">
+            <select id="summaryDateType" onchange="sumCurrentPage=1; renderSummaryPage()" style="padding:6px 8px; border:1.5px solid var(--border); border-radius:6px; font-size:12px; font-family:inherit;">
+              <option value="">全部日期</option>
+              <option value="startDate">開團日</option>
+              <option value="endDate">結單日</option>
+            </select>
+            <input type="date" id="summaryDateFilter" onchange="sumCurrentPage=1; renderSummaryPage()" style="padding:6px 8px; border:1.5px solid var(--border); border-radius:6px; font-size:12px; font-family:inherit;">
             <div style="width:1px; height:24px; background:var(--border); margin:0 2px;"></div>
             <input type="text" id="summaryKeyword" oninput="sumCurrentPage=1; renderSummaryPage()" placeholder="搜尋…" style="width:120px; padding:6px 10px; border:1.5px solid var(--border); border-radius:6px; font-size:12px; font-family:inherit;">
             <button onclick="sumCurrentPage=1; renderSummaryPage()" style="padding:6px 10px; border:1px solid #be185d; border-radius:6px; background:#be185d; color:white; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap;">查詢</button>
@@ -1990,10 +1992,10 @@ const MOCK_SUMMARY_DATA = [];
 
 function initSummaryPage() {
   // 預設不帶日期，顯示全部資料
-  const fromEl = document.getElementById('summaryDateFrom');
-  const toEl   = document.getElementById('summaryDateTo');
-  if (fromEl) fromEl.value = '';
-  if (toEl) toEl.value = '';
+  const dtEl = document.getElementById('summaryDateType');
+  const dfEl = document.getElementById('summaryDateFilter');
+  if (dtEl) dtEl.value = '';
+  if (dfEl) dfEl.value = '';
   renderSummaryPage();
 }
 
@@ -2002,16 +2004,16 @@ const SUM_PAGE_SIZE = 100;
 
 function clearSummaryFilters() {
   const kw = document.getElementById('summaryKeyword');
-  const df = document.getElementById('summaryDateFrom');
-  const dt = document.getElementById('summaryDateTo');
-  if (!kw.value.trim() && !df.value && !dt.value) return;
+  const dt = document.getElementById('summaryDateType');
+  const df = document.getElementById('summaryDateFilter');
+  if (!kw.value.trim() && !dt.value && !df.value) return;
   Swal.fire({
     title: '確認清除篩選？', icon: 'question',
     showCancelButton: true, confirmButtonText: '清除', cancelButtonText: '取消',
     confirmButtonColor: '#be185d'
   }).then(r => {
     if (r.isConfirmed) {
-      df.value = ''; dt.value = ''; kw.value = '';
+      dt.value = ''; df.value = ''; kw.value = '';
       sumCurrentPage = 1; renderSummaryPage();
     }
   });
@@ -2055,8 +2057,8 @@ function renderSummaryPage() {
       ? [storeOnly.find(s => s.name === currentStore.name), ...storeOnly.filter(s => s.name !== currentStore.name)].filter(Boolean)
       : storeOnly;
   }
-  const fromVal   = document.getElementById('summaryDateFrom')?.value || '';
-  const toVal     = document.getElementById('summaryDateTo')?.value   || '';
+  const dateType   = document.getElementById('summaryDateType')?.value || '';
+  const dateFilter = document.getElementById('summaryDateFilter')?.value || '';
   const keyword   = (document.getElementById('summaryKeyword')?.value || '').trim().toLowerCase();
 
   // 讀取 localStorage 發布的商品 + 各店訂單（由 branch_admin.html 寫入）
@@ -2073,8 +2075,9 @@ function renderSummaryPage() {
 
   let filteredData = sourceData;
   // 開團日~結單日的區間只要與篩選範圍有交集就顯示
-  if (fromVal) filteredData = filteredData.filter(item => (item.endDate || item.startDate || '') >= fromVal);
-  if (toVal)   filteredData = filteredData.filter(item => (item.startDate || '') <= toVal);
+  if (dateType && dateFilter) {
+    filteredData = filteredData.filter(function(item) { return (item[dateType] || '') === dateFilter; });
+  }
   if (keyword) filteredData = filteredData.filter(item =>
     item.name.toLowerCase().includes(keyword) || item.id.includes(keyword)
   );
