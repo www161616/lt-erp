@@ -3932,6 +3932,7 @@ function showBillingDetail(orderId) {
     <table style="width:100%; border-collapse:collapse; font-size:13px;">
       <thead>
         <tr style="background:#f8f9fa;">
+          <th style="padding:10px 16px; width:32px; border-bottom:1px solid var(--border);"></th>
           <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">商品編號</th>
           <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">商品名稱</th>
           <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">數量</th>
@@ -3967,6 +3968,7 @@ function showBillingDetail(orderId) {
     }
     html += `
       <tr style="border-bottom:1px solid #f3f4f6; ${hasReturn?'background:#fce7f3;':''}">
+        <td style="padding:10px 16px; text-align:center; vertical-align:top;"><input type="checkbox" class="billing-label-ck" checked style="width:16px; height:16px; cursor:pointer; accent-color:#7c3aed;"></td>
         <td style="padding:10px 16px; color:#6b7280; font-size:12px;">${item.productId}</td>
         <td style="padding:10px 16px; font-weight:500; color:#1f2937;">${item.name}${hasReturn?` <span style="font-size:11px; color:#ef4444; background:#fee2e2; padding:1px 6px; border-radius:8px; margin-left:4px;">退 ${item.returnQty}</span>`:''}${((item.note||'').match(/超發 \+(\d+)/))?` <span style="font-size:11px; color:#c05621; background:#fef3c7; padding:1px 6px; border-radius:8px; margin-left:4px;">超發 +${(item.note||'').match(/超發 \+(\d+)/)[1]}</span>`:''}
         </td>
@@ -4046,7 +4048,11 @@ function printBillingLabels() {
   if (!orderId) return;
   var r = portalOrders.find(function(o) { return o.id === orderId; });
   if (!r) return;
-  var items = (r.items || []).filter(function(i) { return i.qty > 0; });
+  var checkboxes = document.querySelectorAll('.billing-label-ck');
+  var checkedIndexes = new Set();
+  checkboxes.forEach(function(cb, i) { if (cb.checked) checkedIndexes.add(i); });
+  var allItems = (r.items || []).filter(function(i) { return i.qty > 0; });
+  var items = checkedIndexes.size > 0 ? allItems.filter(function(_, i) { return checkedIndexes.has(i); }) : allItems;
   if (items.length === 0) { Swal.fire('提示', '沒有可列印的商品', 'info'); return; }
 
   var labels = items.map(function(item) {
@@ -4061,8 +4067,8 @@ function printBillingLabels() {
     'body { font-family: "Microsoft JhengHei", sans-serif; margin: 0; padding: 0; }' +
     '.label { width: 76mm; padding: 6mm 4mm; border-bottom: 1px dashed #ccc; page-break-after: always; box-sizing: border-box; text-align: center; }' +
     '.label:last-child { border-bottom: none; }' +
-    '.name { font-size: 18px; font-weight: bold; line-height: 1.4; margin-bottom: 6px; word-break: break-word; }' +
-    '.price { font-size: 28px; font-weight: bold; color: #be185d; letter-spacing: 2px; }' +
+    '.name { font-size: 24px; font-weight: 900; line-height: 1.4; margin-bottom: 8px; word-break: break-word; }' +
+    '.price { font-size: 36px; font-weight: 900; color: #000; letter-spacing: 2px; }' +
     '.no-print { position:fixed; top:8px; right:8px; z-index:99; }' +
     '.no-print button { padding:8px 16px; font-size:14px; border:none; border-radius:6px; cursor:pointer; font-weight:bold; margin-left:6px; }' +
     '@media print { .no-print { display:none; } }' +
