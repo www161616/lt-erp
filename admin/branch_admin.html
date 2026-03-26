@@ -299,6 +299,9 @@
         autoCloseJanFeb();
         renderDashboard();
         checkArrivalBadge();
+        // 保護：本機有資料就推上雲端，確保換電腦不遺失
+        var _localSO = localStorage.getItem('portalSalesOrders');
+        if (_localSO && JSON.parse(_localSO).length > 0) cloudSave('portalSalesOrders');
       } else {
         // 嘗試從 Supabase session 自動恢復
         try {
@@ -322,6 +325,8 @@
               autoCloseJanFeb();
               renderDashboard();
               checkArrivalBadge();
+              var _localSO2 = localStorage.getItem('portalSalesOrders');
+              if (_localSO2 && JSON.parse(_localSO2).length > 0) cloudSave('portalSalesOrders');
               return;
             }
           }
