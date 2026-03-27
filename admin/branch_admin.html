@@ -137,9 +137,9 @@
     <div class="menu-item" id="menu-picking" onclick="switchTab('picking', this)">📦 新增揀貨單</div>
     <div class="menu-item" id="menu-pickingHistory" onclick="switchTab('pickingHistory', this)">📋 揀貨歷史查詢</div>
     <div class="menu-item" id="menu-accounting" onclick="switchTab('accounting', this)">💳 銷貨單管理</div>
-    <div class="menu-item" id="menu-demandBackorder" onclick="switchTab('demandBackorder', this)">📋 需求與欠品管理</div>
-    <div class="menu-item" id="menu-transfer" onclick="switchTab('transfer', this)">🔄 店轉店與退倉審核</div>
-    <div class="menu-item" id="menu-aid" onclick="switchTab('aid', this)">🤝 互助交流板</div>
+    <div class="menu-item" id="menu-demandBackorder" onclick="switchTab('demandBackorder', this)">📋 需求與欠品管理<span id="badgeDemand" style="display:none; margin-left:6px; background:#dc2626; color:white; font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px; min-width:16px; text-align:center;"></span></div>
+    <div class="menu-item" id="menu-transfer" onclick="switchTab('transfer', this)">🔄 店轉店與退倉審核<span id="badgeTransfer" style="display:none; margin-left:6px; background:#dc2626; color:white; font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px; min-width:16px; text-align:center;"></span></div>
+    <div class="menu-item" id="menu-aid" onclick="switchTab('aid', this)">🤝 互助交流板<span id="badgeAid" style="display:none; margin-left:6px; background:#dc2626; color:white; font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px; min-width:16px; text-align:center;"></span></div>
     <div class="menu-item" id="menu-bulletin" onclick="switchTab('bulletin', this)">📢 公告管理</div>
 
 
@@ -200,6 +200,52 @@
           });
         }
       } catch(e) { console.error('cloudLoadAll error:', e); }
+    }
+
+    async function updateSidebarBadges() {
+      // 1. 需求與欠品：portalAllRequests pending 數
+      try {
+        const reqs = JSON.parse(localStorage.getItem('portalAllRequests') || '[]');
+        const demandCount = reqs.filter(function(r) { return r.status === 'pending'; }).length;
+        const badgeDemand = document.getElementById('badgeDemand');
+        if (badgeDemand) {
+          badgeDemand.textContent = demandCount;
+          badgeDemand.style.display = demandCount > 0 ? '' : 'none';
+        }
+      } catch(e) {}
+
+      // 2. 店轉店：transfer_orders admin_status === 'pending'
+      try {
+        const res = await fetch(SB_URL + '/transfer_orders?admin_status=eq.pending&select=id&limit=999', { headers: HEADERS });
+        const transferCount = res.ok ? (await res.json()).length : 0;
+        const badgeTransfer = document.getElementById('badgeTransfer');
+        if (badgeTransfer) {
+          badgeTransfer.textContent = transferCount;
+          badgeTransfer.style.display = transferCount > 0 ? '' : 'none';
+        }
+      } catch(e) {}
+
+      // 3. 互助交流：總倉的貼文有新的分店回應（未看過）
+      try {
+        const board = JSON.parse(localStorage.getItem('portalMutualAidBoard') || '[]');
+        var totalResponses = 0;
+        board.forEach(function(post) {
+          if (post.posterStore === '總倉') {
+            (post.items || []).forEach(function(item) {
+              (item.responses || []).forEach(function(r) {
+                if (r.store !== '總倉') totalResponses++;
+              });
+            });
+          }
+        });
+        var seenCount = parseInt(localStorage.getItem('lt_admin_aid_seen') || '0');
+        var aidNewCount = Math.max(0, totalResponses - seenCount);
+        const badgeAid = document.getElementById('badgeAid');
+        if (badgeAid) {
+          badgeAid.textContent = aidNewCount;
+          badgeAid.style.display = aidNewCount > 0 ? '' : 'none';
+        }
+      } catch(e) {}
     }
 
     const TEMP_CAT = { '1': '冷凍', '2': '冷藏', '3': '常溫', 'N': '漂漂館' };
@@ -396,6 +442,7 @@
 
         applyRolePermissions();
         await cloudLoadAll();
+        await updateSidebarBadges();
         await logActivity('登入系統', 'USER', `員工 ${currentUser.username} 登入成功`);
 
         Swal.fire({ icon: 'success', title: '登入成功！', timer: 1000, showConfirmButton: false });
@@ -469,10 +516,12 @@
     window.onload = async () => {
       await checkLoginStatus();
       await cloudLoadAll();
+      await updateSidebarBadges();
       fetchCustomers();
       fetchSuppliers();
       updateClock();
       setInterval(updateClock, 10000);
+      setInterval(updateSidebarBadges, 60000);
     };
 
     function switchTab(tabId, element) {
@@ -531,15 +580,36 @@
         renderCnReturns();
       } else if (tabId === 'backorder') {
         title.innerText = '當前功能：需求與欠品管理';
+        const badgeDemand2 = document.getElementById('badgeDemand');
+        if (badgeDemand2) badgeDemand2.style.display = 'none';
         renderDemandBackorderStation();
       } else if (tabId === 'demandBackorder') {
         title.innerText = '當前功能：需求與欠品管理';
+        const badgeDemand = document.getElementById('badgeDemand');
+        if (badgeDemand) badgeDemand.style.display = 'none';
         renderDemandBackorderStation();
       } else if (tabId === 'transfer') {
         title.innerText = '當前功能：店轉店與退倉審核';
+        const badgeTransfer = document.getElementById('badgeTransfer');
+        if (badgeTransfer) badgeTransfer.style.display = 'none';
         renderTransferStation();
       } else if (tabId === 'aid') {
         title.innerText = '當前功能：互助交流板';
+        // 標記互助交流已看
+        const board = JSON.parse(localStorage.getItem('portalMutualAidBoard') || '[]');
+        var totalResponses = 0;
+        board.forEach(function(post) {
+          if (post.posterStore === '總倉') {
+            (post.items || []).forEach(function(item) {
+              (item.responses || []).forEach(function(r) {
+                if (r.store !== '總倉') totalResponses++;
+              });
+            });
+          }
+        });
+        localStorage.setItem('lt_admin_aid_seen', String(totalResponses));
+        const badgeAid = document.getElementById('badgeAid');
+        if (badgeAid) { badgeAid.style.display = 'none'; }
         renderAdminAidStation();
       } else if (tabId === 'arrivalTracking') {
         title.innerText = '當前功能：到貨追蹤';
