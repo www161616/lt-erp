@@ -470,19 +470,18 @@
       return;
     }
 
-    list.innerHTML = `<div style="display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid #e2e8f0; margin-bottom:8px;">
-      <input type="checkbox" onchange="document.querySelectorAll('.po-check').forEach(function(c){c.checked=this.checked}.bind(this)); updatePOPendingCount();" style="width:16px; height:16px; cursor:pointer;">
-      <button class="btn btn-approve" style="padding:5px 14px; font-size:13px;" onclick="batchApprovePurchase()">✅ 批次確認轉入</button>
-      <span id="poPendingCount" style="font-size:12px; color:#64748b;"></span>
+    list.innerHTML = `<div style="background:#fef3c7; border:1px solid #fde68a; border-radius:8px; padding:10px 16px; margin:12px 18px 12px; font-size:13px; color:#92400e; display:flex; align-items:center; gap:8px;">
+      ⚠️ 請至「依廠商到貨」tab 依廠商分批確認到貨並轉入正式進貨單
     </div>` + pendingPurchaseOrders.map(o => {
       const amount = Number(o.grand_total || o.subtotal || 0);
+      const statusText = o.status === '部分到貨' ? '部分到貨' : '待審核';
+      const statusStyle = o.status === '部分到貨' ? 'background:#dbeafe; color:#1e40af;' : '';
       return `
         <div class="order-card" onclick="showPurchaseDetail('${o.id}')">
           <div class="order-card-header">
             <div>
-              <input type="checkbox" class="po-check" value="${o.id}" onclick="event.stopPropagation();" onchange="updatePOPendingCount()" style="width:15px; height:15px; cursor:pointer; margin-right:6px;">
               <span class="order-card-id">${o.id}</span>
-              <span class="status-badge status-pending" style="margin-left:8px;">待審核</span>
+              <span class="status-badge status-pending" style="margin-left:8px;${statusStyle}">${statusText}</span>
             </div>
             <span class="order-card-date">${o.order_date || ''}</span>
           </div>
@@ -497,7 +496,6 @@
           </div>
           <div class="order-card-actions" onclick="event.stopPropagation();">
             <button class="btn btn-detail" onclick="showPurchaseDetail('${o.id}')">👁 明細</button>
-            <button class="btn btn-approve" onclick="approvePurchaseOrder('${o.id}')">✅ 確認轉入進貨單</button>
             <button class="btn btn-reject" onclick="rejectPurchaseOrder('${o.id}')">❌ 駁回</button>
           </div>
         </div>`;
@@ -859,44 +857,56 @@
 
       return `
         <div style="margin:12px 18px; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden;">
-          <div style="background:${headerBg}; padding:12px 18px; display:flex; justify-content:space-between; align-items:center;">
-            <div>
-              <span style="font-size:16px; font-weight:bold; color:${headerColor};">🏭 ${g.supplier}</span>
-              <span style="margin-left:10px; font-size:12px; color:#64748b;">${g.items.length} 項品項</span>
-            </div>
+          <div style="background:${headerBg}; padding:12px 18px; display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleSupplierCard(${gi})">
             <div style="display:flex; align-items:center; gap:10px;">
+              <span id="suppArrow_${gi}" style="font-size:12px; color:${headerColor};">▶</span>
+              <span style="font-size:16px; font-weight:bold; color:${headerColor};">🏭 ${g.supplier}</span>
+              <span style="font-size:12px; color:#64748b;">${g.items.length} 項品項</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;" onclick="event.stopPropagation()">
               <span style="font-size:15px; font-weight:bold; color:#c05621; font-family:monospace;" id="suppTotal_${gi}">$${totalAmt.toLocaleString()}</span>
               <button class="btn btn-approve" onclick="convertSupplierGroup(${gi})" style="padding:8px 16px;">✅ 確認到貨，轉入進貨單</button>
             </div>
           </div>
-          <table class="detail-table">
-            <thead>
-              <tr>
-                <th style="width:36px; text-align:center;"><input type="checkbox" checked onchange="toggleSupplierGroup(${gi}, this.checked)" style="cursor:pointer;"></th>
-                <th>來源單號</th>
-                <th>商品編號</th>
-                <th>商品名稱</th>
-                <th style="text-align:center;">數量</th>
-                <th style="text-align:right;">成本單價</th>
-                <th style="text-align:right;">小計</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${g.items.map((it, ii) => `
+          <div id="suppBody_${gi}" style="display:none;">
+            <table class="detail-table">
+              <thead>
                 <tr>
-                  <td style="text-align:center;"><input type="checkbox" class="supp-check-${gi}" value="${it.detailId}" checked onchange="updateSupplierTotal(${gi})" style="cursor:pointer;"></td>
-                  <td><span style="font-family:monospace; font-size:12px; color:#475569;">${it.orderId}</span><br><span style="font-size:11px; color:#94a3b8;">${it.orderDate}</span></td>
-                  <td style="font-family:monospace; font-size:12px; color:#64748b;">${it.productId || '—'}</td>
-                  <td style="font-weight:500;">${it.productName}</td>
-                  <td style="text-align:center;">${it.qty} ${it.unit}</td>
-                  <td style="text-align:right; font-family:monospace;">$${it.cost.toLocaleString()}</td>
-                  <td style="text-align:right; font-family:monospace; font-weight:600;">$${it.subtotal.toLocaleString()}</td>
+                  <th style="width:36px; text-align:center;"><input type="checkbox" checked onchange="toggleSupplierGroup(${gi}, this.checked)" style="cursor:pointer;"></th>
+                  <th>來源單號</th>
+                  <th>商品編號</th>
+                  <th>商品名稱</th>
+                  <th style="text-align:center;">數量</th>
+                  <th style="text-align:right;">成本單價</th>
+                  <th style="text-align:right;">小計</th>
                 </tr>
-              `).join('')}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                ${g.items.map((it, ii) => `
+                  <tr>
+                    <td style="text-align:center;"><input type="checkbox" class="supp-check-${gi}" value="${it.detailId}" checked onchange="updateSupplierTotal(${gi})" style="cursor:pointer;"></td>
+                    <td><span style="font-family:monospace; font-size:12px; color:#475569;">${it.orderId}</span><br><span style="font-size:11px; color:#94a3b8;">${it.orderDate}</span></td>
+                    <td style="font-family:monospace; font-size:12px; color:#64748b;">${it.productId || '—'}</td>
+                    <td style="font-weight:500;">${it.productName}</td>
+                    <td style="text-align:center;">${it.qty} ${it.unit}</td>
+                    <td style="text-align:right; font-family:monospace;">$${it.cost.toLocaleString()}</td>
+                    <td style="text-align:right; font-family:monospace; font-weight:600;">$${it.subtotal.toLocaleString()}</td>
+                  </tr>
+                `).join('')}
+              </tbody>
+            </table>
+          </div>
         </div>`;
     }).join('');
+  }
+
+  function toggleSupplierCard(gi) {
+    const body = document.getElementById('suppBody_' + gi);
+    const arrow = document.getElementById('suppArrow_' + gi);
+    if (!body) return;
+    const isOpen = body.style.display !== 'none';
+    body.style.display = isOpen ? 'none' : '';
+    arrow.textContent = isOpen ? '▶' : '▼';
   }
 
   function toggleSupplierGroup(gi, checked) {
