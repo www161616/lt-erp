@@ -3997,7 +3997,7 @@ function showBillingDetail(orderId) {
     <table style="width:100%; border-collapse:collapse; font-size:13px;">
       <thead>
         <tr style="background:#f8f9fa;">
-          <th style="padding:10px 16px; width:32px; border-bottom:1px solid var(--border);"></th>
+          <th style="padding:10px 16px; width:32px; border-bottom:1px solid var(--border);"><input type="checkbox" checked id="billingLabelAllCk" onchange="document.querySelectorAll('.billing-label-ck').forEach(function(c){ c.checked=this.checked; }.bind(this))" style="width:16px; height:16px; cursor:pointer; accent-color:#7c3aed;" title="全選/全取消"></th>
           <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">商品編號</th>
           <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">商品名稱</th>
           <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600;">數量</th>
