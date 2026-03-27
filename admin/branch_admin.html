@@ -311,22 +311,12 @@
 
       // 系統管理：僅 admin
 
-      // 陸貨專區（漂漂館+團購叫貨）：assistant + admin，其他帳號隱藏
+      // 漂漂館+團購叫貨+匯入開團：僅 admin/assistant，staff 隱藏
       const showPP = isAdmin || isAssistant;
       document.getElementById('menu-ppAssistant').style.display = showPP ? '' : 'none';
       document.getElementById('menu-gbOrder').style.display = showPP ? '' : 'none';
-
-      // staff 隱藏所有主要區塊（僅看基本功能）
-      const hideForStaff = [
-        'menu-home','label-product','menu-campaign','menu-purchase','menu-searchPurchase','menu-adminSummary','menu-importGroupBuy','menu-orders',
-        'menu-cnArrivals','menu-cnReturns',
-        'label-warehouse','menu-picking','menu-pickingHistory','menu-demandBackorder','menu-transfer','menu-aid','menu-arrivalTracking','menu-bulletin',
-        'label-accounting','menu-accounting'
-      ];
-      hideForStaff.forEach(id => {
-        const el = document.getElementById(id);
-        if (el) el.style.display = isStaff ? 'none' : '';
-      });
+      const importEl = document.getElementById('menu-importGroupBuy');
+      if (importEl) importEl.style.display = showPP ? '' : 'none';
     }
 
     async function checkLoginStatus() {
@@ -351,7 +341,7 @@
           const { data: { session } } = await sbClient.auth.getSession();
           if (session) {
             const meta = session.user.user_metadata || {};
-            if (meta.role === 'admin' || meta.role === 'assistant') {
+            if (meta.role === 'admin' || meta.role === 'assistant' || meta.role === 'staff') {
               HEADERS['Authorization'] = `Bearer ${session.access_token}`;
               sessionStorage.setItem('sb_auth_token', session.access_token);
               sessionStorage.setItem('sb_auth_token_admin_email', session.user.email);
@@ -422,7 +412,7 @@
         sessionStorage.setItem('sb_auth_token_admin_pass', pass);
 
         const meta = authData.user.user_metadata || {};
-        if (meta.role !== 'admin' && meta.role !== 'assistant') {
+        if (meta.role !== 'admin' && meta.role !== 'assistant' && meta.role !== 'staff') {
           await sbClient.auth.signOut();
           Swal.fire('權限不足', '此帳號無法使用管理後台。', 'error');
           return;
