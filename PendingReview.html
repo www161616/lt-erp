@@ -90,6 +90,7 @@
   <div class="tab-bar">
     <button class="tab-btn active" onclick="switchTab('sales', this)">🛒 待審銷貨單 <span class="badge" id="badgeSales">0</span></button>
     <button class="tab-btn" onclick="switchTab('purchase', this)">📥 待審進貨單 <span class="badge" id="badgePurchase">0</span></button>
+    <button class="tab-btn" onclick="switchTab('supplier', this)">🏭 依廠商到貨 <span class="badge" id="badgeSupplier">0</span></button>
   </div>
 
   <div class="content-area">
@@ -102,6 +103,12 @@
     <div class="tab-content" id="tabPurchase">
       <div class="summary-bar" id="purchaseSummary"></div>
       <div class="list-scroll" id="purchaseList">
+        <div class="empty-state">載入中...</div>
+      </div>
+    </div>
+    <div class="tab-content" id="tabSupplier">
+      <div class="summary-bar" id="supplierSummary"></div>
+      <div class="list-scroll" id="supplierList">
         <div class="empty-state">載入中...</div>
       </div>
     </div>
@@ -126,6 +133,7 @@
   let pendingSalesOrders = [];
   let pendingPurchaseOrders = [];
   let allCustomers = [];
+  let allSuppliers = [];
 
   // ============================
   // 分頁切換
@@ -134,7 +142,9 @@
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
     el.classList.add('active');
-    document.getElementById(tab === 'sales' ? 'tabSales' : 'tabPurchase').classList.add('active');
+    const tabMap = { sales: 'tabSales', purchase: 'tabPurchase', supplier: 'tabSupplier' };
+    document.getElementById(tabMap[tab]).classList.add('active');
+    if (tab === 'supplier') loadSupplierView();
   }
 
   // ============================
@@ -144,7 +154,8 @@
     await Promise.all([
       loadPendingSales(),
       loadPendingPurchases(),
-      loadCustomers()
+      loadCustomers(),
+      loadSuppliers()
     ]);
   }
 
@@ -154,6 +165,14 @@
       const res = await fetch(`${SB_URL}/customers?select=id,name,tax_type`, { headers: HEADERS });
       if (res.ok) allCustomers = await res.json();
     } catch(e) { console.error('loadCustomers error:', e); }
+  }
+
+  // 載入供應商清單
+  async function loadSuppliers() {
+    try {
+      const res = await fetch(`${SB_URL}/suppliers?select=id,name`, { headers: HEADERS });
+      if (res.ok) allSuppliers = await res.json();
+    } catch(e) { console.error('loadSuppliers error:', e); }
   }
 
   // ============================
@@ -424,7 +443,7 @@
   // ============================
   async function loadPendingPurchases() {
     try {
-      const res = await fetch(`${SB_URL}/internal_purchases?status=eq.待審核&select=*&order=order_date.desc,id.desc`, { headers: HEADERS });
+      const res = await fetch(`${SB_URL}/internal_purchases?status=in.("待審核","部分到貨")&select=*&order=order_date.desc,id.desc`, { headers: HEADERS });
       if (!res.ok) throw new Error('讀取 internal_purchases 失敗');
       pendingPurchaseOrders = await res.json();
       renderPurchaseList();
@@ -737,6 +756,270 @@
       await loadPendingPurchases();
     } catch(e) {
       Swal.fire('操作失敗', e.message, 'error');
+    }
+  }
+
+  // ============================
+  // 依廠商到貨檢視
+  // ============================
+  let supplierViewData = []; // [{supplier, supplierId, items:[{detailId, orderId, orderDate, productId, productName, qty, cost, subtotal}]}]
+
+  async function loadSupplierView() {
+    const list = document.getElementById('supplierList');
+    list.innerHTML = '<div class="empty-state">載入中...</div>';
+
+    try {
+      // 1. 讀取所有待審核+部分到貨的 internal_purchases
+      const ordRes = await fetch(`${SB_URL}/internal_purchases?status=in.("待審核","部分到貨")&select=id,order_date,supplier_name,status`, { headers: HEADERS });
+      if (!ordRes.ok) throw new Error('讀取 internal_purchases 失敗');
+      const orders = await ordRes.json();
+      if (orders.length === 0) {
+        document.getElementById('badgeSupplier').textContent = '0';
+        document.getElementById('supplierSummary').innerHTML = '<div class="summary-item">目前沒有待到貨的採購單</div>';
+        list.innerHTML = '<div class="empty-state">🎉 目前沒有待到貨的採購品項</div>';
+        return;
+      }
+
+      // 2. 讀取對應 details（未轉入的）
+      const orderIds = orders.map(o => `"${o.id}"`).join(',');
+      const detRes = await fetch(`${SB_URL}/internal_purchase_details?order_id=in.(${orderIds})&converted_po_id=is.null&select=*&order=order_id.asc,id.asc`, { headers: HEADERS });
+      if (!detRes.ok) throw new Error('讀取明細失敗');
+      const details = await detRes.json();
+
+      // 3. 建立 order lookup
+      const orderMap = {};
+      orders.forEach(o => { orderMap[o.id] = o; });
+
+      // 4. 按 supplier 分組
+      const groups = {};
+      details.forEach(d => {
+        const ord = orderMap[d.order_id] || {};
+        // supplier 優先取 detail 的，fallback 取主單的
+        let supp = (d.supplier || '').trim();
+        if (!supp) supp = (ord.supplier_name || '').trim();
+        if (!supp) supp = '未指定供應商';
+        if (!groups[supp]) groups[supp] = [];
+        groups[supp].push({
+          detailId: d.id,
+          orderId: d.order_id,
+          orderDate: ord.order_date || '',
+          productId: d.product_id,
+          productName: d.product_name,
+          qty: Number(d.qty) || 0,
+          unit: d.unit || '個',
+          cost: Number(d.cost) || 0,
+          subtotal: Number(d.subtotal) || 0
+        });
+      });
+
+      // 5. 排序：未指定放最後，其他按名稱排
+      const sortedKeys = Object.keys(groups).sort((a, b) => {
+        if (a === '未指定供應商') return 1;
+        if (b === '未指定供應商') return -1;
+        return a.localeCompare(b, 'zh-TW');
+      });
+
+      supplierViewData = sortedKeys.map(supp => ({
+        supplier: supp,
+        items: groups[supp]
+      }));
+
+      // 6. badge
+      const totalItems = details.length;
+      document.getElementById('badgeSupplier').textContent = sortedKeys.length;
+
+      // 7. summary
+      const totalAmount = details.reduce((s, d) => s + (Number(d.subtotal) || 0), 0);
+      document.getElementById('supplierSummary').innerHTML = `
+        <div class="summary-item">廠商數：<b>${sortedKeys.length}</b></div>
+        <div class="summary-item">待到貨品項：<b>${totalItems}</b></div>
+        <div class="summary-item">待到貨總額：<b style="color:#c05621;">$${totalAmount.toLocaleString()}</b></div>
+      `;
+
+      // 8. render
+      renderSupplierCards();
+    } catch(e) {
+      console.error('loadSupplierView error:', e);
+      list.innerHTML = `<div class="empty-state" style="color:#dc2626;">載入失敗: ${e.message}</div>`;
+    }
+  }
+
+  function renderSupplierCards() {
+    const list = document.getElementById('supplierList');
+    if (supplierViewData.length === 0) {
+      list.innerHTML = '<div class="empty-state">🎉 目前沒有待到貨的採購品項</div>';
+      return;
+    }
+
+    list.innerHTML = supplierViewData.map((g, gi) => {
+      const totalAmt = g.items.reduce((s, it) => s + it.subtotal, 0);
+      const isUnknown = g.supplier === '未指定供應商';
+      const headerBg = isUnknown ? '#fef3c7' : '#d1fae5';
+      const headerColor = isUnknown ? '#92400e' : '#065f46';
+
+      return `
+        <div style="margin:12px 18px; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden;">
+          <div style="background:${headerBg}; padding:12px 18px; display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <span style="font-size:16px; font-weight:bold; color:${headerColor};">🏭 ${g.supplier}</span>
+              <span style="margin-left:10px; font-size:12px; color:#64748b;">${g.items.length} 項品項</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span style="font-size:15px; font-weight:bold; color:#c05621; font-family:monospace;" id="suppTotal_${gi}">$${totalAmt.toLocaleString()}</span>
+              <button class="btn btn-approve" onclick="convertSupplierGroup(${gi})" style="padding:8px 16px;">✅ 確認到貨，轉入進貨單</button>
+            </div>
+          </div>
+          <table class="detail-table">
+            <thead>
+              <tr>
+                <th style="width:36px; text-align:center;"><input type="checkbox" checked onchange="toggleSupplierGroup(${gi}, this.checked)" style="cursor:pointer;"></th>
+                <th>來源單號</th>
+                <th>商品編號</th>
+                <th>商品名稱</th>
+                <th style="text-align:center;">數量</th>
+                <th style="text-align:right;">成本單價</th>
+                <th style="text-align:right;">小計</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${g.items.map((it, ii) => `
+                <tr>
+                  <td style="text-align:center;"><input type="checkbox" class="supp-check-${gi}" value="${it.detailId}" checked onchange="updateSupplierTotal(${gi})" style="cursor:pointer;"></td>
+                  <td><span style="font-family:monospace; font-size:12px; color:#475569;">${it.orderId}</span><br><span style="font-size:11px; color:#94a3b8;">${it.orderDate}</span></td>
+                  <td style="font-family:monospace; font-size:12px; color:#64748b;">${it.productId || '—'}</td>
+                  <td style="font-weight:500;">${it.productName}</td>
+                  <td style="text-align:center;">${it.qty} ${it.unit}</td>
+                  <td style="text-align:right; font-family:monospace;">$${it.cost.toLocaleString()}</td>
+                  <td style="text-align:right; font-family:monospace; font-weight:600;">$${it.subtotal.toLocaleString()}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>`;
+    }).join('');
+  }
+
+  function toggleSupplierGroup(gi, checked) {
+    document.querySelectorAll(`.supp-check-${gi}`).forEach(c => { c.checked = checked; });
+    updateSupplierTotal(gi);
+  }
+
+  function updateSupplierTotal(gi) {
+    const checks = document.querySelectorAll(`.supp-check-${gi}:checked`);
+    const g = supplierViewData[gi];
+    let total = 0;
+    checks.forEach(c => {
+      const item = g.items.find(it => it.detailId === c.value);
+      if (item) total += item.subtotal;
+    });
+    const el = document.getElementById(`suppTotal_${gi}`);
+    if (el) el.textContent = '$' + total.toLocaleString();
+  }
+
+  async function convertSupplierGroup(gi) {
+    const g = supplierViewData[gi];
+    // 收集勾選的品項
+    const checks = document.querySelectorAll(`.supp-check-${gi}:checked`);
+    const selectedIds = new Set(Array.from(checks).map(c => c.value));
+    const selectedItems = g.items.filter(it => selectedIds.has(it.detailId));
+
+    if (selectedItems.length === 0) {
+      Swal.fire('提醒', '請至少勾選一個品項', 'warning');
+      return;
+    }
+
+    const subtotal = selectedItems.reduce((s, it) => s + it.subtotal, 0);
+    const confirm = await Swal.fire({
+      title: '確認到貨，轉入進貨單？',
+      html: `廠商：<b>${g.supplier}</b><br>品項：<b>${selectedItems.length}</b> 項<br>金額：<b style="color:#047857; font-size:18px;">$${subtotal.toLocaleString()}</b>
+        <br><br><span style="color:#047857; font-size:13px;">✅ 將為此廠商建立一張正式進貨單。</span>`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: '確認轉入',
+      confirmButtonColor: '#047857',
+      cancelButtonText: '再看看'
+    });
+    if (!confirm.isConfirmed) return;
+
+    Swal.fire({ title: '轉入中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+    try {
+      // 找 supplier_id
+      const suppMatch = allSuppliers.find(s => s.name === g.supplier);
+      const supplierId = suppMatch ? suppMatch.id : null;
+
+      // 用第一筆的 orderDate 當進貨單日期
+      const orderDate = selectedItems[0].orderDate || new Date().toISOString().split('T')[0];
+
+      // 組來源單號備註
+      const sourceOrders = [...new Set(selectedItems.map(it => it.orderId))];
+      const noteText = '轉自內部採購 ' + sourceOrders.join(', ');
+
+      const orderData = {
+        order_date: orderDate,
+        supplier_id: supplierId,
+        supplier_name: g.supplier === '未指定供應商' ? '' : g.supplier,
+        total_amount: subtotal,
+        tax_amount: 0,
+        grand_total: subtotal,
+        handler: '調度中心',
+        payment_status: '未付款',
+        payment_method: '',
+        note: noteText,
+        items: selectedItems.map(it => ({
+          product_id: it.productId,
+          product_name: it.productName,
+          spec: '',
+          qty: it.qty,
+          unit: it.unit,
+          unit_cost: it.cost,
+          note: ''
+        }))
+      };
+
+      const res = await fetch(`${SB_URL}/rpc/web_save_purchase_order`, {
+        method: 'POST',
+        headers: HEADERS,
+        body: JSON.stringify({ p_order_data: orderData })
+      });
+      if (!res.ok) throw new Error('寫入失敗：' + await res.text());
+      const newPoId = await res.json();
+
+      // 回寫 converted_po_id 到每個 detail
+      const detailIds = selectedItems.map(it => `"${it.detailId}"`).join(',');
+      await fetch(`${SB_URL}/internal_purchase_details?id=in.(${detailIds})`, {
+        method: 'PATCH',
+        headers: { ...HEADERS, 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ converted_po_id: newPoId })
+      });
+
+      // 更新來源 internal_purchases 的狀態
+      for (const orderId of sourceOrders) {
+        // 查該單所有 detail 是否都已轉
+        const checkRes = await fetch(`${SB_URL}/internal_purchase_details?order_id=eq.${orderId}&converted_po_id=is.null&select=id&limit=1`, { headers: HEADERS });
+        const remaining = checkRes.ok ? await checkRes.json() : [{ id: 'unknown' }];
+        const newStatus = remaining.length === 0 ? '已轉單' : '部分到貨';
+        await fetch(`${SB_URL}/internal_purchases?id=eq.${orderId}`, {
+          method: 'PATCH',
+          headers: { ...HEADERS, 'Prefer': 'return=minimal' },
+          body: JSON.stringify({ status: newStatus })
+        });
+      }
+
+      Swal.fire({
+        title: '轉入成功',
+        html: `正式進貨單號：<b>${newPoId}</b><br>廠商：${g.supplier}<br>金額：$${subtotal.toLocaleString()}`,
+        icon: 'success',
+        timer: 2500,
+        showConfirmButton: true
+      });
+
+      // 重新載入
+      await loadSupplierView();
+      await loadPendingPurchases();
+    } catch(e) {
+      console.error('convertSupplierGroup error:', e);
+      Swal.fire('轉入失敗', e.message, 'error');
     }
   }
 
