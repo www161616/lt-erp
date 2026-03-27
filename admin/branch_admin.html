@@ -1667,6 +1667,8 @@
             price_wholesale: Number(d.price_wholesale || 0),
             price_group: Number(d.price_group || 0),
             subtotal: Number(d.subtotal || 0),
+            supplier: d.supplier || '',
+            detailId: d.id,
             note: d.note || ''
           }))
         };
@@ -1687,6 +1689,9 @@
         itemRows += `<tr style="border-bottom:1px solid #f0f0f0;">
           <td style="padding:8px; text-align:center;">${i+1}</td>
           <td style="padding:8px;"><b>${it.productName}</b><br><small style="color:#888;">${it.productId}</small></td>
+          <td style="padding:8px;">
+            <input type="text" list="ipSupplierList2" value="${it.supplier || ''}" placeholder="填入廠商" data-detail-id="${it.detailId}" onchange="ipUpdateItemSupplier(this)" style="width:110px; padding:4px 6px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px; font-family:inherit;">
+          </td>
           <td style="padding:8px; text-align:center;">${it.qty} ${it.unit}</td>
           <td style="padding:8px; text-align:right;">$${it.cost.toLocaleString()}</td>
           <td style="padding:8px; text-align:right;">$${it.price.toLocaleString()}</td>
@@ -1724,6 +1729,7 @@
               <thead><tr style="background:var(--accent-light);">
                 <th style="padding:8px; text-align:center; font-size:12px; color:var(--accent);">#</th>
                 <th style="padding:8px; text-align:left; font-size:12px; color:var(--accent);">品名</th>
+                <th style="padding:8px; text-align:left; font-size:12px; color:var(--accent);">廠商</th>
                 <th style="padding:8px; text-align:center; font-size:12px; color:var(--accent);">數量</th>
                 <th style="padding:8px; text-align:right; font-size:12px; color:var(--accent);">成本</th>
                 <th style="padding:8px; text-align:right; font-size:12px; color:var(--accent);">售價</th>
@@ -1747,7 +1753,32 @@
               ${canDelete ? `<button onclick="ipDeleteOrder('${o.orderId}')" style="padding:8px 16px; background:#c53030; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">🗑️ 刪除</button>` : ''}
             </div>
           </div>
+          <datalist id="ipSupplierList2">${allSuppliers.map(s => `<option value="${s.name}">`).join('')}</datalist>
         </div>`;
+    }
+
+    async function ipUpdateItemSupplier(input) {
+      const detailId = input.getAttribute('data-detail-id');
+      const supplierVal = input.value.trim();
+      if (!detailId) return;
+      try {
+        const res = await fetch(`${SB_URL}/internal_purchase_details?id=eq.${detailId}`, {
+          method: 'PATCH',
+          headers: { ...HEADERS, 'Prefer': 'return=minimal', 'Content-Type': 'application/json' },
+          body: JSON.stringify({ supplier: supplierVal })
+        });
+        if (!res.ok) throw new Error(await res.text());
+        if (ipCurrentDetail) {
+          const item = ipCurrentDetail.items.find(it => it.detailId === detailId);
+          if (item) item.supplier = supplierVal;
+        }
+        input.style.borderColor = '#38a169';
+        setTimeout(function() { input.style.borderColor = '#e2e8f0'; }, 1500);
+      } catch(e) {
+        console.error('ipUpdateItemSupplier error:', e);
+        input.style.borderColor = '#c53030';
+        Swal.fire('儲存失敗', e.message, 'error');
+      }
     }
 
     function ipPrintOrder() {
@@ -1759,6 +1790,7 @@
           <td style="text-align:center;">${i+1}</td>
           <td style="font-family:monospace; font-size:11px;">${it.productId||''}</td>
           <td>${it.productName}</td>
+          <td>${it.supplier || '—'}</td>
           <td style="text-align:center;">${it.qty} ${it.unit||''}</td>
           <td style="text-align:right;">$${it.cost.toLocaleString()}</td>
           <td style="text-align:right;">$${(it.price||0).toLocaleString()}</td>
@@ -1791,13 +1823,13 @@
   ${displayNote !== '無' ? `<div class="info-row"><span><b>備註：</b>${displayNote}</span></div>` : ''}
   <table>
     <thead><tr>
-      <th>項次</th><th>商品編號</th><th>商品名稱</th><th>數量</th>
+      <th>項次</th><th>商品編號</th><th>商品名稱</th><th>廠商</th><th>數量</th>
       <th>成本</th><th>售價</th><th>分店價</th><th>批發價</th><th>團購價</th><th>小計</th>
     </tr></thead>
     <tbody>${rows}</tbody>
     <tfoot>
       <tr class="total-row">
-        <td colspan="9" style="text-align:right;"><b>總計</b></td>
+        <td colspan="10" style="text-align:right;"><b>總計</b></td>
         <td style="text-align:right;"><b>$${o.grandTotal.toLocaleString()}</b></td>
       </tr>
     </tfoot>
@@ -1817,12 +1849,12 @@
     function ipExportDetail() {
       if (!ipCurrentDetail) return;
       const o = ipCurrentDetail;
-      let csv = '\uFEFF項次,商品編號,品名,數量,單位,單價成本,售價,分店價,批發價,團購價,小計\n';
+      let csv = '\uFEFF項次,商品編號,品名,廠商,數量,單位,單價成本,售價,分店價,批發價,團購價,小計\n';
       o.items.forEach((it, i) => {
         const lt = it.qty * it.cost;
-        csv += `${i+1},="${ String(it.productId).replace(/"/g,'""') }","${(it.productName||'').replace(/"/g,'""')}",${it.qty},"${it.unit||'個'}",${it.cost},${it.price||0},${it.price_branch||0},${it.price_wholesale||0},${it.price_group||0},${lt}\n`;
+        csv += `${i+1},="${ String(it.productId).replace(/"/g,'""') }","${(it.productName||'').replace(/"/g,'""')}","${(it.supplier||'').replace(/"/g,'""')}",${it.qty},"${it.unit||'個'}",${it.cost},${it.price||0},${it.price_branch||0},${it.price_wholesale||0},${it.price_group||0},${lt}\n`;
       });
-      csv += `,,,,,,,,,,\n,,,,,,,,,,總計,${o.grandTotal}\n`;
+      csv += `,,,,,,,,,,,\n,,,,,,,,,,,總計,${o.grandTotal}\n`;
       ipDownloadCSV(csv, `內部採購單_${o.orderId}_${o.date}`);
     }
 
