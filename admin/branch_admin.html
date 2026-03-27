@@ -1772,8 +1772,32 @@
           const item = ipCurrentDetail.items.find(it => it.detailId === detailId);
           if (item) item.supplier = supplierVal;
         }
-        input.style.borderColor = '#38a169';
-        setTimeout(function() { input.style.borderColor = '#e2e8f0'; }, 1500);
+        const existsInList = supplierVal && allSuppliers.find(s => s.name === supplierVal);
+        if (existsInList) {
+          input.style.borderColor = '#38a169';
+          input.title = '';
+          setTimeout(function() { input.style.borderColor = '#e2e8f0'; }, 1500);
+          const td = input.closest('td');
+          if (td) { const old = td.querySelector('.supp-warn'); if (old) old.remove(); }
+        } else if (supplierVal) {
+          input.style.borderColor = '#d97706';
+          input.title = '⚠️ 此廠商不在供應商清單，請至 index 新增廠商，否則轉入進貨單時將無廠商對應';
+          const td = input.closest('td');
+          if (td) {
+            const old = td.querySelector('.supp-warn');
+            if (old) old.remove();
+            const warn = document.createElement('div');
+            warn.className = 'supp-warn';
+            warn.style.cssText = 'font-size:10px; color:#d97706; margin-top:2px; line-height:1.3;';
+            warn.textContent = '⚠️ 不在供應商清單';
+            td.appendChild(warn);
+          }
+        } else {
+          input.style.borderColor = '#e2e8f0';
+          input.title = '';
+          const td = input.closest('td');
+          if (td) { const old = td.querySelector('.supp-warn'); if (old) old.remove(); }
+        }
       } catch(e) {
         console.error('ipUpdateItemSupplier error:', e);
         input.style.borderColor = '#c53030';
