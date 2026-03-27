@@ -631,6 +631,12 @@
     </label>
   </div>
 </div>
+      <div style="margin-bottom:12px;">
+        <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-size:13px; padding:10px 14px; border:1.5px solid #f59e0b; border-radius:6px; background:#fffbeb; width:fit-content;">
+          <input type="checkbox" id="tfIsDirect" style="width:16px; height:16px; cursor:pointer; accent-color:#f59e0b;">
+          <span>🔄 空中轉（A店直接交付B店，不經過總倉）</span>
+        </label>
+      </div>
       <div style="font-size:12px; font-weight:700; color:#6b7280; margin-bottom:5px;">備註</div>
       <input type="text" id="tfNote" placeholder="選填" style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:6px; font-size:14px; font-family:inherit;">
     </div>
@@ -2806,6 +2812,7 @@ async function submitTransfer() {
   const fromStore = currentStore?.name;
   const toStore   = document.getElementById('tfTo').value;
   const note      = document.getElementById('tfNote').value.trim();
+  const isDirect  = document.getElementById('tfIsDirect')?.checked || false;
   const tempNote  = document.querySelector('input[name="tfTempNote"]:checked')?.value || '';
   if (!tempNote) { Swal.fire('提醒', '請選擇整單溫層（冷凍／冷藏／常溫）', 'warning'); return; }
   const validItems = tfItems.filter(i => i.name.trim() && parseInt(i.qty) > 0);
@@ -2817,7 +2824,7 @@ async function submitTransfer() {
   const orderRes = await fetch(`${SB_URL}/transfer_orders`, {
     method: 'POST',
     headers: { ...SB_HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
-    body: JSON.stringify({ id: tfId, from_store: fromStore, to_store: toStore, status: 'pending', admin_status: 'pending', temp_note: tempNote, note: note })
+    body: JSON.stringify({ id: tfId, from_store: fromStore, to_store: toStore, status: isDirect ? 'direct' : 'pending', admin_status: isDirect ? 'direct' : 'pending', temp_note: tempNote, note: note })
   });
   if (!orderRes.ok) { Swal.fire('建立失敗', await orderRes.text(), 'error'); return; }
 
@@ -2839,6 +2846,7 @@ async function submitTransfer() {
   }).then(result => {
     if (result.isConfirmed) printTransfer(tfId);
     document.getElementById('tfNote').value = '';
+    if (document.getElementById('tfIsDirect')) document.getElementById('tfIsDirect').checked = false;
     tfItems = [{ code: '', name: '', qty: '', price: 0 }];
     renderTfItems();
     loadTransferList().then(() => switchTfTab('mine', document.getElementById('tfTab-mine')));
@@ -2866,9 +2874,9 @@ function renderTransferPage() {
   const now = new Date();
   const myName = currentStore?.name;
 
-  const adminStatusLabel = { pending:'⏳ 待總倉審核', arrived:'📦 已到總倉', shipped:'🚚 已配送', received:'✅ 已收到', cancelled:'❌ 已作廢', pending_supplement:'⚠️ 待確認補發' };
-  const adminStatusColor = { pending:'#be185d', arrived:'#2563eb', shipped:'#047857', received:'#475569', cancelled:'#9ca3af', pending_supplement:'#b45309' };
-  const adminStatusBg    = { pending:'#fce7f3', arrived:'#dbeafe', shipped:'#d1fae5', received:'#f3f4f6', cancelled:'#f3f4f6', pending_supplement:'#fef3c7' };
+  const adminStatusLabel = { pending:'⏳ 待總倉審核', arrived:'📦 已到總倉', shipped:'🚚 已配送', received:'✅ 已收到', cancelled:'❌ 已作廢', pending_supplement:'⚠️ 待確認補發', direct:'🔄 空中轉' };
+  const adminStatusColor = { pending:'#be185d', arrived:'#2563eb', shipped:'#047857', received:'#475569', cancelled:'#9ca3af', pending_supplement:'#b45309', direct:'#d97706' };
+  const adminStatusBg    = { pending:'#fce7f3', arrived:'#dbeafe', shipped:'#d1fae5', received:'#f3f4f6', cancelled:'#f3f4f6', pending_supplement:'#fef3c7', direct:'#fef3c7' };
 
   function tfDateStr(t) { return new Date(t.created_at).toLocaleString('zh-TW', { month:'2-digit', day:'2-digit', hour:'2-digit', minute:'2-digit' }); }
   function tfItemSummary(t) { return (t.items||[]).map(i => `${i.product_name} x${i.qty}${i.price ? ' ($'+i.price+')' : ''}`).join('、'); }
@@ -2935,7 +2943,7 @@ function renderTransferPage() {
           const st = t.admin_status || 'pending';
           const noteHtml = t.warehouse_note ? `<div style="font-size:11px; color:#2563eb;">總倉：${t.warehouse_note}</div>` : '';
           const statusBadge = `<span style="background:${adminStatusBg[st]||'#f3f4f6'}; color:${adminStatusColor[st]||'#374151'}; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; white-space:nowrap;">${adminStatusLabel[st]||st}</span>`;
-          const actionHtml = st === 'shipped'
+          const actionHtml = (st === 'shipped' || st === 'direct')
             ? `<button onclick="confirmTf('${t.id}')" style="padding:6px 14px; background:var(--primary); color:white; border:none; border-radius:4px; font-size:12px; font-weight:700; cursor:pointer; font-family:inherit;">✅ 確認收到</button>`
             : `<span style="font-size:11px; color:#9ca3af;">等待總倉處理</span>`;
           return `<tr style="border-bottom:1px solid #f3f4f6;">
