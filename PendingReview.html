@@ -289,6 +289,16 @@
 
     Swal.fire({ title: '開立中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 
+    // 如果已有 dbId，代表已經寫入過 DB，不再重複呼叫 RPC
+    if (o.dbId) {
+      try {
+        await updateSharedKvOrderStatus(o.id, 'issued');
+        Swal.fire({ title: '已開立！', html: `此單已存在於 ERP（${o.dbId}），狀態已更新為已開立。`, icon: 'success', timer: 2000, showConfirmButton: false });
+        await loadPendingSales();
+      } catch(e) { Swal.fire('錯誤', e.message, 'error'); }
+      return;
+    }
+
     try {
       // 找客戶
       const cust = allCustomers.find(c => c.name.includes(o.storeName)) || { id: null, name: o.storeName, tax_type: '免稅' };
@@ -632,6 +642,13 @@
       var o = pendingSalesOrders.find(function(x) { return x.id === ids[i]; });
       if (!o) { fail++; continue; }
       try {
+        // 如果已有 dbId，跳過 RPC 只更新狀態
+        if (o.dbId) {
+          await updateSharedKvOrderStatus(ids[i], 'issued');
+          ok++;
+          Swal.update({ title: '批次開立中... ' + (ok + fail) + '/' + ids.length });
+          continue;
+        }
         var cust = allCustomers.find(function(c) { return c.name.includes(o.storeName); }) || { id: null, name: o.storeName, tax_type: '免稅' };
         var createdAt = o.createdAt || o.issuedAt || '';
         var dateStr = createdAt ? createdAt.replace(/\//g, '-').substring(0, 10) : new Date().toISOString().split('T')[0];

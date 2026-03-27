@@ -345,9 +345,6 @@
         autoCloseJanFeb();
         renderDashboard();
         checkArrivalBadge();
-        // 保護：本機有資料就推上雲端，確保換電腦不遺失
-        var _localSO = localStorage.getItem('portalSalesOrders');
-        if (_localSO && JSON.parse(_localSO).length > 0) cloudSave('portalSalesOrders');
       } else {
         // 嘗試從 Supabase session 自動恢復
         try {
@@ -371,8 +368,6 @@
               autoCloseJanFeb();
               renderDashboard();
               checkArrivalBadge();
-              var _localSO2 = localStorage.getItem('portalSalesOrders');
-              if (_localSO2 && JSON.parse(_localSO2).length > 0) cloudSave('portalSalesOrders');
               return;
             }
           }
@@ -7738,12 +7733,26 @@
   let mockSalesOrders = JSON.parse(localStorage.getItem('portalSalesOrders') || '[]');
 
   function syncSalesOrdersToPortal() {
-    // 同步全部銷貨單到雲端（含 issued/closed），確保跨裝置資料一致
-    localStorage.setItem('portalSalesOrders', JSON.stringify(mockSalesOrders));
+    // 去重後再存，避免累積重複資料
+    const seenIds = new Set();
+    const unique = mockSalesOrders.filter(o => {
+      if (seenIds.has(o.id)) return false;
+      seenIds.add(o.id);
+      return true;
+    });
+    mockSalesOrders = unique;
+    localStorage.setItem('portalSalesOrders', JSON.stringify(unique));
     cloudSave('portalSalesOrders');
   }
 
   function syncSalesOrdersFromPortal() {
+    // 先去重 mockSalesOrders 本身
+    const seenIds = new Set();
+    mockSalesOrders = mockSalesOrders.filter(o => {
+      if (seenIds.has(o.id)) return false;
+      seenIds.add(o.id);
+      return true;
+    });
     try {
       const portalData = JSON.parse(localStorage.getItem('portalSalesOrders') || '[]');
       portalData.forEach(po => {
