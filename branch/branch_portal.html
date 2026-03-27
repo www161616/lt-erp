@@ -434,12 +434,20 @@
 
   <!-- 新增追加單 -->
   <div style="background:white; border-radius:8px; border:1px solid var(--border); padding:20px 24px; margin-bottom:20px; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
-    <div style="font-size:15px; font-weight:700; color:var(--primary); margin-bottom:16px;">➕ 新增追加需求</div>
-    
-    <div style="display:grid; grid-template-columns:3fr 1fr 2fr auto; gap:10px; align-items:end;">
-      
+    <div style="display:flex; align-items:center; gap:16px; margin-bottom:16px;">
+      <span style="font-size:15px; font-weight:700; color:var(--primary);">➕ 新增需求</span>
+      <label style="display:flex; align-items:center; gap:4px; cursor:pointer; font-size:13px; font-weight:600; color:#374151;">
+        <input type="radio" name="reqType" value="追加商品" checked onchange="onReqTypeChange(this.value)"> 追加商品
+      </label>
+      <label style="display:flex; align-items:center; gap:4px; cursor:pointer; font-size:13px; font-weight:600; color:#2b6cb0;">
+        <input type="radio" name="reqType" value="詢問到貨日" onchange="onReqTypeChange(this.value)"> 詢問到貨日
+      </label>
+    </div>
+
+    <div style="display:grid; grid-template-columns:3fr 1fr 2fr auto; gap:10px; align-items:end;" id="reqFormGrid">
+
       <div>
-        <div style="font-size:12px; font-weight:700; color:#6b7280; margin-bottom:5px;">商品名稱 (可搜尋或自填)</div>
+        <div style="font-size:12px; font-weight:700; color:#6b7280; margin-bottom:5px;" id="reqNameLabel">商品名稱 (可搜尋或自填)</div>
         <div style="display:flex; gap:8px;">
           <div style="position:relative; flex:1;">
             <input type="hidden" id="reqCode">
@@ -457,7 +465,7 @@
         </div>
       </div>
 
-      <div>
+      <div id="reqQtyWrap">
         <div style="font-size:12px; font-weight:700; color:#6b7280; margin-bottom:5px;">數量</div>
         <input type="text" inputmode="numeric" id="reqQty" oninput="sanitizeQty(this)" placeholder="0" style="width:100%; padding:9px 12px; border:1.5px solid var(--border); border-radius:6px; font-size:14px; font-family:inherit; text-align:center;">
       </div>
@@ -504,6 +512,7 @@
           <tr style="background:#fce7f3;">
             <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fce7f3;">單號</th>
             <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fce7f3;">分店</th>
+            <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fce7f3;">類別</th>
             <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fce7f3;">商品編號</th>
             <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fce7f3;">商品名稱</th>
             <th style="padding:10px 16px; text-align:right; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fce7f3;">分店價</th>
@@ -531,6 +540,7 @@
           <tr style="background:#fff0f6;">
             <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fff0f6;">單號</th>
             <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fff0f6;">分店</th>
+            <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fff0f6;">類別</th>
             <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fff0f6;">商品編號</th>
             <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fff0f6;">商品名稱</th>
             <th style="padding:10px 16px; text-align:right; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fff0f6;">分店價</th>
@@ -563,6 +573,7 @@
           <tr style="background:#f8f9fa;">
             <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#f8f9fa;">單號</th>
             <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#f8f9fa;">分店</th>
+            <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#f8f9fa;">類別</th>
             <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#f8f9fa;">商品編號</th>
             <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#f8f9fa;">商品名稱</th>
             <th style="padding:10px 16px; text-align:right; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#f8f9fa;">分店價</th>
@@ -2218,7 +2229,8 @@ function selectReqProduct(code, name, price) {
   document.getElementById('reqCode').value = code;
   document.getElementById('reqCode').dataset.price = price || 0;
   hideReqDropdown();
-  setTimeout(() => document.getElementById('reqQty').focus(), 50);
+  const isInquiry = getReqType() === '詢問到貨日';
+  setTimeout(() => document.getElementById(isInquiry ? 'reqNote' : 'reqQty').focus(), 50);
 }
 
 function showReqDropdown() {
@@ -2346,13 +2358,27 @@ function renderRequestPage() {
       background:${isSelf ? '#fce7f3' : '#f3f4f6'}; color:${isSelf ? '#be185d' : '#374151'};">${r.storeId || '—'}</span>`;
   }
 
+  // 類別 badge（與 admin catBadge 一致配色）
+  function catBadge(r) {
+    const cat = r.category || '追加商品';
+    if (cat === '詢問到貨日') return '<span style="padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; background:#f0f7ff; color:#2b6cb0;">詢問到貨</span>';
+    if (cat === '互助補發') return '<span style="padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; background:#d1fae5; color:#047857;">互助補發</span>';
+    return '<span style="padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; background:#fef3c7; color:#b7791f;">追加商品</span>';
+  }
+
+  // 數量顯示（qty=0 或詢問到貨日 → —）
+  function qtyDisplay(r) {
+    const cat = r.category || '追加商品';
+    return (cat === '詢問到貨日' || !r.qty) ? '—' : r.qty;
+  }
+
   if (currentReqTab === 'pending') {
     const pending = applySearch(requestList.filter(r => r.status === 'pending'));
     renderReqPagination(pending.length);
     const pageItems = pending.slice((reqCurrentPage-1)*REQ_PAGE_SIZE, reqCurrentPage*REQ_PAGE_SIZE);
     let html = '';
     if (pageItems.length === 0) {
-      html = `<tr><td colspan="9" style="padding:24px; text-align:center; color:#9ca3af;">${kw ? '查無符合條件的需求單' : '目前沒有待處理的需求 👍'}</td></tr>`;
+      html = `<tr><td colspan="10" style="padding:24px; text-align:center; color:#9ca3af;">${kw ? '查無符合條件的需求單' : '目前沒有待處理的需求 👍'}</td></tr>`;
     } else {
       pageItems.forEach(r => {
         const hoursAgo = (now - r.createdAt) / 1000 / 3600;
@@ -2363,10 +2389,11 @@ function renderRequestPage() {
           <tr style="border-bottom:1px solid #f3f4f6;${isMine ? 'background:#fafffe;' : ''}">
             <td style="padding:10px 16px; color:#6b7280; white-space:nowrap;">${r.id}</td>
             <td style="padding:10px 16px;">${storeBadge(r)}</td>
+            <td style="padding:10px 16px; text-align:center;">${catBadge(r)}</td>
             <td style="padding:10px 16px; color:#6b7280; font-family:monospace; font-size:12px;">${r.code || '—'}</td>
             <td style="padding:10px 16px; font-weight:500;">${r.name}</td>
             <td style="padding:10px 16px; text-align:right; color:#be185d; font-weight:600;">${r.price ? '$' + r.price : '—'}</td>
-            <td style="padding:10px 16px; text-align:center;">${r.qty}</td>
+            <td style="padding:10px 16px; text-align:center;">${qtyDisplay(r)}</td>
             <td style="padding:10px 16px; color:#6b7280;">${r.note || '—'}</td>
             <td style="padding:10px 16px; color:#6b7280; white-space:nowrap;">${timeStr}${isMine && !canEdit ? '<br><span style="color:#ef4444; font-size:11px;">已鎖定</span>' : ''}</td>
             <td style="padding:10px 16px; text-align:center; white-space:nowrap;">
@@ -2394,7 +2421,7 @@ function renderRequestPage() {
     const doneItems = filtered.slice((reqCurrentPage-1)*REQ_PAGE_SIZE, reqCurrentPage*REQ_PAGE_SIZE);
     let html = '';
     if (doneItems.length === 0) {
-      html = `<tr><td colspan="9" style="padding:24px; text-align:center; color:#9ca3af;">${kw ? '查無符合條件的需求單' : '此月份沒有已處理的需求'}</td></tr>`;
+      html = `<tr><td colspan="10" style="padding:24px; text-align:center; color:#9ca3af;">${kw ? '查無符合條件的需求單' : '此月份沒有已處理的需求'}</td></tr>`;
     } else {
       doneItems.forEach(r => {
         const isMine = currentStore && r.storeId === currentStore.name;
@@ -2403,10 +2430,11 @@ function renderRequestPage() {
         <tr style="border-bottom:1px solid #f3f4f6;${isMine ? 'background:#fafffe;' : ''}">
           <td style="padding:10px 16px; color:#6b7280; white-space:nowrap;">${r.id}</td>
           <td style="padding:10px 16px;">${storeBadge(r)}</td>
+          <td style="padding:10px 16px; text-align:center;">${catBadge(r)}</td>
           <td style="padding:10px 16px; color:#6b7280; font-family:monospace; font-size:12px;">${r.code || '—'}</td>
           <td style="padding:10px 16px; font-weight:500;">${r.name}</td>
           <td style="padding:10px 16px; text-align:right; color:#be185d; font-weight:600;">${r.price ? '$' + r.price : '—'}</td>
-          <td style="padding:10px 16px; text-align:center;">${r.qty}</td>
+          <td style="padding:10px 16px; text-align:center;">${qtyDisplay(r)}</td>
           <td style="padding:10px 16px; color:#6b7280;">${r.note || '—'}</td>
           <td style="padding:10px 16px; color:#6b7280; white-space:nowrap;">${timeStr}</td>
           <td style="padding:10px 16px; color:#be185d; font-weight:500;">${r.reply || '—'}</td>
@@ -2430,7 +2458,7 @@ function renderRequestPage() {
     const histItems = filtered.slice((reqCurrentPage-1)*REQ_PAGE_SIZE, reqCurrentPage*REQ_PAGE_SIZE);
     let html = '';
     if (histItems.length === 0) {
-      html = `<tr><td colspan="10" style="padding:24px; text-align:center; color:#9ca3af;">${kw ? '查無符合條件的需求單' : '沒有符合條件的紀錄'}</td></tr>`;
+      html = `<tr><td colspan="11" style="padding:24px; text-align:center; color:#9ca3af;">${kw ? '查無符合條件的需求單' : '沒有符合條件的紀錄'}</td></tr>`;
     } else {
       histItems.forEach(r => {
         const isMine = currentStore && r.storeId === currentStore.name;
@@ -2442,10 +2470,11 @@ function renderRequestPage() {
           <tr style="border-bottom:1px solid #f3f4f6;${isMine ? 'background:#fafffe;' : ''}">
             <td style="padding:10px 16px; color:#6b7280; white-space:nowrap;">${r.id}</td>
             <td style="padding:10px 16px;">${storeBadge(r)}</td>
+            <td style="padding:10px 16px; text-align:center;">${catBadge(r)}</td>
             <td style="padding:10px 16px; color:#6b7280; font-family:monospace; font-size:12px;">${r.code || '—'}</td>
             <td style="padding:10px 16px; font-weight:500;">${r.name}</td>
             <td style="padding:10px 16px; text-align:right; color:#be185d; font-weight:600;">${r.price ? '$' + r.price : '—'}</td>
-            <td style="padding:10px 16px; text-align:center;">${r.qty}</td>
+            <td style="padding:10px 16px; text-align:center;">${qtyDisplay(r)}</td>
             <td style="padding:10px 16px; color:#6b7280;">${r.note || '—'}</td>
             <td style="padding:10px 16px; color:#6b7280; white-space:nowrap;">${timeStr}</td>
             <td style="padding:10px 16px; text-align:center;">${statusBadge}</td>
@@ -2457,22 +2486,50 @@ function renderRequestPage() {
   }
 }
 
+function getReqType() {
+  const radio = document.querySelector('input[name="reqType"]:checked');
+  return radio ? radio.value : '追加商品';
+}
+
+function onReqTypeChange(type) {
+  const qtyWrap = document.getElementById('reqQtyWrap');
+  const nameLabel = document.getElementById('reqNameLabel');
+  const nameInput = document.getElementById('reqName');
+  const grid = document.getElementById('reqFormGrid');
+  if (type === '詢問到貨日') {
+    qtyWrap.style.display = 'none';
+    grid.style.gridTemplateColumns = '3fr 2fr auto';
+    nameLabel.textContent = '詢問內容 (可搜尋商品或自填)';
+    nameInput.placeholder = '例：鮭魚什麼時候會到？';
+  } else {
+    qtyWrap.style.display = '';
+    grid.style.gridTemplateColumns = '3fr 1fr 2fr auto';
+    nameLabel.textContent = '商品名稱 (可搜尋或自填)';
+    nameInput.placeholder = '輸入名稱、編號，或自填(例:小票紙)';
+  }
+}
+
 function addRequest() {
   const name = document.getElementById('reqName').value.trim();
   const codeEl = document.getElementById('reqCode');
   const code = codeEl.value.trim();
   const price = Number(codeEl.dataset.price) || 0;
-  const qty  = parseInt(document.getElementById('reqQty').value);
+  const category = getReqType();
+  const isInquiry = category === '詢問到貨日';
+  const qty = isInquiry ? 0 : parseInt(document.getElementById('reqQty').value);
   const note = document.getElementById('reqNote').value.trim();
-  if (!name) { Swal.fire('提醒', '請填寫商品名稱', 'warning'); return; }
-  if (!qty || qty <= 0) { Swal.fire('提醒', '請填寫正確數量', 'warning'); return; }
-  requestList.unshift({ id: 'REQ' + String(reqCounter++).padStart(3,'0'), storeId: currentStore?.name || '未知', code, name, price, qty, note, createdAt: new Date(), status: 'pending', reply: '' });
+  if (!name) { Swal.fire('提醒', isInquiry ? '請填寫詢問內容' : '請填寫商品名稱', 'warning'); return; }
+  if (!isInquiry && (!qty || qty <= 0)) { Swal.fire('提醒', '請填寫正確數量', 'warning'); return; }
+  requestList.unshift({ id: 'REQ' + String(reqCounter++).padStart(3,'0'), storeId: currentStore?.name || '未知', category, code: code || '', name, price: price || 0, qty, note, createdAt: new Date(), status: 'pending', reply: '' });
   localStorage.setItem('portalAllRequests', JSON.stringify(requestList));
   cloudSave('portalAllRequests');
   document.getElementById('reqName').value = '';
   document.getElementById('reqCode').value = '';
-  document.getElementById('reqQty').value  = '';
+  codeEl.dataset.price = 0;
+  if (!isInquiry) document.getElementById('reqQty').value = '';
   document.getElementById('reqNote').value = '';
+  const addonRadio = document.querySelector('input[name="reqType"][value="追加商品"]');
+  if (addonRadio) { addonRadio.checked = true; onReqTypeChange('追加商品'); }
   switchReqTab('pending', document.getElementById('reqTab-pending'));
 }
 
@@ -2484,21 +2541,29 @@ function deleteRequest(id) {
 function editRequest(id) {
   const r = requestList.find(r => r.id === id);
   if (!r) return;
+  const cat = r.category || '追加商品';
+  const isInquiry = cat === '詢問到貨日';
+  const nameLabel = isInquiry ? '詢問內容' : '商品名稱';
+  const qtyHtml = isInquiry ? '' : `
+        <label style="font-size:12px; font-weight:700; color:#6b7280;">數量</label>
+        <input id="editQty" class="swal2-input" type="number" value="${r.qty}" style="margin:6px 0 0;">`;
   Swal.fire({
     title: '修改需求',
     html: `
       <div style="text-align:left;">
-        <label style="font-size:12px; font-weight:700; color:#6b7280;">商品名稱</label>
-        <input id="editName" class="swal2-input" value="${r.name}" style="margin:6px 0 12px;">
-        <label style="font-size:12px; font-weight:700; color:#6b7280;">數量</label>
-        <input id="editQty" class="swal2-input" type="number" value="${r.qty}" style="margin:6px 0 0;">
+        <label style="font-size:12px; font-weight:700; color:#6b7280;">${nameLabel}</label>
+        <input id="editName" class="swal2-input" value="${r.name}" style="margin:6px 0 12px;">${qtyHtml}
       </div>`,
     showCancelButton: true, confirmButtonText:'儲存', cancelButtonText:'取消', confirmButtonColor:'#be185d',
     preConfirm: () => {
       const name = document.getElementById('editName').value.trim();
-      const qty  = parseInt(document.getElementById('editQty').value);
-      if (!name || !qty || qty <= 0) { Swal.showValidationMessage('請填寫正確的名稱與數量'); return false; }
-      return { name, qty };
+      if (!name) { Swal.showValidationMessage('請填寫內容'); return false; }
+      if (!isInquiry) {
+        const qty = parseInt(document.getElementById('editQty').value);
+        if (!qty || qty <= 0) { Swal.showValidationMessage('請填寫正確數量'); return false; }
+        return { name, qty };
+      }
+      return { name, qty: 0 };
     }
   }).then(result => { if (result.isConfirmed) { r.name = result.value.name; r.qty = result.value.qty; localStorage.setItem('portalAllRequests', JSON.stringify(requestList)); cloudSave('portalAllRequests'); renderRequestPage(); } });
 }
@@ -5312,61 +5377,83 @@ const PRICE_PER = 50;
 // ============================
 // 📦 到貨狀況（唯讀）
 // ============================
+let arrivalAllData = [];
+
 async function renderArrivalStatusPage() {
   var container = document.getElementById('pageArrival');
   container.innerHTML = '<div style="text-align:center; padding:40px; color:#9ca3af;">載入中...</div>';
   try {
     var res = await fetch(SB_URL + '/procurement_followup?order=end_date.asc', { headers: SB_HEADERS });
-    var data = res.ok ? await res.json() : [];
-  } catch(e) { var data = []; }
+    arrivalAllData = res.ok ? await res.json() : [];
+  } catch(e) { arrivalAllData = []; }
 
   var today = new Date(); today.setHours(0,0,0,0);
-  data.forEach(function(r) {
+  arrivalAllData.forEach(function(r) {
     var ed = new Date(r.end_date);
     r._days = Math.floor((today - ed) / 86400000);
   });
 
-  if (data.length === 0) {
+  renderArrivalGrid();
+}
+
+function renderArrivalGrid() {
+  var container = document.getElementById('pageArrival');
+  var kw = document.getElementById('arrivalSearchKw')?.value?.trim().toLowerCase() || '';
+
+  var data = arrivalAllData;
+  if (kw) {
+    data = data.filter(function(r) {
+      return (r.product_name || '').toLowerCase().includes(kw) || (r.product_id || '').toLowerCase().includes(kw);
+    });
+  }
+
+  if (arrivalAllData.length === 0) {
     container.innerHTML = '<div style="text-align:center; padding:40px; color:#9ca3af;">目前無到貨追蹤資料</div>';
     return;
   }
 
-  var rows = data.map(function(r) {
-    var days = r._days;
-    var dayColor = days >= 45 ? '#dc2626' : days >= 30 ? '#ea580c' : days >= 15 ? '#d97706' : '#059669';
-    var dayBg = days >= 45 ? '#fef2f2' : days >= 30 ? '#fff7ed' : days >= 15 ? '#fefce8' : '#f0fdf4';
-    var statusMap = { '待追蹤': '⏳ 待追蹤', '催貨中': '🔄 催貨中', '已到倉': '✅ 已到倉', '斷貨': '❌ 斷貨' };
-    var statusColor = { '待追蹤': '#6b7280', '催貨中': '#2563eb', '已到倉': '#059669', '斷貨': '#dc2626' };
-    var lastLog = (r.follow_up_logs && r.follow_up_logs.length > 0) ? r.follow_up_logs[r.follow_up_logs.length - 1] : null;
-    var lastLogHtml = lastLog ? lastLog.date + ' ' + (lastLog.note || '').substring(0, 30) : '—';
-    var rowBg = r.status === '斷貨' ? 'background:#fef2f2;' : r.status === '已到倉' ? 'background:#f0fdf4; opacity:0.6;' : '';
+  var rows = data.length === 0
+    ? '<tr><td colspan="6" style="text-align:center; padding:40px; color:#9ca3af;">查無符合的商品</td></tr>'
+    : data.map(function(r) {
+        var days = r._days;
+        var dayColor = days >= 45 ? '#dc2626' : days >= 30 ? '#ea580c' : days >= 15 ? '#d97706' : '#059669';
+        var dayBg = days >= 45 ? '#fef2f2' : days >= 30 ? '#fff7ed' : days >= 15 ? '#fefce8' : '#f0fdf4';
+        var statusMap = { '待追蹤': '⏳ 待追蹤', '催貨中': '🔄 催貨中', '已到倉': '✅ 已到倉', '斷貨': '❌ 斷貨' };
+        var statusColor = { '待追蹤': '#6b7280', '催貨中': '#2563eb', '已到倉': '#059669', '斷貨': '#dc2626' };
+        var lastLog = (r.follow_up_logs && r.follow_up_logs.length > 0) ? r.follow_up_logs[r.follow_up_logs.length - 1] : null;
+        var lastLogHtml = lastLog ? lastLog.date + ' ' + (lastLog.note || '').substring(0, 30) : '—';
+        var rowBg = r.status === '斷貨' ? 'background:#fef2f2;' : r.status === '已到倉' ? 'background:#f0fdf4; opacity:0.6;' : '';
+        return '<tr style="border-bottom:1px solid #f3f4f6; ' + rowBg + '">' +
+          '<td style="padding:10px 14px;"><div style="font-weight:700;">' + (r.product_name || '') + '</div><div style="font-size:11px; color:#9ca3af;">' + (r.product_id || '') + '</div></td>' +
+          '<td style="padding:10px 14px; font-size:13px;">' + (r.supplier || '—') + '</td>' +
+          '<td style="padding:10px 14px; font-size:13px;">' + (r.end_date || '') + '</td>' +
+          '<td style="padding:10px 8px; text-align:center;"><span style="font-weight:700; color:' + dayColor + '; background:' + dayBg + '; padding:2px 8px; border-radius:10px; font-size:13px;">' + days + '天</span></td>' +
+          '<td style="padding:10px 8px; text-align:center; font-weight:700; color:' + (statusColor[r.status] || '#6b7280') + ';">' + (statusMap[r.status] || r.status) + '</td>' +
+          '<td style="padding:10px 14px; font-size:12px; color:#6b7280;">' + lastLogHtml + '</td>' +
+        '</tr>';
+      }).join('');
 
-    return '<tr style="border-bottom:1px solid #f3f4f6; ' + rowBg + '">' +
-      '<td style="padding:10px 14px;"><div style="font-weight:700;">' + (r.product_name || '') + '</div><div style="font-size:11px; color:#9ca3af;">' + (r.product_id || '') + '</div></td>' +
-      '<td style="padding:10px 14px; font-size:13px;">' + (r.supplier || '—') + '</td>' +
-      '<td style="padding:10px 14px; font-size:13px;">' + (r.end_date || '') + '</td>' +
-      '<td style="padding:10px 8px; text-align:center;"><span style="font-weight:700; color:' + dayColor + '; background:' + dayBg + '; padding:2px 8px; border-radius:10px; font-size:13px;">' + days + '天</span></td>' +
-      '<td style="padding:10px 8px; text-align:center; font-weight:700; color:' + (statusColor[r.status] || '#6b7280') + ';">' + (statusMap[r.status] || r.status) + '</td>' +
-      '<td style="padding:10px 14px; font-size:12px; color:#6b7280;">' + lastLogHtml + '</td>' +
-    '</tr>';
-  }).join('');
-
-  container.innerHTML = '<div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:hidden; box-shadow:0 2px 4px rgba(0,0,0,0.04);">' +
-    '<div style="padding:14px 20px; border-bottom:1px solid var(--border); font-size:15px; font-weight:700; color:var(--primary);">📦 到貨狀況</div>' +
-    '<div style="overflow:auto; max-height:70vh;">' +
-      '<table style="width:100%; border-collapse:collapse; font-size:13px;">' +
-        '<thead><tr style="background:#fff0f6;">' +
-          '<th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border);">商品</th>' +
-          '<th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border);">供應商</th>' +
-          '<th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border);">結單日</th>' +
-          '<th style="padding:10px 8px; text-align:center; border-bottom:1px solid var(--border);">天數</th>' +
-          '<th style="padding:10px 8px; text-align:center; border-bottom:1px solid var(--border);">狀態</th>' +
-          '<th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border);">最後催貨</th>' +
-        '</tr></thead>' +
-        '<tbody>' + rows + '</tbody>' +
-      '</table>' +
-    '</div>' +
-  '</div>';
+  container.innerHTML =
+    '<div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:hidden; box-shadow:0 2px 4px rgba(0,0,0,0.04);">' +
+      '<div style="padding:14px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px; flex-wrap:wrap;">' +
+        '<div style="font-size:15px; font-weight:700; color:var(--primary);">📦 到貨狀況</div>' +
+        '<input id="arrivalSearchKw" type="text" placeholder="搜尋商品名稱或編號..." value="' + kw + '" oninput="renderArrivalGrid()" style="padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; font-family:inherit; width:220px;">' +
+        '<span style="font-size:12px; color:#9ca3af;">共 ' + data.length + ' 筆</span>' +
+      '</div>' +
+      '<div style="overflow:auto; max-height:70vh;">' +
+        '<table style="width:100%; border-collapse:collapse; font-size:13px;">' +
+          '<thead><tr style="background:#fff0f6;">' +
+            '<th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border);">商品</th>' +
+            '<th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border);">供應商</th>' +
+            '<th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border);">結單日</th>' +
+            '<th style="padding:10px 8px; text-align:center; border-bottom:1px solid var(--border);">天數</th>' +
+            '<th style="padding:10px 8px; text-align:center; border-bottom:1px solid var(--border);">狀態</th>' +
+            '<th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border);">最後催貨</th>' +
+          '</tr></thead>' +
+          '<tbody>' + rows + '</tbody>' +
+        '</table>' +
+      '</div>' +
+    '</div>';
 }
 
 function renderPriceSearchPage() {
