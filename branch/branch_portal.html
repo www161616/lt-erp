@@ -1756,29 +1756,22 @@
               <th style="padding:4px 8px; text-align:left; color:#0e7490; width:90px; white-space:nowrap;">商品編號</th>
               <th style="padding:4px 8px; text-align:left; color:#0e7490;">商品名稱</th>
               <th style="padding:4px 8px; text-align:center; color:#0e7490; width:50px; white-space:nowrap;">數量</th>
-              <th style="padding:4px 8px; text-align:right; color:#0e7490; width:60px; white-space:nowrap;">售價</th>
-              <th style="padding:4px 8px; text-align:right; color:#0e7490; width:70px; white-space:nowrap;">分店價</th>
-              <th style="padding:4px 8px; text-align:right; color:#0e7490; width:70px; white-space:nowrap;">小計</th>
             </tr></thead><tbody>`;
 
           group.forEach(item => {
-            const usePrice = item.storePrice > 0 ? item.storePrice : item.price;
             html += `<tr style="border-bottom:1px solid #e0f2fe;">
               <td style="padding:3px 8px; font-family:monospace; color:#0e7490; white-space:nowrap;">${item.productId}</td>
               <td style="padding:3px 8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${item.name}</td>
               <td style="padding:3px 8px; text-align:center; font-weight:700; color:#be185d; font-size:14px; white-space:nowrap;">${item.qty}</td>
-              <td style="padding:3px 8px; text-align:right; color:#6b7280; white-space:nowrap;">$${item.price.toLocaleString()}</td>
-              <td style="padding:3px 8px; text-align:right; color:#2563eb; font-weight:600; white-space:nowrap;">${item.storePrice > 0 ? '$' + item.storePrice.toLocaleString() : '-'}</td>
-              <td style="padding:3px 8px; text-align:right; font-weight:600; white-space:nowrap;">$${(item.qty * usePrice).toLocaleString()}</td>
             </tr>`;
           });
           html += `</tbody></table>`;
         });
 
         // 底部總計
-        html += `<div style="margin-top:12px; padding:10px 16px; background:#1e293b; border-radius:8px; display:flex; justify-content:space-between; align-items:center; color:white;">
-          <div><span style="color:#94a3b8;">總品項</span> <b>${totalItems}</b>　<span style="color:#94a3b8;">總數量</span> <b>${totalQty}</b></div>
-          <div style="font-size:18px; font-weight:900;">$${totalAmt.toLocaleString()}</div>
+        html += `<div style="margin-top:12px; padding:10px 16px; background:#1e293b; border-radius:8px; display:flex; justify-content:center; align-items:center; gap:24px; color:white;">
+          <div><span style="color:#94a3b8;">總品項</span> <b style="font-size:18px;">${totalItems}</b></div>
+          <div><span style="color:#94a3b8;">總數量</span> <b style="font-size:18px;">${totalQty}</b></div>
         </div>`;
 
         Swal.fire({
