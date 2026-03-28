@@ -1931,11 +1931,22 @@
             }
 
             if (closedItems.length > 0) {
-              rpt += `<br><span style="color:#9ca3af;">已結單跳過 ${closedItems.length} 筆：</span>${closedItems.join('、')}`;
+              rpt += `<br><b style="color:#9ca3af;">已結單跳過 ${closedItems.length} 筆：</b>`;
+              rpt += `<table style="width:100%; border-collapse:collapse; margin-top:6px; font-size:12px;">
+                <tr style="background:#f1f5f9;"><th style="padding:4px 8px; text-align:left; color:#64748b;">商品</th></tr>`;
+              rpt += closedItems.map(s => `<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:3px 8px; color:#94a3b8;">${s}</td></tr>`).join('');
+              rpt += `</table>`;
             }
             if (skippedItems.length > 0) {
-              rpt += `<br><span style="color:#b45309;">已跳過 ${skippedItems.length} 筆（已有數量）：</span>`;
-              rpt += skippedItems.map(s => `<br>　• ${s}`).join('');
+              rpt += `<br><b style="color:#b45309;">已跳過 ${skippedItems.length} 筆（已有數量）：</b>`;
+              rpt += `<table style="width:100%; border-collapse:collapse; margin-top:6px; font-size:12px;">
+                <tr style="background:#fef3c7;"><th style="padding:4px 8px; text-align:left; color:#92400e;">商品名稱</th><th style="padding:4px 8px; text-align:center; color:#92400e;">原數量</th><th style="padding:4px 8px; text-align:center; color:#92400e;">匯入數量</th></tr>`;
+              rpt += skippedItems.map(s => {
+                const match = s.match(/^(.+?)（原 (\d+)，匯入 (\d+)）$/);
+                if (match) return `<tr style="border-bottom:1px solid #fde68a;"><td style="padding:3px 8px;">${match[1]}</td><td style="padding:3px 8px; text-align:center;">${match[2]}</td><td style="padding:3px 8px; text-align:center; font-weight:700;">${match[3]}</td></tr>`;
+                return `<tr style="border-bottom:1px solid #fde68a;"><td colspan="3" style="padding:3px 8px;">${s}</td></tr>`;
+              }).join('');
+              rpt += `</table>`;
             }
             if (matchedDetails.length > 0) {
               rpt += `<br><b style="color:#059669;">成功填入明細：</b>`;
