@@ -1953,12 +1953,12 @@
             if (matchedDetails.length > 0) {
               rpt += `<br><b style="color:#059669;">成功填入明細：</b>`;
               rpt += `<table style="width:100%; border-collapse:collapse; margin-top:6px; font-size:12px;">
-                <tr style="background:#ecfdf5;"><th style="padding:4px 8px; text-align:left; color:#065f46;">商品編號</th><th style="padding:4px 8px; text-align:left; color:#065f46;">樂樂名稱</th><th style="padding:4px 8px; text-align:left; color:#065f46;">系統名稱</th><th style="padding:4px 8px; text-align:center; color:#065f46;">數量</th></tr>`;
+                <tr style="background:#ecfdf5;"><th style="padding:4px 8px; text-align:left; color:#065f46;">商品編號</th><th style="padding:4px 8px; text-align:left; color:#065f46;">系統名稱</th><th style="padding:4px 8px; text-align:left; color:#065f46;">樂樂名稱</th><th style="padding:4px 8px; text-align:center; color:#065f46;">數量</th></tr>`;
               rpt += matchedDetails.map(m => {
                 return `<tr style="border-bottom:1px solid #d1fae5;">
                   <td style="padding:3px 8px; font-family:monospace; color:#0e7490;">${m.itemPid}${m.fuzzy ? `<div style="font-size:10px; color:#2563eb;">CSV:${m.csvId}</div>` : ''}</td>
-                  <td style="padding:3px 8px; color:#374151;">${m.csvName}</td>
-                  <td style="padding:3px 8px; color:#6b7280; font-size:11px;">${m.sysName}</td>
+                  <td style="padding:3px 8px; color:#374151;">${m.sysName}</td>
+                  <td style="padding:3px 8px; color:#6b7280; font-size:11px;">${m.csvName}</td>
                   <td style="padding:3px 8px; text-align:center; font-weight:700; color:#059669; font-size:14px;">${m.qty}</td>
                 </tr>`;
               }).join('');
