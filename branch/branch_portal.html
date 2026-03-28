@@ -289,19 +289,19 @@
       <div class="store-badge" id="storeNameBadge">🏠 載入中...</div>
 
       <div class="menu-item" id="menuBulletin" onclick="switchPage('pageBulletin', this)">📢 公告欄<span id="notifyBulletin" style="display:none; margin-left:6px; background:#dc2626; color:white; font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px; min-width:16px; text-align:center;">!</span></div>
-      <div class="menu-item active" onclick="switchPage('pageOrder', this)">🛒 結單填表</div>
+      <div class="menu-item active" id="menuOrder" onclick="switchPage('pageOrder', this)">🛒 結單填表</div>
       <div class="menu-item" id="menuTracking" onclick="switchPage('pageTracking', this)">🚚 訂貨動態追蹤<span id="shortageBadge" style="display:none; margin-left:6px; background:#dc2626; color:white; font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px; animation:pulse 1.5s infinite;"></span></div>
-      <div class="menu-item" onclick="switchPage('pageSummary', this)">📊 開團總表</div>
+      <div class="menu-item" id="menuSummary" onclick="switchPage('pageSummary', this)">📊 開團總表</div>
       <div class="menu-item" id="menuRequest" onclick="switchPage('pageRequest', this)">📋 需求表<span id="notifyRequest" style="display:none; margin-left:6px; background:#dc2626; color:white; font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px; min-width:16px; text-align:center;">0</span></div>
       <div class="menu-item" id="menuTransfer" onclick="switchPage('pageTransfer', this)">🔄 店轉店登記<span id="notifyTransfer" style="display:none; margin-left:6px; background:#dc2626; color:white; font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px; min-width:16px; text-align:center;">0</span></div>
       <div class="menu-item" id="menuAid" onclick="switchPage('pageAid', this)">🤝 互助交流<span id="notifyAid" style="display:none; margin-left:6px; background:#dc2626; color:white; font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px; min-width:16px; text-align:center;">0</span></div>
-      <div class="menu-item" onclick="switchPage('pageBackorder', this)">⚠️ 欠品清單<span id="notifyBackorder" style="display:none; margin-left:6px; background:#dc2626; color:white; font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px; min-width:16px; text-align:center; animation:pulse 1.5s infinite;">0</span></div>
-      <div class="menu-item" onclick="switchPage('pageDeliveryPreview', this)">🚚 明日到貨預告</div>
-      <div class="menu-item" onclick="switchPage('pageBilling', this)">📦 今日進貨單</div>
-      <div class="menu-item" onclick="switchPage('pageHistory', this)">📜 所有進貨單</div>
-<div class="menu-item" id="menuLedger" onclick="switchPage('pageLedger', this)">💰 流水帳/訂包管理</div>
-      <div class="menu-item" onclick="switchPage('pageArrival', this)">📦 到貨狀況</div>
-      <div class="menu-item" onclick="switchPage('pagePriceSearch', this)">💲 商品查價</div>
+      <div class="menu-item" id="menuBackorder" onclick="switchPage('pageBackorder', this)">⚠️ 欠品清單<span id="notifyBackorder" style="display:none; margin-left:6px; background:#dc2626; color:white; font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px; min-width:16px; text-align:center; animation:pulse 1.5s infinite;">0</span></div>
+      <div class="menu-item" id="menuDeliveryPreview" onclick="switchPage('pageDeliveryPreview', this)">🚚 明日到貨預告</div>
+      <div class="menu-item" id="menuBilling" onclick="switchPage('pageBilling', this)">📦 今日進貨單</div>
+      <div class="menu-item" id="menuHistory" onclick="switchPage('pageHistory', this)">📜 所有進貨單</div>
+      <div class="menu-item" id="menuLedger" onclick="switchPage('pageLedger', this)">💰 流水帳/訂包管理</div>
+      <div class="menu-item" id="menuArrival" onclick="switchPage('pageArrival', this)">📦 到貨狀況</div>
+      <div class="menu-item" id="menuPriceSearch" onclick="switchPage('pagePriceSearch', this)">💲 商品查價</div>
       <div class="menu-item" id="menuCommon" onclick="switchPage('pageCommon', this)">⭐ 常用功能</div>
 
       <div class="sidebar-footer">
@@ -1501,12 +1501,21 @@
     function applyStoreTypePermissions() {
       const isWholesale = currentStore?.type === 'wholesale';
       const hide = (id) => { const el = document.getElementById(id); if (el) el.style.display = isWholesale ? 'none' : ''; };
-      hide('menuTransfer');  // 店轉店
-      hide('menuRequest');   // 需求表
-      hide('menuLedger');    // 流水帳
-      hide('menuCommon');    // 常用功能
-      hide('menuAid');       // 互助交流
-      hide('importExcelWrap'); // 匯入樂樂報表
+      // 批發只保留：結單填表(menuOrder)、所有進貨單(menuHistory)
+      hide('menuBulletin');        // 公告欄
+      hide('menuTracking');        // 訂貨動態追蹤
+      hide('menuSummary');         // 開團總表
+      hide('menuRequest');         // 需求表
+      hide('menuTransfer');        // 店轉店
+      hide('menuAid');             // 互助交流
+      hide('menuBackorder');       // 欠品清單
+      hide('menuDeliveryPreview'); // 明日到貨預告
+      hide('menuBilling');         // 今日進貨單
+      hide('menuLedger');          // 流水帳
+      hide('menuArrival');         // 到貨狀況
+      hide('menuPriceSearch');     // 商品查價
+      hide('menuCommon');          // 常用功能
+      hide('importExcelWrap');     // 匯入樂樂報表
     }
 
     // ============================
