@@ -1738,9 +1738,22 @@
         }
 
         saveQtyCache();
+        importMode = false; // 重設匯入模式，恢復手動修改自動存
         unlockQtyInputs();
         renderOrderPage();
+        // 同步清除後的數量到雲端
+        const storeName = currentStore?.name || '未知';
+        const saved = JSON.parse(localStorage.getItem('branchOrders') || '{}');
+        if (saved[storeName]) {
+          Object.keys(saved[storeName]).forEach(id => {
+            if (!orderQtyCache[id]) delete saved[storeName][id];
+          });
+          localStorage.setItem('branchOrders', JSON.stringify(saved));
+          cloudSave('branchOrders');
+        }
         document.getElementById('importReport').style.display = 'none';
+        const submitBtn = document.getElementById('submitOrderBtn');
+        if (submitBtn) submitBtn.style.display = 'none';
         Swal.fire({ title: '已清除', text: `${chosen === 'all' ? '全部' : '結單日 ' + chosen}，共 ${cleared} 筆`, icon: 'success', timer: 1500, showConfirmButton: false });
       });
     }
