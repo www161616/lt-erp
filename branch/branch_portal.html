@@ -1570,12 +1570,16 @@
       contentEl.innerHTML = '<div style="text-align:center; padding:40px; color:#94a3b8;">載入中...</div>';
 
       try {
+        // 先用 customer_id 查（跟所有進貨單一致），fallback 用 customer_name
+        const custId = await findCustomerId();
+        const custFilter = custId ? `customer_id=eq.${custId}` : `customer_name=eq.${encodeURIComponent(storeName)}`;
+
         // 抓銷貨單（normal）
-        const soRes = await fetch(`${SB_URL}/sales_orders?customer_name=eq.${encodeURIComponent(storeName)}&order_type=eq.normal&order_date=gte.${from}&order_date=lte.${to}&order=order_date.asc,id.asc&select=id,order_date,grand_total,payment_status`, { headers: SB_HEADERS });
+        const soRes = await fetch(`${SB_URL}/sales_orders?${custFilter}&order_type=eq.normal&order_date=gte.${from}&order_date=lte.${to}&order=order_date.asc,id.asc&select=id,order_date,grand_total,payment_status`, { headers: SB_HEADERS });
         const salesOrders = await soRes.json();
 
         // 抓退貨單（return）
-        const rtRes = await fetch(`${SB_URL}/sales_orders?customer_name=eq.${encodeURIComponent(storeName)}&order_type=eq.return&order_date=gte.${from}&order_date=lte.${to}&order=order_date.asc,id.asc&select=id,order_date,grand_total,ref_order_id,note`, { headers: SB_HEADERS });
+        const rtRes = await fetch(`${SB_URL}/sales_orders?${custFilter}&order_type=eq.return&order_date=gte.${from}&order_date=lte.${to}&order=order_date.asc,id.asc&select=id,order_date,grand_total,ref_order_id,note`, { headers: SB_HEADERS });
         const returnOrders = await rtRes.json();
 
         // 抓店轉店結算（僅分店）
