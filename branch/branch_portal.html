@@ -4842,16 +4842,28 @@ async function renderHistorySummaryCards() {
   const salesTotal = salesData.reduce((s, r) => s + (Number(r.grand_total) || 0), 0);
   const returnTotal = returnData.reduce((s, r) => s + Math.abs(Number(r.grand_total) || 0), 0);
 
-  // 店轉店（僅分店，查當月）
+  // 店轉店（僅分店，即時從 transfer_orders 計算）
   let transferCharge = 0;
   if (!isWH) {
     const startDate = document.getElementById('historyDateStart')?.value || '';
     if (startDate) {
       const ym = startDate.substring(0, 7); // e.g. 2026-03
       try {
-        const tfRes = await fetch(`${SB_URL}/transfer_settlements?store=eq.${encodeURIComponent(currentStore.name)}&month=eq.${ym}&select=transfer_net`, { headers: SB_HEADERS });
-        const tfData = await tfRes.json();
-        if (tfData.length > 0) transferCharge = -(Number(tfData[0].transfer_net) || 0);
+        const tfRes = await fetch(`${SB_URL}/rpc/get_store_transfers`, {
+          method: 'POST',
+          headers: { ...SB_HEADERS, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ p_month: ym, p_store: currentStore.name })
+        });
+        const transfers = tfRes.ok ? await tfRes.json() : [];
+        let totalIn = 0, totalOut = 0;
+        transfers.forEach(tf => {
+          const amt = Number(tf.total_amount) || 0;
+          if (tf.direction === 'in') totalIn += amt;
+          else totalOut += amt;
+        });
+        // 淨額 = 轉入 - 轉出，負數代表分店要多付
+        const net = totalIn - totalOut;
+        transferCharge = -net; // 取反：淨額負(欠總倉)→charge正(要多付)
       } catch(e) {}
     }
   }
