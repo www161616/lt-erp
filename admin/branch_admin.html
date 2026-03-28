@@ -6673,8 +6673,15 @@
 
   async function loadArrivalData() {
     try {
-      var res = await fetch(SB_URL + '/procurement_followup?order=end_date.asc', { headers: HEADERS });
-      _arrivalData = res.ok ? await res.json() : [];
+      _arrivalData = [];
+      var offset = 0;
+      while (true) {
+        var res = await fetch(SB_URL + '/procurement_followup?order=end_date.asc&limit=1000&offset=' + offset, { headers: HEADERS });
+        var data = res.ok ? await res.json() : [];
+        _arrivalData = _arrivalData.concat(data);
+        if (data.length < 1000) break;
+        offset += 1000;
+      }
     } catch(e) { _arrivalData = []; }
   }
 
