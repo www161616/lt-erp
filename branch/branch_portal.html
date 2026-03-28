@@ -4886,7 +4886,7 @@ async function showHistoryDetail(orderId) {
 
     Swal.fire({
       title: `📋 ${orderId}`,
-      html: `<div style="text-align:left; font-size:13px; color:#6b7280; margin-bottom:10px;">進貨日期：${order ? order.order_date : ''}</div>
+      html: `<div style="text-align:left; font-size:13px; color:#6b7280; margin-bottom:10px;">客戶：<b style="color:#1f2937;">${order ? order.customer_name : ''}</b>　　進貨日期：${order ? order.order_date : ''}</div>
         <div style="max-height:50vh; overflow-y:auto;">
         <table style="width:100%; border-collapse:collapse; font-size:13px;">
           <thead><tr style="background:#f8f9fa;">
