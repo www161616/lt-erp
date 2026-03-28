@@ -1750,22 +1750,22 @@
             html += `<div style="font-size:12px; font-weight:700; color:#0e7490; margin:12px 0 6px; border-bottom:1px solid #e2e8f0; padding-bottom:4px;">📅 結單日 ${date}（${group.length} 品項，${groupQty} 件，$${groupAmt.toLocaleString()}）</div>`;
           }
 
-          html += `<table style="width:100%; border-collapse:collapse; font-size:12px; margin-bottom:8px;">
+          html += `<table style="width:100%; border-collapse:collapse; font-size:12px; margin-bottom:8px; table-layout:fixed;">
             <thead><tr style="background:#ecfeff;">
-              <th style="padding:4px 8px; text-align:left; color:#0e7490;">商品編號</th>
+              <th style="padding:4px 8px; text-align:left; color:#0e7490; width:90px; white-space:nowrap;">商品編號</th>
               <th style="padding:4px 8px; text-align:left; color:#0e7490;">商品名稱</th>
-              <th style="padding:4px 8px; text-align:center; color:#0e7490;">數量</th>
-              <th style="padding:4px 8px; text-align:right; color:#0e7490;">單價</th>
-              <th style="padding:4px 8px; text-align:right; color:#0e7490;">小計</th>
+              <th style="padding:4px 8px; text-align:center; color:#0e7490; width:50px; white-space:nowrap;">數量</th>
+              <th style="padding:4px 8px; text-align:right; color:#0e7490; width:60px; white-space:nowrap;">單價</th>
+              <th style="padding:4px 8px; text-align:right; color:#0e7490; width:70px; white-space:nowrap;">小計</th>
             </tr></thead><tbody>`;
 
           group.forEach(item => {
             html += `<tr style="border-bottom:1px solid #e0f2fe;">
-              <td style="padding:3px 8px; font-family:monospace; color:#0e7490;">${item.productId}</td>
-              <td style="padding:3px 8px;">${item.name}</td>
-              <td style="padding:3px 8px; text-align:center; font-weight:700; color:#be185d; font-size:14px;">${item.qty}</td>
-              <td style="padding:3px 8px; text-align:right; color:#6b7280;">$${item.price.toLocaleString()}</td>
-              <td style="padding:3px 8px; text-align:right; font-weight:600;">$${(item.qty * item.price).toLocaleString()}</td>
+              <td style="padding:3px 8px; font-family:monospace; color:#0e7490; white-space:nowrap;">${item.productId}</td>
+              <td style="padding:3px 8px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">${item.name}</td>
+              <td style="padding:3px 8px; text-align:center; font-weight:700; color:#be185d; font-size:14px; white-space:nowrap;">${item.qty}</td>
+              <td style="padding:3px 8px; text-align:right; color:#6b7280; white-space:nowrap;">$${item.price.toLocaleString()}</td>
+              <td style="padding:3px 8px; text-align:right; font-weight:600; white-space:nowrap;">$${(item.qty * item.price).toLocaleString()}</td>
             </tr>`;
           });
           html += `</tbody></table>`;
