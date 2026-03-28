@@ -299,6 +299,7 @@
       <div class="menu-item" id="menuDeliveryPreview" onclick="switchPage('pageDeliveryPreview', this)">🚚 明日到貨預告</div>
       <div class="menu-item" id="menuBilling" onclick="switchPage('pageBilling', this)">📦 今日進貨單</div>
       <div class="menu-item" id="menuHistory" onclick="switchPage('pageHistory', this)">📜 所有進貨單</div>
+      <div class="menu-item" id="menuMonthlyStatement" onclick="switchPage('pageMonthlyStatement', this)">📄 月結對帳單</div>
       <div class="menu-item" id="menuLedger" onclick="switchPage('pageLedger', this)">💰 流水帳/訂包管理</div>
       <div class="menu-item" id="menuArrival" onclick="switchPage('pageArrival', this)">📦 到貨狀況</div>
       <div class="menu-item" id="menuPriceSearch" onclick="switchPage('pagePriceSearch', this)">💲 商品查價</div>
@@ -710,6 +711,27 @@
   <div id="aidBoardList"></div>
   <div id="aidPaginationBottom" style="display:flex; align-items:center; justify-content:center; gap:6px; margin-top:12px; flex-wrap:wrap;"></div>
 </div>
+
+        <!-- ===== 月結對帳單 ===== -->
+        <div id="pageMonthlyStatement" class="page">
+          <div style="background:white; border-radius:8px; border:1px solid var(--border); padding:16px 24px; margin-bottom:20px; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
+            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
+              <div style="font-size:14px; font-weight:700; color:#6b7280;">📄 月結對帳單</div>
+              <select id="msYear" style="padding:8px 12px; border:1.5px solid var(--border); border-radius:6px; font-size:14px; font-family:inherit;"></select>
+              <select id="msMonth" style="padding:8px 12px; border:1.5px solid var(--border); border-radius:6px; font-size:14px; font-family:inherit;">
+                <option value="01">1月</option><option value="02">2月</option><option value="03">3月</option>
+                <option value="04">4月</option><option value="05">5月</option><option value="06">6月</option>
+                <option value="07">7月</option><option value="08">8月</option><option value="09">9月</option>
+                <option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
+              </select>
+              <button onclick="loadMonthlyStatement()" style="padding:8px 16px; background:var(--primary); color:white; border:none; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit;">🔍 查詢</button>
+              <button onclick="printMonthlyStatement()" style="padding:8px 16px; background:#475569; color:white; border:none; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit;">🖨️ 列印</button>
+            </div>
+          </div>
+          <div id="msContent" style="background:white; border-radius:8px; border:1px solid var(--border); padding:24px; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
+            <div style="text-align:center; padding:40px; color:#94a3b8; font-size:14px;">請選擇月份後點擊「查詢」</div>
+          </div>
+        </div>
 
         <div id="pageLedger" class="page">
 
@@ -1519,6 +1541,147 @@
     }
 
     // ============================
+    // 月結對帳單
+    // ============================
+    function initMonthlyStatementSelectors() {
+      const now = new Date();
+      const yearSel = document.getElementById('msYear');
+      if (!yearSel) return;
+      const currentYear = now.getFullYear();
+      yearSel.innerHTML = '';
+      for (let y = currentYear; y >= 2025; y--) {
+        yearSel.innerHTML += `<option value="${y}" ${y === currentYear ? 'selected' : ''}>${y}年</option>`;
+      }
+      document.getElementById('msMonth').value = String(now.getMonth() + 1).padStart(2, '0');
+    }
+
+    async function loadMonthlyStatement() {
+      const year = document.getElementById('msYear').value;
+      const month = document.getElementById('msMonth').value;
+      if (!currentStore?.name) return;
+
+      const storeName = currentStore.name;
+      const isWholesale = currentStore?.type === 'wholesale';
+      const from = `${year}-${month}-01`;
+      const lastDay = new Date(year, parseInt(month), 0).getDate();
+      const to = `${year}-${month}-${String(lastDay).padStart(2, '0')}`;
+
+      const contentEl = document.getElementById('msContent');
+      contentEl.innerHTML = '<div style="text-align:center; padding:40px; color:#94a3b8;">載入中...</div>';
+
+      try {
+        // 抓銷貨單（normal）
+        const soRes = await fetch(`${SB_URL}/sales_orders?customer_name=eq.${encodeURIComponent(storeName)}&order_type=eq.normal&order_date=gte.${from}&order_date=lte.${to}&order=order_date.asc,id.asc&select=id,order_date,grand_total,payment_status`, { headers: SB_HEADERS });
+        const salesOrders = await soRes.json();
+
+        // 抓退貨單（return）
+        const rtRes = await fetch(`${SB_URL}/sales_orders?customer_name=eq.${encodeURIComponent(storeName)}&order_type=eq.return&order_date=gte.${from}&order_date=lte.${to}&order=order_date.asc,id.asc&select=id,order_date,grand_total,ref_order_id,note`, { headers: SB_HEADERS });
+        const returnOrders = await rtRes.json();
+
+        // 抓店轉店結算（僅分店）
+        let transferNet = 0;
+        let transferRows = [];
+        if (!isWholesale) {
+          const tfRes = await fetch(`${SB_URL}/transfer_settlements?store=eq.${encodeURIComponent(storeName)}&month=eq.${year}-${month}&select=*`, { headers: SB_HEADERS });
+          const tfData = await tfRes.json();
+          if (tfData.length > 0) {
+            transferNet = Number(tfData[0].transfer_net) || 0;
+            transferRows = tfData;
+          }
+        }
+
+        const salesTotal = salesOrders.reduce((s, o) => s + Number(o.grand_total), 0);
+        const returnTotal = returnOrders.reduce((s, o) => s + Number(o.grand_total), 0); // 已經是負數
+        const grandTotal = salesTotal + returnTotal + (isWholesale ? 0 : transferNet);
+
+        // 渲染
+        let html = `<div id="msPrintArea">`;
+        html += `<div style="text-align:center; margin-bottom:16px;">
+          <div style="font-size:18px; font-weight:900; color:#1e293b;">丸十水產股份有限公司</div>
+          <div style="font-size:14px; color:#64748b; letter-spacing:4px; margin-top:4px;">月結對帳單</div>
+          <div style="font-size:13px; color:#475569; margin-top:8px;">${storeName}　${year}年${parseInt(month)}月</div>
+        </div>`;
+
+        // 銷貨單區
+        html += `<div style="font-size:13px; font-weight:700; color:#1e293b; margin:16px 0 8px; border-bottom:2px solid #e2e8f0; padding-bottom:4px;">📦 銷貨單</div>`;
+        if (salesOrders.length > 0) {
+          html += `<table style="width:100%; border-collapse:collapse; font-size:13px;">
+            <tr style="background:#f1f5f9;"><th style="padding:6px 10px; text-align:left;">單號</th><th style="padding:6px 10px; text-align:center;">日期</th><th style="padding:6px 10px; text-align:right;">金額</th></tr>`;
+          salesOrders.forEach(o => {
+            html += `<tr><td style="padding:5px 10px; border-bottom:1px solid #f1f5f9;">${o.id}</td><td style="padding:5px 10px; text-align:center; border-bottom:1px solid #f1f5f9;">${o.order_date}</td><td style="padding:5px 10px; text-align:right; border-bottom:1px solid #f1f5f9;">$${Number(o.grand_total).toLocaleString()}</td></tr>`;
+          });
+          html += `<tr style="font-weight:700; background:#f8fafc;"><td colspan="2" style="padding:6px 10px;">銷貨小計（${salesOrders.length} 筆）</td><td style="padding:6px 10px; text-align:right;">$${salesTotal.toLocaleString()}</td></tr></table>`;
+        } else {
+          html += `<div style="color:#94a3b8; padding:12px; font-size:13px;">本月無銷貨單</div>`;
+        }
+
+        // 退貨單區
+        html += `<div style="font-size:13px; font-weight:700; color:#c53030; margin:20px 0 8px; border-bottom:2px solid #fecaca; padding-bottom:4px;">🔄 退貨單</div>`;
+        if (returnOrders.length > 0) {
+          html += `<table style="width:100%; border-collapse:collapse; font-size:13px;">
+            <tr style="background:#fef2f2;"><th style="padding:6px 10px; text-align:left;">單號</th><th style="padding:6px 10px; text-align:center;">日期</th><th style="padding:6px 10px; text-align:left;">原始銷貨單</th><th style="padding:6px 10px; text-align:right;">金額</th></tr>`;
+          returnOrders.forEach(o => {
+            html += `<tr><td style="padding:5px 10px; border-bottom:1px solid #fee2e2;">${o.id}</td><td style="padding:5px 10px; text-align:center; border-bottom:1px solid #fee2e2;">${o.order_date}</td><td style="padding:5px 10px; border-bottom:1px solid #fee2e2;">${o.ref_order_id || ''}</td><td style="padding:5px 10px; text-align:right; border-bottom:1px solid #fee2e2; color:#c53030;">-$${Math.abs(Number(o.grand_total)).toLocaleString()}</td></tr>`;
+          });
+          html += `<tr style="font-weight:700; background:#fef2f2;"><td colspan="3" style="padding:6px 10px;">退貨小計（${returnOrders.length} 筆）</td><td style="padding:6px 10px; text-align:right; color:#c53030;">-$${Math.abs(returnTotal).toLocaleString()}</td></tr></table>`;
+        } else {
+          html += `<div style="color:#94a3b8; padding:12px; font-size:13px;">本月無退貨單</div>`;
+        }
+
+        // 店轉店區（僅分店）
+        if (!isWholesale && transferRows.length > 0) {
+          html += `<div style="font-size:13px; font-weight:700; color:#0e7490; margin:20px 0 8px; border-bottom:2px solid #a5f3fc; padding-bottom:4px;">🔄 店轉店結算</div>`;
+          html += `<table style="width:100%; border-collapse:collapse; font-size:13px;">
+            <tr style="background:#ecfeff;"><th style="padding:6px 10px; text-align:left;">說明</th><th style="padding:6px 10px; text-align:right;">金額</th></tr>`;
+          transferRows.forEach(t => {
+            html += `<tr><td style="padding:5px 10px; border-bottom:1px solid #e0f2fe;">店轉店淨額${t.note ? '（' + t.note + '）' : ''}</td><td style="padding:5px 10px; text-align:right; border-bottom:1px solid #e0f2fe; color:${transferNet >= 0 ? '#16a34a' : '#c53030'};">${transferNet >= 0 ? '+' : '-'}$${Math.abs(transferNet).toLocaleString()}</td></tr>`;
+          });
+          html += `</table>`;
+        }
+
+        // 總計
+        html += `<div style="margin-top:24px; padding:16px; background:#1e293b; border-radius:8px; display:flex; justify-content:space-between; align-items:center;">
+          <div style="color:#94a3b8; font-size:14px; font-weight:700;">本月應付總額</div>
+          <div style="color:#ffffff; font-size:24px; font-weight:900;">$${grandTotal.toLocaleString()}</div>
+        </div>`;
+
+        html += `</div>`; // end msPrintArea
+        contentEl.innerHTML = html;
+
+      } catch(e) {
+        contentEl.innerHTML = `<div style="text-align:center; padding:40px; color:#c53030;">載入失敗: ${e.message}</div>`;
+      }
+    }
+
+    function printMonthlyStatement() {
+      const area = document.getElementById('msPrintArea');
+      if (!area) { Swal.fire('提示', '請先查詢月結對帳單', 'warning'); return; }
+
+      const storeName = currentStore?.name || '';
+      const year = document.getElementById('msYear').value;
+      const month = document.getElementById('msMonth').value;
+
+      const printWin = window.open('', '_blank');
+      printWin.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>月結對帳單 - ${storeName} ${year}年${parseInt(month)}月</title>
+        <style>
+          @page { margin: 10mm; }
+          body { font-family: 'Microsoft JhengHei', sans-serif; color: #1e293b; }
+          table { width: 100%; border-collapse: collapse; }
+          th, td { padding: 5px 8px; }
+          .no-print { display: none; }
+          @media print { .no-print { display: none !important; } }
+        </style>
+      </head><body>
+        <div style="text-align:right; margin-bottom:10px;" class="no-print">
+          <button onclick="window.print()" style="padding:8px 20px; font-size:14px; cursor:pointer;">🖨️ 列印</button>
+          <button onclick="window.close()" style="padding:8px 20px; font-size:14px; cursor:pointer;">✕ 關閉</button>
+        </div>
+        ${area.innerHTML}
+      </body></html>`);
+      printWin.document.close();
+    }
+
+    // ============================
     // 清除所有數量
     // ============================
     function clearAllQty() {
@@ -1965,6 +2128,7 @@
       pagePriceSearch: '💲 商品查價',
       pageAid:      '🤝 互助交流板',
       pageBulletin: '📢 公告欄',
+      pageMonthlyStatement: '📄 月結對帳單',
     };
 
     function switchPage(pageId, menuEl) {
@@ -2006,6 +2170,7 @@
         if (pageId === 'pageBulletin') renderBulletinBoard();
         if (pageId === 'pageArrival') renderArrivalStatusPage();
         if (pageId === 'pagePriceSearch') renderPriceSearchPage();
+        if (pageId === 'pageMonthlyStatement') initMonthlyStatementSelectors();
         // 進入頁面時標記已讀，並更新徽章
         markPageSeen(pageId);
         updateNotificationBadges();
