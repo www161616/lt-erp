@@ -10365,12 +10365,40 @@
       var resData = await res.json();
       var newId = resData.order_id || resData.id || '';
 
-      // 更新 order_type 為 return
+      // 更新 order_type 為 return + ref_order_id
       await fetch(SB_URL + '/sales_orders?id=eq.' + newId, {
         method: 'PATCH',
         headers: HEADERS,
-        body: JSON.stringify({ order_type: 'return' })
+        body: JSON.stringify({ order_type: 'return', ref_order_id: o.dbId || id })
       });
+
+      // 庫存回補
+      for (var ri = 0; ri < retItems.length; ri++) {
+        var rItem = retItems[ri];
+        if (!rItem.product_id) continue;
+        try {
+          var invR = await fetch(SB_URL + '/inventory?product_id=eq.' + encodeURIComponent(rItem.product_id) + '&select=qty', { headers: HEADERS });
+          var invD = await invR.json();
+          if (invD.length > 0) {
+            var newQty = (Number(invD[0].qty) || 0) + rItem.qty;
+            await fetch(SB_URL + '/inventory?product_id=eq.' + encodeURIComponent(rItem.product_id), {
+              method: 'PATCH', headers: HEADERS,
+              body: JSON.stringify({ qty: newQty, last_updated: new Date().toISOString() })
+            });
+            await fetch(SB_URL + '/inventory_logs', {
+              method: 'POST', headers: HEADERS,
+              body: JSON.stringify({
+                product_id: rItem.product_id,
+                log_type: '銷貨退回',
+                qty_change: rItem.qty,
+                after_qty: newQty,
+                note: '退貨單 ' + newId + '（原單 ' + id + '）',
+                created_at: new Date().toISOString()
+              })
+            });
+          }
+        } catch(e) { console.warn('庫存回補失敗:', rItem.product_id, e); }
+      }
 
       // 同步到 portal（讓分店看到退回單）
       mockSalesOrders.push({
