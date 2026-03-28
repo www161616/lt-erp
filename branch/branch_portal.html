@@ -299,7 +299,6 @@
       <div class="menu-item" id="menuDeliveryPreview" onclick="switchPage('pageDeliveryPreview', this)">🚚 明日到貨預告</div>
       <div class="menu-item" id="menuBilling" onclick="switchPage('pageBilling', this)">📦 今日進貨單</div>
       <div class="menu-item" id="menuHistory" onclick="switchPage('pageHistory', this)">📜 所有進貨單</div>
-      <div class="menu-item" id="menuMonthlyStatement" onclick="switchPage('pageMonthlyStatement', this)">📄 月結對帳單</div>
       <div class="menu-item" id="menuLedger" onclick="switchPage('pageLedger', this)">💰 流水帳/訂包管理</div>
       <div class="menu-item" id="menuArrival" onclick="switchPage('pageArrival', this)">📦 到貨狀況</div>
       <div class="menu-item" id="menuPriceSearch" onclick="switchPage('pagePriceSearch', this)">💲 商品查價</div>
@@ -712,26 +711,7 @@
   <div id="aidPaginationBottom" style="display:flex; align-items:center; justify-content:center; gap:6px; margin-top:12px; flex-wrap:wrap;"></div>
 </div>
 
-        <!-- ===== 月結對帳單 ===== -->
-        <div id="pageMonthlyStatement" class="page">
-          <div style="background:white; border-radius:8px; border:1px solid var(--border); padding:16px 24px; margin-bottom:20px; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
-            <div style="display:flex; align-items:center; gap:12px; flex-wrap:wrap;">
-              <div style="font-size:14px; font-weight:700; color:#6b7280;">📄 月結對帳單</div>
-              <select id="msYear" style="padding:8px 12px; border:1.5px solid var(--border); border-radius:6px; font-size:14px; font-family:inherit;"></select>
-              <select id="msMonth" style="padding:8px 12px; border:1.5px solid var(--border); border-radius:6px; font-size:14px; font-family:inherit;">
-                <option value="01">1月</option><option value="02">2月</option><option value="03">3月</option>
-                <option value="04">4月</option><option value="05">5月</option><option value="06">6月</option>
-                <option value="07">7月</option><option value="08">8月</option><option value="09">9月</option>
-                <option value="10">10月</option><option value="11">11月</option><option value="12">12月</option>
-              </select>
-              <button onclick="loadMonthlyStatement()" style="padding:8px 16px; background:var(--primary); color:white; border:none; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit;">🔍 查詢</button>
-              <button onclick="printMonthlyStatement()" style="padding:8px 16px; background:#475569; color:white; border:none; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit;">🖨️ 列印</button>
-            </div>
-          </div>
-          <div id="msContent" style="background:white; border-radius:8px; border:1px solid var(--border); padding:24px; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
-            <div style="text-align:center; padding:40px; color:#94a3b8; font-size:14px;">請選擇月份後點擊「查詢」</div>
-          </div>
-        </div>
+
 
         <div id="pageLedger" class="page">
 
@@ -1004,8 +984,8 @@
             </div>
           </div>
 
-          <!-- 月費橫條（非批發店才顯示）-->
-          <div id="historyFeeBar" style="background:white; border-radius:8px; border:1px solid var(--border); padding:12px 24px; margin-bottom:16px; display:flex; align-items:center; gap:24px; box-shadow:0 2px 4px rgba(0,0,0,0.04);"></div>
+          <!-- 月結匯總卡片 -->
+          <div id="historySummaryCards" style="margin-bottom:16px;"></div>
 
           <!-- 全寬單據表格 -->
           <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:hidden; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
@@ -2144,7 +2124,6 @@
       pagePriceSearch: '💲 商品查價',
       pageAid:      '🤝 互助交流板',
       pageBulletin: '📢 公告欄',
-      pageMonthlyStatement: '📄 月結對帳單',
     };
 
     function switchPage(pageId, menuEl) {
@@ -2186,7 +2165,6 @@
         if (pageId === 'pageBulletin') renderBulletinBoard();
         if (pageId === 'pageArrival') renderArrivalStatusPage();
         if (pageId === 'pagePriceSearch') renderPriceSearchPage();
-        if (pageId === 'pageMonthlyStatement') initMonthlyStatementSelectors();
         // 進入頁面時標記已讀，並更新徽章
         markPageSeen(pageId);
         updateNotificationBadges();
@@ -4849,24 +4827,95 @@ function renderHistoryPage() {
 
   document.getElementById('historyTableBody').innerHTML = html;
 
-  // 月費橫條
+  // 月結匯總卡片
+  renderHistorySummaryCards();
+}
+
+async function renderHistorySummaryCards() {
+  const container = document.getElementById('historySummaryCards');
+  if (!container) return;
   const isWH = currentStore?.type === 'wholesale';
-  const feeBar = document.getElementById('historyFeeBar');
-  if (isWH) {
-    feeBar.style.display = 'none';
-  } else {
-    feeBar.style.display = '';
-    const grandTotal = historyTotal + MONTHLY_FEE;
-    feeBar.innerHTML = `
-      <span style="font-size:13px; color:#6b7280;">固定月費</span>
-      <span style="font-size:15px; font-weight:700; color:#6b7280;">$${MONTHLY_FEE.toLocaleString()}</span>
-      <span style="color:var(--border);">│</span>
-      <span style="font-size:13px; color:#6b7280;">進貨合計</span>
-      <span style="font-size:15px; font-weight:700; color:#be185d;">$${historyTotal.toLocaleString()}</span>
-      <span style="color:var(--border);">│</span>
-      <span style="font-size:13px; color:#6b7280;">含月費總計</span>
-      <span style="font-size:17px; font-weight:700; color:#1f2937;">$${grandTotal.toLocaleString()}</span>`;
+  const data = portalHistory;
+
+  const salesData = data.filter(r => r.order_type !== 'return' && !r.id.startsWith('RT'));
+  const returnData = data.filter(r => r.order_type === 'return' || r.id.startsWith('RT'));
+  const salesTotal = salesData.reduce((s, r) => s + (Number(r.grand_total) || 0), 0);
+  const returnTotal = returnData.reduce((s, r) => s + Math.abs(Number(r.grand_total) || 0), 0);
+
+  // 店轉店（僅分店，查當月）
+  let transferCharge = 0;
+  if (!isWH) {
+    const startDate = document.getElementById('historyDateStart')?.value || '';
+    if (startDate) {
+      const ym = startDate.substring(0, 7); // e.g. 2026-03
+      try {
+        const tfRes = await fetch(`${SB_URL}/transfer_settlements?store=eq.${encodeURIComponent(currentStore.name)}&month=eq.${ym}&select=transfer_net`, { headers: SB_HEADERS });
+        const tfData = await tfRes.json();
+        if (tfData.length > 0) transferCharge = -(Number(tfData[0].transfer_net) || 0);
+      } catch(e) {}
+    }
   }
+
+  const monthlyFee = isWH ? 0 : MONTHLY_FEE;
+  const grandTotal = salesTotal - returnTotal + transferCharge + monthlyFee;
+
+  const cardStyle = 'flex:1; min-width:120px; background:white; border-radius:8px; border:1px solid var(--border); padding:12px 16px; box-shadow:0 2px 4px rgba(0,0,0,0.04); text-align:center;';
+  const labelStyle = 'font-size:11px; color:#9ca3af; margin-bottom:4px;';
+  const valueStyle = 'font-size:18px; font-weight:800;';
+
+  let cards = `
+    <div style="${cardStyle}"><div style="${labelStyle}">📦 銷貨合計（${salesData.length}筆）</div><div style="${valueStyle} color:#1f2937;">$${salesTotal.toLocaleString()}</div></div>
+    <div style="${cardStyle}"><div style="${labelStyle}">🔄 退貨合計（${returnData.length}筆）</div><div style="${valueStyle} color:#c53030;">-$${returnTotal.toLocaleString()}</div></div>`;
+
+  if (!isWH) {
+    const tfColor = transferCharge > 0 ? '#c53030' : transferCharge < 0 ? '#16a34a' : '#6b7280';
+    const tfSign = transferCharge > 0 ? '+' : transferCharge < 0 ? '-' : '';
+    cards += `<div style="${cardStyle}"><div style="${labelStyle}">🔄 店轉店</div><div style="${valueStyle} color:${tfColor};">${tfSign}$${Math.abs(transferCharge).toLocaleString()}</div></div>`;
+    cards += `<div style="${cardStyle}"><div style="${labelStyle}">🏠 固定月費</div><div style="${valueStyle} color:#475569;">$${monthlyFee.toLocaleString()}</div></div>`;
+  }
+
+  cards += `<div style="${cardStyle} background:#1e293b; border-color:#1e293b;"><div style="${labelStyle} color:#94a3b8;">本月應付總額</div><div style="${valueStyle} color:#ffffff;">$${grandTotal.toLocaleString()}</div></div>`;
+  cards += `<div style="display:flex; align-items:center;"><button onclick="printHistorySummary()" style="padding:10px 16px; background:#475569; color:white; border:none; border-radius:8px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit; white-space:nowrap;">🖨️ 列印</button></div>`;
+
+  container.innerHTML = `<div style="display:flex; gap:10px; flex-wrap:wrap;">${cards}</div>`;
+}
+
+function printHistorySummary() {
+  const storeName = currentStore?.name || '';
+  const startDate = document.getElementById('historyDateStart')?.value || '';
+  const endDate = document.getElementById('historyDateEnd')?.value || '';
+  const cards = document.getElementById('historySummaryCards');
+  const table = document.getElementById('historyTableBody');
+  if (!cards || !table) return;
+
+  const printWin = window.open('', '_blank');
+  printWin.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>進貨對帳 - ${storeName}</title>
+    <style>
+      @page { margin: 10mm; }
+      body { font-family: 'Microsoft JhengHei', sans-serif; color: #1e293b; padding: 10px; }
+      table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+      th { background: #f1f5f9; padding: 8px 10px; text-align: left; font-size: 12px; border-bottom: 2px solid #e2e8f0; }
+      td { padding: 6px 10px; font-size: 12px; border-bottom: 1px solid #f1f5f9; }
+      .no-print { display: none; }
+      @media print { .no-print { display: none !important; } }
+    </style>
+  </head><body>
+    <div style="text-align:right; margin-bottom:10px;" class="no-print">
+      <button onclick="window.print()" style="padding:8px 20px; font-size:14px; cursor:pointer;">🖨️ 列印</button>
+      <button onclick="window.close()" style="padding:8px 20px; font-size:14px; cursor:pointer;">✕ 關閉</button>
+    </div>
+    <div style="text-align:center; margin-bottom:16px;">
+      <div style="font-size:18px; font-weight:900;">丸十水產股份有限公司</div>
+      <div style="font-size:14px; color:#64748b; letter-spacing:4px; margin-top:4px;">進貨對帳單</div>
+      <div style="font-size:13px; color:#475569; margin-top:8px;">${storeName}　${startDate} ~ ${endDate}</div>
+    </div>
+    ${cards.innerHTML}
+    <table>
+      <thead><tr><th>單號</th><th>日期</th><th>摘要</th><th style="text-align:right;">金額</th></tr></thead>
+      <tbody>${table.innerHTML}</tbody>
+    </table>
+  </body></html>`);
+  printWin.document.close();
 }
 
 function historyGoPage(p) {
