@@ -137,6 +137,7 @@
     <div class="menu-item" id="menu-picking" onclick="switchTab('picking', this)">📦 新增揀貨單</div>
     <div class="menu-item" id="menu-pickingHistory" onclick="switchTab('pickingHistory', this)">📋 揀貨歷史查詢</div>
     <div class="menu-item" id="menu-accounting" onclick="switchTab('accounting', this)">💳 銷貨單管理</div>
+    <div class="menu-item" id="menu-searchReturns" onclick="switchTab('searchReturns', this)">🔍 退貨單查詢</div>
     <div class="menu-item" id="menu-demandBackorder" onclick="switchTab('demandBackorder', this)">📋 需求與欠品管理<span id="badgeDemand" style="display:none; margin-left:6px; background:#dc2626; color:white; font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px; min-width:16px; text-align:center;"></span></div>
     <div class="menu-item" id="menu-transfer" onclick="switchTab('transfer', this)">🔄 店轉店與退倉審核<span id="badgeTransfer" style="display:none; margin-left:6px; background:#dc2626; color:white; font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px; min-width:16px; text-align:center;"></span></div>
     <div class="menu-item" id="menu-aid" onclick="switchTab('aid', this)">🤝 互助交流板<span id="badgeAid" style="display:none; margin-left:6px; background:#dc2626; color:white; font-size:10px; font-weight:700; padding:1px 6px; border-radius:10px; min-width:16px; text-align:center;"></span></div>
@@ -608,6 +609,9 @@
       } else if (tabId === 'accounting') {
         title.innerText = '當前功能：銷貨單管理';
         renderAccountingStation();
+      } else if (tabId === 'searchReturns') {
+        title.innerText = '當前功能：退貨單查詢';
+        renderSearchReturnsStation();
       } else if (tabId === 'service') {
         title.innerText = '當前功能：需求與欠品管理';
         renderDemandBackorderStation();
@@ -9190,6 +9194,347 @@
       console.error('createReturnOrderFromItem error:', e);
       Swal.fire('退貨單建立失敗', e.message, 'error');
     }
+  }
+
+  // ============================
+  // ============================
+  // 退貨單查詢（從 DB 讀取）
+  // ============================
+  let rtAllResults = [];
+  let rtFilteredResults = [];
+  let rtPage = 1;
+  const RT_PER_PAGE = 50;
+
+  async function renderSearchReturnsStation() {
+    const container = document.getElementById('mainContent');
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+
+    container.innerHTML = `
+      <div class="panel" style="margin-bottom:16px;">
+        <div style="display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap;">
+          <div><label style="font-size:11px; color:var(--text2); display:block; margin-bottom:4px;">起始日期</label><input type="date" id="rtDateFrom" value="${y}-${m}-01" style="padding:7px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px;"></div>
+          <div><label style="font-size:11px; color:var(--text2); display:block; margin-bottom:4px;">結束日期</label><input type="date" id="rtDateTo" value="${now.toISOString().split('T')[0]}" style="padding:7px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px;"></div>
+          <div><label style="font-size:11px; color:var(--text2); display:block; margin-bottom:4px;">客戶/分店</label><input type="text" id="rtFilterCustomer" placeholder="輸入客戶名稱..." style="padding:7px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; width:150px;"></div>
+          <div><label style="font-size:11px; color:var(--text2); display:block; margin-bottom:4px;">搜尋</label><input type="text" id="rtFilterKw" placeholder="單號/商品..." style="padding:7px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; width:180px;" onkeypress="if(event.key==='Enter') rtDoSearch()"></div>
+          <button class="btn" style="background:#2b6cb0;" onclick="rtDoSearch()">🔍 查詢</button>
+          <button class="btn" style="background:var(--border); color:var(--text);" onclick="rtClear()">清除</button>
+        </div>
+      </div>
+      <div id="rtStatBar" style="display:none; display:flex; gap:16px; margin-bottom:12px;">
+        <div style="background:var(--surface2); padding:8px 16px; border-radius:8px;"><div style="font-size:11px; color:var(--text2);">退貨單數</div><div style="font-size:16px; font-weight:700; color:#c53030;" id="rtStatCount">0</div></div>
+        <div style="background:var(--surface2); padding:8px 16px; border-radius:8px;"><div style="font-size:11px; color:var(--text2);">退貨總金額</div><div style="font-size:16px; font-weight:700; color:#c53030;" id="rtStatTotal">$0</div></div>
+      </div>
+      <div class="panel" style="padding:0; overflow:hidden;">
+        <table style="width:100%; border-collapse:collapse;">
+          <thead><tr>
+            <th style="padding:10px 12px; text-align:left; cursor:pointer;" onclick="rtSort('id')">單號 ↕</th>
+            <th style="padding:10px 12px; text-align:left; cursor:pointer;" onclick="rtSort('order_date')">日期 ↕</th>
+            <th style="padding:10px 12px; text-align:left; cursor:pointer;" onclick="rtSort('customer_name')">客戶 ↕</th>
+            <th style="padding:10px 12px; text-align:right; cursor:pointer;" onclick="rtSort('grand_total')">退貨金額 ↕</th>
+            <th style="padding:10px 12px; text-align:left;">備註</th>
+            <th style="padding:10px 12px; text-align:center; width:140px;">操作</th>
+          </tr></thead>
+          <tbody id="rtBody"><tr><td colspan="6" style="text-align:center; padding:30px; color:#94a3b8;">載入中...</td></tr></tbody>
+        </table>
+      </div>
+      <div id="rtPagination" style="display:flex; justify-content:center; gap:4px; margin-top:12px;"></div>`;
+
+    rtDoSearch();
+  }
+
+  async function rtDoSearch() {
+    const from = document.getElementById('rtDateFrom')?.value;
+    const to = document.getElementById('rtDateTo')?.value;
+    const customer = (document.getElementById('rtFilterCustomer')?.value || '').trim();
+    const kw = (document.getElementById('rtFilterKw')?.value || '').trim().toLowerCase();
+
+    let url = `${SB_URL}/sales_orders?order_type=eq.return&order=order_date.desc,id.desc&select=id,order_date,customer_id,customer_name,grand_total,note,ref_order_id`;
+    if (from) url += `&order_date=gte.${from}`;
+    if (to) url += `&order_date=lte.${to}`;
+    url += '&limit=1000';
+
+    const tbody = document.getElementById('rtBody');
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px; color:#94a3b8;">載入中...</td></tr>';
+
+    try {
+      const res = await fetch(url, { headers: HEADERS });
+      rtAllResults = await res.json();
+
+      // 客戶篩選
+      if (customer) {
+        rtAllResults = rtAllResults.filter(o => (o.customer_name || '').includes(customer));
+      }
+
+      // 關鍵字搜尋（單號、備註、商品）
+      if (kw) {
+        const orderIds = rtAllResults.map(o => o.id);
+        let matchedIds = new Set(rtAllResults.filter(o =>
+          o.id.toLowerCase().includes(kw) || (o.customer_name || '').toLowerCase().includes(kw) || (o.note || '').toLowerCase().includes(kw)
+        ).map(o => o.id));
+
+        if (orderIds.length > 0) {
+          try {
+            const dRes = await fetch(`${SB_URL}/sales_details?order_id=in.(${orderIds.join(',')})&select=order_id,product_id,product_name&limit=5000`, { headers: HEADERS });
+            const details = await dRes.json();
+            details.forEach(d => {
+              if ((d.product_id || '').toLowerCase().includes(kw) || (d.product_name || '').toLowerCase().includes(kw)) matchedIds.add(d.order_id);
+            });
+          } catch(e) {}
+        }
+        rtAllResults = rtAllResults.filter(o => matchedIds.has(o.id));
+      }
+
+      rtFilteredResults = rtAllResults;
+      rtPage = 1;
+      rtRenderResults();
+      rtUpdateStats();
+    } catch(e) {
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:30px; color:#c53030;">查詢失敗: ${e.message}</td></tr>`;
+    }
+  }
+
+  function rtUpdateStats() {
+    const bar = document.getElementById('rtStatBar');
+    if (!bar) return;
+    if (rtFilteredResults.length === 0) { bar.style.display = 'none'; return; }
+    bar.style.display = 'flex';
+    document.getElementById('rtStatCount').textContent = rtFilteredResults.length;
+    const total = rtFilteredResults.reduce((s, o) => s + Math.abs(Number(o.grand_total)), 0);
+    document.getElementById('rtStatTotal').textContent = '$' + total.toLocaleString();
+  }
+
+  let rtSortField = 'order_date', rtSortDir = 'desc';
+  function rtSort(field) {
+    if (rtSortField === field) rtSortDir = rtSortDir === 'asc' ? 'desc' : 'asc';
+    else { rtSortField = field; rtSortDir = 'desc'; }
+    rtFilteredResults.sort((a, b) => {
+      let va = a[field] || '', vb = b[field] || '';
+      if (field === 'grand_total') { va = Number(va); vb = Number(vb); }
+      return rtSortDir === 'asc' ? (va < vb ? -1 : va > vb ? 1 : 0) : (va > vb ? -1 : va < vb ? 1 : 0);
+    });
+    rtPage = 1;
+    rtRenderResults();
+  }
+
+  function rtRenderResults() {
+    const tbody = document.getElementById('rtBody');
+    if (rtFilteredResults.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:30px; color:#94a3b8;">查無退貨單</td></tr>';
+      document.getElementById('rtPagination').innerHTML = '';
+      return;
+    }
+
+    const totalPages = Math.ceil(rtFilteredResults.length / RT_PER_PAGE);
+    if (rtPage > totalPages) rtPage = totalPages;
+    const start = (rtPage - 1) * RT_PER_PAGE;
+    const pageData = rtFilteredResults.slice(start, start + RT_PER_PAGE);
+
+    tbody.innerHTML = pageData.map(o => {
+      const amt = Math.abs(Number(o.grand_total));
+      return `<tr>
+        <td style="padding:8px 12px; font-weight:600; color:#c53030; cursor:pointer;" onclick="rtToggleDetail('${o.id}')">${o.id}</td>
+        <td style="padding:8px 12px;">${o.order_date}</td>
+        <td style="padding:8px 12px;">${o.customer_name || ''}</td>
+        <td style="padding:8px 12px; text-align:right; font-weight:600; color:#c53030;">$${amt.toLocaleString()}</td>
+        <td style="padding:8px 12px; font-size:12px; color:var(--text2); max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${o.note || ''}</td>
+        <td style="padding:8px 12px; text-align:center; white-space:nowrap;">
+          <button class="btn" style="padding:3px 8px; font-size:11px; background:#2b6cb0;" onclick="rtEditOrder('${o.id}')">✏️ 編輯</button>
+          <button class="btn" style="padding:3px 8px; font-size:11px; background:#c53030;" onclick="rtVoidOrder('${o.id}')">🗑️ 作廢</button>
+        </td>
+      </tr>
+      <tr id="rtDetail-${o.id}" style="display:none;"><td colspan="6" style="padding:0;"></td></tr>`;
+    }).join('');
+
+    // 分頁
+    if (totalPages > 1) {
+      let ph = '';
+      if (rtPage > 1) ph += `<button class="btn" style="padding:4px 10px; font-size:11px; background:var(--border); color:var(--text);" onclick="rtPage=1;rtRenderResults()">«</button><button class="btn" style="padding:4px 10px; font-size:11px; background:var(--border); color:var(--text);" onclick="rtPage--;rtRenderResults()">‹</button>`;
+      for (let i = Math.max(1, rtPage - 2); i <= Math.min(totalPages, rtPage + 2); i++) {
+        ph += `<button class="btn" style="padding:4px 10px; font-size:11px; ${i === rtPage ? 'background:#2b6cb0;' : 'background:var(--border); color:var(--text);'}" onclick="rtPage=${i};rtRenderResults()">${i}</button>`;
+      }
+      if (rtPage < totalPages) ph += `<button class="btn" style="padding:4px 10px; font-size:11px; background:var(--border); color:var(--text);" onclick="rtPage++;rtRenderResults()">›</button><button class="btn" style="padding:4px 10px; font-size:11px; background:var(--border); color:var(--text);" onclick="rtPage=${totalPages};rtRenderResults()">»</button>`;
+      document.getElementById('rtPagination').innerHTML = ph;
+    } else {
+      document.getElementById('rtPagination').innerHTML = '';
+    }
+  }
+
+  async function rtToggleDetail(orderId) {
+    const row = document.getElementById('rtDetail-' + orderId);
+    if (!row) return;
+    if (row.style.display !== 'none') { row.style.display = 'none'; return; }
+
+    const td = row.querySelector('td');
+    td.innerHTML = '<div style="padding:12px; color:#94a3b8;">載入中...</div>';
+    row.style.display = '';
+
+    try {
+      const res = await fetch(`${SB_URL}/sales_details?order_id=eq.${orderId}&select=*&order=id.asc`, { headers: HEADERS });
+      const details = await res.json();
+      td.innerHTML = `<div style="padding:10px 16px; background:#1a202c; border-radius:0 0 8px 8px;">
+        <table style="width:100%; border-collapse:collapse;">
+          <thead><tr style="background:#2d3748;">
+            <th style="padding:5px 8px; text-align:left; font-size:11px; color:#a0aec0;">商品編號</th>
+            <th style="padding:5px 8px; text-align:left; font-size:11px; color:#a0aec0;">商品名稱</th>
+            <th style="padding:5px 8px; text-align:right; font-size:11px; color:#a0aec0;">單價</th>
+            <th style="padding:5px 8px; text-align:center; font-size:11px; color:#a0aec0;">數量</th>
+            <th style="padding:5px 8px; text-align:right; font-size:11px; color:#a0aec0;">小計</th>
+          </tr></thead>
+          <tbody>${details.map(d => `<tr style="border-bottom:1px solid #2d3748;">
+            <td style="padding:5px 8px; font-size:12px; color:#63b3ed; font-weight:600;">${d.product_id || ''}</td>
+            <td style="padding:5px 8px; font-size:12px; color:#e2e8f0;">${d.product_name || ''}</td>
+            <td style="padding:5px 8px; text-align:right; font-size:12px; color:#e2e8f0;">$${Number(d.unit_price).toLocaleString()}</td>
+            <td style="padding:5px 8px; text-align:center; font-size:12px; color:#e2e8f0;">${Math.abs(d.qty)}</td>
+            <td style="padding:5px 8px; text-align:right; font-size:12px; color:#fc8181; font-weight:600;">$${Math.abs(Number(d.subtotal)).toLocaleString()}</td>
+          </tr>`).join('')}</tbody>
+        </table>
+      </div>`;
+    } catch(e) {
+      td.innerHTML = `<div style="padding:12px; color:#fc8181;">載入失敗: ${e.message}</div>`;
+    }
+  }
+
+  async function rtEditOrder(orderId) {
+    try {
+      const [oRes, dRes] = await Promise.all([
+        fetch(`${SB_URL}/sales_orders?id=eq.${orderId}&select=*`, { headers: HEADERS }),
+        fetch(`${SB_URL}/sales_details?order_id=eq.${orderId}&select=*&order=id.asc`, { headers: HEADERS })
+      ]);
+      const orders = await oRes.json();
+      const details = await dRes.json();
+      if (!orders.length) { Swal.fire('錯誤', '找不到退貨單', 'error'); return; }
+
+      const order = orders[0];
+      let editItems = details.map(d => ({
+        id: d.id, product_id: d.product_id, product_name: d.product_name,
+        unit: d.unit || '件', unit_price: Number(d.unit_price), qty: Math.abs(d.qty)
+      }));
+
+      const itemRows = editItems.map((item, idx) =>
+        `<tr><td style="padding:5px 8px; border-bottom:1px solid #eee; font-size:12px; color:#2b6cb0; font-weight:600;">${item.product_id || ''}</td>
+        <td style="padding:5px 8px; border-bottom:1px solid #eee; font-size:12px;">${item.product_name}</td>
+        <td style="padding:5px 8px; border-bottom:1px solid #eee; text-align:center;"><input type="number" id="rtEditQty-${idx}" min="0" value="${item.qty}" style="width:60px; padding:4px; border:1px solid #ccc; border-radius:4px; font-size:12px; text-align:center;"></td>
+        <td style="padding:5px 8px; border-bottom:1px solid #eee; text-align:right;"><input type="number" id="rtEditPrice-${idx}" min="0" value="${item.unit_price}" style="width:70px; padding:4px; border:1px solid #ccc; border-radius:4px; font-size:12px; text-align:right;"></td></tr>`
+      ).join('');
+
+      const result = await Swal.fire({
+        title: '✏️ 編輯 ' + orderId,
+        width: 560,
+        html: `<div style="text-align:left; font-size:13px;">
+          <div style="margin-bottom:8px;">客戶：<b>${order.customer_name}</b>　日期：${order.order_date}</div>
+          <div style="max-height:280px; overflow-y:auto;"><table style="width:100%; border-collapse:collapse;"><thead><tr style="background:#f7fafc;"><th style="padding:5px 8px; text-align:left; font-size:11px;">編號</th><th style="padding:5px 8px; text-align:left; font-size:11px;">名稱</th><th style="padding:5px 8px; text-align:center; font-size:11px;">數量</th><th style="padding:5px 8px; text-align:right; font-size:11px;">單價</th></tr></thead><tbody>${itemRows}</tbody></table></div>
+          <div style="margin-top:8px;"><label style="font-size:12px; font-weight:600;">備註</label><input type="text" id="rtEditNote" value="${order.note || ''}" style="width:100%; padding:6px; border:1px solid #ccc; border-radius:6px; font-size:12px; margin-top:4px;"></div>
+        </div>`,
+        showCancelButton: true, confirmButtonText: '儲存', cancelButtonText: '取消', confirmButtonColor: '#2b6cb0',
+        preConfirm: () => {
+          const updated = editItems.map((item, idx) => ({
+            ...item,
+            qty: parseInt(document.getElementById('rtEditQty-' + idx).value) || 0,
+            unit_price: Number(document.getElementById('rtEditPrice-' + idx).value) || 0
+          })).filter(i => i.qty > 0);
+          if (updated.length === 0) { Swal.showValidationMessage('至少保留一項商品'); return false; }
+          return { items: updated, note: document.getElementById('rtEditNote').value.trim() };
+        }
+      });
+      if (!result.isConfirmed) return;
+
+      Swal.fire({ title: '更新中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+      const newItems = result.value.items;
+      const newTotal = newItems.reduce((s, i) => s + i.qty * i.unit_price, 0);
+
+      // 庫存差異調整
+      for (const ni of newItems) {
+        const oi = editItems.find(o => o.id === ni.id);
+        const diff = ni.qty - (oi ? oi.qty : 0);
+        if (diff !== 0 && ni.product_id) {
+          try {
+            const ir = await fetch(`${SB_URL}/inventory?product_id=eq.${encodeURIComponent(ni.product_id)}&select=qty`, { headers: HEADERS });
+            const id = await ir.json();
+            if (id.length > 0) {
+              const nq = (Number(id[0].qty) || 0) + diff;
+              await fetch(`${SB_URL}/inventory?product_id=eq.${encodeURIComponent(ni.product_id)}`, { method: 'PATCH', headers: HEADERS, body: JSON.stringify({ qty: nq, last_updated: new Date().toISOString() }) });
+              await fetch(`${SB_URL}/inventory_logs`, { method: 'POST', headers: HEADERS, body: JSON.stringify({ product_id: ni.product_id, log_type: '退貨單修改', qty_change: diff, after_qty: nq, doc_no: orderId, log_date: new Date().toISOString() }) });
+            }
+          } catch(e) {}
+        }
+      }
+      // 被刪除的項目扣回庫存
+      for (const oi of editItems) {
+        if (!newItems.find(n => n.id === oi.id) && oi.product_id) {
+          try {
+            const ir = await fetch(`${SB_URL}/inventory?product_id=eq.${encodeURIComponent(oi.product_id)}&select=qty`, { headers: HEADERS });
+            const id = await ir.json();
+            if (id.length > 0) {
+              const nq = (Number(id[0].qty) || 0) - oi.qty;
+              await fetch(`${SB_URL}/inventory?product_id=eq.${encodeURIComponent(oi.product_id)}`, { method: 'PATCH', headers: HEADERS, body: JSON.stringify({ qty: nq, last_updated: new Date().toISOString() }) });
+              await fetch(`${SB_URL}/inventory_logs`, { method: 'POST', headers: HEADERS, body: JSON.stringify({ product_id: oi.product_id, log_type: '退貨單修改（移除）', qty_change: -oi.qty, after_qty: nq, doc_no: orderId, log_date: new Date().toISOString() }) });
+            }
+          } catch(e) {}
+        }
+      }
+
+      // 刪舊明細寫新明細
+      await fetch(`${SB_URL}/sales_details?order_id=eq.${orderId}`, { method: 'DELETE', headers: HEADERS });
+      const nd = newItems.map((item, idx) => ({ id: orderId + '-' + String(idx+1).padStart(3,'0'), order_id: orderId, product_id: item.product_id, product_name: item.product_name, qty: -item.qty, unit: item.unit, unit_price: item.unit_price, subtotal: -(item.qty * item.unit_price) }));
+      await fetch(`${SB_URL}/sales_details`, { method: 'POST', headers: Object.assign({}, HEADERS, { 'Prefer': 'return=representation' }), body: JSON.stringify(nd) });
+      await fetch(`${SB_URL}/sales_orders?id=eq.${orderId}`, { method: 'PATCH', headers: HEADERS, body: JSON.stringify({ subtotal: -newTotal, grand_total: -newTotal, note: result.value.note }) });
+
+      Swal.fire({ icon: 'success', title: '已更新', text: '退貨金額：$' + newTotal.toLocaleString(), timer: 1500, showConfirmButton: false });
+      rtDoSearch();
+    } catch(e) { Swal.fire('錯誤', e.message, 'error'); }
+  }
+
+  async function rtVoidOrder(orderId) {
+    const order = rtFilteredResults.find(o => o.id === orderId);
+    if (!order) return;
+
+    const confirm = await Swal.fire({
+      title: '確定作廢？',
+      html: `退貨單 <b>${orderId}</b><br>客戶：${order.customer_name}<br>金額：<b style="color:#c53030;">$${Math.abs(Number(order.grand_total)).toLocaleString()}</b><br><br><span style="font-size:12px; color:#c53030;">作廢後將刪除退貨單並扣回庫存</span>`,
+      icon: 'warning', showCancelButton: true, confirmButtonText: '確定作廢', cancelButtonText: '取消', confirmButtonColor: '#c53030'
+    });
+    if (!confirm.isConfirmed) return;
+
+    Swal.fire({ title: '作廢中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+    try {
+      const dRes = await fetch(`${SB_URL}/sales_details?order_id=eq.${orderId}&select=*`, { headers: HEADERS });
+      const details = await dRes.json();
+
+      for (const d of details) {
+        if (!d.product_id) continue;
+        const rq = Math.abs(d.qty);
+        try {
+          const ir = await fetch(`${SB_URL}/inventory?product_id=eq.${encodeURIComponent(d.product_id)}&select=qty`, { headers: HEADERS });
+          const id = await ir.json();
+          if (id.length > 0) {
+            const nq = (Number(id[0].qty) || 0) - rq;
+            await fetch(`${SB_URL}/inventory?product_id=eq.${encodeURIComponent(d.product_id)}`, { method: 'PATCH', headers: HEADERS, body: JSON.stringify({ qty: nq, last_updated: new Date().toISOString() }) });
+            await fetch(`${SB_URL}/inventory_logs`, { method: 'POST', headers: HEADERS, body: JSON.stringify({ product_id: d.product_id, log_type: '退貨單作廢', qty_change: -rq, after_qty: nq, doc_no: orderId, log_date: new Date().toISOString() }) });
+          }
+        } catch(e) {}
+      }
+
+      await fetch(`${SB_URL}/sales_details?order_id=eq.${orderId}`, { method: 'DELETE', headers: HEADERS });
+      await fetch(`${SB_URL}/sales_orders?id=eq.${orderId}`, { method: 'DELETE', headers: HEADERS });
+
+      logActivity('作廢退貨單', orderId, { customer: order.customer_name, amount: order.grand_total });
+
+      Swal.fire({ icon: 'success', title: '已作廢', text: orderId + ' 已刪除，庫存已扣回', timer: 1500, showConfirmButton: false });
+      rtDoSearch();
+    } catch(e) { Swal.fire('錯誤', e.message, 'error'); }
+  }
+
+  function rtClear() {
+    const now = new Date();
+    document.getElementById('rtDateFrom').value = now.getFullYear() + '-' + String(now.getMonth()+1).padStart(2,'0') + '-01';
+    document.getElementById('rtDateTo').value = now.toISOString().split('T')[0];
+    document.getElementById('rtFilterCustomer').value = '';
+    document.getElementById('rtFilterKw').value = '';
+    rtDoSearch();
   }
 
   // ============================
