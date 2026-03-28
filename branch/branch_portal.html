@@ -342,6 +342,10 @@
                 style="background:#6b7280; color:white; border:none; padding:10px 16px; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit;">
                 🗑️ 清除數量
               </button>
+              <button onclick="showOrderSummary()"
+                style="background:#0e7490; color:white; border:none; padding:10px 16px; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit;">
+                📋 訂單彙總
+              </button>
               <button id="submitOrderBtn" onclick="submitOrder()"
                 style="display:none; background:#059669; color:white; border:none; padding:10px 20px; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit; animation:pulse 1.5s infinite;">
                 🚀 送出資料
@@ -1675,6 +1679,143 @@
         ${area.innerHTML}
       </body></html>`);
       printWin.document.close();
+    }
+
+    // ============================
+    // 訂單彙總（只列有數量的商品）
+    // ============================
+    function showOrderSummary() {
+      const orderList = JSON.parse(localStorage.getItem('branchOrderList') || '[]');
+      const today = new Date();
+      const threeDaysAgo = new Date(today); threeDaysAgo.setDate(today.getDate() - 3);
+      const cutoff = threeDaysAgo.toISOString().split('T')[0];
+      const endDates = [...new Set(orderList.map(p => p.endDate).filter(Boolean))].sort().filter(d => d >= cutoff);
+
+      // 選結單日
+      const options = { all: '全部結單日' };
+      endDates.forEach(d => { options[d] = `結單日 ${d}`; });
+
+      Swal.fire({
+        title: '📋 訂單彙總',
+        input: 'select',
+        inputOptions: options,
+        inputValue: 'all',
+        showCancelButton: true,
+        confirmButtonText: '查看',
+        cancelButtonText: '取消',
+        confirmButtonColor: '#0e7490'
+      }).then(r => {
+        if (!r.isConfirmed) return;
+        const chosen = r.value;
+
+        // 篩選有數量的商品
+        const items = orderList.filter(p => {
+          if (chosen !== 'all' && p.endDate !== chosen) return false;
+          const qty = parseInt(orderQtyCache[p.id]) || 0;
+          return qty > 0;
+        }).map(p => ({
+          endDate: p.endDate || '',
+          productId: p.productId || p.id,
+          name: p.name || '',
+          qty: parseInt(orderQtyCache[p.id]) || 0,
+          price: p.price || 0
+        }));
+
+        if (items.length === 0) {
+          Swal.fire({ title: '無資料', text: '沒有填入數量的商品', icon: 'info', confirmButtonColor: '#0e7490' });
+          return;
+        }
+
+        // 依結單日分組
+        const groups = {};
+        items.forEach(item => {
+          const key = item.endDate || '未設定';
+          if (!groups[key]) groups[key] = [];
+          groups[key].push(item);
+        });
+
+        const totalItems = items.length;
+        const totalQty = items.reduce((s, i) => s + i.qty, 0);
+        const totalAmt = items.reduce((s, i) => s + i.qty * i.price, 0);
+
+        let html = '';
+        const sortedKeys = Object.keys(groups).sort();
+
+        sortedKeys.forEach(date => {
+          const group = groups[date];
+          const groupQty = group.reduce((s, i) => s + i.qty, 0);
+          const groupAmt = group.reduce((s, i) => s + i.qty * i.price, 0);
+
+          if (sortedKeys.length > 1) {
+            html += `<div style="font-size:12px; font-weight:700; color:#0e7490; margin:12px 0 6px; border-bottom:1px solid #e2e8f0; padding-bottom:4px;">📅 結單日 ${date}（${group.length} 品項，${groupQty} 件，$${groupAmt.toLocaleString()}）</div>`;
+          }
+
+          html += `<table style="width:100%; border-collapse:collapse; font-size:12px; margin-bottom:8px;">
+            <thead><tr style="background:#ecfeff;">
+              <th style="padding:4px 8px; text-align:left; color:#0e7490;">商品編號</th>
+              <th style="padding:4px 8px; text-align:left; color:#0e7490;">商品名稱</th>
+              <th style="padding:4px 8px; text-align:center; color:#0e7490;">數量</th>
+              <th style="padding:4px 8px; text-align:right; color:#0e7490;">單價</th>
+              <th style="padding:4px 8px; text-align:right; color:#0e7490;">小計</th>
+            </tr></thead><tbody>`;
+
+          group.forEach(item => {
+            html += `<tr style="border-bottom:1px solid #e0f2fe;">
+              <td style="padding:3px 8px; font-family:monospace; color:#0e7490;">${item.productId}</td>
+              <td style="padding:3px 8px;">${item.name}</td>
+              <td style="padding:3px 8px; text-align:center; font-weight:700; color:#be185d; font-size:14px;">${item.qty}</td>
+              <td style="padding:3px 8px; text-align:right; color:#6b7280;">$${item.price.toLocaleString()}</td>
+              <td style="padding:3px 8px; text-align:right; font-weight:600;">$${(item.qty * item.price).toLocaleString()}</td>
+            </tr>`;
+          });
+          html += `</tbody></table>`;
+        });
+
+        // 底部總計
+        html += `<div style="margin-top:12px; padding:10px 16px; background:#1e293b; border-radius:8px; display:flex; justify-content:space-between; align-items:center; color:white;">
+          <div><span style="color:#94a3b8;">總品項</span> <b>${totalItems}</b>　<span style="color:#94a3b8;">總數量</span> <b>${totalQty}</b></div>
+          <div style="font-size:18px; font-weight:900;">$${totalAmt.toLocaleString()}</div>
+        </div>`;
+
+        Swal.fire({
+          title: `📋 訂單彙總${chosen !== 'all' ? '（' + chosen + '）' : ''}`,
+          html: `<div style="text-align:left; max-height:60vh; overflow-y:auto;">${html}</div>`,
+          width: 650,
+          showCloseButton: true,
+          showConfirmButton: true,
+          confirmButtonText: '🖨️ 列印',
+          confirmButtonColor: '#475569',
+          showCancelButton: true,
+          cancelButtonText: '關閉'
+        }).then(pr => {
+          if (!pr.isConfirmed) return;
+          // 列印
+          const storeName = currentStore?.name || '';
+          const printWin = window.open('', '_blank');
+          printWin.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>訂單彙總 - ${storeName}</title>
+            <style>
+              @page { margin: 10mm; }
+              body { font-family: 'Microsoft JhengHei', sans-serif; color: #1e293b; padding: 10px; }
+              table { width: 100%; border-collapse: collapse; }
+              th { background: #f1f5f9; padding: 5px 8px; text-align: left; font-size: 12px; border-bottom: 2px solid #e2e8f0; }
+              td { padding: 4px 8px; font-size: 12px; border-bottom: 1px solid #f1f5f9; }
+              .no-print { display: none; }
+              @media print { .no-print { display: none !important; } }
+            </style>
+          </head><body>
+            <div style="text-align:right; margin-bottom:10px;" class="no-print">
+              <button onclick="window.print()" style="padding:8px 20px; font-size:14px; cursor:pointer;">🖨️ 列印</button>
+              <button onclick="window.close()" style="padding:8px 20px; font-size:14px; cursor:pointer;">✕ 關閉</button>
+            </div>
+            <div style="text-align:center; margin-bottom:16px;">
+              <div style="font-size:18px; font-weight:900;">${storeName} — 訂單彙總</div>
+              <div style="font-size:13px; color:#64748b; margin-top:4px;">${chosen !== 'all' ? '結單日 ' + chosen : '全部結單日'}　列印時間 ${new Date().toLocaleString('zh-TW', { hour12: false })}</div>
+            </div>
+            ${html}
+          </body></html>`);
+          printWin.document.close();
+        });
+      });
     }
 
     // ============================
