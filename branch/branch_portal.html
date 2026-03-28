@@ -4800,12 +4800,18 @@ function renderHistoryPage() {
   } else {
     pageData.forEach(r => {
       const amt = Number(r.grand_total) || 0;
+      const isReturn = r.order_type === 'return' || r.id.startsWith('RT');
+      const typeTag = isReturn
+        ? '<span style="display:inline-block; padding:1px 6px; border-radius:4px; font-size:10px; font-weight:700; background:#fef2f2; color:#c53030; margin-left:6px;">🔄 退貨單</span>'
+        : '<span style="display:inline-block; padding:1px 6px; border-radius:4px; font-size:10px; font-weight:700; background:#ecfdf5; color:#047857; margin-left:6px;">📦 銷貨單</span>';
+      const amtColor = isReturn ? '#c53030' : '#1f2937';
+      const rowBg = isReturn ? 'background:#fef2f2;' : '';
       html += `
-        <tr style="border-bottom:1px solid #f3f4f6; cursor:pointer;" onclick="showHistoryDetail('${r.id}')">
-          <td style="padding:10px 16px; font-weight:600; color:var(--primary);">${r.id}</td>
+        <tr style="border-bottom:1px solid #f3f4f6; cursor:pointer; ${rowBg}" onclick="showHistoryDetail('${r.id}')">
+          <td style="padding:10px 16px; font-weight:600; color:${isReturn ? '#c53030' : 'var(--primary)'};">${r.id}${typeTag}</td>
           <td style="padding:10px 16px; color:#6b7280;">${r.order_date}</td>
           <td style="padding:10px 16px; font-size:13px; color:#4b5563;">${r.note || ''}</td>
-          <td style="padding:10px 16px; text-align:right; font-weight:700; color:#1f2937;">$${amt.toLocaleString()}</td>
+          <td style="padding:10px 16px; text-align:right; font-weight:700; color:${amtColor};">${isReturn ? '-' : ''}$${Math.abs(amt).toLocaleString()}</td>
           <td style="padding:10px 16px; text-align:center;">
             <button onclick="event.stopPropagation(); showHistoryDetail('${r.id}')" style="padding:4px 10px; background:#fff0f6; color:#be185d; border:1px solid #be185d; border-radius:4px; font-size:12px; cursor:pointer; font-family:inherit;">查看</button>
           </td>
