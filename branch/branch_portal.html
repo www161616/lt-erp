@@ -1824,8 +1824,10 @@
                 productId = productId.trim();
                 if (!quantities[productId]) quantities[productId] = 0;
                 quantities[productId] += qty;
-                const shortName = styleC.match(/【(.+?)】/);
-                if (!csvNames[productId]) csvNames[productId] = shortName ? shortName[1] : nameB.slice(0, 30);
+                // 商品名稱：優先用款式【...】，再用名稱欄清洗（去掉emoji、價格、結單日、編號等）
+                const shortName = (styleC.match(/【(.+?)】/) || [])[1];
+                const cleanName = nameB.replace(/[⬜🔲✅☑️❤️💰⏰🔥⭐️📢🎉🆕]/g, '').replace(/#\d+#/g, '').replace(/💰\d+/g, '').replace(/⏰.+?結單/g, '').trim();
+                if (!csvNames[productId]) csvNames[productId] = shortName || cleanName || nameB.slice(0, 30);
               } else {
                 // 名稱和款式都沒有 #編號#
                 const displayName = (styleC.match(/【(.+?)】/) || [])[1] || nameB.slice(0, 40) || '(無名稱)';
@@ -1904,7 +1906,7 @@
 
               matchCount++;
               filledTotalQty += totalQty;
-              matchedDetails.push({ csvId, itemPid, name: csvNames[csvId] || item.name || csvId, qty: finalQty, fuzzy: csvId !== itemPid });
+              matchedDetails.push({ csvId, itemPid, csvName: csvNames[csvId] || '', sysName: item.name || '', qty: finalQty, fuzzy: csvId !== itemPid });
             }
             saveQtyCache();
 
@@ -1951,14 +1953,13 @@
             if (matchedDetails.length > 0) {
               rpt += `<br><b style="color:#059669;">成功填入明細：</b>`;
               rpt += `<table style="width:100%; border-collapse:collapse; margin-top:6px; font-size:12px;">
-                <tr style="background:#ecfdf5;"><th style="padding:4px 8px; text-align:left; color:#065f46;">商品編號</th><th style="padding:4px 8px; text-align:left; color:#065f46;">商品名稱</th><th style="padding:4px 8px; text-align:center; color:#065f46;">數量</th>${mode === 'add' ? '<th style="padding:4px 8px; text-align:center; color:#065f46;">說明</th>' : ''}</tr>`;
+                <tr style="background:#ecfdf5;"><th style="padding:4px 8px; text-align:left; color:#065f46;">商品編號</th><th style="padding:4px 8px; text-align:left; color:#065f46;">樂樂名稱</th><th style="padding:4px 8px; text-align:left; color:#065f46;">系統名稱</th><th style="padding:4px 8px; text-align:center; color:#065f46;">數量</th></tr>`;
               rpt += matchedDetails.map(m => {
-                const note = m.fuzzy ? `<span style="color:#2563eb;">${m.csvId}→${m.itemPid}</span>` : '';
                 return `<tr style="border-bottom:1px solid #d1fae5;">
-                  <td style="padding:3px 8px; font-family:monospace; color:#0e7490;">${m.itemPid}</td>
-                  <td style="padding:3px 8px;">${m.name}</td>
-                  <td style="padding:3px 8px; text-align:center; font-weight:700; color:#059669;">${m.qty}</td>
-                  ${mode === 'add' ? `<td style="padding:3px 8px; text-align:center; font-size:11px;">${note}</td>` : ''}
+                  <td style="padding:3px 8px; font-family:monospace; color:#0e7490;">${m.itemPid}${m.fuzzy ? `<div style="font-size:10px; color:#2563eb;">CSV:${m.csvId}</div>` : ''}</td>
+                  <td style="padding:3px 8px; color:#374151;">${m.csvName}</td>
+                  <td style="padding:3px 8px; color:#6b7280; font-size:11px;">${m.sysName}</td>
+                  <td style="padding:3px 8px; text-align:center; font-weight:700; color:#059669; font-size:14px;">${m.qty}</td>
                 </tr>`;
               }).join('');
               rpt += `</table>`;
