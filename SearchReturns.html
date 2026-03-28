@@ -87,7 +87,7 @@
         <th onclick="sortBy('customer_name')">客戶 ↕</th>
         <th style="text-align:right;" onclick="sortBy('grand_total')">退貨金額 ↕</th>
         <th>備註</th>
-        <th style="width:60px;"></th>
+        <th style="width:130px;">操作</th>
       </tr>
     </thead>
     <tbody id="resultBody">
@@ -244,13 +244,16 @@ function renderResults() {
 
   tbody.innerHTML = pageData.map(o => {
     const amount = Math.abs(Number(o.grand_total));
-    return `<tr style="cursor:pointer;" onclick="toggleDetail('${o.id}', this)">
+    return `<tr style="cursor:pointer;" onclick="toggleDetail('${o.id}')">
       <td style="font-weight:600; color:var(--danger);">${o.id}</td>
       <td>${o.order_date}</td>
       <td>${o.customer_name || ''}</td>
       <td style="text-align:right; font-weight:600; color:var(--danger);">$${amount.toLocaleString()}</td>
-      <td style="font-size:12px; color:var(--text2);">${o.note || ''}</td>
-      <td style="text-align:center;"><span style="font-size:11px; color:var(--blue);">▼ 展開</span></td>
+      <td style="font-size:12px; color:var(--text2); max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${o.note || ''}</td>
+      <td style="text-align:center; white-space:nowrap;">
+        <button onclick="event.stopPropagation();editReturnOrder('${o.id}')" style="padding:3px 8px; font-size:11px; border:1px solid var(--border); background:#fff; border-radius:4px; cursor:pointer; font-family:inherit;">✏️ 編輯</button>
+        <button onclick="event.stopPropagation();voidReturnOrder('${o.id}')" style="padding:3px 8px; font-size:11px; border:1px solid #fecaca; background:#fef2f2; color:#c53030; border-radius:4px; cursor:pointer; font-family:inherit;">🗑️ 作廢</button>
+      </td>
     </tr>
     <tr class="detail-row" id="detail-${o.id}" style="display:none;"><td colspan="6" style="padding:0;"></td></tr>`;
   }).join('');
@@ -316,6 +319,225 @@ async function toggleDetail(orderId, rowEl) {
     td.innerHTML = html;
   } catch(e) {
     td.innerHTML = `<div style="padding:12px; color:#c53030;">載入失敗: ${e.message}</div>`;
+  }
+}
+
+// ===== 編輯退貨單 =====
+async function editReturnOrder(orderId) {
+  try {
+    const [oRes, dRes] = await Promise.all([
+      fetch(`${SB_URL}/sales_orders?id=eq.${orderId}&select=*`, { headers: H() }),
+      fetch(`${SB_URL}/sales_details?order_id=eq.${orderId}&select=*&order=id.asc`, { headers: H() })
+    ]);
+    const orders = await oRes.json();
+    const details = await dRes.json();
+    if (!orders.length) { Swal.fire('錯誤', '找不到退貨單', 'error'); return; }
+
+    const order = orders[0];
+    let editItems = details.map(d => ({
+      id: d.id, product_id: d.product_id, product_name: d.product_name,
+      unit: d.unit || '件', unit_price: Number(d.unit_price), qty: Math.abs(d.qty)
+    }));
+
+    const itemRows = editItems.map((item, idx) =>
+      `<tr>
+        <td style="padding:5px 8px; border-bottom:1px solid #f1f5f9; font-size:12px; color:var(--blue); font-weight:600;">${item.product_id || ''}</td>
+        <td style="padding:5px 8px; border-bottom:1px solid #f1f5f9; font-size:12px;">${item.product_name}</td>
+        <td style="padding:5px 8px; border-bottom:1px solid #f1f5f9; text-align:center;">
+          <input type="number" id="editQty-${idx}" min="0" value="${item.qty}" style="width:60px; padding:4px; border:1px solid var(--border); border-radius:4px; font-size:12px; text-align:center;">
+        </td>
+        <td style="padding:5px 8px; border-bottom:1px solid #f1f5f9; text-align:right;">
+          <input type="number" id="editPrice-${idx}" min="0" value="${item.unit_price}" style="width:70px; padding:4px; border:1px solid var(--border); border-radius:4px; font-size:12px; text-align:right;">
+        </td>
+      </tr>`
+    ).join('');
+
+    const result = await Swal.fire({
+      title: '✏️ 編輯退貨單 ' + orderId,
+      width: 600,
+      html: `<div style="text-align:left; font-size:13px;">
+        <div style="margin-bottom:8px;">客戶：<b>${order.customer_name}</b>　日期：<b>${order.order_date}</b></div>
+        <div style="max-height:300px; overflow-y:auto;">
+          <table style="width:100%; border-collapse:collapse;">
+            <thead><tr style="background:var(--surface2);">
+              <th style="padding:5px 8px; text-align:left; font-size:11px;">商品編號</th>
+              <th style="padding:5px 8px; text-align:left; font-size:11px;">商品名稱</th>
+              <th style="padding:5px 8px; text-align:center; font-size:11px;">數量</th>
+              <th style="padding:5px 8px; text-align:right; font-size:11px;">單價</th>
+            </tr></thead>
+            <tbody>${itemRows}</tbody>
+          </table>
+        </div>
+        <div style="margin-top:10px;">
+          <label style="font-size:12px; font-weight:600;">備註</label>
+          <input type="text" id="editNote" value="${order.note || ''}" style="width:100%; padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:12px; margin-top:4px;">
+        </div>
+      </div>`,
+      showCancelButton: true,
+      confirmButtonText: '儲存修改',
+      cancelButtonText: '取消',
+      confirmButtonColor: '#475569',
+      preConfirm: () => {
+        const updated = editItems.map((item, idx) => ({
+          ...item,
+          qty: parseInt(document.getElementById('editQty-' + idx).value) || 0,
+          unit_price: Number(document.getElementById('editPrice-' + idx).value) || 0
+        })).filter(i => i.qty > 0);
+        if (updated.length === 0) { Swal.showValidationMessage('至少保留一項商品'); return false; }
+        return { items: updated, note: document.getElementById('editNote').value.trim() };
+      }
+    });
+
+    if (!result.isConfirmed) return;
+
+    Swal.fire({ title: '更新中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+    const newItems = result.value.items;
+    const newTotal = newItems.reduce((s, i) => s + i.qty * i.unit_price, 0);
+
+    // 1. 計算庫存差異（舊數量 vs 新數量）
+    for (const newItem of newItems) {
+      const oldItem = editItems.find(o => o.id === newItem.id);
+      const oldQty = oldItem ? oldItem.qty : 0;
+      const diff = newItem.qty - oldQty; // 正=多退，負=少退
+      if (diff !== 0 && newItem.product_id) {
+        try {
+          const invRes = await fetch(`${SB_URL}/inventory?product_id=eq.${encodeURIComponent(newItem.product_id)}&select=qty`, { headers: H() });
+          const invData = await invRes.json();
+          if (invData.length > 0) {
+            const adjQty = (Number(invData[0].qty) || 0) + diff;
+            await fetch(`${SB_URL}/inventory?product_id=eq.${encodeURIComponent(newItem.product_id)}`, {
+              method: 'PATCH', headers: H(),
+              body: JSON.stringify({ qty: adjQty, last_updated: new Date().toISOString() })
+            });
+            await fetch(`${SB_URL}/inventory_logs`, {
+              method: 'POST', headers: H(),
+              body: JSON.stringify({ product_id: newItem.product_id, log_type: '退貨單修改', qty_change: diff, after_qty: adjQty, doc_no: orderId, log_date: new Date().toISOString() })
+            });
+          }
+        } catch(e) { console.warn('庫存調整失敗:', newItem.product_id, e); }
+      }
+    }
+
+    // 處理被刪除的項目（數量改為0的），要扣回庫存
+    for (const oldItem of editItems) {
+      if (!newItems.find(n => n.id === oldItem.id) && oldItem.product_id) {
+        try {
+          const invRes = await fetch(`${SB_URL}/inventory?product_id=eq.${encodeURIComponent(oldItem.product_id)}&select=qty`, { headers: H() });
+          const invData = await invRes.json();
+          if (invData.length > 0) {
+            const adjQty = (Number(invData[0].qty) || 0) - oldItem.qty;
+            await fetch(`${SB_URL}/inventory?product_id=eq.${encodeURIComponent(oldItem.product_id)}`, {
+              method: 'PATCH', headers: H(),
+              body: JSON.stringify({ qty: adjQty, last_updated: new Date().toISOString() })
+            });
+            await fetch(`${SB_URL}/inventory_logs`, {
+              method: 'POST', headers: H(),
+              body: JSON.stringify({ product_id: oldItem.product_id, log_type: '退貨單修改（移除）', qty_change: -oldItem.qty, after_qty: adjQty, doc_no: orderId, log_date: new Date().toISOString() })
+            });
+          }
+        } catch(e) { console.warn('庫存扣回失敗:', oldItem.product_id, e); }
+      }
+    }
+
+    // 2. 刪除舊明細，寫入新明細
+    await fetch(`${SB_URL}/sales_details?order_id=eq.${orderId}`, { method: 'DELETE', headers: H() });
+
+    const newDetails = newItems.map((item, idx) => ({
+      id: orderId + '-' + String(idx + 1).padStart(3, '0'),
+      order_id: orderId,
+      product_id: item.product_id,
+      product_name: item.product_name,
+      qty: -item.qty,
+      unit: item.unit,
+      unit_price: item.unit_price,
+      subtotal: -(item.qty * item.unit_price)
+    }));
+    await fetch(`${SB_URL}/sales_details`, {
+      method: 'POST', headers: H({ 'Prefer': 'return=representation' }),
+      body: JSON.stringify(newDetails)
+    });
+
+    // 3. 更新 sales_orders
+    await fetch(`${SB_URL}/sales_orders?id=eq.${orderId}`, {
+      method: 'PATCH', headers: H(),
+      body: JSON.stringify({ subtotal: -newTotal, grand_total: -newTotal, note: result.value.note })
+    });
+
+    Swal.fire({ icon: 'success', title: '已更新', text: '退貨金額：$' + newTotal.toLocaleString(), timer: 1500, showConfirmButton: false });
+    doSearch();
+
+  } catch(e) {
+    Swal.fire('錯誤', e.message, 'error');
+  }
+}
+
+// ===== 作廢退貨單 =====
+async function voidReturnOrder(orderId) {
+  const order = filteredResults.find(o => o.id === orderId);
+  if (!order) return;
+
+  const confirm = await Swal.fire({
+    title: '確定作廢？',
+    html: `退貨單 <b>${orderId}</b><br>客戶：${order.customer_name}<br>金額：<b style="color:#c53030;">$${Math.abs(Number(order.grand_total)).toLocaleString()}</b><br><br><span style="font-size:12px; color:#c53030;">作廢後將刪除退貨單並扣回庫存</span>`,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: '確定作廢',
+    cancelButtonText: '取消',
+    confirmButtonColor: '#c53030'
+  });
+  if (!confirm.isConfirmed) return;
+
+  Swal.fire({ title: '作廢中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+  try {
+    // 讀取明細，扣回庫存
+    const dRes = await fetch(`${SB_URL}/sales_details?order_id=eq.${orderId}&select=*`, { headers: H() });
+    const details = await dRes.json();
+
+    for (const d of details) {
+      if (!d.product_id) continue;
+      const returnQty = Math.abs(d.qty);
+      try {
+        const invRes = await fetch(`${SB_URL}/inventory?product_id=eq.${encodeURIComponent(d.product_id)}&select=qty`, { headers: H() });
+        const invData = await invRes.json();
+        if (invData.length > 0) {
+          const newQty = (Number(invData[0].qty) || 0) - returnQty;
+          await fetch(`${SB_URL}/inventory?product_id=eq.${encodeURIComponent(d.product_id)}`, {
+            method: 'PATCH', headers: H(),
+            body: JSON.stringify({ qty: newQty, last_updated: new Date().toISOString() })
+          });
+          await fetch(`${SB_URL}/inventory_logs`, {
+            method: 'POST', headers: H(),
+            body: JSON.stringify({ product_id: d.product_id, log_type: '退貨單作廢', qty_change: -returnQty, after_qty: newQty, doc_no: orderId, log_date: new Date().toISOString() })
+          });
+        }
+      } catch(e) { console.warn('庫存扣回失敗:', d.product_id, e); }
+    }
+
+    // 刪除明細 + 刪除退貨單
+    await fetch(`${SB_URL}/sales_details?order_id=eq.${orderId}`, { method: 'DELETE', headers: H() });
+    await fetch(`${SB_URL}/sales_orders?id=eq.${orderId}`, { method: 'DELETE', headers: H() });
+
+    // 操作紀錄
+    try {
+      const meta = JSON.parse(sessionStorage.getItem('user_meta') || '{}');
+      await fetch(`${SB_URL}/activity_logs`, {
+        method: 'POST', headers: H(),
+        body: JSON.stringify({
+          action: '作廢退貨單',
+          target_id: orderId,
+          employee_name: meta.full_name || meta.username || 'admin',
+          detail: { customer: order.customer_name, amount: order.grand_total }
+        })
+      });
+    } catch(e) {}
+
+    Swal.fire({ icon: 'success', title: '已作廢', text: orderId + ' 已刪除，庫存已扣回', timer: 1500, showConfirmButton: false });
+    doSearch();
+
+  } catch(e) {
+    Swal.fire('錯誤', e.message, 'error');
   }
 }
 

@@ -10355,21 +10355,55 @@
     Swal.fire({ title: '開立中...', allowOutsideClick: false, didOpen: function() { Swal.showLoading(); } });
 
     try {
-      var res = await fetch(SB_URL + '/rpc/web_save_sales_order', {
-        method: 'POST',
-        headers: HEADERS,
-        body: JSON.stringify({ p_order_data: orderData })
+      // 產生 RT 開頭的退貨單 ID
+      var today = new Date();
+      var ds = today.getFullYear().toString() + String(today.getMonth()+1).padStart(2,'0') + String(today.getDate()).padStart(2,'0');
+      var prefix = 'RT' + ds;
+      var seqRes = await fetch(SB_URL + '/sales_orders?id=like.' + prefix + '*&select=id&order=id.desc&limit=1', { headers: HEADERS });
+      var seqData = await seqRes.json();
+      var seq = 1;
+      if (seqData.length > 0) seq = parseInt(seqData[0].id.slice(-3)) + 1;
+      var newId = prefix + String(seq).padStart(3, '0');
+
+      // 直接寫入 sales_orders
+      var soData = {
+        id: newId,
+        order_date: today.toISOString().split('T')[0],
+        customer_id: cust.id,
+        customer_name: cust.name,
+        subtotal: -subtotal,
+        shipping: 0,
+        deduction: 0,
+        tax_amount: 0,
+        grand_total: -subtotal,
+        payment_status: '未收款',
+        order_type: 'return',
+        ref_order_id: o.dbId || id,
+        note: '銷退：原單 ' + id + ' | 原因：' + reason
+      };
+      var oRes = await fetch(SB_URL + '/sales_orders', {
+        method: 'POST', headers: Object.assign({}, HEADERS, { 'Prefer': 'return=representation' }),
+        body: JSON.stringify(soData)
       });
+      if (!oRes.ok) throw new Error('退貨單寫入失敗: ' + (await oRes.text()));
 
-      if (!res.ok) throw new Error(await res.text());
-      var resData = await res.json();
-      var newId = resData.order_id || resData.id || '';
-
-      // 更新 order_type 為 return + ref_order_id
-      await fetch(SB_URL + '/sales_orders?id=eq.' + newId, {
-        method: 'PATCH',
-        headers: HEADERS,
-        body: JSON.stringify({ order_type: 'return', ref_order_id: o.dbId || id })
+      // 寫入 sales_details
+      var detailsData = retItems.map(function(item, idx) {
+        return {
+          id: newId + '-' + String(idx+1).padStart(3,'0'),
+          order_id: newId,
+          product_id: item.product_id,
+          product_name: item.product_name,
+          qty: -item.qty,
+          unit: '件',
+          unit_price: item.unit_price,
+          subtotal: -(item.qty * item.unit_price),
+          unit_cost: item.cost || 0
+        };
+      });
+      await fetch(SB_URL + '/sales_details', {
+        method: 'POST', headers: Object.assign({}, HEADERS, { 'Prefer': 'return=representation' }),
+        body: JSON.stringify(detailsData)
       });
 
       // 庫存回補
@@ -10388,30 +10422,23 @@
             await fetch(SB_URL + '/inventory_logs', {
               method: 'POST', headers: HEADERS,
               body: JSON.stringify({
-                product_id: rItem.product_id,
-                log_type: '銷貨退回',
-                qty_change: rItem.qty,
-                after_qty: newQty,
-                doc_no: '退貨單 ' + newId + '（原單 ' + id + '）',
-                log_date: new Date().toISOString()
+                product_id: rItem.product_id, log_type: '銷貨退回',
+                qty_change: rItem.qty, after_qty: newQty,
+                doc_no: newId, log_date: new Date().toISOString()
               })
             });
           }
         } catch(e) { console.warn('庫存回補失敗:', rItem.product_id, e); }
       }
 
-      // 同步到 portal（讓分店看到退回單）
+      // 同步到 portal
       mockSalesOrders.push({
-        id: newId,
-        waveId: 'RETURN-' + id,
-        storeName: o.storeName,
+        id: newId, waveId: 'RETURN-' + id, storeName: o.storeName,
         createdAt: new Date().toLocaleString('zh-TW', { hour12: false }),
-        storeConfirmedAt: null,
-        status: 'issued',
+        storeConfirmedAt: null, status: 'issued',
         issuedAt: new Date().toLocaleString('zh-TW', { hour12: false }),
-        finalAmount: -subtotal,
-        orderType: 'return',
-        note: '銷退：原單 ' + id + ' | 原因：' + reason,
+        finalAmount: -subtotal, orderType: 'return',
+        note: soData.note,
         items: retItems.map(function(i) {
           return { productId: i.product_id, name: i.product_name, qty: -i.qty, unitPrice: i.unit_price, returnQty: 0, returnStatus: 'none', returnReason: '', returnDate: '', damaged: false, note: '銷退' };
         })
@@ -10541,29 +10568,55 @@
       var cust = customers.find(function(c) { return c.name.includes(o.storeName) || o.storeName.includes(c.name); }) || { id: null, name: o.storeName, tax_type: '免稅' };
 
       try {
-        var orderData = {
-          order_id: null,
-          order_date: new Date().toISOString().split('T')[0],
-          customer_id: cust.id,
-          customer_name: cust.name,
-          subtotal: -subtotal,
-          tax_amount: 0,
-          grand_total: -subtotal,
-          tax_type: cust.tax_type || '免稅',
-          shipping_fee: 0,
-          deduction: 0,
-          note: '銷退：原單 ' + o.id + ' | 原因：' + reason,
-          items: storeRetItems.map(function(it) {
-            return { product_id: it.product_id, product_name: it.product_name, unit: '件', qty: -it.qty, price: it.unit_price, cost: it.cost, note: '銷退 ' + o.id };
-          })
+        // 產生 RT ID
+        var bToday = new Date();
+        var bDs = bToday.getFullYear().toString() + String(bToday.getMonth()+1).padStart(2,'0') + String(bToday.getDate()).padStart(2,'0');
+        var bPrefix = 'RT' + bDs;
+        var bSeqRes = await fetch(SB_URL + '/sales_orders?id=like.' + bPrefix + '*&select=id&order=id.desc&limit=1', { headers: HEADERS });
+        var bSeqData = await bSeqRes.json();
+        var bSeq = 1;
+        if (bSeqData.length > 0) bSeq = parseInt(bSeqData[0].id.slice(-3)) + 1;
+        var newId = bPrefix + String(bSeq).padStart(3, '0');
+
+        // 寫入 sales_orders
+        var bSoData = {
+          id: newId,
+          order_date: bToday.toISOString().split('T')[0],
+          customer_id: cust.id, customer_name: cust.name,
+          subtotal: -subtotal, shipping: 0, deduction: 0, tax_amount: 0,
+          grand_total: -subtotal, payment_status: '未收款',
+          order_type: 'return', ref_order_id: o.dbId || o.id,
+          note: '銷退：原單 ' + o.id + ' | 原因：' + reason
         };
+        var bORes = await fetch(SB_URL + '/sales_orders', {
+          method: 'POST', headers: Object.assign({}, HEADERS, { 'Prefer': 'return=representation' }),
+          body: JSON.stringify(bSoData)
+        });
+        if (!bORes.ok) { errors.push(o.storeName + ': ' + (await bORes.text())); fail++; continue; }
 
-        var res = await fetch(SB_URL + '/rpc/web_save_sales_order', { method: 'POST', headers: HEADERS, body: JSON.stringify({ p_order_data: orderData }) });
-        if (!res.ok) { errors.push(o.storeName + ': ' + (await res.text())); fail++; continue; }
-        var resData = await res.json();
-        var newId = resData.order_id || resData.id || '';
+        // 寫入 sales_details
+        var bDetails = storeRetItems.map(function(it, idx) {
+          return { id: newId + '-' + String(idx+1).padStart(3,'0'), order_id: newId, product_id: it.product_id, product_name: it.product_name, qty: -it.qty, unit: '件', unit_price: it.unit_price, subtotal: -(it.qty * it.unit_price), unit_cost: it.cost || 0 };
+        });
+        await fetch(SB_URL + '/sales_details', {
+          method: 'POST', headers: Object.assign({}, HEADERS, { 'Prefer': 'return=representation' }),
+          body: JSON.stringify(bDetails)
+        });
 
-        await fetch(SB_URL + '/sales_orders?id=eq.' + newId, { method: 'PATCH', headers: HEADERS, body: JSON.stringify({ order_type: 'return' }) });
+        // 庫存回補
+        for (var bi = 0; bi < storeRetItems.length; bi++) {
+          var bIt = storeRetItems[bi];
+          if (!bIt.product_id) continue;
+          try {
+            var bInvR = await fetch(SB_URL + '/inventory?product_id=eq.' + encodeURIComponent(bIt.product_id) + '&select=qty', { headers: HEADERS });
+            var bInvD = await bInvR.json();
+            if (bInvD.length > 0) {
+              var bNewQty = (Number(bInvD[0].qty) || 0) + bIt.qty;
+              await fetch(SB_URL + '/inventory?product_id=eq.' + encodeURIComponent(bIt.product_id), { method: 'PATCH', headers: HEADERS, body: JSON.stringify({ qty: bNewQty, last_updated: new Date().toISOString() }) });
+              await fetch(SB_URL + '/inventory_logs', { method: 'POST', headers: HEADERS, body: JSON.stringify({ product_id: bIt.product_id, log_type: '銷貨退回', qty_change: bIt.qty, after_qty: bNewQty, doc_no: newId, log_date: new Date().toISOString() }) });
+            }
+          } catch(e) { console.warn('庫存回補失敗:', bIt.product_id, e); }
+        }
 
         mockSalesOrders.push({
           id: newId, waveId: 'RETURN-' + o.id, storeName: o.storeName,
@@ -10571,7 +10624,7 @@
           storeConfirmedAt: null, status: 'issued',
           issuedAt: new Date().toLocaleString('zh-TW', { hour12: false }),
           finalAmount: -subtotal, orderType: 'return',
-          note: '銷退：原單 ' + o.id + ' | 原因：' + reason,
+          note: bSoData.note,
           items: storeRetItems.map(function(it) {
             return { productId: it.product_id, name: it.product_name, qty: -it.qty, unitPrice: it.unit_price, returnQty: 0, returnStatus: 'none', returnReason: '', returnDate: '', damaged: false, note: '銷退' };
           })
