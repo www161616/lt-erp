@@ -324,14 +324,8 @@
       // 用原始開單日期（出貨日），非審核當天
       const createdAt = o.createdAt || o.issuedAt || '';
       const dateStr = createdAt ? createdAt.replace(/\//g, '-').substring(0, 10) : new Date().toISOString().split('T')[0];
-      const subtotal = o.items.reduce((s, i) => {
-        const deduct = i.returnStatus === 'received'
-          ? (i.adminReturnQty || i.returnQty || 0)
-          : i.returnStatus === 'waived'
-          ? (i.returnQty || 0)
-          : 0;
-        return s + (i.qty - deduct) * i.unitPrice;
-      }, 0);
+      // 用原始金額（不扣退貨），退貨由 RT 退貨單獨立處理
+      const subtotal = o.items.reduce((s, i) => s + i.qty * i.unitPrice, 0);
       const taxRate = cust.tax_type === '外加5%' ? 0.05 : 0;
       const tax_amount = Math.round(subtotal * taxRate);
       const grand_total = subtotal + tax_amount;
@@ -349,15 +343,11 @@
         deduction: 0,
         note: `來自調度中心 ${o.id}${o.note ? ' | ' + o.note : ''}`,
         items: o.items.map(it => {
-          const deduct = it.returnStatus === 'received'
-            ? (it.adminReturnQty || it.returnQty || 0)
-            : it.returnStatus === 'waived'
-            ? (it.returnQty || 0)
-            : 0;
+          // 寫入原始數量，退貨由 RT 退貨單處理
           return {
             product_id: it.productId ? it.productId.split('_')[0] : null,
             product_name: it.name,
-            qty: it.qty - deduct,
+            qty: it.qty,
             unit: '件',
             price: it.unitPrice,
             cost: it.cost || 0,
@@ -683,10 +673,8 @@
         var cust = allCustomers.find(function(c) { return c.name.includes(o.storeName); }) || { id: null, name: o.storeName, tax_type: '免稅' };
         var createdAt = o.createdAt || o.issuedAt || '';
         var dateStr = createdAt ? createdAt.replace(/\//g, '-').substring(0, 10) : new Date().toISOString().split('T')[0];
-        var subtotal = o.items.reduce(function(s, it) {
-          var deduct = it.returnStatus === 'received' ? (it.adminReturnQty || it.returnQty || 0) : it.returnStatus === 'waived' ? (it.returnQty || 0) : 0;
-          return s + (it.qty - deduct) * it.unitPrice;
-        }, 0);
+        // 用原始金額（不扣退貨），退貨由 RT 退貨單獨立處理
+        var subtotal = o.items.reduce(function(s, it) { return s + it.qty * it.unitPrice; }, 0);
         var taxRate = cust.tax_type === '外加5%' ? 0.05 : 0;
         var tax_amount = Math.round(subtotal * taxRate);
         var grand_total = subtotal + tax_amount;
@@ -695,7 +683,7 @@
           subtotal: subtotal, tax_amount: tax_amount, grand_total: grand_total,
           tax_type: cust.tax_type || '免稅', shipping_fee: 0, deduction: 0,
           note: '來自調度中心 ' + o.id + (o.note ? ' | ' + o.note : ''),
-          items: o.items.map(function(it) { var deduct = it.returnStatus === 'received' ? (it.adminReturnQty || it.returnQty || 0) : it.returnStatus === 'waived' ? (it.returnQty || 0) : 0; return { product_id: it.productId ? it.productId.split('_')[0] : null, product_name: it.name, qty: it.qty - deduct, unit: '件', price: it.unitPrice, cost: it.cost || 0, note: it.note || '' }; })
+          items: o.items.map(function(it) { return { product_id: it.productId ? it.productId.split('_')[0] : null, product_name: it.name, qty: it.qty, unit: '件', price: it.unitPrice, cost: it.cost || 0, note: it.note || '' }; })
         };
         var res = await fetch(SB_URL + '/rpc/web_save_sales_order', { method: 'POST', headers: HEADERS, body: JSON.stringify({ p_order_data: orderData }) });
         if (!res.ok) throw new Error(await res.text());

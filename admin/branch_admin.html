@@ -9009,14 +9009,15 @@
     const item = o.items[itemIdx];
     Swal.fire({
       title: '接受，免退回（壞損認定）',
-      html: `品項：<b>${item.name}</b><br>確認接受退 <b>${item.returnQty}</b> 件，但不需退回實體商品，直接從銷貨金額扣除？`,
+      html: `品項：<b>${item.name}</b><br>確認接受退 <b>${item.returnQty}</b> 件，不需退回實體商品。<br><span style="font-size:12px; color:#047857;">將自動建立退貨單（RT），庫存不回補。</span>`,
       icon: 'warning', showCancelButton: true,
       confirmButtonText: '確認免退', cancelButtonText: '取消'
-    }).then(res => {
+    }).then(async res => {
       if (!res.isConfirmed) return;
       item.returnStatus = 'waived';
       syncSalesOrdersToPortal();
-      syncSalesOrderAmountToDB(orderId);
+      // 建立正式退貨單（不回補庫存，因為是壞損/免退回）
+      await createReturnOrderFromItem(o, item, item.returnQty, false, '免退回（壞損認定）：' + (item.returnReason || ''));
       showSalesOrderDetail(orderId);
     });
   }
@@ -9051,14 +9052,16 @@
     const item = o.items[itemIdx];
     Swal.fire({
       title: '確認已收到退貨？',
-      html: `品項：<b>${item.name}</b><br>實際收到 <b>${item.adminReturnQty}</b> 件，金額將扣除。`,
+      html: `品項：<b>${item.name}</b><br>實際收到 <b>${item.adminReturnQty}</b> 件。<br><span style="font-size:12px; color:#047857;">將自動建立退貨單（RT）並回補庫存。</span>`,
       icon: 'question', showCancelButton: true,
       confirmButtonText: '確認收到', cancelButtonText: '取消'
-    }).then(res => {
+    }).then(async res => {
       if (!res.isConfirmed) return;
       item.returnStatus = 'received';
       syncSalesOrdersToPortal();
-      syncSalesOrderAmountToDB(orderId);
+      // 建立正式退貨單（回補庫存，因為實際收到退貨品）
+      const returnQty = item.adminReturnQty || item.returnQty;
+      await createReturnOrderFromItem(o, item, returnQty, true, '退貨收回：' + (item.returnReason || ''));
       showSalesOrderDetail(orderId);
     });
   }
@@ -9077,6 +9080,116 @@
         body: JSON.stringify({ total_amount: newAmount })
       });
     } catch(e) { console.error('syncSalesOrderAmountToDB error:', e); }
+  }
+
+  // ============================
+  // 自動建立退貨單（RT）
+  // ============================
+  async function createReturnOrderFromItem(salesOrder, item, returnQty, restoreInventory, note) {
+    if (returnQty <= 0) return;
+    try {
+      Swal.fire({ title: '建立退貨單中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+      // 產生退貨單 ID
+      const today = new Date();
+      const dateStr = today.getFullYear().toString() +
+        String(today.getMonth() + 1).padStart(2, '0') +
+        String(today.getDate()).padStart(2, '0');
+      const prefix = 'RT' + dateStr;
+      const existRes = await fetch(`${SB_URL}/sales_orders?id=like.${prefix}*&select=id&order=id.desc&limit=1`, { headers: HEADERS });
+      const existing = await existRes.json();
+      let seq = 1;
+      if (existing.length > 0) seq = parseInt(existing[0].id.slice(-3)) + 1;
+      const returnId = prefix + String(seq).padStart(3, '0');
+
+      // 找客戶資料
+      const cust = allCustomers.find(c => c.name.includes(salesOrder.storeName)) || { id: null, name: salesOrder.storeName };
+      const returnAmount = returnQty * item.unitPrice;
+
+      // 1. 寫入 sales_orders（退貨單）
+      const orderData = {
+        id: returnId,
+        order_date: today.toISOString().split('T')[0],
+        customer_id: cust.id,
+        customer_name: cust.name,
+        subtotal: -returnAmount,
+        shipping: 0,
+        deduction: 0,
+        tax_amount: 0,
+        grand_total: -returnAmount,
+        payment_status: '未收款',
+        order_type: 'return',
+        ref_order_id: salesOrder.dbId || salesOrder.id,
+        note: note || ''
+      };
+      const oRes = await fetch(`${SB_URL}/sales_orders`, {
+        method: 'POST', headers: { ...HEADERS, 'Prefer': 'return=representation' },
+        body: JSON.stringify(orderData)
+      });
+      if (!oRes.ok) throw new Error('退貨單寫入失敗');
+
+      // 2. 寫入 sales_details
+      const productId = item.productId ? item.productId.split('_')[0] : item.productId;
+      const detailData = {
+        id: returnId + '-001',
+        order_id: returnId,
+        product_id: productId,
+        product_name: item.name,
+        qty: -returnQty,
+        unit: '件',
+        unit_price: item.unitPrice,
+        subtotal: -returnAmount
+      };
+      await fetch(`${SB_URL}/sales_details`, {
+        method: 'POST', headers: { ...HEADERS, 'Prefer': 'return=representation' },
+        body: JSON.stringify(detailData)
+      });
+
+      // 3. 庫存回補（僅實際收到退貨時）
+      if (restoreInventory && productId) {
+        try {
+          const invRes = await fetch(`${SB_URL}/inventory?product_id=eq.${encodeURIComponent(productId)}&select=qty`, { headers: HEADERS });
+          const invData = await invRes.json();
+          if (invData.length > 0) {
+            const newQty = (Number(invData[0].qty) || 0) + returnQty;
+            await fetch(`${SB_URL}/inventory?product_id=eq.${encodeURIComponent(productId)}`, {
+              method: 'PATCH', headers: HEADERS,
+              body: JSON.stringify({ qty: newQty, last_updated: new Date().toISOString() })
+            });
+            await fetch(`${SB_URL}/inventory_logs`, {
+              method: 'POST', headers: HEADERS,
+              body: JSON.stringify({
+                product_id: productId,
+                log_type: '銷貨退回',
+                qty_change: returnQty,
+                after_qty: newQty,
+                note: `退貨單 ${returnId}（原單 ${salesOrder.dbId || salesOrder.id}）`,
+                created_at: new Date().toISOString()
+              })
+            });
+          }
+        } catch(e) { console.warn('庫存回補失敗:', productId, e); }
+      }
+
+      // 4. 操作紀錄
+      await logActivity('建立退貨單', returnId, {
+        ref_order: salesOrder.dbId || salesOrder.id,
+        store: salesOrder.storeName,
+        product: item.name,
+        qty: returnQty,
+        amount: -returnAmount
+      });
+
+      Swal.fire({
+        icon: 'success',
+        title: '退貨單已建立',
+        html: `單號：<b>${returnId}</b><br>品項：${item.name} × ${returnQty}<br>金額：<b style="color:#c53030;">-$${returnAmount.toLocaleString()}</b>${restoreInventory ? '<br>庫存已回補' : ''}`,
+        timer: 2500, showConfirmButton: false
+      });
+    } catch(e) {
+      console.error('createReturnOrderFromItem error:', e);
+      Swal.fire('退貨單建立失敗', e.message, 'error');
+    }
   }
 
   // ============================
@@ -10036,7 +10149,8 @@
         // 用原始建單日期，非開立當天
         const createdAt = o.createdAt || '';
         const dateStr = createdAt ? createdAt.replace(/\//g, '-').substring(0, 10) : now.toISOString().split('T')[0];
-        const subtotal = calcOrderAmount(o);
+        // 用原始金額（不扣退貨），退貨由 RT 退貨單獨立處理
+        const subtotal = o.items.reduce((sum, it) => sum + it.qty * it.unitPrice, 0);
         const taxRate = cust.tax_type === '外加5%' ? 0.05 : 0;
         const tax_amount = Math.round(subtotal * taxRate);
         const grand_total = subtotal + tax_amount;
@@ -10054,15 +10168,11 @@
           deduction: 0,
           note: o.note || '',
           items: o.items.map(it => {
-            const deduct = it.returnStatus === 'received'
-              ? (it.adminReturnQty || it.returnQty || 0)
-              : it.returnStatus === 'waived'
-              ? (it.returnQty || 0)
-              : 0;
+            // 寫入原始數量，退貨由 RT 退貨單處理
             return {
               product_id: it.productId ? it.productId.split('_')[0] : null,
               product_name: it.name,
-              qty: it.qty - deduct,
+              qty: it.qty,
               unit: '件',
               price: it.unitPrice,
               cost: it.cost || 0,
