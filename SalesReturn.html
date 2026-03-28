@@ -13,7 +13,7 @@
     * { box-sizing: border-box; margin: 0; padding: 0; }
     body { font-family: 'Segoe UI','Microsoft JhengHei',sans-serif; padding: 20px; background: var(--bg); color: var(--text); }
     .container { background: var(--surface); padding: 24px; border-radius: 10px; max-width: 1100px; margin: 0 auto; box-shadow: 0 2px 10px rgba(0,0,0,0.06); border-top: 4px solid var(--danger); }
-    h2 { color: var(--danger); margin-bottom: 20px; font-size: 20px; }
+    h2 { color: var(--danger); margin-bottom: 20px; font-size: 20px; display: flex; align-items: center; gap: 8px; }
     .form-row { display: flex; gap: 12px; align-items: flex-end; margin-bottom: 16px; flex-wrap: wrap; }
     .form-group { display: flex; flex-direction: column; gap: 4px; }
     .form-group label { font-size: 12px; font-weight: 700; color: var(--text2); }
@@ -23,106 +23,93 @@
     .btn-primary:hover { background: var(--accent-hover); }
     .btn-danger { background: var(--danger); color: #fff; }
     .btn-danger:hover { background: #9b2c2c; }
-    .btn-success { background: var(--success); color: #fff; }
     .btn-sm { padding: 5px 10px; font-size: 12px; }
     table { width: 100%; border-collapse: collapse; margin-top: 12px; }
     th { background: var(--surface2); color: var(--text2); font-size: 12px; font-weight: 700; padding: 8px 10px; text-align: left; border-bottom: 2px solid var(--border); }
-    td { padding: 8px 10px; font-size: 13px; border-bottom: 1px solid var(--surface2); }
+    td { padding: 6px 10px; font-size: 13px; border-bottom: 1px solid var(--surface2); vertical-align: middle; }
     tr:hover { background: #fefce8; }
-    .empty { text-align: center; padding: 40px; color: #94a3b8; font-size: 14px; }
-    .info-box { background: #fef2f2; border: 1px solid #fecaca; border-radius: 8px; padding: 14px 18px; margin-bottom: 16px; }
-    .info-box .label { font-size: 12px; color: var(--text2); }
-    .info-box .value { font-size: 14px; font-weight: 700; color: var(--text); }
-    .summary-row { display: flex; justify-content: flex-end; gap: 24px; margin-top: 16px; padding: 12px 16px; background: #fef2f2; border-radius: 8px; }
-    .summary-row .item { text-align: right; }
-    .summary-row .item .label { font-size: 12px; color: var(--text2); }
-    .summary-row .item .value { font-size: 18px; font-weight: 700; color: var(--danger); }
-    input[type="number"] { width: 70px; text-align: center; }
-    .return-qty-input { width: 70px; text-align: center; padding: 6px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; }
-    .note-input { width: 100%; padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; font-family: inherit; margin-top: 8px; }
+    .search-box { position: relative; }
+    .search-box input { width: 300px; }
+    .search-dropdown { position: absolute; top: 100%; left: 0; width: 500px; max-height: 300px; overflow-y: auto; background: white; border: 1px solid var(--border); border-radius: 6px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 100; display: none; }
+    .search-dropdown .item { padding: 8px 12px; cursor: pointer; font-size: 13px; border-bottom: 1px solid var(--surface2); display: flex; justify-content: space-between; }
+    .search-dropdown .item:hover { background: #fefce8; }
+    .search-dropdown .item .pid { color: var(--blue); font-weight: 600; margin-right: 8px; }
+    .search-dropdown .item .pname { flex: 1; }
+    .search-dropdown .item .pprice { color: var(--danger); font-weight: 600; }
+    .summary-bar { margin-top: 16px; padding: 14px 20px; background: #fef2f2; border-radius: 8px; display: flex; justify-content: space-between; align-items: center; }
+    .summary-bar .total-label { font-size: 14px; font-weight: 700; color: var(--text2); }
+    .summary-bar .total-value { font-size: 22px; font-weight: 900; color: var(--danger); }
+    .cart-input { width: 70px; text-align: center; padding: 5px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; font-family: inherit; }
+    .price-badge { display: inline-block; padding: 1px 6px; border-radius: 4px; font-size: 10px; font-weight: 600; margin-left: 4px; }
   </style>
 </head>
 <body>
 <div class="container">
   <h2>🔄 銷貨退回單</h2>
 
-  <!-- Step 1: 選客戶 + 銷貨單 -->
   <div class="form-row">
     <div class="form-group">
+      <label>退貨日期</label>
+      <input type="date" id="returnDate" style="min-width:150px;">
+    </div>
+    <div class="form-group">
       <label>客戶</label>
-      <select id="selCustomer" onchange="loadSalesOrders()" style="min-width:180px;">
+      <select id="selCustomer" onchange="onCustomerChange()" style="min-width:200px;">
         <option value="">-- 選擇客戶 --</option>
       </select>
     </div>
-    <div class="form-group">
-      <label>銷貨單</label>
-      <select id="selOrder" onchange="loadOrderDetail()" style="min-width:260px;">
-        <option value="">-- 先選客戶 --</option>
-      </select>
+    <div class="form-group" id="customerPriceInfo" style="display:none;">
+      <label>價別</label>
+      <div id="priceGroupTag" style="padding:8px 12px; font-size:13px; font-weight:700;"></div>
     </div>
     <div class="form-group">
-      <label>退貨原因</label>
-      <select id="selReason" style="min-width:150px;">
-        <option value="品質問題">品質問題</option>
-        <option value="數量錯誤">數量錯誤</option>
-        <option value="客戶退訂">客戶退訂</option>
-        <option value="過期品">過期品</option>
-        <option value="其他">其他</option>
-      </select>
+      <label>備註</label>
+      <input type="text" id="returnNote" placeholder="選填" style="min-width:200px;">
     </div>
   </div>
 
-  <!-- Step 2: 原始銷貨單資訊 -->
-  <div id="orderInfo" style="display:none;">
-    <div class="info-box">
-      <div style="display:flex; gap:24px; flex-wrap:wrap;">
-        <div><span class="label">銷貨單號：</span><span class="value" id="infoOrderId"></span></div>
-        <div><span class="label">日期：</span><span class="value" id="infoDate"></span></div>
-        <div><span class="label">客戶：</span><span class="value" id="infoCustomer"></span></div>
-        <div><span class="label">原始金額：</span><span class="value" id="infoTotal"></span></div>
-      </div>
-    </div>
-
-    <!-- Step 3: 明細勾選 -->
-    <table>
-      <thead>
-        <tr>
-          <th style="width:40px;"><input type="checkbox" id="chkAll" onchange="toggleAll()"></th>
-          <th>商品編號</th>
-          <th>商品名稱</th>
-          <th>單位</th>
-          <th style="text-align:right;">單價</th>
-          <th style="text-align:center;">原始數量</th>
-          <th style="text-align:center;">退貨數量</th>
-          <th style="text-align:right;">退貨金額</th>
-        </tr>
-      </thead>
-      <tbody id="detailBody"></tbody>
-    </table>
-
-    <div class="summary-row">
-      <div class="item">
-        <div class="label">退貨品項數</div>
-        <div class="value" id="sumItems">0</div>
-      </div>
-      <div class="item">
-        <div class="label">退貨總金額</div>
-        <div class="value" id="sumTotal">$0</div>
-      </div>
-    </div>
-
-    <div style="margin-top:12px;">
-      <label style="font-size:12px; font-weight:700; color:var(--text2);">備註</label>
-      <input type="text" id="returnNote" class="note-input" placeholder="選填，例：3/25 送貨品質問題退回">
-    </div>
-
-    <div style="margin-top:20px; display:flex; gap:12px; justify-content:flex-end;">
-      <button class="btn btn-primary" onclick="previewReturn()">👁️ 預覽退貨單</button>
-      <button class="btn btn-danger" onclick="submitReturn()">✅ 確認開立退貨單</button>
+  <!-- 商品搜尋 -->
+  <div class="form-row">
+    <div class="form-group search-box">
+      <label>新增商品（輸入編號或名稱搜尋）</label>
+      <input type="text" id="searchProduct" placeholder="輸入商品編號或名稱..." oninput="searchProducts()" onkeydown="handleSearchKey(event)" autocomplete="off">
+      <div class="search-dropdown" id="searchDropdown"></div>
     </div>
   </div>
 
-  <div id="emptyHint" class="empty">請選擇客戶與銷貨單</div>
+  <!-- 退貨明細表 -->
+  <table>
+    <thead>
+      <tr>
+        <th style="width:100px;">商品編號</th>
+        <th>商品名稱</th>
+        <th style="width:60px;">單位</th>
+        <th style="width:90px; text-align:right;">單價</th>
+        <th style="width:80px; text-align:center;">數量</th>
+        <th style="width:100px; text-align:right;">小計</th>
+        <th style="width:50px;"></th>
+      </tr>
+    </thead>
+    <tbody id="cartBody">
+      <tr id="emptyRow"><td colspan="7" style="text-align:center; padding:30px; color:#94a3b8;">請搜尋商品加入退貨明細</td></tr>
+    </tbody>
+  </table>
+
+  <div class="summary-bar">
+    <div>
+      <span class="total-label">退貨品項：</span>
+      <span id="cartCount" style="font-size:16px; font-weight:700;">0</span> 項
+    </div>
+    <div>
+      <span class="total-label">退貨總金額：</span>
+      <span class="total-value" id="cartTotal">$0</span>
+    </div>
+  </div>
+
+  <div style="margin-top:20px; display:flex; gap:12px; justify-content:flex-end;">
+    <button class="btn" style="background:#e2e8f0; color:#374151;" onclick="clearCart()">🗑️ 清空</button>
+    <button class="btn btn-danger" onclick="submitReturn()">✅ 確認開立退貨單</button>
+  </div>
 </div>
 
 <script>
@@ -135,226 +122,215 @@ function H(extra) {
   return h;
 }
 
-let orderDetails = [];
-let selectedOrder = null;
+let allProducts = [];
+let allCustomers = [];
+let specialPrices = [];
+let cart = [];
+let searchTimer = null;
 
-// ===== 載入客戶列表 =====
-async function loadCustomers() {
-  try {
-    const res = await fetch(`${SB_URL}/customers?select=id,name&order=name.asc`, { headers: H() });
-    const customers = await res.json();
-    const sel = document.getElementById('selCustomer');
-    // 也從 sales_orders 抓有銷貨紀錄的客戶名（可能不在 customers 表）
-    const soRes = await fetch(`${SB_URL}/sales_orders?select=customer_id,customer_name&order_type=eq.normal&order=customer_name.asc`, { headers: H() });
-    const soData = await soRes.json();
-    const custMap = new Map();
-    customers.forEach(c => custMap.set(c.id, c.name));
-    soData.forEach(o => { if (o.customer_id && !custMap.has(o.customer_id)) custMap.set(o.customer_id, o.customer_name); });
-    // 用 customer_name 去重
-    const nameMap = new Map();
-    soData.forEach(o => { if (o.customer_id) nameMap.set(o.customer_id, o.customer_name); });
-    customers.forEach(c => nameMap.set(c.id, c.name));
+// ===== 初始化 =====
+async function init() {
+  document.getElementById('returnDate').value = new Date().toISOString().split('T')[0];
 
-    sel.innerHTML = '<option value="">-- 選擇客戶 --</option>';
-    [...nameMap.entries()].sort((a,b) => (a[1]||'').localeCompare(b[1]||'')).forEach(([id, name]) => {
-      sel.innerHTML += `<option value="${id}">${name} (${id})</option>`;
-    });
-  } catch(e) {
-    console.error('載入客戶失敗:', e);
+  // 並行載入
+  const [cRes, pRes, spRes] = await Promise.all([
+    fetch(`${SB_URL}/customers?select=id,name,price_group&status=eq.啟用&order=name.asc`, { headers: H() }),
+    loadAllProducts(),
+    fetch(`${SB_URL}/special_prices?select=*`, { headers: H() })
+  ]);
+
+  allCustomers = await cRes.json();
+  specialPrices = (await spRes.json()).map(s => ({
+    custId: s.customer_id, prodId: s.product_id, price: Number(s.price), endDate: s.end_date || ''
+  }));
+
+  const sel = document.getElementById('selCustomer');
+  allCustomers.forEach(c => {
+    sel.innerHTML += `<option value="${c.id}" data-name="${c.name}" data-group="${c.price_group || ''}">${c.name} (${c.id})</option>`;
+  });
+}
+
+async function loadAllProducts() {
+  let offset = 0;
+  allProducts = [];
+  while (true) {
+    const res = await fetch(`${SB_URL}/products?select=id,name,unit,price,price_branch,price_wholesale,price_group&status=eq.啟用&order=id.asc&limit=1000&offset=${offset}`, { headers: H() });
+    const data = await res.json();
+    allProducts.push(...data);
+    if (data.length < 1000) break;
+    offset += 1000;
   }
 }
 
-// ===== 載入該客戶的銷貨單 =====
-async function loadSalesOrders() {
-  const custId = document.getElementById('selCustomer').value;
-  const sel = document.getElementById('selOrder');
-  sel.innerHTML = '<option value="">-- 選擇銷貨單 --</option>';
-  document.getElementById('orderInfo').style.display = 'none';
-  document.getElementById('emptyHint').style.display = 'block';
-  if (!custId) return;
+// ===== 客戶選擇 =====
+function onCustomerChange() {
+  const sel = document.getElementById('selCustomer');
+  const opt = sel.selectedOptions[0];
+  const info = document.getElementById('customerPriceInfo');
+  const tag = document.getElementById('priceGroupTag');
 
-  try {
-    const res = await fetch(`${SB_URL}/sales_orders?customer_id=eq.${custId}&order_type=eq.normal&order=order_date.desc,id.desc&limit=100`, { headers: H() });
-    const orders = await res.json();
-    orders.forEach(o => {
-      sel.innerHTML += `<option value="${o.id}">${o.id}　${o.order_date}　$${Number(o.grand_total).toLocaleString()}</option>`;
-    });
-  } catch(e) {
-    console.error('載入銷貨單失敗:', e);
-  }
-}
-
-// ===== 載入銷貨單明細 =====
-async function loadOrderDetail() {
-  const orderId = document.getElementById('selOrder').value;
-  if (!orderId) {
-    document.getElementById('orderInfo').style.display = 'none';
-    document.getElementById('emptyHint').style.display = 'block';
+  if (!opt || !opt.value) {
+    info.style.display = 'none';
     return;
   }
 
-  try {
-    const [oRes, dRes] = await Promise.all([
-      fetch(`${SB_URL}/sales_orders?id=eq.${orderId}&select=*`, { headers: H() }),
-      fetch(`${SB_URL}/sales_details?order_id=eq.${orderId}&select=*`, { headers: H() })
-    ]);
-    const [orders, details] = await Promise.all([oRes.json(), dRes.json()]);
-    if (!orders.length) return;
+  const group = opt.dataset.group || '一般';
+  const colorMap = { '分店': '#2563eb', '批發': '#92400e', '團購': '#7c3aed' };
+  tag.innerHTML = `<span style="color:${colorMap[group] || '#475569'}; background:${group === '分店' ? '#dbeafe' : group === '批發' ? '#fef3c7' : group === '團購' ? '#ede9fe' : '#f1f5f9'}; padding:4px 10px; border-radius:6px;">${group}</span>`;
+  info.style.display = '';
+}
 
-    selectedOrder = orders[0];
-    orderDetails = details;
+// ===== 取得客戶對應價格 =====
+function getCustomerPrice(product) {
+  const custId = document.getElementById('selCustomer').value;
+  const cust = allCustomers.find(c => c.id === custId);
 
-    // 查詢此銷貨單已有的退貨數量
-    const existingReturns = await loadExistingReturns(orderId);
-
-    document.getElementById('infoOrderId').textContent = selectedOrder.id;
-    document.getElementById('infoDate').textContent = selectedOrder.order_date;
-    document.getElementById('infoCustomer').textContent = selectedOrder.customer_name || selectedOrder.customer_id;
-    document.getElementById('infoTotal').textContent = '$' + Number(selectedOrder.grand_total).toLocaleString();
-
-    const tbody = document.getElementById('detailBody');
-    tbody.innerHTML = orderDetails.map((d, i) => {
-      const alreadyReturned = existingReturns[d.product_id] || 0;
-      const maxReturnQty = d.qty - alreadyReturned;
-      return `<tr>
-        <td><input type="checkbox" class="chk-item" data-idx="${i}" onchange="calcSummary()" ${maxReturnQty <= 0 ? 'disabled' : ''}></td>
-        <td>${d.product_id || ''}</td>
-        <td>${d.product_name || ''}</td>
-        <td>${d.unit || ''}</td>
-        <td style="text-align:right;">$${Number(d.unit_price).toLocaleString()}</td>
-        <td style="text-align:center;">${d.qty}${alreadyReturned > 0 ? ` <span style="color:var(--danger); font-size:11px;">(已退${alreadyReturned})</span>` : ''}</td>
-        <td style="text-align:center;">
-          <input type="number" class="return-qty-input" data-idx="${i}" min="0" max="${maxReturnQty}" value="${maxReturnQty > 0 ? maxReturnQty : 0}" onchange="calcSummary()" oninput="calcSummary()" ${maxReturnQty <= 0 ? 'disabled' : ''}>
-        </td>
-        <td style="text-align:right;" class="return-amount" data-idx="${i}">$0</td>
-      </tr>`;
-    }).join('');
-
-    document.getElementById('orderInfo').style.display = 'block';
-    document.getElementById('emptyHint').style.display = 'none';
-    document.getElementById('chkAll').checked = false;
-    calcSummary();
-  } catch(e) {
-    console.error('載入明細失敗:', e);
-    Swal.fire('錯誤', '載入銷貨單明細失敗: ' + e.message, 'error');
+  // 特價優先
+  if (custId) {
+    const sp = specialPrices.find(s => s.custId === custId && s.prodId === product.id && (!s.endDate || s.endDate === ''));
+    if (sp) return { price: sp.price, label: '特價' };
   }
-}
 
-// ===== 查詢已退貨數量 =====
-async function loadExistingReturns(refOrderId) {
-  try {
-    // 找此銷貨單的所有退貨單
-    const rtRes = await fetch(`${SB_URL}/sales_orders?ref_order_id=eq.${refOrderId}&order_type=eq.return&select=id`, { headers: H() });
-    const rtOrders = await rtRes.json();
-    if (!rtOrders.length) return {};
-
-    const rtIds = rtOrders.map(r => r.id);
-    const dtRes = await fetch(`${SB_URL}/sales_details?order_id=in.(${rtIds.join(',')})&select=product_id,qty`, { headers: H() });
-    const dtData = await dtRes.json();
-
-    // 彙總每個商品的已退數量（退貨單 qty 是負數，取絕對值）
-    const result = {};
-    dtData.forEach(d => {
-      result[d.product_id] = (result[d.product_id] || 0) + Math.abs(d.qty);
-    });
-    return result;
-  } catch(e) {
-    console.warn('查詢已退貨數量失敗:', e);
-    return {};
+  if (cust && cust.price_group) {
+    const grp = cust.price_group;
+    if ((grp.includes('總倉') || grp.includes('分店')) && Number(product.price_branch) > 0)
+      return { price: Number(product.price_branch), label: '分店價' };
+    if ((grp.includes('店家') || grp.includes('批發')) && Number(product.price_wholesale) > 0)
+      return { price: Number(product.price_wholesale), label: '批發價' };
+    if ((grp.includes('餐廳') || grp.includes('團購')) && Number(product.price_group) > 0)
+      return { price: Number(product.price_group), label: '團購價' };
   }
+
+  return { price: Number(product.price) || 0, label: '售價' };
 }
 
-// ===== 全選/取消 =====
-function toggleAll() {
-  const allChecked = document.getElementById('chkAll').checked;
-  document.querySelectorAll('.chk-item:not(:disabled)').forEach(cb => cb.checked = allChecked);
-  calcSummary();
-}
+// ===== 商品搜尋 =====
+function searchProducts() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    const kw = document.getElementById('searchProduct').value.trim().toLowerCase();
+    const dropdown = document.getElementById('searchDropdown');
+    if (!kw || kw.length < 1) { dropdown.style.display = 'none'; return; }
 
-// ===== 計算退貨合計 =====
-function calcSummary() {
-  let totalAmount = 0;
-  let itemCount = 0;
+    const results = allProducts.filter(p =>
+      p.id.toLowerCase().includes(kw) || (p.name || '').toLowerCase().includes(kw)
+    ).slice(0, 30);
 
-  document.querySelectorAll('.chk-item').forEach(cb => {
-    const idx = cb.dataset.idx;
-    const qtyInput = document.querySelector(`.return-qty-input[data-idx="${idx}"]`);
-    const amountCell = document.querySelector(`.return-amount[data-idx="${idx}"]`);
-    const detail = orderDetails[idx];
-
-    if (cb.checked && !cb.disabled) {
-      let qty = parseInt(qtyInput.value) || 0;
-      const max = parseInt(qtyInput.max) || 0;
-      if (qty > max) { qty = max; qtyInput.value = max; }
-      if (qty < 0) { qty = 0; qtyInput.value = 0; }
-      const amount = qty * Number(detail.unit_price);
-      amountCell.textContent = '-$' + amount.toLocaleString();
-      totalAmount += amount;
-      if (qty > 0) itemCount++;
-    } else {
-      amountCell.textContent = '$0';
+    if (results.length === 0) {
+      dropdown.innerHTML = '<div style="padding:12px; color:#94a3b8; font-size:13px;">查無商品</div>';
+      dropdown.style.display = 'block';
+      return;
     }
-  });
 
-  document.getElementById('sumItems').textContent = itemCount;
-  document.getElementById('sumTotal').textContent = '-$' + totalAmount.toLocaleString();
+    dropdown.innerHTML = results.map((p, i) => {
+      const priceInfo = getCustomerPrice(p);
+      return `<div class="item" onclick="addToCart('${p.id}')" data-idx="${i}">
+        <span class="pid">${p.id}</span>
+        <span class="pname">${p.name || ''}</span>
+        <span class="pprice">$${priceInfo.price.toLocaleString()} <span class="price-badge" style="background:#fef2f2; color:#c53030;">${priceInfo.label}</span></span>
+      </div>`;
+    }).join('');
+    dropdown.style.display = 'block';
+  }, 150);
 }
 
-// ===== 預覽退貨單 =====
-function previewReturn() {
-  const items = getReturnItems();
-  if (!items.length) { Swal.fire('提示', '請勾選至少一個退貨品項', 'warning'); return; }
-
-  const total = items.reduce((s, i) => s + i.amount, 0);
-  const reason = document.getElementById('selReason').value;
-  const note = document.getElementById('returnNote').value.trim();
-
-  let html = `<div style="text-align:left; font-size:13px; max-height:400px; overflow-y:auto;">
-    <div style="margin-bottom:12px;">
-      <b>原始銷貨單：</b>${selectedOrder.id}<br>
-      <b>客戶：</b>${selectedOrder.customer_name}<br>
-      <b>退貨原因：</b>${reason}<br>
-      ${note ? `<b>備註：</b>${note}<br>` : ''}
-    </div>
-    <table style="width:100%; border-collapse:collapse; font-size:12px;">
-      <tr style="background:#fef2f2;"><th style="padding:6px; text-align:left;">商品</th><th style="padding:6px; text-align:center;">數量</th><th style="padding:6px; text-align:right;">金額</th></tr>
-      ${items.map(i => `<tr><td style="padding:5px; border-bottom:1px solid #fee2e2;">${i.product_name}</td><td style="padding:5px; text-align:center; border-bottom:1px solid #fee2e2;">${i.qty}</td><td style="padding:5px; text-align:right; border-bottom:1px solid #fee2e2; color:#c53030;">-$${i.amount.toLocaleString()}</td></tr>`).join('')}
-    </table>
-    <div style="text-align:right; margin-top:10px; font-size:16px; font-weight:bold; color:#c53030;">退貨總金額：-$${total.toLocaleString()}</div>
-  </div>`;
-
-  Swal.fire({ title: '退貨單預覽', html, width: 550, confirmButtonText: '確認無誤', confirmButtonColor: '#475569' });
+function handleSearchKey(e) {
+  if (e.key === 'Escape') {
+    document.getElementById('searchDropdown').style.display = 'none';
+  }
 }
 
-// ===== 取得勾選的退貨項目 =====
-function getReturnItems() {
-  const items = [];
-  document.querySelectorAll('.chk-item:checked').forEach(cb => {
-    const idx = cb.dataset.idx;
-    const qty = parseInt(document.querySelector(`.return-qty-input[data-idx="${idx}"]`).value) || 0;
-    if (qty <= 0) return;
-    const detail = orderDetails[idx];
-    items.push({
-      product_id: detail.product_id,
-      product_name: detail.product_name,
-      unit: detail.unit,
-      unit_price: Number(detail.unit_price),
-      qty: qty,
-      amount: qty * Number(detail.unit_price),
-      unit_cost: Number(detail.unit_cost) || 0
-    });
+// 點擊外部關閉下拉
+document.addEventListener('click', (e) => {
+  if (!e.target.closest('.search-box')) {
+    document.getElementById('searchDropdown').style.display = 'none';
+  }
+});
+
+// ===== 加入退貨明細 =====
+function addToCart(productId) {
+  const product = allProducts.find(p => p.id === productId);
+  if (!product) return;
+
+  // 檢查是否已在明細中
+  const existing = cart.find(c => c.product_id === productId);
+  if (existing) {
+    existing.qty += 1;
+    renderCart();
+    return;
+  }
+
+  const priceInfo = getCustomerPrice(product);
+  cart.push({
+    product_id: product.id,
+    product_name: product.name,
+    unit: product.unit || '',
+    unit_price: priceInfo.price,
+    price_label: priceInfo.label,
+    qty: 1
   });
-  return items;
+
+  document.getElementById('searchProduct').value = '';
+  document.getElementById('searchDropdown').style.display = 'none';
+  renderCart();
+}
+
+// ===== 渲染退貨明細 =====
+function renderCart() {
+  const tbody = document.getElementById('cartBody');
+  if (cart.length === 0) {
+    tbody.innerHTML = '<tr id="emptyRow"><td colspan="7" style="text-align:center; padding:30px; color:#94a3b8;">請搜尋商品加入退貨明細</td></tr>';
+    document.getElementById('cartCount').textContent = '0';
+    document.getElementById('cartTotal').textContent = '$0';
+    return;
+  }
+
+  tbody.innerHTML = cart.map((item, i) => {
+    const subtotal = item.qty * item.unit_price;
+    return `<tr>
+      <td style="font-weight:600; color:var(--blue);">${item.product_id}</td>
+      <td>${item.product_name}</td>
+      <td>${item.unit}</td>
+      <td style="text-align:right;">$${item.unit_price.toLocaleString()} <span class="price-badge" style="background:#f1f5f9; color:var(--text2);">${item.price_label}</span></td>
+      <td style="text-align:center;"><input type="number" class="cart-input" min="1" value="${item.qty}" onchange="updateCartQty(${i}, this.value)" oninput="updateCartQty(${i}, this.value)"></td>
+      <td style="text-align:right; font-weight:600; color:var(--danger);">$${subtotal.toLocaleString()}</td>
+      <td style="text-align:center;"><button class="btn btn-sm" style="background:#fee2e2; color:#c53030;" onclick="removeFromCart(${i})">✕</button></td>
+    </tr>`;
+  }).join('');
+
+  updateSummary();
+}
+
+function updateCartQty(index, val) {
+  let qty = parseInt(val) || 1;
+  if (qty < 1) qty = 1;
+  cart[index].qty = qty;
+  updateSummary();
+}
+
+function removeFromCart(index) {
+  cart.splice(index, 1);
+  renderCart();
+}
+
+function clearCart() {
+  if (cart.length === 0) return;
+  Swal.fire({
+    title: '確定清空？', text: '將移除所有退貨明細', icon: 'warning',
+    showCancelButton: true, confirmButtonText: '清空', cancelButtonText: '取消', confirmButtonColor: '#c53030'
+  }).then(r => { if (r.isConfirmed) { cart = []; renderCart(); } });
+}
+
+function updateSummary() {
+  const total = cart.reduce((s, item) => s + item.qty * item.unit_price, 0);
+  document.getElementById('cartCount').textContent = cart.length;
+  document.getElementById('cartTotal').textContent = '$' + total.toLocaleString();
 }
 
 // ===== 產生退貨單 ID =====
 async function generateReturnId() {
-  const today = new Date();
-  const dateStr = today.getFullYear().toString() +
-    String(today.getMonth() + 1).padStart(2, '0') +
-    String(today.getDate()).padStart(2, '0');
+  const dateStr = document.getElementById('returnDate').value.replace(/-/g, '');
   const prefix = 'RT' + dateStr;
-
   const res = await fetch(`${SB_URL}/sales_orders?id=like.${prefix}*&select=id&order=id.desc&limit=1`, { headers: H() });
   const existing = await res.json();
   let seq = 1;
@@ -365,20 +341,28 @@ async function generateReturnId() {
   return prefix + String(seq).padStart(3, '0');
 }
 
-// ===== 確認開立退貨單 =====
+// ===== 開立退貨單 =====
 async function submitReturn() {
-  const items = getReturnItems();
-  if (!items.length) { Swal.fire('提示', '請勾選至少一個退貨品項', 'warning'); return; }
+  if (cart.length === 0) { Swal.fire('提示', '請先加入退貨商品', 'warning'); return; }
 
-  const total = items.reduce((s, i) => s + i.amount, 0);
-  const reason = document.getElementById('selReason').value;
+  const custId = document.getElementById('selCustomer').value;
+  if (!custId) { Swal.fire('提示', '請選擇客戶', 'warning'); return; }
+
+  const cust = allCustomers.find(c => c.id === custId);
+  const custName = cust ? cust.name : custId;
+  const total = cart.reduce((s, item) => s + item.qty * item.unit_price, 0);
   const note = document.getElementById('returnNote').value.trim();
-  const fullNote = reason + (note ? '；' + note : '');
+  const returnDate = document.getElementById('returnDate').value;
 
   const confirm = await Swal.fire({
     title: '確認開立退貨單？',
-    html: `退回 <b>${items.length}</b> 項商品，退貨金額 <b style="color:#c53030;">-$${total.toLocaleString()}</b><br><br>
-      <span style="font-size:12px; color:#64748b;">將同時回補庫存</span>`,
+    html: `<div style="text-align:left; font-size:13px;">
+      <b>客戶：</b>${custName}<br>
+      <b>日期：</b>${returnDate}<br>
+      <b>品項：</b>${cart.length} 項<br>
+      <b style="color:#c53030;">退貨金額：$${total.toLocaleString()}</b><br><br>
+      <span style="color:#64748b; font-size:12px;">庫存將自動回補</span>
+    </div>`,
     icon: 'warning',
     showCancelButton: true,
     confirmButtonText: '確認開立',
@@ -392,35 +376,31 @@ async function submitReturn() {
   try {
     const returnId = await generateReturnId();
 
-    // 1. 寫入 sales_orders（退貨單）
+    // 1. 寫入 sales_orders
     const orderData = {
       id: returnId,
-      order_date: new Date().toISOString().split('T')[0],
-      customer_id: selectedOrder.customer_id,
-      customer_name: selectedOrder.customer_name,
+      order_date: returnDate,
+      customer_id: custId,
+      customer_name: custName,
       subtotal: -total,
       shipping: 0,
       deduction: 0,
       tax_amount: 0,
       grand_total: -total,
-      tax_type: selectedOrder.tax_type,
+      tax_type: cust?.tax_type || null,
       payment_status: '未收款',
       order_type: 'return',
-      ref_order_id: selectedOrder.id,
-      note: fullNote
+      note: note || null
     };
 
     const oRes = await fetch(`${SB_URL}/sales_orders`, {
       method: 'POST', headers: H({ 'Prefer': 'return=representation' }),
       body: JSON.stringify(orderData)
     });
-    if (!oRes.ok) {
-      const err = await oRes.json();
-      throw new Error('退貨單寫入失敗: ' + (err.message || ''));
-    }
+    if (!oRes.ok) throw new Error('退貨單寫入失敗: ' + (await oRes.json()).message);
 
-    // 2. 寫入 sales_details（退貨明細，qty 為負數）
-    const detailsData = items.map((item, i) => ({
+    // 2. 寫入 sales_details
+    const detailsData = cart.map((item, i) => ({
       id: returnId + '-' + String(i + 1).padStart(3, '0'),
       order_id: returnId,
       product_id: item.product_id,
@@ -428,9 +408,7 @@ async function submitReturn() {
       qty: -item.qty,
       unit: item.unit,
       unit_price: item.unit_price,
-      subtotal: -item.amount,
-      unit_cost: item.unit_cost,
-      profit: -(item.amount - item.qty * item.unit_cost)
+      subtotal: -(item.qty * item.unit_price)
     }));
 
     const dRes = await fetch(`${SB_URL}/sales_details`, {
@@ -440,19 +418,16 @@ async function submitReturn() {
     if (!dRes.ok) throw new Error('退貨明細寫入失敗');
 
     // 3. 庫存回補
-    for (const item of items) {
+    for (const item of cart) {
       try {
-        // 讀取目前庫存
         const invRes = await fetch(`${SB_URL}/inventory?product_id=eq.${encodeURIComponent(item.product_id)}&select=qty`, { headers: H() });
         const invData = await invRes.json();
         if (invData.length > 0) {
-          const currentQty = Number(invData[0].qty) || 0;
-          const newQty = currentQty + item.qty;
+          const newQty = (Number(invData[0].qty) || 0) + item.qty;
           await fetch(`${SB_URL}/inventory?product_id=eq.${encodeURIComponent(item.product_id)}`, {
             method: 'PATCH', headers: H(),
             body: JSON.stringify({ qty: newQty, last_updated: new Date().toISOString() })
           });
-          // 寫入庫存異動記錄
           await fetch(`${SB_URL}/inventory_logs`, {
             method: 'POST', headers: H(),
             body: JSON.stringify({
@@ -460,17 +435,15 @@ async function submitReturn() {
               log_type: '銷貨退回',
               qty_change: item.qty,
               after_qty: newQty,
-              note: `退貨單 ${returnId}（原單 ${selectedOrder.id}）`,
+              note: `退貨單 ${returnId}`,
               created_at: new Date().toISOString()
             })
           });
         }
-      } catch(e) {
-        console.warn('庫存回補失敗:', item.product_id, e);
-      }
+      } catch(e) { console.warn('庫存回補失敗:', item.product_id, e); }
     }
 
-    // 4. 寫入操作紀錄
+    // 4. 操作紀錄
     try {
       const meta = JSON.parse(sessionStorage.getItem('user_meta') || '{}');
       await fetch(`${SB_URL}/activity_logs`, {
@@ -479,28 +452,27 @@ async function submitReturn() {
           action: '開立退貨單',
           target_id: returnId,
           employee_name: meta.full_name || meta.username || 'admin',
-          detail: { ref_order: selectedOrder.id, customer: selectedOrder.customer_name, items: items.length, total: -total, reason }
+          detail: { customer: custName, items: cart.length, total: -total }
         })
       });
-    } catch(e) { console.warn('操作紀錄寫入失敗:', e); }
+    } catch(e) {}
 
     Swal.fire({
       icon: 'success',
       title: '退貨單已開立',
-      html: `單號：<b>${returnId}</b><br>退貨金額：<b style="color:#c53030;">-$${total.toLocaleString()}</b><br>庫存已回補`,
+      html: `單號：<b>${returnId}</b><br>退貨金額：<b style="color:#c53030;">$${total.toLocaleString()}</b><br>庫存已回補`,
       confirmButtonColor: '#475569'
     });
 
-    // 重新載入明細（更新已退數量）
-    loadOrderDetail();
+    cart = [];
+    renderCart();
 
   } catch(e) {
     Swal.fire('錯誤', e.message, 'error');
   }
 }
 
-// 頁面載入
-loadCustomers();
+init();
 </script>
 </body>
 </html>

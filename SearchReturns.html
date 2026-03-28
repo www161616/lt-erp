@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>查詢退貨單</title>
+  <script src="libs/sweetalert2.min.js"></script>
+  <style>
+    :root {
+      --bg: #f8f9fb; --surface: #ffffff; --surface2: #f1f5f9; --border: #e2e8f0;
+      --accent: #475569; --accent-hover: #334155; --text: #1e293b; --text2: #64748b;
+      --danger: #c53030; --blue: #0e7490;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI','Microsoft JhengHei',sans-serif; padding: 20px; background: var(--bg); color: var(--text); }
+    .container { background: var(--surface); padding: 24px; border-radius: 10px; max-width: 1200px; margin: 0 auto; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+    h2 { color: var(--accent); margin-bottom: 20px; font-size: 20px; }
+    .toolbar { display: flex; gap: 10px; align-items: flex-end; margin-bottom: 16px; flex-wrap: wrap; }
+    .toolbar label { font-size: 12px; font-weight: 700; color: var(--text2); display: block; margin-bottom: 4px; }
+    .toolbar input, .toolbar select { padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; font-family: inherit; }
+    .btn { padding: 8px 16px; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; font-weight: 600; font-family: inherit; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-hover); }
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th { background: var(--surface2); color: var(--text2); font-size: 12px; font-weight: 700; padding: 8px 10px; text-align: left; border-bottom: 2px solid var(--border); cursor: pointer; }
+    th:hover { background: #e2e8f0; }
+    td { padding: 8px 10px; font-size: 13px; border-bottom: 1px solid var(--surface2); }
+    tr:hover { background: #fefce8; }
+    .empty { text-align: center; padding: 40px; color: #94a3b8; font-size: 14px; }
+    .pagination { display: flex; justify-content: center; gap: 4px; margin-top: 16px; }
+    .pagination button { padding: 5px 12px; border: 1px solid var(--border); background: white; border-radius: 4px; font-size: 12px; cursor: pointer; font-family: inherit; }
+    .pagination button.active { background: var(--accent); color: white; border-color: var(--accent); }
+    .pagination button:hover:not(.active) { background: var(--surface2); }
+    .detail-table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    .detail-table th { background: #fef2f2; font-size: 11px; padding: 5px 8px; }
+    .detail-table td { padding: 5px 8px; font-size: 12px; border-bottom: 1px solid #fee2e2; }
+    .stat-bar { display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+    .stat-item { background: var(--surface2); padding: 10px 16px; border-radius: 8px; }
+    .stat-item .label { font-size: 11px; color: var(--text2); }
+    .stat-item .value { font-size: 16px; font-weight: 700; color: var(--danger); }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h2>🔍 查詢退貨單</h2>
+
+  <div class="toolbar">
+    <div>
+      <label>起始日期</label>
+      <input type="date" id="dateFrom">
+    </div>
+    <div>
+      <label>結束日期</label>
+      <input type="date" id="dateTo">
+    </div>
+    <div>
+      <label>客戶</label>
+      <select id="filterCustomer" style="min-width:160px;">
+        <option value="">全部客戶</option>
+      </select>
+    </div>
+    <div>
+      <label>搜尋（單號/商品編號/商品名稱）</label>
+      <input type="text" id="filterKeyword" placeholder="輸入關鍵字..." style="min-width:220px;" onkeypress="if(event.key==='Enter') doSearch()">
+    </div>
+    <div style="display:flex; gap:8px; align-items:flex-end;">
+      <button class="btn btn-primary" onclick="doSearch()">🔍 查詢</button>
+      <button class="btn" style="background:#e2e8f0; color:#374151;" onclick="clearFilters()">清除</button>
+    </div>
+  </div>
+
+  <div class="stat-bar" id="statBar" style="display:none;">
+    <div class="stat-item">
+      <div class="label">退貨單數</div>
+      <div class="value" id="statCount">0</div>
+    </div>
+    <div class="stat-item">
+      <div class="label">退貨總金額</div>
+      <div class="value" id="statTotal">$0</div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th onclick="sortBy('id')">單號 ↕</th>
+        <th onclick="sortBy('order_date')">日期 ↕</th>
+        <th onclick="sortBy('customer_name')">客戶 ↕</th>
+        <th style="text-align:right;" onclick="sortBy('grand_total')">退貨金額 ↕</th>
+        <th>備註</th>
+        <th style="width:60px;"></th>
+      </tr>
+    </thead>
+    <tbody id="resultBody">
+      <tr><td colspan="6" class="empty">請設定條件後點擊「查詢」</td></tr>
+    </tbody>
+  </table>
+
+  <!-- 上方分頁 -->
+  <div class="pagination" id="paginationTop"></div>
+
+  <!-- 明細展開區 -->
+  <div id="detailArea"></div>
+
+  <!-- 下方分頁 -->
+  <div class="pagination" id="paginationBottom"></div>
+</div>
+
+<script>
+const SB_URL = 'https://asugjynpocwygggttxyo.supabase.co/rest/v1';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFzdWdqeW5wb2N3eWdnZ3R0eHlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNzU3MjksImV4cCI6MjA4ODk1MTcyOX0.LzcRQAl80rZxKKD8NIYWGvylfwCbs1ek5LtKpmZodBc';
+function getToken() { return sessionStorage.getItem('sb_auth_token') || SB_KEY; }
+function H(extra) {
+  const h = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/json' };
+  if (extra) Object.assign(h, extra);
+  return h;
+}
+
+let allResults = [];
+let filteredResults = [];
+let currentPage = 1;
+const PER_PAGE = 50;
+let sortField = 'order_date';
+let sortDir = 'desc';
+
+// ===== 初始化 =====
+async function init() {
+  // 預設日期：本月
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  document.getElementById('dateFrom').value = `${y}-${m}-01`;
+  document.getElementById('dateTo').value = now.toISOString().split('T')[0];
+
+  // 載入客戶下拉
+  const cRes = await fetch(`${SB_URL}/customers?select=id,name&status=eq.啟用&order=name.asc`, { headers: H() });
+  const customers = await cRes.json();
+  const sel = document.getElementById('filterCustomer');
+  customers.forEach(c => {
+    sel.innerHTML += `<option value="${c.name}">${c.name}</option>`;
+  });
+
+  doSearch();
+}
+
+// ===== 查詢 =====
+async function doSearch() {
+  const from = document.getElementById('dateFrom').value;
+  const to = document.getElementById('dateTo').value;
+  const customer = document.getElementById('filterCustomer').value;
+  const keyword = document.getElementById('filterKeyword').value.trim().toLowerCase();
+
+  let url = `${SB_URL}/sales_orders?order_type=eq.return&order=order_date.desc,id.desc&select=id,order_date,customer_id,customer_name,grand_total,note,ref_order_id`;
+  if (from) url += `&order_date=gte.${from}`;
+  if (to) url += `&order_date=lte.${to}`;
+  if (customer) url += `&customer_name=eq.${encodeURIComponent(customer)}`;
+  url += '&limit=1000';
+
+  const tbody = document.getElementById('resultBody');
+  tbody.innerHTML = '<tr><td colspan="6" class="empty">載入中...</td></tr>';
+
+  try {
+    const res = await fetch(url, { headers: H() });
+    allResults = await res.json();
+
+    // 如果有關鍵字，需要搜尋明細
+    if (keyword) {
+      // 先用單號篩選
+      let matched = allResults.filter(o =>
+        o.id.toLowerCase().includes(keyword) ||
+        (o.customer_name || '').toLowerCase().includes(keyword) ||
+        (o.note || '').toLowerCase().includes(keyword)
+      );
+
+      // 也搜尋 sales_details 的商品
+      if (matched.length < allResults.length) {
+        const orderIds = allResults.map(o => o.id);
+        if (orderIds.length > 0) {
+          const detailUrl = `${SB_URL}/sales_details?order_id=in.(${orderIds.join(',')})&select=order_id,product_id,product_name&limit=5000`;
+          const dRes = await fetch(detailUrl, { headers: H() });
+          const details = await dRes.json();
+          const matchedOrderIds = new Set(matched.map(o => o.id));
+          details.forEach(d => {
+            if ((d.product_id || '').toLowerCase().includes(keyword) ||
+                (d.product_name || '').toLowerCase().includes(keyword)) {
+              matchedOrderIds.add(d.order_id);
+            }
+          });
+          matched = allResults.filter(o => matchedOrderIds.has(o.id));
+        }
+      }
+      filteredResults = matched;
+    } else {
+      filteredResults = allResults;
+    }
+
+    currentPage = 1;
+    renderResults();
+    updateStats();
+  } catch(e) {
+    tbody.innerHTML = `<tr><td colspan="6" class="empty" style="color:#c53030;">查詢失敗: ${e.message}</td></tr>`;
+  }
+}
+
+// ===== 統計 =====
+function updateStats() {
+  const bar = document.getElementById('statBar');
+  if (filteredResults.length === 0) { bar.style.display = 'none'; return; }
+  bar.style.display = 'flex';
+  document.getElementById('statCount').textContent = filteredResults.length;
+  const total = filteredResults.reduce((s, o) => s + Math.abs(Number(o.grand_total)), 0);
+  document.getElementById('statTotal').textContent = '$' + total.toLocaleString();
+}
+
+// ===== 排序 =====
+function sortBy(field) {
+  if (sortField === field) { sortDir = sortDir === 'asc' ? 'desc' : 'asc'; }
+  else { sortField = field; sortDir = 'desc'; }
+
+  filteredResults.sort((a, b) => {
+    let va = a[field] || '', vb = b[field] || '';
+    if (field === 'grand_total') { va = Number(va); vb = Number(vb); }
+    if (va < vb) return sortDir === 'asc' ? -1 : 1;
+    if (va > vb) return sortDir === 'asc' ? 1 : -1;
+    return 0;
+  });
+  currentPage = 1;
+  renderResults();
+}
+
+// ===== 渲染結果 =====
+function renderResults() {
+  const tbody = document.getElementById('resultBody');
+  if (filteredResults.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="6" class="empty">查無退貨單</td></tr>';
+    document.getElementById('paginationTop').innerHTML = '';
+    document.getElementById('paginationBottom').innerHTML = '';
+    return;
+  }
+
+  const totalPages = Math.ceil(filteredResults.length / PER_PAGE);
+  if (currentPage > totalPages) currentPage = totalPages;
+  const start = (currentPage - 1) * PER_PAGE;
+  const pageData = filteredResults.slice(start, start + PER_PAGE);
+
+  tbody.innerHTML = pageData.map(o => {
+    const amount = Math.abs(Number(o.grand_total));
+    return `<tr style="cursor:pointer;" onclick="toggleDetail('${o.id}', this)">
+      <td style="font-weight:600; color:var(--danger);">${o.id}</td>
+      <td>${o.order_date}</td>
+      <td>${o.customer_name || ''}</td>
+      <td style="text-align:right; font-weight:600; color:var(--danger);">$${amount.toLocaleString()}</td>
+      <td style="font-size:12px; color:var(--text2);">${o.note || ''}</td>
+      <td style="text-align:center;"><span style="font-size:11px; color:var(--blue);">▼ 展開</span></td>
+    </tr>
+    <tr class="detail-row" id="detail-${o.id}" style="display:none;"><td colspan="6" style="padding:0;"></td></tr>`;
+  }).join('');
+
+  renderPagination(totalPages);
+}
+
+// ===== 分頁 =====
+function renderPagination(totalPages) {
+  if (totalPages <= 1) {
+    document.getElementById('paginationTop').innerHTML = '';
+    document.getElementById('paginationBottom').innerHTML = '';
+    return;
+  }
+  let html = '';
+  if (currentPage > 1) html += `<button onclick="goPage(1)">«</button><button onclick="goPage(${currentPage-1})">‹</button>`;
+  for (let i = Math.max(1, currentPage - 2); i <= Math.min(totalPages, currentPage + 2); i++) {
+    html += `<button class="${i === currentPage ? 'active' : ''}" onclick="goPage(${i})">${i}</button>`;
+  }
+  if (currentPage < totalPages) html += `<button onclick="goPage(${currentPage+1})">›</button><button onclick="goPage(${totalPages})">»</button>`;
+  document.getElementById('paginationTop').innerHTML = html;
+  document.getElementById('paginationBottom').innerHTML = html;
+}
+
+function goPage(p) {
+  currentPage = p;
+  renderResults();
+  window.scrollTo(0, 0);
+}
+
+// ===== 展開明細 =====
+async function toggleDetail(orderId, rowEl) {
+  const detailRow = document.getElementById('detail-' + orderId);
+  if (detailRow.style.display !== 'none') {
+    detailRow.style.display = 'none';
+    return;
+  }
+
+  // 載入明細
+  const td = detailRow.querySelector('td');
+  td.innerHTML = '<div style="padding:12px; color:#94a3b8;">載入中...</div>';
+  detailRow.style.display = '';
+
+  try {
+    const res = await fetch(`${SB_URL}/sales_details?order_id=eq.${orderId}&select=*&order=id.asc`, { headers: H() });
+    const details = await res.json();
+
+    let html = `<div style="padding:12px 16px; background:#fef2f2; border-radius:0 0 8px 8px;">
+      <table class="detail-table">
+        <thead><tr><th>商品編號</th><th>商品名稱</th><th>單位</th><th style="text-align:right;">單價</th><th style="text-align:center;">數量</th><th style="text-align:right;">小計</th></tr></thead>
+        <tbody>`;
+    details.forEach(d => {
+      html += `<tr>
+        <td style="color:var(--blue); font-weight:600;">${d.product_id || ''}</td>
+        <td>${d.product_name || ''}</td>
+        <td>${d.unit || ''}</td>
+        <td style="text-align:right;">$${Number(d.unit_price).toLocaleString()}</td>
+        <td style="text-align:center;">${Math.abs(d.qty)}</td>
+        <td style="text-align:right; color:var(--danger); font-weight:600;">$${Math.abs(Number(d.subtotal)).toLocaleString()}</td>
+      </tr>`;
+    });
+    html += '</tbody></table></div>';
+    td.innerHTML = html;
+  } catch(e) {
+    td.innerHTML = `<div style="padding:12px; color:#c53030;">載入失敗: ${e.message}</div>`;
+  }
+}
+
+// ===== 清除 =====
+function clearFilters() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  document.getElementById('dateFrom').value = `${y}-${m}-01`;
+  document.getElementById('dateTo').value = now.toISOString().split('T')[0];
+  document.getElementById('filterCustomer').value = '';
+  document.getElementById('filterKeyword').value = '';
+  doSearch();
+}
+
+init();
+</script>
+</body>
+</html>
