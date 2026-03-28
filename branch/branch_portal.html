@@ -1597,7 +1597,9 @@
         const salesTotal = salesOrders.reduce((s, o) => s + Number(o.grand_total), 0);
         const returnTotal = returnOrders.reduce((s, o) => s + Number(o.grand_total), 0); // 已經是負數
         const monthlyFee = isWholesale ? 0 : MONTHLY_FEE;
-        const grandTotal = salesTotal + returnTotal + (isWholesale ? 0 : transferNet) + monthlyFee;
+        // transferNet 負數=分店欠總倉（要多付），正數=總倉欠分店（可抵扣），取反加入總額
+        const transferCharge = isWholesale ? 0 : -transferNet;
+        const grandTotal = salesTotal + returnTotal + transferCharge + monthlyFee;
 
         // 渲染
         let html = `<div id="msPrintArea">`;
@@ -1639,7 +1641,8 @@
           html += `<table style="width:100%; border-collapse:collapse; font-size:13px;">
             <tr style="background:#ecfeff;"><th style="padding:6px 10px; text-align:left;">說明</th><th style="padding:6px 10px; text-align:right;">金額</th></tr>`;
           transferRows.forEach(t => {
-            html += `<tr><td style="padding:5px 10px; border-bottom:1px solid #e0f2fe;">店轉店淨額${t.note ? '（' + t.note + '）' : ''}</td><td style="padding:5px 10px; text-align:right; border-bottom:1px solid #e0f2fe; color:${transferNet >= 0 ? '#16a34a' : '#c53030'};">${transferNet >= 0 ? '+' : '-'}$${Math.abs(transferNet).toLocaleString()}</td></tr>`;
+            const chargeLabel = transferNet < 0 ? '應收（總倉代付）' : '應扣（總倉代收）';
+            html += `<tr><td style="padding:5px 10px; border-bottom:1px solid #e0f2fe;">店轉店${chargeLabel}${t.note ? '（' + t.note + '）' : ''}</td><td style="padding:5px 10px; text-align:right; border-bottom:1px solid #e0f2fe; color:${transferNet < 0 ? '#c53030' : '#16a34a'};">${transferNet < 0 ? '+' : '-'}$${Math.abs(transferNet).toLocaleString()}</td></tr>`;
           });
           html += `</table>`;
         }
