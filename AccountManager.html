@@ -146,11 +146,12 @@
     }
   }
 
-  function accessTags(role) {
+  function accessTags(role, storeType) {
     if (role === 'admin') return '<span class="access-tag" style="background:#dbeafe; color:#1e40af;">ERP</span><span class="access-tag" style="background:#fef3c7; color:#92400e;">管理後台（全部）</span>';
     if (role === 'accountant') return '<span class="access-tag" style="background:#dbeafe; color:#1e40af;">ERP（無帳號管理）</span>';
     if (role === 'assistant') return '<span class="access-tag" style="background:#fef3c7; color:#92400e;">管理後台（全部）</span>';
     if (role === 'staff') return '<span class="access-tag" style="background:#fef3c7; color:#92400e;">管理後台（無漂漂館/團購）</span>';
+    if (role === 'store' && storeType === 'wholesale') return '<span class="access-tag" style="background:#fef3c7; color:#92400e;">分店前台（僅結單+進貨單）</span>';
     if (role === 'store') return '<span class="access-tag" style="background:#e2e8f0; color:#475569;">分店前台</span>';
     return '-';
   }
@@ -167,15 +168,18 @@
 
     var roleLabel = { admin: '最高管理員', accountant: '會計', assistant: '助理', staff: '員工', store: '分店' };
     var roleBadge = { admin: 'badge-admin', accountant: 'badge-admin', assistant: 'badge-assistant', staff: 'badge-staff', store: 'badge-staff' };
+    var storeTypeLabel = { wholesale: '批發' };
 
     tbody.innerHTML = accountList.map(function(a) {
       var role = a.role || 'staff';
       var status = a.status || 'active';
+      var displayRole = (role === 'store' && a.store_type === 'wholesale') ? '批發' : (roleLabel[role] || role);
+      var displayBadge = (role === 'store' && a.store_type === 'wholesale') ? 'badge-assistant' : (roleBadge[role] || 'badge-staff');
       return '<tr>' +
         '<td style="font-weight:600;">' + (a.username || '') + '</td>' +
         '<td>' + (a.full_name || '-') + '</td>' +
-        '<td><span class="badge ' + (roleBadge[role] || 'badge-staff') + '">' + (roleLabel[role] || role) + '</span></td>' +
-        '<td>' + accessTags(role) + '</td>' +
+        '<td><span class="badge ' + displayBadge + '">' + displayRole + '</span></td>' +
+        '<td>' + accessTags(role, a.store_type) + '</td>' +
         '<td>' + (a.store || '總倉') + '</td>' +
         '<td><span class="badge ' + (status === 'active' ? 'badge-active' : 'badge-inactive') + '">' + (status === 'active' ? '啟用' : '停用') + '</span></td>' +
         '<td style="white-space:nowrap;">' +
@@ -201,14 +205,19 @@
           '<div style="margin-bottom:10px;"><label style="font-weight:bold; color:#718096; font-size:12px;">姓名</label>' +
             '<input id="acc-fullname" type="text" placeholder="使用者姓名" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;"></div>' +
           '<div style="margin-bottom:10px;"><label style="font-weight:bold; color:#718096; font-size:12px;">角色</label>' +
-            '<select id="acc-role" onchange="document.getElementById(\'acc-store-row\').style.display=this.value===\'store\'?\'block\':\'none\';" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;">' +
+            '<select id="acc-role" onchange="var isStore=this.value===\'store\'; document.getElementById(\'acc-store-row\').style.display=isStore?\'block\':\'none\'; document.getElementById(\'acc-storetype-row\').style.display=isStore?\'block\':\'none\';" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;">' +
               '<option value="accountant">會計 → ERP（無帳號管理）</option>' +
               '<option value="assistant">助理 → 管理後台（全部功能）</option>' +
               '<option value="staff">員工 → 管理後台（無漂漂館/團購叫貨）</option>' +
-              '<option value="store">分店 → 分店前台（需指定分店）</option>' +
+              '<option value="store">分店/批發 → 分店前台</option>' +
             '</select></div>' +
-          '<div id="acc-store-row" style="margin-bottom:10px; display:none;"><label style="font-weight:bold; color:#718096; font-size:12px;">所屬分店（分店帳號必填）</label>' +
-            '<input id="acc-store" type="text" placeholder="例：龍潭店" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;"></div>' +
+          '<div id="acc-storetype-row" style="margin-bottom:10px; display:none;"><label style="font-weight:bold; color:#718096; font-size:12px;">分店類型</label>' +
+            '<select id="acc-storetype" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;">' +
+              '<option value="store">分店（完整功能）</option>' +
+              '<option value="wholesale">批發（僅結單填表+進貨單）</option>' +
+            '</select></div>' +
+          '<div id="acc-store-row" style="margin-bottom:10px; display:none;"><label style="font-weight:bold; color:#718096; font-size:12px;">所屬分店/批發名稱（必填）</label>' +
+            '<input id="acc-store" type="text" placeholder="例：龍潭店、全民" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;"></div>' +
         '</div>',
       showCancelButton: true,
       confirmButtonText: '新增', cancelButtonText: '取消', confirmButtonColor: '#475569',
@@ -218,10 +227,12 @@
         var full_name = (document.getElementById('acc-fullname').value || '').trim();
         var role = document.getElementById('acc-role').value || 'admin';
         var store = (document.getElementById('acc-store').value || '').trim();
+        var store_type = (document.getElementById('acc-storetype')?.value) || 'store';
         if (!username || !password) { Swal.showValidationMessage('帳號和密碼為必填'); return false; }
         if (password.length < 6) { Swal.showValidationMessage('密碼至少 6 碼'); return false; }
-        if (role === 'store' && !store) { Swal.showValidationMessage('分店帳號必須指定所屬分店'); return false; }
-        return { username: username, password: password, full_name: full_name, role: role, store: store };
+        if (role === 'store' && !store) { Swal.showValidationMessage('必須指定所屬分店/批發名稱'); return false; }
+        if (role !== 'store') store_type = 'store';
+        return { username: username, password: password, full_name: full_name, role: role, store: store, store_type: store_type };
       }
     }).then(async function(res) {
       if (!res.isConfirmed) return;
@@ -230,7 +241,7 @@
       try {
         var authResp = await fetch(SB_URL + '/rpc/admin_create_auth_user', {
           method: 'POST', headers: H(),
-          body: JSON.stringify({ p_username: v.username, p_password: v.password, p_full_name: v.full_name, p_role: v.role, p_store: v.store })
+          body: JSON.stringify({ p_username: v.username, p_password: v.password, p_full_name: v.full_name, p_role: v.role, p_store: v.store, p_store_type: v.store_type })
         });
         if (!authResp.ok) {
           var err = await authResp.json();
@@ -239,7 +250,7 @@
 
         var resp = await fetch(SB_URL + '/employees', {
           method: 'POST', headers: H({ 'Prefer': 'return=representation' }),
-          body: JSON.stringify({ username: v.username, password: v.password, full_name: v.full_name, role: v.role, store: v.store, status: 'active' })
+          body: JSON.stringify({ username: v.username, password: v.password, full_name: v.full_name, role: v.role, store: v.store, store_type: v.store_type, status: 'active' })
         });
         if (!resp.ok) {
           var err2 = await resp.json();
@@ -266,14 +277,19 @@
           '<div style="margin-bottom:10px;"><label style="font-weight:bold; color:#718096; font-size:12px;">姓名</label>' +
             '<input id="edit-fullname" type="text" value="' + (emp.full_name || '') + '" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;"></div>' +
           '<div style="margin-bottom:10px;"><label style="font-weight:bold; color:#718096; font-size:12px;">角色</label>' +
-            '<select id="edit-role" onchange="document.getElementById(\'edit-store-row\').style.display=this.value===\'store\'?\'block\':\'none\';" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;">' +
+            '<select id="edit-role" onchange="var isStore=this.value===\'store\'; document.getElementById(\'edit-store-row\').style.display=isStore?\'block\':\'none\'; document.getElementById(\'edit-storetype-row\').style.display=isStore?\'block\':\'none\';" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;">' +
               '<option value="admin"' + (emp.role === 'admin' ? ' selected' : '') + '>最高管理員 → 全部系統</option>' +
               '<option value="accountant"' + (emp.role === 'accountant' ? ' selected' : '') + '>會計 → ERP（無帳號管理）</option>' +
               '<option value="assistant"' + (emp.role === 'assistant' ? ' selected' : '') + '>助理 → 管理後台（全部功能）</option>' +
               '<option value="staff"' + (emp.role === 'staff' ? ' selected' : '') + '>員工 → 管理後台（無漂漂館/團購）</option>' +
-              '<option value="store"' + (emp.role === 'store' ? ' selected' : '') + '>分店 → 分店前台</option>' +
+              '<option value="store"' + (emp.role === 'store' ? ' selected' : '') + '>分店/批發 → 分店前台</option>' +
             '</select></div>' +
-          '<div id="edit-store-row" style="margin-bottom:10px;' + (emp.role === 'store' ? '' : ' display:none;') + '"><label style="font-weight:bold; color:#718096; font-size:12px;">所屬分店</label>' +
+          '<div id="edit-storetype-row" style="margin-bottom:10px;' + (emp.role === 'store' ? '' : ' display:none;') + '"><label style="font-weight:bold; color:#718096; font-size:12px;">分店類型</label>' +
+            '<select id="edit-storetype" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;">' +
+              '<option value="store"' + ((emp.store_type || 'store') === 'store' ? ' selected' : '') + '>分店（完整功能）</option>' +
+              '<option value="wholesale"' + (emp.store_type === 'wholesale' ? ' selected' : '') + '>批發（僅結單填表+進貨單）</option>' +
+            '</select></div>' +
+          '<div id="edit-store-row" style="margin-bottom:10px;' + (emp.role === 'store' ? '' : ' display:none;') + '"><label style="font-weight:bold; color:#718096; font-size:12px;">所屬分店/批發名稱</label>' +
             '<input id="edit-store" type="text" value="' + (emp.store || '') + '" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;"></div>' +
           '<div style="margin-bottom:10px;"><label style="font-weight:bold; color:#718096; font-size:12px;">狀態</label>' +
             '<select id="edit-status" style="width:100%; padding:8px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; margin-top:4px;">' +
@@ -284,10 +300,14 @@
       showCancelButton: true,
       confirmButtonText: '儲存', cancelButtonText: '取消', confirmButtonColor: '#475569',
       preConfirm: function() {
+        var role = document.getElementById('edit-role').value;
+        var store_type = (document.getElementById('edit-storetype')?.value) || 'store';
+        if (role !== 'store') store_type = 'store';
         return {
           full_name: (document.getElementById('edit-fullname').value || '').trim(),
-          role: document.getElementById('edit-role').value,
+          role: role,
           store: (document.getElementById('edit-store').value || '').trim(),
+          store_type: store_type,
           status: document.getElementById('edit-status').value
         };
       }
@@ -298,7 +318,7 @@
       try {
         var authResp = await fetch(SB_URL + '/rpc/admin_update_auth_user', {
           method: 'POST', headers: H(),
-          body: JSON.stringify({ p_username: username, p_full_name: v.full_name, p_role: v.role, p_store: v.store })
+          body: JSON.stringify({ p_username: username, p_full_name: v.full_name, p_role: v.role, p_store: v.store, p_store_type: v.store_type })
         });
         if (!authResp.ok) {
           var err = await authResp.json();
@@ -307,7 +327,7 @@
 
         var resp = await fetch(SB_URL + '/employees?username=eq.' + encodeURIComponent(username), {
           method: 'PATCH', headers: H(),
-          body: JSON.stringify({ full_name: v.full_name, role: v.role, store: v.store, status: v.status })
+          body: JSON.stringify({ full_name: v.full_name, role: v.role, store: v.store, store_type: v.store_type, status: v.status })
         });
         if (!resp.ok) throw new Error('employees 更新失敗');
 

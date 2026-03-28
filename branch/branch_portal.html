@@ -1408,6 +1408,10 @@
         const storeName = meta.store || '總倉管理';
         const fullName = meta.full_name || meta.username;
         currentStore = { id: meta.username, name: matchBranchName(storeName), employee: fullName };
+        // 從 user_metadata 讀取分店類型（優先），fallback localStorage
+        const metaStoreType = meta.store_type || '';
+        const typeMapFallback = JSON.parse(localStorage.getItem('branchTypeMap') || '{}');
+        currentStore.type = metaStoreType || typeMapFallback[storeName] || 'store';
         sessionStorage.setItem('branch_employee', JSON.stringify(currentStore));
         // 從雲端載入共用資料到 localStorage
         await cloudLoadAll();
@@ -1419,9 +1423,6 @@
         } catch(e) { console.warn('分店資料載入失敗:', e); }
         // 載入該店專屬資料
         initStoreData();
-        // 判斷分店類型（分店 or 批發）
-        const typeMap = JSON.parse(localStorage.getItem('branchTypeMap') || '{}');
-        currentStore.type = typeMap[storeName] || 'store';
 
         document.getElementById('storeNameBadge').textContent = `🏠 ${storeName}`;
         document.getElementById('topbarInfo').textContent = `${storeName}｜${fullName}`;
@@ -1469,6 +1470,10 @@
         const storeName = meta.store || '總倉管理';
         const fullName = meta.full_name || meta.username;
         currentStore = { id: meta.username, name: matchBranchName(storeName), employee: fullName };
+        // 從 user_metadata 讀取分店類型（優先），fallback localStorage
+        const autoMetaStoreType = meta.store_type || '';
+        const autoTypeMapFallback = JSON.parse(localStorage.getItem('branchTypeMap') || '{}');
+        currentStore.type = autoMetaStoreType || autoTypeMapFallback[storeName] || 'store';
         sessionStorage.setItem('branch_employee', JSON.stringify(currentStore));
         await cloudLoadAll();
         // 從雲端載入分店專屬資料（流水帳、訂包）
@@ -1478,8 +1483,6 @@
           if (sdR.ok) { (await sdR.json()).forEach(r => localStorage.setItem(r.key, JSON.stringify(r.value))); }
         } catch(e) { console.warn('分店資料載入失敗:', e); }
         initStoreData();
-        const typeMap = JSON.parse(localStorage.getItem('branchTypeMap') || '{}');
-        currentStore.type = typeMap[storeName] || 'store';
         document.getElementById('storeNameBadge').textContent = `🏠 ${storeName}`;
         document.getElementById('topbarInfo').textContent = `${storeName}｜${fullName}`;
         document.getElementById('loginPage').style.display = 'none';

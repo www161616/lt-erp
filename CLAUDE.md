@@ -1,3 +1,7 @@
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
 # 龍潭總倉 ERP 系統
 
 ## 專案概述
@@ -13,27 +17,19 @@
 - WSL 已設定 Git credential（classic PAT），可直接 `git push`
 - **工作流程**：本地改完讓使用者測試，確認沒問題再一次 push（不要每改一個就推）
 
-## 資料夾結構
-```
-龍潭_deploy/
-├── index.html              # ERP 主頁（管理員/會計用）
-├── *.html                  # 各功能子頁面（iframe 載入）
-├── supplier_xiaolan.html   # 小瀾私人採購管理（獨立頁面）
-├── backup.html             # 備份工具（不改動）
-├── admin/
-│   ├── branch_admin.html   # 開團小幫手（助理/員工用）
-│   └── ImportGroupBuy.html
-├── branch/
-│   └── branch_portal.html  # 分店入口
-├── templates/
-│   └── 銷貨單.xlsx         # Excel 範本
-├── docs/                   # 參考資料（.gitignore 排除，不部署）
-│   ├── supabase/           # DB 欄位 CSV（查欄位名用這裡）
-│   ├── 備份紀錄/
-│   ├── ai紀錄/
-│   └── *.sql, *.txt, *.xlsx
-└── .gitignore              # 排除 docs/
-```
+## 架構
+- **index.html**：ERP 主殼（sidebar + iframe），管理員/會計用
+- **根目錄 *.html**：各功能子頁面，透過 iframe 載入（如 ProductList、SalesOrder、Inventory 等）
+- **admin/branch_admin.html**：開團小幫手（助理/員工用），含漂漂館區、團購叫貨區
+- **branch/branch_portal.html**：分店入口
+- **supplier_xiaolan.html**：小瀾私人採購管理（獨立頁面，不連結主站）
+- **backup.html**：備份工具（不改動）
+- **libs/**：本地 JS 依賴（supabase.min.js, sweetalert2.min.js, xlsx.full.min.js）
+- **templates/**：Excel 範本（銷貨單.xlsx）
+- **docs/**：參考資料（.gitignore 排除，不部署）— DB 欄位 CSV 在 `docs/supabase/`
+
+## .gitignore 排除項目
+docs/、*_backup*.html、*.xls、*.xlsx、*.jpg、*.png、.claude/、EZTOOL*/
 
 ## 主題色（不可混用）
 - **index.html + 根目錄所有 HTML**：石板灰護眼主題（slate gray）
@@ -45,6 +41,15 @@
 - KEY: `eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFzdWdqeW5wb2N3eWdnZ3R0eHlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNzU3MjksImV4cCI6MjA4ODk1MTcyOX0.LzcRQAl80rZxKKD8NIYWGvylfwCbs1ek5LtKpmZodBc`
 - 變數名稱：`SB_URL`, `SB_KEY`, `HEADERS`
 - 預設只回傳 1000 筆，大量資料需分頁 while loop
+
+## Supabase REST API 慣例
+- 每個 HTML 頁面頂部自行宣告 `SB_URL`/`SB_KEY`/`HEADERS`（非共用模組）
+- Auth token 從 `sessionStorage.getItem('sb_auth_token')` 取得，fallback 為 SB_KEY
+- HEADERS 必須同時包含 `apikey` 和 `Authorization: Bearer`
+- 查詢用 PostgREST 語法：`?id=eq.VALUE`、`?id=in.(A,B)`、`?order=id.desc`
+- 超過 1000 筆用 while loop 分頁：`limit=1000&offset=N`，直到回傳筆數 < limit
+- 部分頁面有 `api()` helper（如 Inventory.html），但多數頁面直接用 fetch
+- RPC 呼叫：`fetch(SB_URL + '/rpc/function_name', { method: 'POST', body: ... })`
 
 ## RLS 安全策略（已啟用，非 anon 全開）
 - 所有 public 表都已啟用 RLS
