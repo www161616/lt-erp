@@ -435,8 +435,8 @@ async function submitReturn() {
               log_type: '銷貨退回',
               qty_change: item.qty,
               after_qty: newQty,
-              note: `退貨單 ${returnId}`,
-              created_at: new Date().toISOString()
+              doc_no: `退貨單 ${returnId}`,
+              log_date: new Date().toISOString()
             })
           });
         }

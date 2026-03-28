@@ -9163,8 +9163,8 @@
                 log_type: '銷貨退回',
                 qty_change: returnQty,
                 after_qty: newQty,
-                note: `退貨單 ${returnId}（原單 ${salesOrder.dbId || salesOrder.id}）`,
-                created_at: new Date().toISOString()
+                doc_no: `退貨單 ${returnId}（原單 ${salesOrder.dbId || salesOrder.id}）`,
+                log_date: new Date().toISOString()
               })
             });
           }
@@ -10392,8 +10392,8 @@
                 log_type: '銷貨退回',
                 qty_change: rItem.qty,
                 after_qty: newQty,
-                note: '退貨單 ' + newId + '（原單 ' + id + '）',
-                created_at: new Date().toISOString()
+                doc_no: '退貨單 ' + newId + '（原單 ' + id + '）',
+                log_date: new Date().toISOString()
               })
             });
           }
