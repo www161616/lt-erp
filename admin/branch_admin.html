@@ -4520,13 +4520,25 @@
         }
       });
 
-      // 讀取小瀾在 supplier_xiaolan 勾選的「已叫貨」，自動更新 procStatus
+      // 讀取小瀾在 DB 勾選的「已叫貨」，自動更新 procStatus
       try {
-        const otOrdered = new Set(JSON.parse(localStorage.getItem('xiaolan_ot_ordered') || '[]'));
-        if (otOrdered.size > 0) {
+        const otRes = await fetch(`${SB_URL}/xiaolan_order_tracking?ordered=eq.true&select=product_id`, { headers: HEADERS });
+        const otRows = otRes.ok ? await otRes.json() : [];
+        if (otRows.length > 0) {
+          const otOrdered = new Set(otRows.map(r => r.product_id));
           mockConsolidatedOrders.forEach(item => {
             const pid = item.productId || item.id;
             if (otOrdered.has(pid) && item.procStatus === 'pending') {
+              item.procStatus = 'ordered';
+            }
+          });
+        }
+        // 過渡期：也讀 localStorage
+        const otOldOrdered = new Set(JSON.parse(localStorage.getItem('xiaolan_ot_ordered') || '[]'));
+        if (otOldOrdered.size > 0) {
+          mockConsolidatedOrders.forEach(item => {
+            const pid = item.productId || item.id;
+            if (otOldOrdered.has(pid) && item.procStatus === 'pending') {
               item.procStatus = 'ordered';
             }
           });
@@ -4831,7 +4843,7 @@
       syncSupplierData();
     }
 
-    function syncSupplierData() {
+    async function syncSupplierData() {
       const branchOrders = JSON.parse(localStorage.getItem('branchOrders') || '{}');
       const allStoreNames = JSON.parse(localStorage.getItem('importedStoreNames') || '[]');
       const allPersonalNames = JSON.parse(localStorage.getItem('importedPersonalNames') || '[]');
@@ -4869,7 +4881,35 @@
             storeQtys: storeQtys
           };
         });
+
+      // 過渡期：仍寫 localStorage（供舊版 supplier_xiaolan 使用）
       localStorage.setItem('supplier_xiaolan_orders', JSON.stringify(supplierItems));
+
+      // 寫入 DB：xiaolan_order_tracking（批次 upsert by product_id）
+      try {
+        const rows = supplierItems.map(item => ({
+          product_id: item.productId,
+          product_name: item.name,
+          total_qty: item.totalQty || 0,
+          stock: item.stock || 0,
+          order_qty: item.orderQty || 0,
+          url: item.url || '',
+          packaging: item.packaging || '',
+          selling_price: parseFloat(item.price) || 0,
+          store_qtys: item.storeQtys || {},
+          end_date: item.endDate || '',
+          updated_at: new Date().toISOString()
+        }));
+        if (rows.length > 0) {
+          await fetch(`${SB_URL}/xiaolan_order_tracking?on_conflict=product_id`, {
+            method: 'POST',
+            headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates,return=minimal' },
+            body: JSON.stringify(rows)
+          });
+        }
+      } catch (err) {
+        console.error('syncSupplierData DB error:', err);
+      }
     }
 
     // ============================

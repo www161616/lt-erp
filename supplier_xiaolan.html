@@ -96,8 +96,7 @@
     .grid-wrap td.calc { background:#f7fafc; color:var(--teal); font-weight:600; text-align:right; padding:4px 6px; font-size:12px; }
     .grid-wrap td.row-num { background:#f1f5f9; color:#9ca3af; text-align:center; padding:4px 6px; font-size:11px; width:36px; }
     .grid-wrap tr:hover td { background:#fefce8; }
-    #tab-orderTrack .grid-wrap td { padding:8px 10px; font-size:13px; }
-    #tab-group .grid-wrap td { padding:8px 10px; font-size:13px; max-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+    #tab-procurement .grid-wrap td { padding:8px 10px; font-size:13px; }
     #tab-sisterBill td { padding:6px 8px; font-size:12px; }
     #tab-sisterBill th { font-size:12px; }
     .sb-tab {
@@ -156,9 +155,8 @@
   <div class="sidebar-menu">
     <div class="menu-item active" onclick="switchTab('purchases',this)">所有訂單</div>
     <div class="menu-item" onclick="switchTab('piaopiao',this)">漂漂館</div>
-    <div class="menu-item" onclick="switchTab('group',this)">團購購買</div>
+    <div class="menu-item" onclick="switchTab('procurement',this)">團購採購</div>
     <div class="menu-item" onclick="switchTab('arrivals',this)">到貨清單</div>
-    <div class="menu-item" onclick="switchTab('orderTrack',this)">陸貨訂購</div>
     <div class="menu-item" onclick="switchTab('returns',this)" id="menuReturns">退換貨追蹤</div>
     <div style="border-top:1px solid rgba(255,255,255,0.15);margin:8px 12px;"></div>
     <div class="menu-item" onclick="switchTab('sisterBill',this)">姐姐對帳單</div>
@@ -175,9 +173,9 @@
       <div class="topbar-actions">
         <input type="file" id="importExcel" accept=".xlsx,.xls,.csv" style="display:none;" onchange="importExcelFile(event)">
         <button class="btn" style="background:#e67e22;color:#fff;" onclick="toggleOrderLinks()">叫貨清單</button>
+        <button class="btn" style="background:#2b6cb0;color:#fff;" onclick="openPasteDialog()">📋 智能匯入</button>
         <button class="btn btn-outline" onclick="document.getElementById('importExcel').click()">匯入 Excel</button>
         <button class="btn btn-outline" onclick="addPurchaseRows(5)">+5 行</button>
-        <button class="btn" style="background:#2b6cb0;color:#fff;" onclick="openPasteDialog()">📋 貼上</button>
         <button class="btn btn-outline" onclick="exportPurchasesExcel()">下載 Excel</button>
         <button class="btn" style="background:#c53030;" onclick="deleteSelectedPurchases()">刪除勾選</button>
       </div>
@@ -288,44 +286,34 @@
   </div>
 
   <!-- ===== 團購購買 ===== -->
-  <div class="tab-panel" id="tab-group">
+  <!-- ===== 團購採購（合併：開團商品 + 1688採購紀錄） ===== -->
+  <div class="tab-panel" id="tab-procurement">
     <div class="topbar">
-      <h2>團購購買</h2>
+      <h2>團購採購</h2>
       <div class="topbar-actions">
-        <select id="gMonth" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:13px;" onchange="gPage=1;renderGroupBuy();">
-          <option value="">全部月份</option>
-        </select>
-        <input type="text" id="gKeyword" placeholder="搜尋品名/訂單號" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:13px;width:160px;" onkeydown="if(event.key==='Enter'){gPage=1;renderGroupBuy();}">
-        <button class="btn btn-outline" style="padding:5px 10px;font-size:13px;" onclick="gPage=1;renderGroupBuy();">查詢</button>
-        <button class="btn btn-outline" style="padding:5px 10px;font-size:13px;" onclick="document.getElementById('gMonth').value='';document.getElementById('gKeyword').value='';gPage=1;renderGroupBuy();">清除</button>
+        <button class="btn btn-outline" onclick="loadProcurement()">重新整理</button>
         <button class="btn" style="background:#2b6cb0;" onclick="printGroupBuy();">列印請款單</button>
       </div>
     </div>
-    <div id="gSummary" style="display:flex;gap:12px;padding:8px 16px;flex-wrap:wrap;"></div>
-    <div id="gPagination" style="display:flex; align-items:center; gap:6px; padding:4px 8px; font-size:13px;"></div>
-    <div class="grid-wrap">
-      <table id="groupGrid">
-        <thead>
-          <tr>
-            <th style="width:36px;">#</th>
-            <th style="width:110px;">訂單日</th>
-            <th style="width:210px;">訂單號碼</th>
-            <th style="width:185px;">運單號碼</th>
-            <th style="min-width:160px;">商品名稱</th>
-            <th style="width:90px;">商品編號</th>
-            <th style="width:160px;">團購商品名稱</th>
-            <th style="width:55px;">數量</th>
-            <th style="width:75px;">金額(T)</th>
-            <th style="width:65px;">單個價</th>
-            <th style="width:65px;">團購價</th>
-            <th style="width:75px;">預估利潤</th>
-            <th style="width:80px;">預估毛利</th>
-          </tr>
-        </thead>
-        <tbody id="gBody"></tbody>
-      </table>
+    <div class="grid-toolbar">
+      <select id="procMonth" onchange="procPage=1;renderProcurement();" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:13px;">
+        <option value="">全部月份</option>
+      </select>
+      <select id="procStatus" onchange="procPage=1;renderProcurement();" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:13px;">
+        <option value="all">全部狀態</option>
+        <option value="pending">⏳ 待處理</option>
+        <option value="ordered">🚚 已叫貨</option>
+        <option value="arrived">📦 已到倉</option>
+      </select>
+      <input type="text" id="procSearch" placeholder="搜尋商品名稱/編號" style="padding:5px 8px;border:1px solid var(--border);border-radius:4px;font-size:13px;width:180px;" onkeydown="if(event.key==='Enter'){procPage=1;renderProcurement();}">
+      <button class="btn btn-outline" style="padding:5px 10px;font-size:13px;" onclick="procPage=1;renderProcurement();">查詢</button>
+      <button class="btn btn-outline" style="padding:5px 10px;font-size:13px;" onclick="document.getElementById('procMonth').value='';document.getElementById('procSearch').value='';document.getElementById('procStatus').value='all';procPage=1;renderProcurement();">清除</button>
+      <div class="grid-info" id="procInfo"></div>
     </div>
-    <div id="gPaginationBottom" style="display:flex; align-items:center; gap:6px; padding:4px 8px; font-size:13px;"></div>
+    <div id="procSummary" style="display:flex;gap:12px;padding:4px 8px;flex-wrap:wrap;"></div>
+    <div id="procPaginationTop" style="display:flex; align-items:center; gap:6px; padding:4px 8px; font-size:13px;"></div>
+    <div id="procBody" style="overflow:auto; max-height:calc(100vh - 230px);"></div>
+    <div id="procPaginationBottom" style="display:flex; align-items:center; gap:6px; padding:4px 8px; font-size:13px;"></div>
   </div>
 
   <!-- ===== 到貨清單 ===== -->
@@ -384,49 +372,7 @@
     <div id="aPaginationBottom" style="display:flex; align-items:center; gap:6px; padding:4px 0; font-size:13px;"></div>
   </div>
 
-  <!-- ===== 陸貨訂購 (從 branch_admin localStorage 讀取) ===== -->
-  <div class="tab-panel" id="tab-orderTrack">
-    <div class="topbar">
-      <h2>陸貨訂購</h2>
-      <div class="topbar-actions">
-        <button class="btn btn-outline" onclick="loadOrderTrack()">重新整理</button>
-      </div>
-    </div>
-    <div class="grid-toolbar">
-      <select id="otStatusFilter" onchange="renderOrderTrackTable()" style="padding:6px 10px; border:1px solid var(--border); border-radius:4px; font-family:inherit; font-size:13px;">
-        <option value="all">全部狀態</option>
-        <option value="pending">⏳ 待處理</option>
-        <option value="ordered">🚚 已叫貨</option>
-        <option value="arrived">📦 已到倉</option>
-        <option value="out_of_stock">❌ 廠商斷貨</option>
-        <option value="supplier_shortage">⚠️ 廠商短缺</option>
-      </select>
-      <input type="text" id="otSearch" placeholder="搜尋商品名稱或編號..." style="max-width:220px; padding:6px 10px; border:1px solid var(--border); border-radius:4px; font-size:13px;" onkeyup="if(event.key==='Enter') renderOrderTrackTable()">
-      <button class="btn btn-outline" onclick="document.getElementById('otSearch').value='';document.getElementById('otStatusFilter').value='all';otPage=1;renderOrderTrackTable();" style="padding:5px 10px;">清除</button>
-      <div class="grid-info" id="otInfo"></div>
-    </div>
-    <div id="otPaginationTop" style="display:flex; align-items:center; gap:6px; padding:4px 0; font-size:13px;"></div>
-    <div class="grid-wrap">
-      <table>
-        <thead>
-          <tr>
-            <th style="width:140px;">結單日</th>
-            <th style="width:100px;">商品編號</th>
-            <th style="width:340px;">商品名稱</th>
-            <th style="width:40px; text-align:center;">已叫</th>
-            <th style="width:80px; text-align:center;">叫貨量</th>
-            <th style="width:70px; text-align:right;">售價</th>
-            <th style="width:160px; text-align:center;">採購進度</th>
-            <th style="width:70px; text-align:right;">單個價</th>
-            <th style="width:55px; text-align:center;">商品頁</th>
-            <th style="width:55px; text-align:center;">下單處</th>
-          </tr>
-        </thead>
-        <tbody id="otBody"></tbody>
-      </table>
-    </div>
-    <div id="otPaginationBottom" style="display:flex; align-items:center; gap:6px; padding:4px 0; font-size:13px;"></div>
-  </div>
+  <!-- tab-orderTrack 已合併到 tab-procurement -->
 
   <!-- ===== 退換貨追蹤 ===== -->
   <div class="tab-panel" id="tab-returns">
@@ -744,7 +690,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   if (!loggedIn) return;
   loadGlobalRateSettings();
   linkRows = JSON.parse(localStorage.getItem('xiaolan_links') || '[]');
-  await Promise.all([loadPurchases(), loadArrivals(), loadReturns()]);
+  await Promise.all([loadPurchases(), loadArrivals(), loadReturns(), loadOrderTrack()]);
   initNewRows();
   renderPurchaseGrid();
   renderArrivalGrid();
@@ -765,8 +711,7 @@ function switchTab(name, el) {
   document.getElementById('tab-' + name).classList.add('active');
   document.querySelectorAll('.menu-item').forEach(m => m.classList.remove('active'));
   if (el) el.classList.add('active');
-  if (name === 'orderTrack') loadOrderTrack();
-  if (name === 'group') renderGroupBuy();
+  if (name === 'procurement') loadProcurement();
   if (name === 'arrivals') renderArrivalGrid();
   if (name === 'returns') renderReturnGrid();
   if (name === 'sisterBill') renderSisterBill();
@@ -906,6 +851,8 @@ function renderPurchaseGrid() {
 }
 
 function getOrderTrackOptions() {
+  // 優先用 DB 載入的 orderTrackData
+  if (orderTrackData && orderTrackData.length > 0) return orderTrackData;
   try {
     return JSON.parse(localStorage.getItem('supplier_xiaolan_orders') || '[]');
   } catch { return []; }
@@ -1047,80 +994,618 @@ function addPurchaseRows(n, silent) {
 }
 
 // ===== 📋 貼上模式 =====
+// ===== 智能匯入系統 =====
+let _smartImportParsed = [];
+let _smartImportFormat = 'auto';
+let _smartImportCategory = '團購';
+
 function openPasteDialog() {
+  _smartImportParsed = [];
+  _smartImportFormat = 'auto';
+  _smartImportCategory = '團購';
+
   Swal.fire({
-    title: '📋 貼上資料',
-    width: '700px',
+    title: '📋 智能匯入',
+    width: '95vw',
+    heightAuto: false,
     html: `
-      <div style="text-align:left; font-size:13px; margin-bottom:8px;">
-        <p style="color:#718096; margin-bottom:6px;">從 Excel / Google Sheets 複製後直接貼上（Tab 分隔）</p>
-        <p style="color:#718096; font-size:12px; margin-bottom:8px;">欄位順序：<b>訂單日　訂單號　運單號　商品名稱　付款RMB　數量　重量kg　團購價　用途　來源　賣家　備註</b></p>
-        <p style="color:#2b6cb0; font-size:12px; margin-bottom:10px;">💡 不用填滿所有欄位，空白會自動跳過。最少只要有「商品名稱」就能新增。</p>
-        <textarea id="pasteArea" style="width:100%; height:260px; padding:10px; border:1px solid #dde3ec; border-radius:6px; font-size:13px; font-family:monospace; line-height:1.6; resize:vertical;" placeholder="在這裡貼上...&#10;&#10;例如：&#10;2026/3/10	ORD001		洗衣精	29.9	2	0.5		團購	1688"></textarea>
-        <div style="margin-top:8px; display:flex; gap:8px; align-items:center;">
-          <span id="pastePreviewCount" style="font-size:12px; color:#718096;"></span>
+      <div style="text-align:left; font-size:13px;">
+        <!-- 格式選擇列 -->
+        <div style="display:flex; gap:6px; margin-bottom:10px; flex-wrap:wrap; align-items:center;">
+          <span style="font-weight:600; margin-right:4px;">格式：</span>
+          <button class="si-fmt-btn active" data-fmt="auto" onclick="siSelectFormat('auto')">自動偵測</button>
+          <button class="si-fmt-btn" data-fmt="1688" onclick="siSelectFormat('1688')">1688</button>
+          <button class="si-fmt-btn" data-fmt="pdd" onclick="siSelectFormat('pdd')">拼多多</button>
+          <button class="si-fmt-btn" data-fmt="package" onclick="siSelectFormat('package')">集運包裹</button>
+          <button class="si-fmt-btn" data-fmt="free" onclick="siSelectFormat('free')">自由格式</button>
+          <span style="width:1px;height:20px;background:#dde3ec;margin:0 6px;"></span>
+          <span style="font-weight:600; margin-right:4px;">用途：</span>
+          <select id="siCategory" onchange="_smartImportCategory=this.value" style="padding:4px 8px; border:1px solid #dde3ec; border-radius:4px; font-size:13px;">
+            <option value="團購">團購</option>
+            <option value="漂漂館">漂漂館</option>
+            <option value="大姐">大姐</option>
+            <option value="二姐">二姐</option>
+            <option value="私人">私人</option>
+          </select>
         </div>
-      </div>`,
+        <!-- 貼上區 -->
+        <textarea id="siPasteArea" style="width:100%; height:180px; padding:10px; border:1px solid #dde3ec; border-radius:6px; font-size:12px; font-family:monospace; line-height:1.5; resize:vertical;" placeholder="在這裡貼上從 1688、拼多多、集運網站複製的資料...&#10;&#10;支援：&#10;- 從 1688 訂單頁面直接複製&#10;- 從拼多多訂單頁面直接複製&#10;- 從 Google Sheets / Excel 複製（Tab 分隔）&#10;- 集運包裹出貨明細"></textarea>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin:8px 0;">
+          <div>
+            <span id="siDetectInfo" style="font-size:12px; color:#718096;"></span>
+            <input type="file" id="siFileInput" accept=".xlsx,.xls,.csv" style="display:none;" onchange="siHandleFile(event)">
+            <button onclick="document.getElementById('siFileInput').click()" style="padding:3px 10px; border:1px solid #dde3ec; border-radius:4px; background:#fff; cursor:pointer; font-size:12px; margin-left:8px;">或選擇 Excel 檔案</button>
+          </div>
+          <button onclick="siParseAndPreview()" style="padding:6px 16px; background:#2b6cb0; color:#fff; border:none; border-radius:4px; cursor:pointer; font-size:13px; font-weight:600;">解析預覽 ▼</button>
+        </div>
+        <!-- 預覽區 -->
+        <div id="siPreviewWrap" style="display:none; border:1px solid #dde3ec; border-radius:6px; overflow:hidden; margin-top:4px;">
+          <div id="siPreviewHeader" style="padding:8px 12px; background:#eef1f5; font-size:12px; font-weight:600; display:flex; justify-content:space-between; align-items:center;">
+            <span id="siPreviewCount"></span>
+            <div style="display:flex; gap:6px;">
+              <button onclick="siToggleAll(true)" style="padding:2px 8px; border:1px solid #dde3ec; border-radius:3px; background:#fff; cursor:pointer; font-size:11px;">全選</button>
+              <button onclick="siToggleAll(false)" style="padding:2px 8px; border:1px solid #dde3ec; border-radius:3px; background:#fff; cursor:pointer; font-size:11px;">全不選</button>
+            </div>
+          </div>
+          <div id="siPreviewBody" style="max-height:300px; overflow:auto;"></div>
+        </div>
+      </div>
+      <style>
+        .si-fmt-btn { padding:4px 12px; border:1px solid #dde3ec; border-radius:4px; background:#fff; cursor:pointer; font-size:12px; transition:all .15s; }
+        .si-fmt-btn:hover { background:#eef1f5; }
+        .si-fmt-btn.active { background:#2b6cb0; color:#fff; border-color:#2b6cb0; }
+        .si-preview-row td { padding:4px 8px; border-bottom:1px solid #f0f0f0; }
+        .si-preview-row:hover td { background:#f7fafc; }
+        .si-preview-row.dup td { background:#fffbeb; }
+        .si-preview-row .si-dup-tag { font-size:10px; color:#b7791f; background:#fefcbf; padding:1px 6px; border-radius:3px; white-space:nowrap; }
+      </style>`,
     showCancelButton: true,
-    confirmButtonText: '確定匯入',
+    confirmButtonText: '確認匯入',
     cancelButtonText: '取消',
     confirmButtonColor: '#2b6cb0',
     didOpen: () => {
-      const ta = document.getElementById('pasteArea');
-      ta.focus();
-      ta.addEventListener('input', () => {
-        const lines = ta.value.split('\\n').filter(l => l.trim());
-        document.getElementById('pastePreviewCount').textContent = '偵測到 ' + lines.length + ' 行資料';
+      document.getElementById('siPasteArea').focus();
+      // 貼上時自動解析
+      document.getElementById('siPasteArea').addEventListener('paste', () => {
+        setTimeout(() => siParseAndPreview(), 100);
       });
     },
     preConfirm: () => {
-      const text = document.getElementById('pasteArea').value.trim();
-      if (!text) { Swal.showValidationMessage('請貼上資料'); return false; }
-      return text;
+      const checked = _smartImportParsed.filter(r => r._checked);
+      if (checked.length === 0) {
+        Swal.showValidationMessage('沒有勾選任何資料，請先解析預覽');
+        return false;
+      }
+      return checked;
     }
   }).then(res => {
-    if (!res.isConfirmed) return;
-    const lines = res.value.split('\\n').filter(l => l.trim());
-    const fieldMap = ['order_date','order_number','tracking_number','product_name','payment_rmb','qty','weight_kg','selling_price','category','source','seller','note'];
-    let count = 0;
-    lines.forEach(line => {
-      const cols = line.split('\\t');
-      const row = { order_date: '', order_number: '', tracking_number: '', product_name: '', payment_rmb: 0, qty: 0, weight_kg: 0, total_twd: 0, unit_cost: 0, selling_price: 0, category: '團購', source: '1688', seller: '', offer_id: '', note: '', linked_product: '', used_rate: getRate(), used_ship: getShip() };
-      cols.forEach((val, i) => {
-        if (i < fieldMap.length && val.trim()) {
-          const field = fieldMap[i];
-          const v = val.trim();
-          if (['payment_rmb','qty','weight_kg','selling_price'].includes(field)) {
-            row[field] = parseFloat(v) || 0;
-          } else if (field === 'order_date') {
-            // 支援各種日期格式
-            if (v.includes('/') || v.includes('-')) {
-              const d = new Date(v);
-              if (!isNaN(d)) row[field] = d.toISOString().split('T')[0];
-              else row[field] = v;
-            } else {
-              row[field] = v;
-            }
-          } else {
-            row[field] = v;
+    if (!res.isConfirmed || !res.value) return;
+    const items = res.value;
+    let imported = 0;
+    const isPackage = items[0] && items[0]._isPackage;
+
+    if (isPackage) {
+      // 集運包裹：更新重量 + 建到貨清單
+      let weightFilled = 0, arrivalCreated = 0;
+      items.forEach(item => {
+        const tn = item.tracking_number;
+        if (!tn) return;
+        const pMatches = findAllPurchasesByTracking(tn);
+        pMatches.forEach(pm => {
+          if (item.weight_kg > 0 && !pm.weight_kg) {
+            pm.weight_kg = item.weight_kg;
+            pm._dirty = true;
+            calcRow(pm);
+            weightFilled++;
           }
-        }
+        });
+        const targets = pMatches.length > 0 ? pMatches : [null];
+        targets.forEach(pMatch => {
+          const arrRow = {
+            offer_id: pMatch ? (pMatch.offer_id || '') : '',
+            arrived: false,
+            tracking_number: tn,
+            product_name: item.product_name || (pMatch ? pMatch.product_name : ''),
+            product_id: '',
+            selling_price: 0,
+            qty: pMatch ? (pMatch.qty || 0) : 0,
+            unit_cost: pMatch ? (pMatch.unit_cost || 0) : 0,
+            note: '',
+            ship_date: item.ship_date || '',
+            ship_order: item.ship_order || '',
+            ship_to: '直寄龍潭'
+          };
+          if (pMatch && pMatch.linked_product) {
+            const otItems = getOrderTrackOptions();
+            const otMatch = otItems.find(o => (o.productId || o.name || '') === pMatch.linked_product);
+            if (otMatch) {
+              arrRow.product_name = otMatch.name || '';
+              arrRow.product_id = otMatch.productId || '';
+              arrRow.selling_price = parseFloat(otMatch.price) || 0;
+            }
+          }
+          newArrivalRows.push(arrRow);
+          arrivalCreated++;
+        });
       });
-      if (row.product_name) {
+      if (weightFilled > 0) savePurchases(true);
+      renderArrivalGrid();
+      renderPurchaseGrid();
+      Swal.fire({ icon: 'success', title: '包裹匯入完成', html: `到貨清單新增 <b>${arrivalCreated}</b> 筆<br>填入重量 <b>${weightFilled}</b> 筆`, timer: 2500, showConfirmButton: false });
+    } else {
+      // 一般訂單匯入
+      items.forEach(item => {
+        const row = {
+          order_date: item.order_date || '',
+          order_number: item.order_number || '',
+          tracking_number: item.tracking_number || '',
+          product_name: item.product_name || '',
+          payment_rmb: parseFloat(item.payment_rmb) || 0,
+          qty: parseInt(item.qty) || 0,
+          weight_kg: parseFloat(item.weight_kg) || 0,
+          selling_price: parseFloat(item.selling_price) || 0,
+          category: _smartImportCategory,
+          source: item.source || '1688',
+          seller: item.seller || '',
+          offer_id: item.offer_id || '',
+          note: item.note || '',
+          linked_product: '',
+          total_twd: 0, unit_cost: 0,
+          used_rate: getRate(), used_ship: getShip()
+        };
         calcRow(row);
         newPurchaseRows.push(row);
-        count++;
-      }
-    });
-    if (count > 0) {
+        imported++;
+      });
       pPage = 1;
       renderPurchaseGrid();
-      Swal.fire({ icon: 'success', title: '已匯入 ' + count + ' 筆', timer: 1500, showConfirmButton: false });
-    } else {
-      Swal.fire('無有效資料', '請確認至少有商品名稱欄位', 'warning');
+      Swal.fire({ icon: 'success', title: `已匯入 ${imported} 筆`, text: '請確認後按「儲存」', timer: 2000, showConfirmButton: false });
     }
   });
 }
+
+function siSelectFormat(fmt) {
+  _smartImportFormat = fmt;
+  document.querySelectorAll('.si-fmt-btn').forEach(b => b.classList.toggle('active', b.dataset.fmt === fmt));
+  // 如果已有資料，重新解析
+  const ta = document.getElementById('siPasteArea');
+  if (ta && ta.value.trim()) siParseAndPreview();
+}
+
+function siHandleFile(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = (ev) => {
+    try {
+      const wb = XLSX.read(ev.target.result, { type: 'binary' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
+      // 轉成 tab-separated 貼到 textarea
+      const text = data.map(row => row.map(c => c == null ? '' : String(c)).join('\t')).join('\n');
+      document.getElementById('siPasteArea').value = text;
+      siParseAndPreview();
+    } catch (err) {
+      Swal.fire('讀取失敗', err.message, 'error');
+    }
+    e.target.value = '';
+  };
+  reader.readAsBinaryString(file);
+}
+
+function siSplitCols(line) {
+  // 優先 Tab 分隔，若沒有 Tab 則用連續空格分隔
+  if (line.includes('\t')) return line.split('\t');
+  // 2+ 空格當分隔（但不切中文字間的單空格）
+  return line.split(/  +/);
+}
+
+function siDetectFormat(lines) {
+  if (!lines || lines.length === 0) return 'free';
+  const first = lines[0].toLowerCase();
+  // 1688 有表頭：含「订单编号」+特徵欄位
+  if (first.includes('订单编号') && (first.includes('实付款') || first.includes('货品标题') || first.includes('订单创建时间'))) return '1688';
+  // 集運包裹：含「快递单号」+「包裹重量」
+  if (first.includes('订单编号') && first.includes('快递单号')) return 'package';
+  // 拼多多：含特有欄位
+  if ((first.includes('订单号') || first.includes('订单编号')) && (first.includes('拼单') || first.includes('售后') || first.includes('商家备注'))) return 'pdd';
+  // Google Sheet / 自訂欄位
+  if (first.includes('訂單日') || first.includes('訂單號') || first.includes('商品名')) return 'free';
+
+  // 無表頭偵測：檢查第一行資料特徵
+  const cols = siSplitCols(lines[0]);
+  if (cols.length >= 4) {
+    const c0 = cols[0].trim(), c1 = cols[1].trim();
+    // 1688 無表頭：第一欄像日期，第二欄像長數字訂單號（15位以上）
+    if (/^\d{4}[-\/]\d{2}[-\/]\d{2}/.test(c0) && /^\d{15,}$/.test(c1)) return '1688_raw';
+    // 也可能第一欄就是訂單號（無日期）
+    if (/^\d{15,}$/.test(c0)) return '1688_raw';
+  }
+
+  return 'free';
+}
+
+function siExcelDateToStr(v) {
+  if (!v) return '';
+  // Excel serial number（整數或帶小數，如 46108 或 46108.678）
+  if (typeof v === 'number' || /^\d{4,5}(\.\d+)?$/.test(String(v).trim())) {
+    const n = parseFloat(v);
+    if (n > 40000 && n < 60000) {
+      const d = new Date((n - 25569) * 86400000);
+      return d.toISOString().split('T')[0];
+    }
+  }
+  const s = String(v).trim();
+  // 處理 "2026-01-11 4:02:33" 這類
+  if (s.includes('-') || s.includes('/')) {
+    const d = new Date(s);
+    if (!isNaN(d)) return d.toISOString().split('T')[0];
+  }
+  return s;
+}
+
+function siParse1688(lines) {
+  const results = [];
+  const headers = siSplitCols(lines[0]);
+  // 找欄位位置
+  const findCol = (keywords) => headers.findIndex(h => keywords.some(k => h.includes(k)));
+  const cOrder = findCol(['订单编号']);
+  const cPay = findCol(['实付款', '应付款']);
+  const cDate = findCol(['订单创建时间', '创建时间']);
+  const cName = findCol(['货品标题', '商品名称']);
+  const cQty = findCol(['数量', '购买数量']);
+  const cTrack = findCol(['运单号', '物流单号']);
+  const cSeller = findCol(['卖家', '供应商']);
+  const cOffer = findCol(['offer']);
+
+  let current = null;
+  for (let i = 1; i < lines.length; i++) {
+    const cols = siSplitCols(lines[i]);
+    if (cols.length < 3) continue;
+    const orderNum = cOrder >= 0 ? (cols[cOrder] || '').trim() : '';
+    const name = cName >= 0 ? (cols[cName] || '').trim() : '';
+    if (!name) continue;
+    const qty = cQty >= 0 ? (parseInt(cols[cQty]) || 0) : 0;
+
+    if (orderNum) {
+      if (current) results.push(current);
+      const cleanName = name.replace(/\s*(颜色|规格|尺寸|型号)\s*[:：].*/i, '').trim();
+      current = {
+        order_number: orderNum,
+        order_date: cDate >= 0 ? siExcelDateToStr(cols[cDate]) : '',
+        tracking_number: cTrack >= 0 ? (cols[cTrack] || '').trim() : '',
+        product_name: cleanName,
+        payment_rmb: cPay >= 0 ? (parseFloat(cols[cPay]) || 0) : 0,
+        qty: qty,
+        seller: cSeller >= 0 ? (cols[cSeller] || '').trim() : '',
+        offer_id: cOffer >= 0 ? (cols[cOffer] || '').trim() : '',
+        source: '1688'
+      };
+    } else if (current) {
+      current.qty += qty;
+    }
+  }
+  if (current) results.push(current);
+  return results;
+}
+
+// 1688 無表頭格式（從網頁直接複製）
+// 欄位順序：日期 訂單號 運單號 商品名稱 付款RMB 數量 重量
+function siParse1688Raw(lines) {
+  const results = [];
+  let current = null;
+
+  for (let i = 0; i < lines.length; i++) {
+    const cols = siSplitCols(lines[i]).map(c => c.trim()).filter(c => c);
+    if (cols.length < 2) continue;
+
+    // 判斷是主列還是續行：主列的某個欄位是 15+ 位數字（訂單號）
+    let orderIdx = cols.findIndex(c => /^\d{15,}$/.test(c));
+    // 也可能有日期在前面
+    let dateIdx = cols.findIndex(c => /^\d{4}[-\/]\d{2}[-\/]\d{2}/.test(c));
+
+    if (orderIdx >= 0) {
+      // 主列
+      if (current) results.push(current);
+
+      // 找各欄位：日期、訂單號之後依序是 運單號、商品名、金額、數量、重量
+      const orderNum = cols[orderIdx];
+      const date = dateIdx >= 0 && dateIdx < orderIdx ? siExcelDateToStr(cols[dateIdx]) : '';
+
+      // 訂單號之後的欄位
+      const rest = cols.slice(orderIdx + 1);
+      // 找運單號（純數字或含字母的物流單號）
+      let trackIdx = rest.findIndex(c => /^[A-Z]{0,3}\d{10,}$/i.test(c));
+      let tracking = trackIdx >= 0 ? rest[trackIdx] : '';
+
+      // 找商品名（含中文的欄位）
+      let nameIdx = rest.findIndex(c => /[\u4e00-\u9fff]/.test(c));
+      let name = nameIdx >= 0 ? rest[nameIdx] : '';
+      name = name.replace(/\s*(颜色|规格|尺寸|型号)\s*[:：].*/i, '').trim();
+
+      // 找數值欄位（金額、數量、重量）
+      const nums = rest.filter(c => /^\d+\.?\d*$/.test(c)).map(Number);
+
+      current = {
+        order_number: orderNum,
+        order_date: date,
+        tracking_number: tracking,
+        product_name: name,
+        payment_rmb: nums[0] || 0,
+        qty: nums.length > 1 ? Math.round(nums[1]) : 0,
+        weight_kg: nums.length > 2 ? nums[2] : 0,
+        source: '1688'
+      };
+    } else if (current) {
+      // 續行：可能是金額/數量/重量，或是額外的商品名
+      const nums = cols.filter(c => /^\d+\.?\d*$/.test(c)).map(Number);
+      if (nums.length >= 2) {
+        // 補充金額/數量/重量
+        if (!current.payment_rmb && nums[0]) current.payment_rmb = nums[0];
+        if (!current.qty && nums.length > 1) current.qty = Math.round(nums[1]);
+        if (!current.weight_kg && nums.length > 2) current.weight_kg = nums[2];
+      }
+      // 如果有中文可能是商品名補充
+      const chinese = cols.find(c => /[\u4e00-\u9fff]/.test(c));
+      if (chinese && !current.product_name) {
+        current.product_name = chinese.replace(/\s*(颜色|规格|尺寸|型号)\s*[:：].*/i, '').trim();
+      }
+    }
+  }
+  if (current) results.push(current);
+  return results;
+}
+
+function siParsePDD(lines) {
+  const results = [];
+  const headers = siSplitCols(lines[0]);
+  const findCol = (keywords) => headers.findIndex(h => keywords.some(k => h.includes(k)));
+  const cOrder = findCol(['订单号', '订单编号']);
+  const cDate = findCol(['下单时间', '创建时间', '订单时间']);
+  const cName = findCol(['商品名称', '商品', '货品']);
+  const cPay = findCol(['实付金额', '实付款', '商品金额', '支付金额']);
+  const cQty = findCol(['数量', '商品数量']);
+  const cTrack = findCol(['快递单号', '物流单号', '运单号']);
+
+  for (let i = 1; i < lines.length; i++) {
+    const cols = siSplitCols(lines[i]);
+    if (cols.length < 3) continue;
+    const name = cName >= 0 ? (cols[cName] || '').trim() : '';
+    if (!name) continue;
+    results.push({
+      order_number: cOrder >= 0 ? (cols[cOrder] || '').trim() : '',
+      order_date: cDate >= 0 ? siExcelDateToStr(cols[cDate]) : '',
+      tracking_number: cTrack >= 0 ? (cols[cTrack] || '').trim() : '',
+      product_name: name.replace(/\s*(颜色|规格|尺寸|型号)\s*[:：].*/i, '').trim(),
+      payment_rmb: cPay >= 0 ? (parseFloat(cols[cPay]) || 0) : 0,
+      qty: cQty >= 0 ? (parseInt(cols[cQty]) || 0) : 1,
+      source: '拼多多'
+    });
+  }
+  return results;
+}
+
+function siParsePackage(lines) {
+  const results = [];
+  const headers = siSplitCols(lines[0]);
+  const findCol = (keywords) => headers.findIndex(h => keywords.some(k => h.includes(k)));
+  const cOrder = findCol(['订单编号']);
+  const cDate = findCol(['创建时间']);
+  const cTrack = findCol(['快递单号']);
+  const cWeight = findCol(['包裹重量']);
+  const cName = findCol(['物品名称', '包裹备注', '商品名称']);
+
+  for (let i = 1; i < lines.length; i++) {
+    const cols = siSplitCols(lines[i]);
+    if (cols.length < 3) continue;
+    const tn = cTrack >= 0 ? (cols[cTrack] || '').trim() : '';
+    if (!tn) continue;
+    results.push({
+      tracking_number: tn,
+      weight_kg: cWeight >= 0 ? (parseFloat(cols[cWeight]) || 0) : 0,
+      product_name: cName >= 0 ? (cols[cName] || '').trim() : '',
+      ship_order: cOrder >= 0 ? (cols[cOrder] || '').trim() : '',
+      ship_date: cDate >= 0 ? siExcelDateToStr(cols[cDate]) : '',
+      _isPackage: true,
+      source: '集運'
+    });
+  }
+  return results;
+}
+
+function siParseFree(lines) {
+  const results = [];
+  const headers = siSplitCols(lines[0]).map(h => h.trim());
+  // 嘗試用表頭匹配欄位
+  const fieldMap = {};
+  const mapping = {
+    order_date: ['訂單日', '日期', 'date', '下单时间'],
+    order_number: ['訂單號', '訂單編號', '订单编号', '订单号'],
+    tracking_number: ['運單', '快遞', '物流', '运单号', '快递单号'],
+    product_name: ['商品名', '品名', '名稱', '商品', '货品标题', '商品名称'],
+    payment_rmb: ['付款', '金額', 'RMB', '付款金額', '实付款'],
+    qty: ['數量', '总数', '数量'],
+    weight_kg: ['重量', 'kg'],
+    selling_price: ['團購價', '售價', '团购价'],
+    source: ['下單處', '來源', '来源'],
+    seller: ['賣家', '供应商'],
+    note: ['備註', '備注', '备注']
+  };
+
+  for (const [field, keywords] of Object.entries(mapping)) {
+    const idx = headers.findIndex(h => keywords.some(k => h.toLowerCase().includes(k.toLowerCase())));
+    if (idx >= 0) fieldMap[field] = idx;
+  }
+
+  // 如果完全沒匹配到表頭，當成固定順序
+  const hasHeaders = Object.keys(fieldMap).length > 0;
+  const startRow = hasHeaders ? 1 : 0;
+  const defaultFields = ['order_date','order_number','tracking_number','product_name','payment_rmb','qty','weight_kg','selling_price','category','source','seller','note'];
+
+  for (let i = startRow; i < lines.length; i++) {
+    const cols = siSplitCols(lines[i]);
+    if (cols.length < 1 || !cols.some(c => c.trim())) continue;
+    const row = {};
+
+    if (hasHeaders) {
+      for (const [field, idx] of Object.entries(fieldMap)) {
+        row[field] = (cols[idx] || '').trim();
+      }
+    } else {
+      cols.forEach((val, ci) => {
+        if (ci < defaultFields.length) row[defaultFields[ci]] = (val || '').trim();
+      });
+    }
+
+    // 數值轉換
+    if (row.payment_rmb) row.payment_rmb = parseFloat(row.payment_rmb) || 0;
+    if (row.qty) row.qty = parseInt(row.qty) || 0;
+    if (row.weight_kg) row.weight_kg = parseFloat(row.weight_kg) || 0;
+    if (row.selling_price) row.selling_price = parseFloat(row.selling_price) || 0;
+    if (row.order_date) row.order_date = siExcelDateToStr(row.order_date);
+
+    const name = row.product_name || '';
+    if (name) {
+      row.source = row.source || '1688';
+      results.push(row);
+    }
+  }
+  return results;
+}
+
+function siParseAndPreview() {
+  const text = document.getElementById('siPasteArea').value.trim();
+  if (!text) {
+    document.getElementById('siPreviewWrap').style.display = 'none';
+    document.getElementById('siDetectInfo').textContent = '';
+    return;
+  }
+
+  const lines = text.split('\n').filter(l => l.trim());
+  if (lines.length === 0) return;
+
+  // 偵測格式
+  let fmt = _smartImportFormat;
+  if (fmt === 'auto') {
+    fmt = siDetectFormat(lines);
+    const fmtLabels = { '1688': '1688（有表頭）', '1688_raw': '1688（無表頭）', 'pdd': '拼多多', 'package': '集運包裹', 'free': '自由格式' };
+    document.getElementById('siDetectInfo').innerHTML = `自動偵測：<b>${fmtLabels[fmt] || fmt}</b>`;
+  } else {
+    document.getElementById('siDetectInfo').textContent = '';
+  }
+
+  // 手動選 1688 時，自動判斷有無表頭
+  let effectiveFmt = fmt;
+  if (fmt === '1688') {
+    const first = lines[0].toLowerCase();
+    if (!first.includes('订单编号') && !first.includes('货品标题')) effectiveFmt = '1688_raw';
+  }
+
+  // 解析
+  let parsed = [];
+  try {
+    if (effectiveFmt === '1688') parsed = siParse1688(lines);
+    else if (effectiveFmt === '1688_raw') parsed = siParse1688Raw(lines);
+    else if (effectiveFmt === 'pdd') parsed = siParsePDD(lines);
+    else if (effectiveFmt === 'package') parsed = siParsePackage(lines);
+    else parsed = siParseFree(lines);
+  } catch (err) {
+    document.getElementById('siDetectInfo').innerHTML = `<span style="color:#c53030;">解析錯誤：${err.message}</span>`;
+    return;
+  }
+
+  if (parsed.length === 0) {
+    document.getElementById('siDetectInfo').innerHTML = '<span style="color:#c53030;">未解析出任何資料，請檢查格式</span>';
+    document.getElementById('siPreviewWrap').style.display = 'none';
+    return;
+  }
+
+  // 標記重複運單
+  const existingTNs = new Set();
+  purchaseRows.forEach(r => {
+    if (r.tracking_number) r.tracking_number.split(/[,，、;；\s]+/).forEach(t => { if (t) existingTNs.add(t.trim()); });
+  });
+
+  parsed.forEach(r => {
+    r._checked = true;
+    r._dup = false;
+    if (r.tracking_number) {
+      const tns = r.tracking_number.split(/[,，;；\s]+/).filter(Boolean);
+      r._dup = tns.some(t => existingTNs.has(t.trim()));
+    }
+  });
+
+  _smartImportParsed = parsed;
+  siRenderPreview();
+}
+
+function siRenderPreview() {
+  const wrap = document.getElementById('siPreviewWrap');
+  const body = document.getElementById('siPreviewBody');
+  const countEl = document.getElementById('siPreviewCount');
+  wrap.style.display = 'block';
+
+  const checked = _smartImportParsed.filter(r => r._checked).length;
+  const dups = _smartImportParsed.filter(r => r._dup).length;
+  countEl.innerHTML = `共 <b>${_smartImportParsed.length}</b> 筆，已勾選 <b>${checked}</b> 筆` +
+    (dups > 0 ? `　<span style="color:#b7791f;">⚠ ${dups} 筆重複運單</span>` : '');
+
+  const isPackage = _smartImportParsed[0] && _smartImportParsed[0]._isPackage;
+
+  let html = '<table style="width:100%; border-collapse:collapse; font-size:12px;">';
+  html += '<tr style="background:#f7fafc; position:sticky; top:0;">';
+  html += '<th style="padding:5px 8px; text-align:center; width:30px;">✓</th>';
+  if (isPackage) {
+    html += '<th style="padding:5px 8px; text-align:left;">快遞單號</th>';
+    html += '<th style="padding:5px 8px; text-align:left;">商品名稱</th>';
+    html += '<th style="padding:5px 8px; text-align:right;">重量kg</th>';
+    html += '<th style="padding:5px 8px; text-align:left;">集運單號</th>';
+    html += '<th style="padding:5px 8px; text-align:left;">出貨日</th>';
+  } else {
+    html += '<th style="padding:5px 8px; text-align:left;">訂單號</th>';
+    html += '<th style="padding:5px 8px; text-align:left;">商品名稱</th>';
+    html += '<th style="padding:5px 8px; text-align:right;">金額</th>';
+    html += '<th style="padding:5px 8px; text-align:right;">數量</th>';
+    html += '<th style="padding:5px 8px; text-align:left;">運單號</th>';
+    html += '<th style="padding:5px 8px; text-align:left;">日期</th>';
+    html += '<th style="padding:5px 8px; text-align:left;">來源</th>';
+  }
+  html += '<th style="padding:5px 8px; width:40px;"></th></tr>';
+
+  _smartImportParsed.forEach((r, i) => {
+    const dupClass = r._dup ? ' dup' : '';
+    const bg = i % 2 === 0 ? '' : 'background:#fafbfc;';
+    const dupBg = r._dup ? 'background:#fffbeb;' : '';
+    html += `<tr class="si-preview-row${dupClass}" style="${dupBg || bg}">`;
+    html += `<td style="padding:4px 8px; text-align:center;"><input type="checkbox" ${r._checked ? 'checked' : ''} onchange="_smartImportParsed[${i}]._checked=this.checked; siRenderPreview();"></td>`;
+    if (isPackage) {
+      html += `<td style="padding:4px 8px;">${esc(r.tracking_number || '')}</td>`;
+      html += `<td style="padding:4px 8px;">${esc((r.product_name || '').slice(0, 30))}</td>`;
+      html += `<td style="padding:4px 8px; text-align:right;">${r.weight_kg || ''}</td>`;
+      html += `<td style="padding:4px 8px;">${esc(r.ship_order || '')}</td>`;
+      html += `<td style="padding:4px 8px;">${esc(r.ship_date || '')}</td>`;
+    } else {
+      html += `<td style="padding:4px 8px; font-family:monospace; font-size:11px;">${esc((r.order_number || '').slice(-10))}</td>`;
+      html += `<td style="padding:4px 8px;">${esc((r.product_name || '').slice(0, 35))}</td>`;
+      html += `<td style="padding:4px 8px; text-align:right;">${r.payment_rmb || ''}</td>`;
+      html += `<td style="padding:4px 8px; text-align:right;">${r.qty || ''}</td>`;
+      html += `<td style="padding:4px 8px; font-family:monospace; font-size:11px;">${esc((r.tracking_number || '').slice(-12))}</td>`;
+      html += `<td style="padding:4px 8px;">${esc(r.order_date || '')}</td>`;
+      html += `<td style="padding:4px 8px;">${esc(r.source || '')}</td>`;
+    }
+    html += `<td style="padding:4px 8px;">${r._dup ? '<span class="si-dup-tag">重複</span>' : ''}</td>`;
+    html += '</tr>';
+  });
+  html += '</table>';
+  body.innerHTML = html;
+}
+
+function siToggleAll(checked) {
+  _smartImportParsed.forEach(r => r._checked = checked);
+  siRenderPreview();
+}
+
+function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
 
 let autoSaveTimer = null;
@@ -2304,8 +2789,8 @@ function renderGroupBuy() {
 }
 
 function printGroupBuy() {
-  const month = document.getElementById('gMonth').value || '全部';
-  const data = getGroupBuyData();
+  const month = document.getElementById('procMonth')?.value || '全部';
+  const data = purchaseRows.filter(isGroupBuyCat);
   let totalAmount = 0, totalProfit = 0;
   data.forEach(r => {
     totalAmount += r.total_twd || 0;
@@ -2390,6 +2875,276 @@ function gGoPage(p) {
   const totalPages = Math.max(1, Math.ceil(data.length / G_PER_PAGE));
   gPage = Math.max(1, Math.min(p, totalPages));
   renderGroupBuy();
+}
+
+// ===== 姐姐對帳單 =====
+// ===== 團購採購（合併：開團商品 + 1688採購紀錄） =====
+let procPage = 1;
+const PROC_PER_PAGE = 50;
+
+// 從 offer_id 或 url 提取 1688 offer id
+function extractOfferId(url) {
+  if (!url) return '';
+  const m = url.match(/offer\/(\d+)/);
+  return m ? m[1] : '';
+}
+
+// 建立配對關係：開團商品 ↔ 1688 採購紀錄
+// 一筆 1688 訂單可能對應多個開團商品（同商品不同規格）
+function buildProcMatchMap() {
+  const map = {}; // key=productId → [purchase rows]
+
+  if (orderTrackData.length === 0) return map;
+
+  // 建 offer_id → [productId, ...] 的索引（一對多）
+  const offerToProducts = {};
+  orderTrackData.forEach(ot => {
+    const oid = extractOfferId(ot.url) || extractOfferId(OT_ORDER_URLS[ot.productId]);
+    if (oid) {
+      if (!offerToProducts[oid]) offerToProducts[oid] = [];
+      offerToProducts[oid].push(ot.productId);
+    }
+  });
+
+  purchaseRows.filter(isGroupBuyCat).forEach(r => {
+    // 1. offer_id 自動配對（優先，支援一對多）
+    if (r.offer_id && offerToProducts[r.offer_id]) {
+      offerToProducts[r.offer_id].forEach(pid => {
+        if (!map[pid]) map[pid] = [];
+        if (!map[pid].includes(r)) map[pid].push(r);
+      });
+    }
+    // 2. 沒有 offer_id 時，用 linked_product 配對
+    else if (r.linked_product) {
+      if (!map[r.linked_product]) map[r.linked_product] = [];
+      if (!map[r.linked_product].includes(r)) map[r.linked_product].push(r);
+    }
+  });
+
+  return map;
+}
+
+async function loadProcurement() {
+  // 載入兩邊的資料
+  await loadOrderTrack();
+  procPage = 1;
+  renderProcurement();
+}
+
+function getFilteredProcData() {
+  const month = document.getElementById('procMonth')?.value || '';
+  const status = document.getElementById('procStatus')?.value || 'all';
+  const kw = (document.getElementById('procSearch')?.value || '').trim().toLowerCase();
+
+  let data = [...orderTrackData];
+  if (month) data = data.filter(r => (r.endDate || '').startsWith(month));
+  if (status !== 'all') {
+    data = data.filter(r => {
+      const isOrdered = otOrderedSet.has(r.productId);
+      if (status === 'ordered') return isOrdered;
+      if (status === 'pending') return !isOrdered;
+      return r.procStatus === status;
+    });
+  }
+  if (kw) data = data.filter(r =>
+    (r.name || '').toLowerCase().includes(kw) ||
+    (r.productId || '').toLowerCase().includes(kw)
+  );
+  data.sort((a, b) => (b.endDate || '').localeCompare(a.endDate || ''));
+  return data;
+}
+
+function renderProcurement() {
+  const matchMap = buildProcMatchMap();
+  const data = getFilteredProcData();
+  const totalPages = Math.max(1, Math.ceil(data.length / PROC_PER_PAGE));
+  if (procPage > totalPages) procPage = totalPages;
+  const start = (procPage - 1) * PROC_PER_PAGE;
+  const pageItems = data.slice(start, start + PROC_PER_PAGE);
+
+  // 月份選項
+  const monthSel = document.getElementById('procMonth');
+  if (monthSel) {
+    const curVal = monthSel.value;
+    const months = [...new Set(orderTrackData.filter(r => r.endDate).map(r => r.endDate.slice(0, 7)))].sort().reverse();
+    monthSel.innerHTML = '<option value="">全部月份</option>' + months.map(m => `<option value="${m}" ${m === curVal ? 'selected' : ''}>${m}</option>`).join('');
+  }
+
+  // 統計
+  let totalItems = data.length, orderedCount = 0, pendingCount = 0;
+  data.forEach(r => {
+    if (otOrderedSet.has(r.productId)) orderedCount++;
+    else pendingCount++;
+  });
+
+  const summaryEl = document.getElementById('procSummary');
+  if (summaryEl) {
+    summaryEl.innerHTML = `
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:8px 14px;">
+        <span style="font-size:11px;color:var(--text2);">總商品</span>
+        <span style="font-size:16px;font-weight:700;margin-left:6px;">${totalItems}</span>
+      </div>
+      <div style="background:#f0f7ff;border:1px solid #bee3f8;border-radius:8px;padding:8px 14px;">
+        <span style="font-size:11px;color:#2b6cb0;">已叫貨</span>
+        <span style="font-size:16px;font-weight:700;color:#2b6cb0;margin-left:6px;">${orderedCount}</span>
+      </div>
+      <div style="background:#fffbeb;border:1px solid #fbd38d;border-radius:8px;padding:8px 14px;">
+        <span style="font-size:11px;color:#b7791f;">待處理</span>
+        <span style="font-size:16px;font-weight:700;color:#b7791f;margin-left:6px;">${pendingCount}</span>
+      </div>`;
+  }
+
+  // 分頁
+  const paginationHtml = buildProcPagination(data.length, totalPages);
+  const topEl = document.getElementById('procPaginationTop');
+  const botEl = document.getElementById('procPaginationBottom');
+  if (topEl) topEl.innerHTML = paginationHtml;
+  if (botEl) botEl.innerHTML = paginationHtml;
+
+  const infoEl = document.getElementById('procInfo');
+  if (infoEl) infoEl.textContent = `共 ${data.length} 筆`;
+
+  // 渲染表格
+  const statusMap = {
+    pending:  { label: '⏳ 待處理', bg: '#fefcbf', color: '#b7791f' },
+    ordered:  { label: '🚚 已叫貨', bg: '#bee3f8', color: '#2b6cb0' },
+    arrived:  { label: '📦 已到倉', bg: '#c6f6d5', color: '#276749' }
+  };
+
+  let html = '<table style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap;">';
+  html += `<thead style="position:sticky;top:0;z-index:2;"><tr style="background:#edf2f7;">
+    <th style="width:32px;padding:6px;border:1px solid #e2e8f0;">#</th>
+    <th style="width:70px;padding:6px;border:1px solid #e2e8f0;color:#e11d48;">結單日</th>
+    <th style="width:85px;padding:6px;border:1px solid #e2e8f0;">商品編號</th>
+    <th style="max-width:180px;padding:6px;border:1px solid #e2e8f0;">商品名稱</th>
+    <th style="width:40px;padding:6px;border:1px solid #e2e8f0;text-align:center;">已叫</th>
+    <th style="width:50px;padding:6px;border:1px solid #e2e8f0;text-align:center;">叫貨量</th>
+    <th style="width:50px;padding:6px;border:1px solid #e2e8f0;text-align:right;">售價</th>
+    <th style="width:45px;padding:6px;border:1px solid #e2e8f0;text-align:center;">下單</th>
+    <th style="border-left:3px solid #2b6cb0;width:75px;padding:6px;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;border-right:1px solid #e2e8f0;background:#f0f7ff;">訂單日</th>
+    <th style="width:60px;padding:6px;border:1px solid #e2e8f0;background:#f0f7ff;text-align:right;">付款RMB</th>
+    <th style="width:45px;padding:6px;border:1px solid #e2e8f0;background:#f0f7ff;text-align:center;">數量</th>
+    <th style="width:55px;padding:6px;border:1px solid #e2e8f0;background:#f0f7ff;text-align:right;">進貨價</th>
+    <th style="width:55px;padding:6px;border:1px solid #e2e8f0;background:#f0f7ff;text-align:right;">預估利潤</th>
+    <th style="width:90px;padding:6px;border:1px solid #e2e8f0;background:#f0f7ff;text-align:center;">狀態</th>
+  </tr></thead><tbody>`;
+
+  const tdL = 'border:1px solid #e2e8f0;padding:4px 5px;white-space:nowrap;';
+  const tdR = 'border:1px solid #e2e8f0;padding:4px 5px;border-left:3px solid #2b6cb0;background:#fafcff;white-space:nowrap;';
+  const tdRn = 'border:1px solid #e2e8f0;padding:4px 5px;background:#fafcff;white-space:nowrap;';
+  const tdName = 'border:1px solid #e2e8f0;padding:4px 5px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
+
+  pageItems.forEach((item, pi) => {
+    const i = start + pi;
+    const pid = item.productId || '';
+    const isOrdered = otOrderedSet.has(pid);
+    const purchases = matchMap[pid] || [];
+    const lp = purchases.length > 0 ? purchases[purchases.length - 1] : null;
+    const uc = lp ? lp.unit_cost : 0;
+    const unitProfit = (item.price && uc) ? (Number(item.price) - uc) : 0;
+    const profitColor = unitProfit >= 0 ? '#276749' : '#c53030';
+
+    const orderUrl = item.url || gbUrlMap[pid] || OT_ORDER_URLS[pid] || '';
+    const orderLink = orderUrl ? `<span class="shared-link" data-url="${orderUrl}" style="color:#e67e22;cursor:pointer;text-decoration:underline;font-size:11px;">下單</span>` : '';
+
+    const rowBg = isOrdered ? 'background:#f0fff4;' : '';
+    const rowSpan = purchases.length > 1 ? ` rowspan="${purchases.length}"` : '';
+
+    if (purchases.length <= 1) {
+      // 單行：左右各一列
+      html += `<tr style="${rowBg}">`;
+      html += `<td style="${tdL}text-align:center;color:#a0aec0;font-size:11px;">${i+1}</td>`;
+      html += `<td style="${tdL}color:#e11d48;font-weight:600;white-space:nowrap;">${item.endDate || ''}</td>`;
+      html += `<td style="${tdL}font-family:monospace;font-size:11px;color:#2b6cb0;">${pid}</td>`;
+      html += `<td style="${tdName}font-weight:500;" title="${esc(item.name || '')}">${esc(item.name || '')}</td>`;
+      html += `<td style="${tdL}text-align:center;"><input type="checkbox" ${isOrdered?'checked':''} onchange="otToggleOrdered('${pid}')"></td>`;
+      html += `<td style="${tdL}text-align:center;font-weight:700;color:${(item.orderQty||0)>0?'#c53030':'#047857'};">${item.orderQty != null ? item.orderQty : item.totalQty || 0}</td>`;
+      html += `<td style="${tdL}text-align:right;">${item.price ? '$' + Number(item.price).toLocaleString() : ''}</td>`;
+      html += `<td style="${tdL}text-align:center;">${orderLink}</td>`;
+
+      if (lp) {
+        html += `<td style="${tdR}font-size:11px;">${lp.order_date || ''}</td>`;
+        html += `<td style="${tdRn}text-align:right;font-size:11px;">¥${(lp.payment_rmb||0).toFixed(1)}</td>`;
+        html += `<td style="${tdRn}text-align:center;">${lp.qty || ''}</td>`;
+        html += `<td style="${tdRn}text-align:right;font-weight:600;">$${uc ? uc.toFixed(1) : ''}</td>`;
+        html += `<td style="${tdRn}text-align:right;color:${profitColor};font-weight:600;">${unitProfit ? '$' + unitProfit.toFixed(1) : ''}</td>`;
+        const effStatus = isOrdered ? 'ordered' : 'pending';
+        const st = statusMap[effStatus] || statusMap.pending;
+        html += `<td style="${tdRn}text-align:center;"><span style="background:${st.bg};color:${st.color};padding:2px 8px;border-radius:10px;font-size:11px;">${st.label}</span></td>`;
+      } else {
+        html += `<td style="${tdR}text-align:center;color:#a0aec0;font-size:11px;" colspan="5">尚未採購</td>`;
+        html += `<td style="${tdRn}text-align:center;"><span style="background:#fefcbf;color:#b7791f;padding:2px 8px;border-radius:10px;font-size:11px;">⏳ 待處理</span></td>`;
+      }
+      html += '</tr>';
+    } else {
+      // 多行：左邊 rowspan，右邊多列
+      purchases.forEach((p, pi2) => {
+        const puc = p.unit_cost || 0;
+        const pProfit = (item.price && puc) ? (Number(item.price) - puc) : 0;
+        const pColor = pProfit >= 0 ? '#276749' : '#c53030';
+        html += `<tr style="${rowBg}">`;
+        if (pi2 === 0) {
+          html += `<td style="${tdL}text-align:center;color:#a0aec0;font-size:11px;" rowspan="${purchases.length}">${i+1}</td>`;
+          html += `<td style="${tdL}color:#e11d48;font-weight:600;white-space:nowrap;" rowspan="${purchases.length}">${item.endDate || ''}</td>`;
+          html += `<td style="${tdL}font-family:monospace;font-size:11px;color:#2b6cb0;" rowspan="${purchases.length}">${pid}</td>`;
+          html += `<td style="${tdL}font-weight:500;" rowspan="${purchases.length}">${esc(item.name || '')}</td>`;
+          html += `<td style="${tdL}text-align:center;" rowspan="${purchases.length}"><input type="checkbox" ${isOrdered?'checked':''} onchange="otToggleOrdered('${pid}')"></td>`;
+          html += `<td style="${tdL}text-align:center;font-weight:700;color:${(item.orderQty||0)>0?'#c53030':'#047857'};" rowspan="${purchases.length}">${item.orderQty != null ? item.orderQty : item.totalQty || 0}</td>`;
+          html += `<td style="${tdL}text-align:right;" rowspan="${purchases.length}">${item.price ? '$' + Number(item.price).toLocaleString() : ''}</td>`;
+          html += `<td style="${tdL}text-align:center;" rowspan="${purchases.length}">${orderLink}</td>`;
+        }
+        html += `<td style="${pi2===0?tdR:tdRn}font-size:11px;">${p.order_date || ''}</td>`;
+        html += `<td style="${tdRn}text-align:right;font-size:11px;">¥${(p.payment_rmb||0).toFixed(1)}</td>`;
+        html += `<td style="${tdRn}text-align:center;">${p.qty || ''}</td>`;
+        html += `<td style="${tdRn}text-align:right;font-weight:600;">$${puc ? puc.toFixed(1) : ''}</td>`;
+        html += `<td style="${tdRn}text-align:right;color:${pColor};font-weight:600;">${pProfit ? '$' + pProfit.toFixed(1) : ''}</td>`;
+        if (pi2 === 0) {
+          const effStatus = isOrdered ? 'ordered' : 'pending';
+          const st = statusMap[effStatus] || statusMap.pending;
+          html += `<td style="${tdRn}text-align:center;" rowspan="${purchases.length}"><span style="background:${st.bg};color:${st.color};padding:2px 8px;border-radius:10px;font-size:11px;">${st.label}</span></td>`;
+        }
+        html += '</tr>';
+      });
+    }
+  });
+
+  if (data.length === 0) {
+    html += `<tr><td colspan="14" style="text-align:center;padding:40px;color:#718096;">沒有開團商品資料（需先在調度中心同步）</td></tr>`;
+  }
+
+  // 未配對的團購採購紀錄
+  const matchedPids = new Set(Object.keys(buildProcMatchMap()));
+  const unmatched = purchaseRows.filter(r => isGroupBuyCat(r) && !r.linked_product && r.offer_id && !matchedPids.has(r.offer_id));
+  // 暫不顯示未配對的（太複雜），先以開團商品為主
+
+  html += '</tbody></table>';
+  document.getElementById('procBody').innerHTML = html;
+}
+
+function buildProcPagination(total, totalPages) {
+  if (totalPages <= 1) return '';
+  let html = `<span style="color:var(--text2);font-size:12px;">共 ${total} 筆</span>`;
+  html += `<button class="btn btn-outline" style="padding:3px 8px;font-size:12px;" onclick="procGoPage(1)" ${procPage===1?'disabled':''}>«</button>`;
+  html += `<button class="btn btn-outline" style="padding:3px 8px;font-size:12px;" onclick="procGoPage(${procPage-1})" ${procPage===1?'disabled':''}>‹</button>`;
+  const pages = [];
+  for (let p = 1; p <= totalPages; p++) {
+    if (p === 1 || p === totalPages || (p >= procPage - 2 && p <= procPage + 2)) pages.push(p);
+    else if (pages[pages.length-1] !== '...') pages.push('...');
+  }
+  pages.forEach(p => {
+    if (p === '...') html += `<span style="padding:0 4px;color:var(--text2);">…</span>`;
+    else html += `<button style="padding:3px 10px;font-size:12px;border:1px solid var(--border);border-radius:4px;cursor:pointer;${p===procPage?'background:var(--accent);color:#fff;':''}" onclick="procGoPage(${p})">${p}</button>`;
+  });
+  html += `<button class="btn btn-outline" style="padding:3px 8px;font-size:12px;" onclick="procGoPage(${procPage+1})" ${procPage===totalPages?'disabled':''}>›</button>`;
+  html += `<button class="btn btn-outline" style="padding:3px 8px;font-size:12px;" onclick="procGoPage(${totalPages})" ${procPage===totalPages?'disabled':''}>»</button>`;
+  return html;
+}
+
+function procGoPage(p) {
+  const data = getFilteredProcData();
+  const totalPages = Math.max(1, Math.ceil(data.length / PROC_PER_PAGE));
+  procPage = Math.max(1, Math.min(p, totalPages));
+  renderProcurement();
 }
 
 // ===== 姐姐對帳單 =====
@@ -3439,25 +4194,67 @@ const OT_ORDER_URLS = {"160302024":"https://detail.1688.com/offer/936886143725.h
 const OT_PER_PAGE = 100;
 
 let gbUrlMap = {};
-let otOrderedSet = new Set(JSON.parse(localStorage.getItem('xiaolan_ot_ordered') || '[]'));
-function otToggleOrdered(pid) {
+let otOrderedSet = new Set();
+
+async function otToggleOrdered(pid) {
   if (otOrderedSet.has(pid)) otOrderedSet.delete(pid); else otOrderedSet.add(pid);
-  localStorage.setItem('xiaolan_ot_ordered', JSON.stringify([...otOrderedSet]));
-  renderOrderTrackTable();
-}
-async function loadOrderTrack() {
+  // 寫入 DB
   try {
-    orderTrackData = JSON.parse(localStorage.getItem('supplier_xiaolan_orders') || '[]');
-    orderTrackData.sort((a, b) => (b.endDate || '').localeCompare(a.endDate || ''));
-  } catch { orderTrackData = []; }
+    await fetch(`${SB_URL}/xiaolan_order_tracking?product_id=eq.${encodeURIComponent(pid)}`, {
+      method: 'PATCH',
+      headers: JSON_H,
+      body: JSON.stringify({ ordered: otOrderedSet.has(pid), updated_at: new Date().toISOString() })
+    });
+  } catch (err) {
+    console.error('otToggleOrdered DB error:', err);
+  }
+  renderProcurement();
+}
+
+async function loadOrderTrack() {
+  // 優先從 DB 讀取
+  try {
+    const dbRows = await sbFetchAll('xiaolan_order_tracking', 'end_date.desc');
+    if (dbRows.length > 0) {
+      otOrderedSet = new Set();
+      orderTrackData = dbRows.map(r => {
+        if (r.ordered) otOrderedSet.add(r.product_id);
+        return {
+          productId: r.product_id,
+          name: r.product_name,
+          totalQty: r.total_qty || 0,
+          stock: r.stock || 0,
+          orderQty: r.order_qty || 0,
+          url: r.url || '',
+          packaging: r.packaging || '',
+          price: r.selling_price || '',
+          endDate: r.end_date || '',
+          storeQtys: r.store_qtys || {},
+          procStatus: r.ordered ? 'ordered' : 'pending'
+        };
+      });
+    } else {
+      // DB 沒資料時 fallback 到 localStorage（過渡期）
+      try {
+        orderTrackData = JSON.parse(localStorage.getItem('supplier_xiaolan_orders') || '[]');
+        orderTrackData.sort((a, b) => (b.endDate || '').localeCompare(a.endDate || ''));
+        otOrderedSet = new Set(JSON.parse(localStorage.getItem('xiaolan_ot_ordered') || '[]'));
+      } catch { orderTrackData = []; }
+    }
+  } catch {
+    // 網路錯誤時 fallback
+    try {
+      orderTrackData = JSON.parse(localStorage.getItem('supplier_xiaolan_orders') || '[]');
+      orderTrackData.sort((a, b) => (b.endDate || '').localeCompare(a.endDate || ''));
+      otOrderedSet = new Set(JSON.parse(localStorage.getItem('xiaolan_ot_ordered') || '[]'));
+    } catch { orderTrackData = []; }
+  }
   // 從 xiaolan_gb_orders 讀取商品編號→網址對應
   try {
     const gbRows = await sbFetchAll('xiaolan_gb_orders', 'id.desc');
     gbUrlMap = {};
     gbRows.forEach(r => { if (r.product_code && r.url) gbUrlMap[r.product_code] = r.url; });
   } catch { gbUrlMap = {}; }
-  otPage = 1;
-  renderOrderTrackTable();
 }
 
 function getLinkedPurchase(productId) {
