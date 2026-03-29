@@ -11119,24 +11119,22 @@
   }
 
   // ============================
-  // 陸貨專區：團購叫貨區（從訂貨追蹤篩選廠商=小瀾）
+  // 陸貨專區：團購叫貨區（唯讀，從 DB 讀取）
   // ============================
   let gbOrderRows = [];
   let gbPage = 1;
   const GB_PER = 50;
-  // 助理補充的額外資料（庫存、網址、包裝），存 localStorage
-  let gbExtraData = JSON.parse(localStorage.getItem('lt_gbExtra') || '{}'); // key=productId → {stock, url, packaging}
-  function saveGBExtra() { localStorage.setItem('lt_gbExtra', JSON.stringify(gbExtraData)); }
 
   function gbEsc(v) { return (v || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
   async function renderGBOrder() {
     const container = document.getElementById('mainContainer');
     container.innerHTML = '<div class="panel"><p>載入中...</p></div>';
-    // 確保訂貨追蹤已載入
-    if (mockConsolidatedOrders.length === 0) await initConsolidatedOrders();
-    // 篩選廠商包含「小瀾」的
-    gbOrderRows = mockConsolidatedOrders.filter(item => (item.supplier || '').includes('小瀾'));
+    // 從 DB 讀取
+    try {
+      const res = await fetch(`${SB_URL}/xiaolan_order_tracking?order=end_date.desc&limit=1000`, { headers: HEADERS });
+      gbOrderRows = res.ok ? await res.json() : [];
+    } catch { gbOrderRows = []; }
     gbPage = 1;
     renderGBGrid();
   }
@@ -11145,9 +11143,9 @@
     const kw = document.getElementById('gbSearch')?.value?.trim().toLowerCase() || '';
     const month = document.getElementById('gbMonth')?.value || '';
     let data = [...gbOrderRows];
-    if (month) data = data.filter(r => (r.endDate || '').startsWith(month));
-    if (kw) data = data.filter(r => (r.id||'').toLowerCase().includes(kw) || (r.name||'').toLowerCase().includes(kw));
-    data.sort((a,b) => (b.endDate||'').localeCompare(a.endDate||''));
+    if (month) data = data.filter(r => (r.end_date || '').startsWith(month));
+    if (kw) data = data.filter(r => (r.product_id||'').toLowerCase().includes(kw) || (r.product_name||'').toLowerCase().includes(kw));
+    data.sort((a,b) => (b.end_date||'').localeCompare(a.end_date||''));
     return data;
   }
 
@@ -11187,15 +11185,12 @@
     const start = (gbPage - 1) * GB_PER;
     const pageItems = data.slice(start, start + GB_PER);
 
-    const months = [...new Set(gbOrderRows.filter(r=>r.endDate).map(r=>(r.endDate||'').slice(0,7)).filter(Boolean))].sort().reverse();
+    const months = [...new Set(gbOrderRows.filter(r=>r.end_date).map(r=>(r.end_date||'').slice(0,7)).filter(Boolean))].sort().reverse();
     const paginationHtml = buildGBPagination(data.length, totalPages);
 
     let html = `<div class="panel">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-        <h3 style="margin:0;">📋 團購叫貨區 <span style="font-size:13px;color:#718096;font-weight:normal;">（訂貨追蹤 → 廠商：小瀾）</span></h3>
-        <div style="display:flex;gap:8px;">
-          <button class="btn" style="background:#2b6cb0;color:#fff;" onclick="gbSyncToSupplier()">📦 同步到小瀾陸貨訂購</button>
-        </div>
+        <h3 style="margin:0;">📋 團購叫貨區 <span style="font-size:13px;color:#718096;font-weight:normal;">（唯讀，資料來自小瀾採購系統）</span></h3>
       </div>
       <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;flex-wrap:wrap;">
         <select id="gbMonth" onchange="gbPage=1;renderGBGrid();" style="padding:5px 8px;border:1px solid #ddd;border-radius:4px;font-size:13px;">
@@ -11204,57 +11199,41 @@
         <input id="gbSearch" type="text" placeholder="搜尋商品編號/名稱" value="${gbEsc(kw)}" style="padding:5px 8px;border:1px solid #ddd;border-radius:4px;font-size:13px;width:200px;" onkeydown="if(event.key==='Enter'){gbPage=1;renderGBGrid();}">
         <button class="btn" onclick="gbPage=1;renderGBGrid()">查詢</button>
         <button class="btn" onclick="document.getElementById('gbMonth').value='';document.getElementById('gbSearch').value='';gbPage=1;renderGBGrid();">清除</button>
-        <span style="font-size:12px;color:#718096;margin-left:auto;">共 ${data.length} 筆（廠商含「小瀾」）</span>
+        <span style="font-size:12px;color:#718096;margin-left:auto;">共 ${data.length} 筆</span>
       </div>
       <div style="display:flex;gap:4px;margin-bottom:6px;align-items:center;flex-wrap:wrap;">${paginationHtml}</div>
       <div style="overflow:auto; max-height:calc(100vh - 260px);">
-      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;white-space:nowrap;">
         <thead style="position:sticky;top:0;z-index:2;"><tr style="background:#edf2f7;">
           <th style="width:32px;padding:6px;border:1px solid #e2e8f0;background:#edf2f7;">#</th>
           <th style="width:80px;padding:6px;border:1px solid #e2e8f0;background:#edf2f7;color:#e11d48;">結單日</th>
           <th style="width:100px;padding:6px;border:1px solid #e2e8f0;background:#edf2f7;">商品編號</th>
           <th style="min-width:160px;padding:6px;border:1px solid #e2e8f0;background:#edf2f7;">商品名稱</th>
-          <th style="width:70px;padding:6px;border:1px solid #e2e8f0;background:#edf2f7;">總數量</th>
-          <th style="width:70px;padding:6px;border:1px solid #e2e8f0;background:#edf2f7;">庫存</th>
           <th style="width:70px;padding:6px;border:1px solid #e2e8f0;background:#edf2f7;">叫貨量</th>
           <th style="width:70px;padding:6px;border:1px solid #e2e8f0;background:#edf2f7;">售價</th>
-          <th style="min-width:140px;padding:6px;border:1px solid #e2e8f0;background:#edf2f7;">網址</th>
-          <th style="width:90px;padding:6px;border:1px solid #e2e8f0;background:#edf2f7;">包裝</th>
+          <th style="width:70px;padding:6px;border:1px solid #e2e8f0;background:#edf2f7;">進貨價</th>
           <th style="width:80px;padding:6px;border:1px solid #e2e8f0;background:#edf2f7;">採購進度</th>
         </tr></thead><tbody>`;
 
-    const tdS = 'border:1px solid #e2e8f0;padding:4px;';
-    const procLabel = { pending:'⏳ 待處理', ordered:'🚚 已叫貨', arrived:'📦 到倉', out_of_stock:'❌ 斷貨', supplier_shortage:'⚠️ 短缺' };
-    const procColor = { pending:'#b7791f', ordered:'#2b6cb0', arrived:'#047857', out_of_stock:'#c53030', supplier_shortage:'#b7791f' };
+    const tdS = 'border:1px solid #e2e8f0;padding:5px 6px;';
+    const procLabel = { false:'⏳ 待處理', true:'🚚 已叫貨' };
+    const procColor = { false:'#b7791f', true:'#2b6cb0' };
 
     pageItems.forEach((r, pi) => {
       const i = start + pi;
-      const pid = r.productId || r.id;
-      const extra = gbExtraData[pid] || {};
-      const stock = extra.stock || 0;
-      const orderQty = Math.max(0, (r.totalQty || 0) - stock);
-      const url = extra.url || '';
-      const packaging = extra.packaging || '';
-      const ps = r.procStatus || 'pending';
-
-      let linkHtml = '';
-      if (url) linkHtml = `<span class="shared-link" data-url="${gbEsc(url)}" style="color:#2b6cb0;font-size:11px;cursor:pointer;text-decoration:underline;display:inline-block;margin-bottom:2px;max-width:130px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${gbEsc(url)}">🔗 前往下單</span><br>`;
-      linkHtml += `<input value="${gbEsc(url)}" data-pid="${pid}" data-field="url" onchange="onGBExtraChange(this)" style="width:100%;font-size:10px;color:#4a6fa5;padding:3px 5px;border:1px solid #e2e8f0;border-radius:3px;" placeholder="貼上1688網址">`;
-
-      const rowBg = ps === 'ordered' ? 'background:#f0f7ff;' : ps === 'arrived' ? 'background:#f0fdf4;' : '';
+      const pid = r.product_id || '';
+      const ordered = r.ordered || false;
+      const rowBg = ordered ? 'background:#f0f7ff;' : '';
 
       html += `<tr style="${rowBg}">`;
       html += `<td style="text-align:center;${tdS}color:#a0aec0;font-size:11px;">${i+1}</td>`;
-      html += `<td style="${tdS}color:#e11d48;font-weight:600;font-size:12px;white-space:nowrap;">${r.endDate || ''}</td>`;
+      html += `<td style="${tdS}color:#e11d48;font-weight:600;">${r.end_date || ''}</td>`;
       html += `<td style="${tdS}font-family:monospace;font-size:11px;color:#2b6cb0;">${pid}</td>`;
-      html += `<td style="${tdS}font-weight:600;">${gbEsc(r.name)}</td>`;
-      html += `<td style="${tdS}text-align:center;font-weight:700;color:#2b6cb0;font-size:14px;">${r.totalQty || 0}</td>`;
-      html += `<td style="${tdS}text-align:center;"><input type="number" value="${stock||''}" data-pid="${pid}" data-field="stock" onchange="onGBExtraChange(this)" style="width:55px;padding:3px;text-align:center;border:1px solid #e2e8f0;border-radius:3px;font-size:12px;" placeholder="0"></td>`;
-      html += `<td style="${tdS}text-align:center;font-weight:700;color:${orderQty > 0 ? '#c53030' : '#047857'};font-size:14px;">${orderQty}</td>`;
-      html += `<td style="${tdS}text-align:center;font-size:12px;">${r.price ? '$' + r.price : ''}</td>`;
-      html += `<td style="${tdS}vertical-align:top;">${linkHtml}</td>`;
-      html += `<td style="${tdS}"><input value="${gbEsc(packaging)}" data-pid="${pid}" data-field="packaging" onchange="onGBExtraChange(this)" style="width:100%;font-size:11px;padding:3px 5px;border:1px solid #e2e8f0;border-radius:3px;" placeholder="袋裝/盒裝"></td>`;
-      html += `<td style="${tdS}text-align:center;"><span style="color:${procColor[ps]||'#718096'};font-weight:600;font-size:11px;">${procLabel[ps]||ps}</span></td>`;
+      html += `<td style="${tdS}font-weight:500;">${gbEsc(r.product_name)}</td>`;
+      html += `<td style="${tdS}text-align:center;font-weight:700;color:${(r.order_qty||0)>0?'#c53030':'#047857'};">${r.order_qty || 0}</td>`;
+      html += `<td style="${tdS}text-align:center;">${r.selling_price ? '$' + Number(r.selling_price).toLocaleString() : ''}</td>`;
+      html += `<td style="${tdS}text-align:center;color:#2b6cb0;font-weight:600;">${r.unit_cost ? '$' + Number(r.unit_cost).toFixed(1) : ''}</td>`;
+      html += `<td style="${tdS}text-align:center;"><span style="color:${procColor[ordered]||'#718096'};font-weight:600;font-size:11px;">${procLabel[ordered]||'⏳ 待處理'}</span></td>`;
       html += `</tr>`;
     });
 
@@ -11269,32 +11248,7 @@
     enableTableResize(container.querySelector('table'));
   }
 
-  function onGBExtraChange(el) {
-    const pid = el.dataset.pid;
-    const field = el.dataset.field;
-    if (!pid) return;
-    if (!gbExtraData[pid]) gbExtraData[pid] = {};
-    if (field === 'stock') gbExtraData[pid].stock = parseInt(el.value) || 0;
-    else gbExtraData[pid][field] = el.value;
-    saveGBExtra();
-    // 庫存改了要更新叫貨量顯示
-    if (field === 'stock') {
-      const row = gbOrderRows.find(r => (r.productId || r.id) === pid);
-      if (row) {
-        const orderQty = Math.max(0, (row.totalQty || 0) - (gbExtraData[pid].stock || 0));
-        const td = el.closest('tr')?.children[6]; // 叫貨量欄
-        if (td) { td.style.color = orderQty > 0 ? '#c53030' : '#047857'; td.textContent = orderQty; }
-      }
-    }
-    // 同步到 supplier_xiaolan_orders
-    syncSupplierData();
-  }
-
-  // 同步到 supplier_xiaolan 的陸貨訂購
-  function gbSyncToSupplier() {
-    syncSupplierData();
-    Swal.fire({ icon:'success', title:'已同步', text:'小瀾的陸貨訂購已更新', timer:1500, showConfirmButton:false });
-  }
+  // onGBExtraChange 和 gbSyncToSupplier 已移除（團購叫貨區改唯讀）
 
   // ============================
   // 陸貨專區：漂漂館區

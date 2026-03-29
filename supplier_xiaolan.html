@@ -1672,6 +1672,9 @@ async function savePurchases(isAuto) {
       updated++;
     }
 
+    // 同步 unit_cost 到 xiaolan_order_tracking
+    syncUnitCostToDB();
+
     if (isAuto) {
       // 自動儲存：不重新渲染，避免打斷使用者輸入
       for (const r of toUpdate) r._dirty = false;
@@ -1691,6 +1694,51 @@ async function savePurchases(isAuto) {
     }
   } catch (e) {
     Swal.fire('錯誤', '儲存失敗：' + e.message, 'error');
+  }
+}
+
+// 同步進貨價到 xiaolan_order_tracking
+async function syncUnitCostToDB() {
+  try {
+    // 收集所有有 linked_product 且有 unit_cost 的採購紀錄
+    // 同一個 product_id 可能有多筆，取最新的（最後一筆）
+    const costMap = {}; // product_id → unit_cost
+    const allRows = [...purchaseRows, ...newPurchaseRows];
+    allRows.forEach(r => {
+      if (r.linked_product && r.unit_cost > 0) {
+        costMap[r.linked_product] = r.unit_cost;
+      }
+    });
+
+    // 也用 offer_id 配對
+    if (orderTrackData.length > 0) {
+      const offerToProducts = {};
+      orderTrackData.forEach(ot => {
+        const oid = extractOfferId(ot.url) || extractOfferId(OT_ORDER_URLS[ot.productId]);
+        if (oid) {
+          if (!offerToProducts[oid]) offerToProducts[oid] = [];
+          offerToProducts[oid].push(ot.productId);
+        }
+      });
+      allRows.forEach(r => {
+        if (r.offer_id && r.unit_cost > 0 && offerToProducts[r.offer_id]) {
+          offerToProducts[r.offer_id].forEach(pid => {
+            if (!costMap[pid]) costMap[pid] = r.unit_cost;
+          });
+        }
+      });
+    }
+
+    // 批次更新
+    for (const [pid, uc] of Object.entries(costMap)) {
+      await fetch(`${SB_URL}/xiaolan_order_tracking?product_id=eq.${encodeURIComponent(pid)}`, {
+        method: 'PATCH',
+        headers: JSON_H,
+        body: JSON.stringify({ unit_cost: uc, updated_at: new Date().toISOString() })
+      });
+    }
+  } catch (err) {
+    console.error('syncUnitCostToDB error:', err);
   }
 }
 
