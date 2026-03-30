@@ -201,6 +201,46 @@
           });
         }
       } catch(e) { console.error('cloudLoadAll error:', e); }
+
+      // 一次性遷移：branchOrders 簡稱改全名（全→全民、山→山張、買→買上癮）
+      try {
+        const MIGRATE_MAP = { '全': '全民', '山': '山張', '買': '買上癮' };
+        const migrated = localStorage.getItem('lt_alias_migrated');
+        if (!migrated) {
+          const bo = JSON.parse(localStorage.getItem('branchOrders') || '{}');
+          let changed = false;
+          Object.entries(MIGRATE_MAP).forEach(([oldName, newName]) => {
+            if (bo[oldName]) {
+              // 合併到全名（不覆蓋已有的數量）
+              if (!bo[newName]) bo[newName] = {};
+              Object.entries(bo[oldName]).forEach(([itemId, qty]) => {
+                if (!bo[newName][itemId]) bo[newName][itemId] = qty;
+              });
+              delete bo[oldName];
+              changed = true;
+            }
+          });
+          // 刪除不要的個人戶
+          ['澤','絨','光','大','杰','胖','峯','柚','方','佑','楊'].forEach(name => {
+            if (bo[name]) { delete bo[name]; changed = true; }
+          });
+          if (changed) {
+            localStorage.setItem('branchOrders', JSON.stringify(bo));
+            cloudSave('branchOrders');
+            // 更新 importedStoreNames：移除簡稱和個人戶
+            let stores = JSON.parse(localStorage.getItem('importedStoreNames') || '[]');
+            const removeNames = new Set([...Object.keys(MIGRATE_MAP), '澤','絨','光','大','杰','胖','峯','柚','方','佑','楊']);
+            stores = stores.filter(s => !removeNames.has(s));
+            Object.values(MIGRATE_MAP).forEach(fn => { if (!stores.includes(fn)) stores.push(fn); });
+            localStorage.setItem('importedStoreNames', JSON.stringify(stores));
+            cloudSave('importedStoreNames');
+            // 清空 importedPersonalNames
+            localStorage.setItem('importedPersonalNames', JSON.stringify([]));
+            cloudSave('importedPersonalNames');
+          }
+          localStorage.setItem('lt_alias_migrated', '1');
+        }
+      } catch(e) { console.error('alias migration error:', e); }
     }
 
     async function updateSidebarBadges() {

@@ -201,7 +201,11 @@
 
     // ===== 店家名稱對照（從 branchDataList 動態讀取）=====
     const DEFAULT_STORES = ['三峽','中和','文山','四號','永和','忠順','淡水','環球','平鎮','古華','林口','南平','泰山','萬華','板橋','湖口','經國','松山','龍潭'];
-    const DEFAULT_PERSONALS = ['買','山','全','澤','絨','光','大','杰','胖','峯','柚','方','佑','楊'];
+
+    // Google Sheet 簡稱 → 系統全名 對照（個人戶併入批發）
+    const ALIAS_MAP = { '全': '全民', '山': '山張', '買': '買上癮' };
+    // 舊的個人戶簡稱（不再匯入）
+    const IGNORED_PERSONALS = ['澤','絨','光','大','杰','胖','峯','柚','方','佑','楊'];
 
     // 從 localStorage/cloudSave 讀取動態客戶名單
     let branchDataList = [];
@@ -209,23 +213,16 @@
 
     let STORE_COLUMNS, PERSONAL_COLUMNS;
     if (branchDataList.length > 0) {
-      // 有動態名單：store/wholesale 歸入 STORE_COLUMNS
       STORE_COLUMNS = branchDataList.filter(b => b.type === 'store' || b.type === 'wholesale').map(b => b.name);
-      // personal 歸入 PERSONAL_COLUMNS（如果有的話）
-      const personals = branchDataList.filter(b => b.type === 'personal').map(b => b.name);
-      PERSONAL_COLUMNS = personals.length > 0 ? personals : DEFAULT_PERSONALS;
+      PERSONAL_COLUMNS = [];
     } else {
       STORE_COLUMNS = DEFAULT_STORES;
-      PERSONAL_COLUMNS = DEFAULT_PERSONALS;
+      PERSONAL_COLUMNS = [];
     }
-
-    // 額外：從 Google Sheet 表頭自動發現新欄位（不在名單裡的也匯入）
-    function detectExtraColumns(header) {
-      const known = new Set([...STORE_COLUMNS, ...PERSONAL_COLUMNS,
-        '狀態','結單日','商品編號','商品名稱','數量','庫存','破損','售價','廠商','分店價']);
-      const extra = header.filter(h => h.trim() && !known.has(h.trim()));
-      return extra.map(h => h.trim());
-    }
+    // 加入簡稱對應的全名（確保 STORE_COLUMNS 包含全民、山張、買上癮）
+    Object.values(ALIAS_MAP).forEach(fullName => {
+      if (!STORE_COLUMNS.includes(fullName)) STORE_COLUMNS.push(fullName);
+    });
 
     // ===== 全域變數 =====
     let allRows = [];
@@ -376,14 +373,18 @@
           };
 
           STORE_COLUMNS.forEach(s => {
-            const key = header.findIndex(h => h.trim() === s);
+            // 先找全名欄位，再找簡稱欄位
+            let key = header.findIndex(h => h.trim() === s);
+            if (key < 0) {
+              // 反查簡稱：例如 s='全民'，找 ALIAS_MAP 裡 value=全民 的 key='全'
+              const alias = Object.entries(ALIAS_MAP).find(([k, v]) => v === s);
+              if (alias) key = header.findIndex(h => h.trim() === alias[0]);
+            }
             item.stores[s] = key >= 0 ? (parseInt(r[key]) || 0) : 0;
           });
 
-          PERSONAL_COLUMNS.forEach(p => {
-            const key = header.findIndex(h => h.trim() === p);
-            item.personals[p] = key >= 0 ? (parseInt(r[key]) || 0) : 0;
-          });
+          // 簡稱欄位（全、山、買）的數量已經透過 ALIAS_MAP 合併到全名
+          // IGNORED_PERSONALS 直接跳過不匯入
 
           allRows.push(item);
         }
@@ -691,10 +692,7 @@
             if (!existingOrders[storeName]) existingOrders[storeName] = {};
             existingOrders[storeName][orderKey] = qty;
           });
-          Object.entries(item.personals).forEach(([pName, qty]) => {
-            if (!existingOrders[pName]) existingOrders[pName] = {};
-            existingOrders[pName][orderKey] = qty;
-          });
+          // 個人戶已不再匯入（全/山/買 已透過 ALIAS_MAP 合併到全民/山張/買上癮）
 
           processed++;
         }
