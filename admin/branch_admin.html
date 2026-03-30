@@ -11981,14 +11981,32 @@
   // 陸貨專區：陸貨到貨清單（唯讀＋列印）
   // ============================
   let cnArrivalRows = [];
+  let cnPurchaseRows = [];
   let cnaPage = 1;
   const CNA_PER = 100;
   const cnaCheckedOrders = new Set();
 
+  // 用快遞單號從所有訂單比對即時資料
+  function cnaGetLive(trackingNumber) {
+    if (!trackingNumber) return null;
+    const needle = trackingNumber.trim().toLowerCase();
+    const match = cnPurchaseRows.find(p => {
+      if (!p.tracking_number) return false;
+      return p.tracking_number.toLowerCase().split(/[,，;；\s]+/).some(t => t.trim() === needle);
+    });
+    if (!match) return null;
+    return { product_name: match.product_name || '', qty: match.qty || 0, unit_cost: match.unit_cost || 0, selling_price: match.selling_price || 0, category: match.category || '' };
+  }
+
   async function renderCnArrivals() {
     const container = document.getElementById('mainContainer');
     container.innerHTML = '<div class="panel"><p>載入中...</p></div>';
-    try { cnArrivalRows = await cnFetchAll('xiaolan_arrivals', 'id.desc'); } catch { cnArrivalRows = []; }
+    try {
+      [cnArrivalRows, cnPurchaseRows] = await Promise.all([
+        cnFetchAll('xiaolan_arrivals', 'id.desc'),
+        cnFetchAll('xiaolan_purchases', 'id.desc')
+      ]);
+    } catch { cnArrivalRows = []; cnPurchaseRows = []; }
     cnaPage = 1;
     renderCnArrivalGrid();
   }
@@ -12047,6 +12065,7 @@
           <th style="width:58px;padding:6px;border:1px solid #e2e8f0;white-space:nowrap;">出貨日期</th>
           <th style="width:100px;padding:6px;border:1px solid #e2e8f0;">訂單號</th>
           <th style="width:80px;padding:6px;border:1px solid #e2e8f0;">寄至</th>
+          <th style="width:60px;padding:6px;border:1px solid #e2e8f0;">用途</th>
         </tr></thead><tbody>`;
 
     // 按訂單號分組，計算每組的 rowspan
@@ -12064,6 +12083,14 @@
       const isFirst = group[0] === pi;
       const groupSize = group.length;
 
+      // 從所有訂單即時帶出資料
+      const live = cnaGetLive(r.tracking_number);
+      const liveName = live ? live.product_name : (r.product_name || '');
+      const liveQty = live ? live.qty : (r.qty || '');
+      const liveCost = live ? live.unit_cost : (r.unit_cost || '');
+      const livePrice = live ? live.selling_price : (r.selling_price || '');
+      const liveCategory = live ? live.category : '';
+
       html += `<tr>`;
       if (isFirst) {
         const rs = groupSize > 1 ? ` rowspan="${groupSize}"` : '';
@@ -12076,13 +12103,14 @@
         <td style="text-align:center;border:1px solid #e2e8f0;padding:5px;">${arrived}</td>
         <td style="border:1px solid #e2e8f0;padding:5px;font-size:11px;">${r.tracking_number||''}</td>
         <td style="border:1px solid #e2e8f0;padding:5px;font-family:monospace;">${r.product_id||''}</td>
-        <td style="border:1px solid #e2e8f0;padding:5px;">${r.product_name||''}</td>
-        <td style="text-align:right;border:1px solid #e2e8f0;padding:5px;">${r.selling_price||''}</td>
-        <td style="text-align:center;border:1px solid #e2e8f0;padding:5px;">${r.qty||''}</td>
-        <td style="text-align:right;border:1px solid #e2e8f0;padding:5px;">${r.unit_cost||''}</td>
+        <td style="border:1px solid #e2e8f0;padding:5px;">${liveName}</td>
+        <td style="text-align:right;border:1px solid #e2e8f0;padding:5px;">${livePrice||''}</td>
+        <td style="text-align:center;border:1px solid #e2e8f0;padding:5px;">${liveQty||''}</td>
+        <td style="text-align:right;border:1px solid #e2e8f0;padding:5px;">${liveCost||''}</td>
         <td style="border:1px solid #e2e8f0;padding:5px;white-space:nowrap;font-size:11px;">${r.ship_date||''}</td>
         <td style="border:1px solid #e2e8f0;padding:5px;font-size:11px;">${r.ship_order||''}</td>
         <td style="border:1px solid #e2e8f0;padding:5px;">${r.ship_to||''}</td>
+        <td style="border:1px solid #e2e8f0;padding:5px;text-align:center;">${liveCategory}</td>
       </tr>`;
     });
 
