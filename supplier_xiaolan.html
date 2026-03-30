@@ -960,10 +960,22 @@ function onLinkedChange(input) {
   const typedVal = input.value.trim();
   // 從 datalist 找匹配的選項
   const options = getOrderTrackOptions();
-  const matched = options.find(o => {
+  // 比對方式：精準 → 包含商品編號 → 包含商品名稱
+  let matched = options.find(o => {
     const label = (o.productId ? o.productId + ' ' : '') + (o.name || '');
     return label === typedVal;
   });
+  if (!matched) {
+    // 從輸入值提取商品編號（開頭的數字）
+    const pidMatch = typedVal.match(/^(\d+)/);
+    if (pidMatch) {
+      matched = options.find(o => o.productId === pidMatch[1]);
+    }
+  }
+  if (!matched && typedVal.length >= 3) {
+    // 名稱包含比對
+    matched = options.find(o => typedVal.includes(o.name) || (o.name && o.name.includes(typedVal)));
+  }
   if (matched) {
     const val = matched.productId || matched.name || '';
     row.linked_product = val;
@@ -976,6 +988,7 @@ function onLinkedChange(input) {
       const priceInput = tr.querySelector('input[data-field="selling_price"]');
       if (priceInput) priceInput.value = price;
     }
+    triggerAutoSave();
   } else if (!typedVal) {
     row.linked_product = '';
     row._dirty = true;
