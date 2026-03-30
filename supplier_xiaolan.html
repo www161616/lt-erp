@@ -1094,7 +1094,7 @@ function openPasteDialog() {
       }
       return checked;
     }
-  }).then(res => {
+  }).then(async res => {
     if (!res.isConfirmed || !res.value) return;
     const items = res.value;
     let imported = 0;
@@ -1184,12 +1184,14 @@ function openPasteDialog() {
       });
       pPage = 1;
       renderPurchaseGrid();
+      // 直接存入 DB
+      await savePurchases(false);
       // 自動配對開團商品
       const matchResult = autoMatchPurchases(true);
       if (matchResult.matched > 0) {
         showAutoMatchResult(matchResult);
       } else {
-        Swal.fire({ icon: 'success', title: `已匯入 ${imported} 筆`, text: '請確認後按「儲存」', timer: 2000, showConfirmButton: false });
+        Swal.fire({ icon: 'success', title: `已匯入 ${imported} 筆，已存入資料庫`, timer: 2000, showConfirmButton: false });
       }
     }
   });
