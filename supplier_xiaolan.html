@@ -1419,7 +1419,7 @@ function siParse1688(lines) {
   const cQty = findCol(['数量', '购买数量']);
   const cTrack = findCol(['运单号', '物流单号']);
   const cSeller = findCol(['卖家', '供应商']);
-  const cOffer = findCol(['offer']);
+  const cOffer = findCol(['Offer ID', 'offer', 'Offer']);
 
   let current = null;
   for (let i = 1; i < lines.length; i++) {
