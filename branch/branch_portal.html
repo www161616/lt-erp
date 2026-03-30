@@ -1053,6 +1053,29 @@
     function cloudSave(key) {
       const raw = localStorage.getItem(key);
       if (raw === null) return;
+
+      // branchOrders 特殊處理：先拉雲端最新，合併自己店的資料再上傳，避免覆蓋其他店
+      if (key === 'branchOrders' && currentStore?.name) {
+        const storeName = currentStore.name;
+        const localData = JSON.parse(raw);
+        const myData = localData[storeName] || {};
+        fetch(`${SB_URL}/shared_kv?key=eq.branchOrders&select=value`, { headers: SB_HEADERS })
+          .then(r => r.ok ? r.json() : [])
+          .then(rows => {
+            let cloud = (rows[0] && rows[0].value) ? (typeof rows[0].value === 'string' ? JSON.parse(rows[0].value) : rows[0].value) : {};
+            cloud[storeName] = myData;
+            // 同步更新本地（含其他店的最新資料）
+            localStorage.setItem('branchOrders', JSON.stringify(cloud));
+            return fetch(`${SB_URL}/shared_kv`, {
+              method: 'POST',
+              headers: { ...SB_HEADERS, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
+              body: JSON.stringify({ key: 'branchOrders', value: cloud, updated_at: new Date().toISOString() })
+            });
+          })
+          .catch(e => console.error('cloudSave branchOrders error:', e));
+        return;
+      }
+
       fetch(`${SB_URL}/shared_kv`, {
         method: 'POST',
         headers: { ...SB_HEADERS, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
