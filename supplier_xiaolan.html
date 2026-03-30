@@ -1168,7 +1168,161 @@ function openPasteDialog() {
       });
       pPage = 1;
       renderPurchaseGrid();
-      Swal.fire({ icon: 'success', title: `已匯入 ${imported} 筆`, text: '請確認後按「儲存」', timer: 2000, showConfirmButton: false });
+      // 自動配對開團商品
+      const matchResult = autoMatchPurchases(items);
+      if (matchResult.matched > 0 || matchResult.unmatched > 0) {
+        showAutoMatchResult(matchResult);
+      } else {
+        Swal.fire({ icon: 'success', title: `已匯入 ${imported} 筆`, text: '請確認後按「儲存」', timer: 2000, showConfirmButton: false });
+      }
+    }
+  });
+}
+
+// ===== 匯入後自動配對開團商品 =====
+function autoMatchPurchases(importedItems) {
+  const otItems = getOrderTrackOptions();
+  if (otItems.length === 0) return { matched: 0, unmatched: 0, details: [] };
+
+  // 建立 offer_id → 開團商品 索引
+  const offerIndex = {};
+  otItems.forEach(ot => {
+    const oid = extractOfferId(ot.url) || extractOfferId(OT_ORDER_URLS[ot.productId]);
+    if (oid) {
+      if (!offerIndex[oid]) offerIndex[oid] = [];
+      offerIndex[oid].push(ot);
+    }
+  });
+
+  // 建立名稱索引（用於模糊比對）
+  const otNames = otItems.map(ot => ({
+    ot,
+    keywords: (ot.name || '').replace(/[（()）\-\/]/g, ' ').split(/\s+/).filter(w => w.length >= 2)
+  }));
+
+  const details = [];
+  let matched = 0, unmatched = 0;
+
+  // 找需要配對的（新匯入的 + 沒有 linked_product 的）
+  const allRows = [...purchaseRows, ...newPurchaseRows];
+  const toMatch = importedItems
+    ? allRows.filter(r => !r.linked_product && r.offer_id)
+    : [];
+
+  toMatch.forEach(r => {
+    let bestMatch = null;
+    let matchType = '';
+
+    // 1. offer_id 精準配對
+    if (r.offer_id && offerIndex[r.offer_id]) {
+      bestMatch = offerIndex[r.offer_id][0];
+      matchType = 'offer_id';
+    }
+
+    // 2. 商品名稱模糊比對
+    if (!bestMatch && r.product_name) {
+      const rName = r.product_name.replace(/\s*(颜色|规格|尺寸|型号)\s*[:：].*/i, '').trim().toLowerCase();
+      let bestScore = 0;
+      otNames.forEach(({ ot, keywords }) => {
+        let score = 0;
+        keywords.forEach(kw => {
+          if (rName.includes(kw.toLowerCase())) score += kw.length;
+        });
+        // 也反向比：開團商品名的關鍵字在 1688 名稱中
+        const rWords = rName.replace(/[（()）\-\/]/g, ' ').split(/\s+/).filter(w => w.length >= 2);
+        rWords.forEach(w => {
+          if ((ot.name || '').toLowerCase().includes(w)) score += w.length;
+        });
+        if (score > bestScore && score >= 4) {
+          bestScore = score;
+          bestMatch = ot;
+          matchType = 'fuzzy';
+        }
+      });
+    }
+
+    if (bestMatch) {
+      matched++;
+      details.push({
+        row: r,
+        match: bestMatch,
+        type: matchType,
+        applied: false
+      });
+    } else {
+      unmatched++;
+      details.push({ row: r, match: null, type: 'none', applied: false });
+    }
+  });
+
+  return { matched, unmatched, details };
+}
+
+function showAutoMatchResult(result) {
+  const { matched, unmatched, details } = result;
+  const matchedDetails = details.filter(d => d.match);
+  const unmatchedDetails = details.filter(d => !d.match);
+
+  let html = `<div style="text-align:left;font-size:13px;">`;
+  html += `<p style="margin-bottom:8px;">匯入完成！自動配對結果：<b style="color:#276749;">${matched} 筆配對成功</b>`;
+  if (unmatched > 0) html += `，<b style="color:#b7791f;">${unmatched} 筆未配對</b>`;
+  html += `</p>`;
+
+  if (matchedDetails.length > 0) {
+    html += `<div style="max-height:350px;overflow:auto;border:1px solid #e2e8f0;border-radius:6px;">`;
+    html += `<table style="width:100%;border-collapse:collapse;font-size:12px;">`;
+    html += `<tr style="background:#f0fdf4;position:sticky;top:0;">
+      <th style="padding:5px 8px;text-align:left;border-bottom:1px solid #e2e8f0;">1688 商品名</th>
+      <th style="padding:5px 8px;text-align:center;border-bottom:1px solid #e2e8f0;">→</th>
+      <th style="padding:5px 8px;text-align:left;border-bottom:1px solid #e2e8f0;">開團商品</th>
+      <th style="padding:5px 8px;text-align:center;border-bottom:1px solid #e2e8f0;width:50px;">配對</th>
+    </tr>`;
+    matchedDetails.forEach((d, i) => {
+      const tag = d.type === 'offer_id'
+        ? '<span style="background:#bee3f8;color:#2b6cb0;padding:1px 6px;border-radius:3px;font-size:10px;">精準</span>'
+        : '<span style="background:#fefcbf;color:#b7791f;padding:1px 6px;border-radius:3px;font-size:10px;">模糊</span>';
+      html += `<tr style="border-bottom:1px solid #f0f0f0;">
+        <td style="padding:4px 8px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(d.row.product_name)}">${esc((d.row.product_name || '').slice(0, 25))}</td>
+        <td style="padding:4px;text-align:center;color:#a0aec0;">→</td>
+        <td style="padding:4px 8px;"><b style="color:#2b6cb0;">${d.match.productId || ''}</b> ${esc(d.match.name || '')}</td>
+        <td style="padding:4px 8px;text-align:center;">${tag}</td>
+      </tr>`;
+    });
+    html += `</table></div>`;
+  }
+
+  if (unmatchedDetails.length > 0 && unmatchedDetails.length <= 10) {
+    html += `<div style="margin-top:8px;font-size:11px;color:#b7791f;">`;
+    html += `<b>未配對：</b>`;
+    unmatchedDetails.forEach(d => {
+      html += `<br>• ${esc((d.row.product_name || '').slice(0, 40))}`;
+    });
+    html += `</div>`;
+  }
+
+  html += `</div>`;
+
+  Swal.fire({
+    title: '自動配對結果',
+    html,
+    width: '700px',
+    showCancelButton: true,
+    confirmButtonText: `套用 ${matched} 筆配對`,
+    cancelButtonText: '跳過（手動配對）',
+    confirmButtonColor: '#276749',
+  }).then(res => {
+    if (res.isConfirmed) {
+      // 套用配對結果
+      let applied = 0;
+      matchedDetails.forEach(d => {
+        d.row.linked_product = d.match.productId || d.match.name || '';
+        if (d.match.price) d.row.selling_price = parseFloat(d.match.price) || 0;
+        d.row._dirty = true;
+        applied++;
+      });
+      renderPurchaseGrid();
+      triggerAutoSave();
+      Swal.fire({ icon: 'success', title: `已套用 ${applied} 筆`, text: '對應商品和售價已自動填入，請確認後儲存', timer: 2500, showConfirmButton: false });
     }
   });
 }
