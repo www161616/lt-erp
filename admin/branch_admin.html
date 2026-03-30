@@ -4527,6 +4527,9 @@
           // 商品建檔的 supplier 作為預設，但不覆蓋訂貨追蹤手動修改的值
           if (!existing.supplier && item.supplier) existing.supplier = item.supplier;
           if (item.price !== undefined) existing.price = item.price;
+          // 從 branchOrderList 恢復已存的 procStatus（不覆蓋 DB 來源的更新）
+          if (item.procStatus && existing.procStatus === 'pending') existing.procStatus = item.procStatus;
+          if (item.eta) existing.eta = item.eta;
           // 重算總需求量
           const allStoreNames = JSON.parse(localStorage.getItem('importedStoreNames') || '[]');
           const allPersonalNames = JSON.parse(localStorage.getItem('importedPersonalNames') || '[]');
@@ -4552,8 +4555,8 @@
             startDate: item.startDate || '',
             endDate: item.endDate || '',
             status: isExpired ? 'closed' : 'open',
-            procStatus: 'pending',
-            eta: '',
+            procStatus: item.procStatus || 'pending',
+            eta: item.eta || '',
             supplier: item.supplier || '',
             price: item.price || ''
           });
@@ -4773,11 +4776,11 @@
       const item = mockConsolidatedOrders.find(i => i.id === id);
       if (item) {
         item[field] = value;
-        // 廠商修改也回寫 branchOrderList，確保重新進入頁面不會遺失
-        if (field === 'supplier') {
+        // 回寫 branchOrderList，確保重新進入頁面不會遺失
+        if (['supplier', 'procStatus', 'eta'].includes(field)) {
           const saved = JSON.parse(localStorage.getItem('branchOrderList') || '[]');
           const entry = saved.find(p => p.id === id);
-          if (entry) { entry.supplier = value; localStorage.setItem('branchOrderList', JSON.stringify(saved)); cloudSave('branchOrderList'); }
+          if (entry) { entry[field] = value; localStorage.setItem('branchOrderList', JSON.stringify(saved)); cloudSave('branchOrderList'); }
         }
         syncProcurementToPortal();
         if (field === 'procStatus' && value === 'supplier_shortage') {
@@ -4835,10 +4838,15 @@
         confirmButtonColor: '#805ad5'
       }).then(r => {
         if (!r.isConfirmed) return;
+        const saved = JSON.parse(localStorage.getItem('branchOrderList') || '[]');
         targetIds.forEach(id => {
           const item = mockConsolidatedOrders.find(i => i.id === id);
           if (item) item.procStatus = newStatus;
+          const entry = saved.find(p => p.id === id);
+          if (entry) entry.procStatus = newStatus;
         });
+        localStorage.setItem('branchOrderList', JSON.stringify(saved));
+        cloudSave('branchOrderList');
         syncProcurementToPortal();
         logActivity('批次更新採購進度', 'PROCUREMENT', `${checked.length} 筆改為 ${statusMap[newStatus]}`);
         renderProcurementTable();
