@@ -1242,28 +1242,48 @@ function autoMatchPurchases(importedItems) {
       matchType = 'offer_id';
     }
 
-    // 2. 商品名稱模糊比對（中文子串滑動比對）
+    // 2. 商品名稱模糊比對（核心名詞比對，排除通用詞）
     if (!bestMatch && r.product_name) {
-      const rName = r.product_name.replace(/\s*(颜色|规格|尺寸|型号)\s*[:：].*/i, '').replace(/[\-\(\)（）\/\s]/g, '').trim().toLowerCase();
+      // 通用詞黑名單（這些詞到處出現，不算分）
+      const STOP_WORDS = new Set(['多功能','二合一','三合一','四合一','五合一','家用','新款','升级','加厚','加大','大号','小号',
+        '批发','厂家','直销','包邮','现货','爆款','热销','创意','迷你','便携','折叠','不锈钢','塑料','硅胶',
+        '男女','通用','随机','颜色','尺寸','规格','型号','款式']);
+
+      const rClean = r.product_name.replace(/\s*(颜色|规格|尺寸|型号)\s*[:：].*/i, '').replace(/[\-\(\)（）\/\s\d]/g, '').trim().toLowerCase();
       let bestScore = 0;
-      otNames.forEach(({ ot, name: otName, keywords }) => {
-        let score = 0;
-        // 開團商品的子串在 1688 名稱中出現
-        keywords.forEach(kw => {
-          if (rName.includes(kw)) score += kw.length;
-        });
-        // 也反向：1688 名稱的子串在開團商品名中出現
-        for (let len = 4; len >= 3; len--) {
-          for (let i = 0; i <= rName.length - len; i++) {
-            const sub = rName.slice(i, i + len);
-            if (/[\u4e00-\u9fff]{2,}/.test(sub) && otName.includes(sub)) score += len;
+
+      otNames.forEach(({ ot, name: otName }) => {
+        const otClean = otName.replace(/[\-\(\)（）\/\s\d]/g, '').toLowerCase();
+        // 用 3-6 字的子串比對，只算非通用詞的匹配
+        const matchedSubs = new Set();
+
+        for (let len = 6; len >= 3; len--) {
+          for (let i = 0; i <= otClean.length - len; i++) {
+            const sub = otClean.slice(i, i + len);
+            if (STOP_WORDS.has(sub)) continue;
+            if (!/[\u4e00-\u9fff]{2,}/.test(sub)) continue;
+            if (rClean.includes(sub)) matchedSubs.add(sub);
           }
         }
-        // 去重計分（避免重疊子串重複加分），用比例衡量
-        const maxPossible = Math.max(rName.length, otName.length) * 2;
-        const ratio = maxPossible > 0 ? score / maxPossible : 0;
-        if (score > bestScore && score >= 6 && ratio > 0.05) {
-          bestScore = score;
+
+        // 計算覆蓋率：匹配的字元數 / 開團商品名長度
+        let coveredChars = 0;
+        const usedPositions = new Set();
+        // 按長度排序，長的先算
+        [...matchedSubs].sort((a, b) => b.length - a.length).forEach(sub => {
+          const idx = otClean.indexOf(sub);
+          if (idx >= 0) {
+            let isNew = false;
+            for (let j = idx; j < idx + sub.length; j++) {
+              if (!usedPositions.has(j)) { isNew = true; usedPositions.add(j); coveredChars++; }
+            }
+          }
+        });
+
+        const coverage = otClean.length > 0 ? coveredChars / otClean.length : 0;
+        // 至少覆蓋 40% 且至少 3 個字元才算配對
+        if (coveredChars >= 3 && coverage > 0.4 && coveredChars > bestScore) {
+          bestScore = coveredChars;
           bestMatch = ot;
           matchType = 'fuzzy';
         }
