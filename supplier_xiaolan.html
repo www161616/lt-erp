@@ -190,7 +190,9 @@
       <select id="pSource" onchange="renderPurchaseGrid()">
         <option value="">全部來源</option>
         <option value="1688">1688</option>
-        <option value="漂漂館">漂漂館</option>
+        <option value="拼多多">拼多多</option>
+        <option value="淘寶">淘寶</option>
+        <option value="其他">其他</option>
       </select>
       <input type="text" id="pKeyword" placeholder="搜尋商品/訂單/運單" style="width:160px;" onkeydown="if(event.key==='Enter')renderPurchaseGrid()">
       <button class="btn btn-outline" onclick="renderPurchaseGrid()" style="padding:5px 10px;">搜尋</button>
@@ -843,7 +845,9 @@ function renderPurchaseGrid() {
       </select></td>
       <td><select data-field="source" data-idx="${idx}" oninput="onPCellChange(this)">
         <option value="1688" ${r.source === '1688' || !r.source ? 'selected' : ''}>1688</option>
-        <option value="漂漂館" ${r.source === '漂漂館' ? 'selected' : ''}>漂漂館</option>
+        <option value="拼多多" ${r.source === '拼多多' ? 'selected' : ''}>拼多多</option>
+        <option value="淘寶" ${r.source === '淘寶' ? 'selected' : ''}>淘寶</option>
+        <option value="其他" ${r.source === '其他' ? 'selected' : ''}>其他</option>
       </select></td>
       <td><input value="${r.seller || ''}" data-field="seller" data-idx="${idx}" oninput="onPCellChange(this)" style="font-size:11px;"></td>
       <td style="text-align:center;">${r.offer_id ? '<span class="shared-link" data-url="https://detail.1688.com/offer/' + r.offer_id + '.html" style="color:var(--accent);font-size:11px;cursor:pointer;text-decoration:underline;">前往</span>' : ''}</td>
@@ -1537,7 +1541,7 @@ function siParse1688(lines) {
   return results;
 }
 
-// 1688 無表頭格式（從網頁直接複製）
+// 1688 無表頭格式（從網頁直接複製 或 Google Sheet 貼上）
 // 欄位順序：日期 訂單號 運單號 商品名稱 付款RMB 數量 重量
 function siParse1688Raw(lines) {
   const results = [];
@@ -1549,19 +1553,28 @@ function siParse1688Raw(lines) {
 
     // 判斷是主列還是續行：主列的某個欄位是 15+ 位數字（訂單號）
     let orderIdx = cols.findIndex(c => /^\d{15,}$/.test(c));
+    // 也支援破折號格式（如 260112-094791319993422）
+    let altOrderIdx = orderIdx < 0 ? cols.findIndex(c => /^\d{6}-\d{10,}$/.test(c)) : -1;
     // 也可能有日期在前面
     let dateIdx = cols.findIndex(c => /^\d{4}[-\/]\d{2}[-\/]\d{2}/.test(c));
+    // 有中文 = 有商品名 = 獨立一筆
+    let hasChinese = cols.some(c => /[\u4e00-\u9fff]/.test(c));
 
-    if (orderIdx >= 0) {
-      // 主列
+    // 只要有日期或訂單號或有商品名，就當獨立一筆
+    let isNewRow = orderIdx >= 0 || altOrderIdx >= 0 || (hasChinese && (dateIdx >= 0 || cols.length >= 4));
+
+    if (isNewRow) {
       if (current) results.push(current);
 
-      // 找各欄位：日期、訂單號之後依序是 運單號、商品名、金額、數量、重量
-      const orderNum = cols[orderIdx];
-      const date = dateIdx >= 0 && dateIdx < orderIdx ? siExcelDateToStr(cols[dateIdx]) : '';
+      const effectiveOrderIdx = orderIdx >= 0 ? orderIdx : altOrderIdx;
+      const orderNum = effectiveOrderIdx >= 0 ? cols[effectiveOrderIdx] : '';
+      const date = dateIdx >= 0 ? siExcelDateToStr(cols[dateIdx]) : '';
 
-      // 訂單號之後的欄位
-      const rest = cols.slice(orderIdx + 1);
+      // 訂單號之後的欄位（若無訂單號，排除日期後取全部）
+      const rest = effectiveOrderIdx >= 0
+        ? cols.slice(effectiveOrderIdx + 1)
+        : cols.filter((c, idx) => idx !== dateIdx);
+
       // 找運單號（純數字或含字母的物流單號）
       let trackIdx = rest.findIndex(c => /^[A-Z]{0,3}\d{10,}$/i.test(c));
       let tracking = trackIdx >= 0 ? rest[trackIdx] : '';
@@ -1571,8 +1584,9 @@ function siParse1688Raw(lines) {
       let name = nameIdx >= 0 ? rest[nameIdx] : '';
       name = name.replace(/\s*(颜色|规格|尺寸|型号)\s*[:：].*/i, '').trim();
 
-      // 找數值欄位（金額、數量、重量）— 排除已識別的運單號
-      const nums = rest.filter((c, idx) => idx !== trackIdx && /^\d+\.?\d*$/.test(c)).map(Number);
+      // 找數值欄位（金額、數量、重量）— 排除已識別的運單號和商品名
+      const nums = rest.filter((c, idx) => idx !== trackIdx && idx !== nameIdx && /^[\d,]+\.?\d*$/.test(c))
+        .map(c => parseFloat(c.replace(/,/g, '')) || 0);
 
       current = {
         order_number: orderNum,
@@ -1585,15 +1599,13 @@ function siParse1688Raw(lines) {
         source: '1688'
       };
     } else if (current) {
-      // 續行：可能是金額/數量/重量，或是額外的商品名
+      // 續行（真正的無商品名、無日期的純補充行）
       const nums = cols.filter(c => /^\d+\.?\d*$/.test(c)).map(Number);
       if (nums.length >= 2) {
-        // 補充金額/數量/重量
         if (!current.payment_rmb && nums[0]) current.payment_rmb = nums[0];
         if (!current.qty && nums.length > 1) current.qty = Math.round(nums[1]);
         if (!current.weight_kg && nums.length > 2) current.weight_kg = nums[2];
       }
-      // 如果有中文可能是商品名補充
       const chinese = cols.find(c => /[\u4e00-\u9fff]/.test(c));
       if (chinese && !current.product_name) {
         current.product_name = chinese.replace(/\s*(颜色|规格|尺寸|型号)\s*[:：].*/i, '').trim();
