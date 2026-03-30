@@ -1197,7 +1197,18 @@ function autoMatchPurchases(importedItems) {
   // 建立名稱索引（用於模糊比對）
   const otNames = otItems.map(ot => ({
     ot,
-    keywords: (ot.name || '').replace(/[（()）\-\/]/g, ' ').split(/\s+/).filter(w => w.length >= 2)
+    name: (ot.name || '').toLowerCase(),
+    // 提取 2-4 字的中文子串作為關鍵字
+    keywords: (() => {
+      const n = (ot.name || '').replace(/[\-\(\)（）\/\s]/g, '');
+      const kws = [];
+      for (let len = 4; len >= 2; len--) {
+        for (let i = 0; i <= n.length - len; i++) {
+          kws.push(n.slice(i, i + len).toLowerCase());
+        }
+      }
+      return [...new Set(kws)];
+    })()
   }));
 
   const details = [];
@@ -1219,21 +1230,27 @@ function autoMatchPurchases(importedItems) {
       matchType = 'offer_id';
     }
 
-    // 2. 商品名稱模糊比對
+    // 2. 商品名稱模糊比對（中文子串滑動比對）
     if (!bestMatch && r.product_name) {
-      const rName = r.product_name.replace(/\s*(颜色|规格|尺寸|型号)\s*[:：].*/i, '').trim().toLowerCase();
+      const rName = r.product_name.replace(/\s*(颜色|规格|尺寸|型号)\s*[:：].*/i, '').replace(/[\-\(\)（）\/\s]/g, '').trim().toLowerCase();
       let bestScore = 0;
-      otNames.forEach(({ ot, keywords }) => {
+      otNames.forEach(({ ot, name: otName, keywords }) => {
         let score = 0;
+        // 開團商品的子串在 1688 名稱中出現
         keywords.forEach(kw => {
-          if (rName.includes(kw.toLowerCase())) score += kw.length;
+          if (rName.includes(kw)) score += kw.length;
         });
-        // 也反向比：開團商品名的關鍵字在 1688 名稱中
-        const rWords = rName.replace(/[（()）\-\/]/g, ' ').split(/\s+/).filter(w => w.length >= 2);
-        rWords.forEach(w => {
-          if ((ot.name || '').toLowerCase().includes(w)) score += w.length;
-        });
-        if (score > bestScore && score >= 4) {
+        // 也反向：1688 名稱的子串在開團商品名中出現
+        for (let len = 4; len >= 3; len--) {
+          for (let i = 0; i <= rName.length - len; i++) {
+            const sub = rName.slice(i, i + len);
+            if (/[\u4e00-\u9fff]{2,}/.test(sub) && otName.includes(sub)) score += len;
+          }
+        }
+        // 去重計分（避免重疊子串重複加分），用比例衡量
+        const maxPossible = Math.max(rName.length, otName.length) * 2;
+        const ratio = maxPossible > 0 ? score / maxPossible : 0;
+        if (score > bestScore && score >= 6 && ratio > 0.05) {
           bestScore = score;
           bestMatch = ot;
           matchType = 'fuzzy';
