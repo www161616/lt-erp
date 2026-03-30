@@ -199,9 +199,33 @@
     // 使用 Google 公開發布的 CSV 網址（不受 CORS 限制）
     const CSV_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:csv&gid=${GID}`;
 
-    // ===== 店家名稱對照 =====
-    const STORE_COLUMNS = ['三峽','中和','文山','四號','永和','忠順','淡水','環球','平鎮','古華','林口','南平','泰山','萬華','板橋','湖口','經國','松山','龍潭'];
-    const PERSONAL_COLUMNS = ['買','山','全','澤','絨','光','大','杰','胖','峯','柚','方','佑','楊'];
+    // ===== 店家名稱對照（從 branchDataList 動態讀取）=====
+    const DEFAULT_STORES = ['三峽','中和','文山','四號','永和','忠順','淡水','環球','平鎮','古華','林口','南平','泰山','萬華','板橋','湖口','經國','松山','龍潭'];
+    const DEFAULT_PERSONALS = ['買','山','全','澤','絨','光','大','杰','胖','峯','柚','方','佑','楊'];
+
+    // 從 localStorage/cloudSave 讀取動態客戶名單
+    let branchDataList = [];
+    try { branchDataList = JSON.parse(localStorage.getItem('branchDataList') || '[]'); } catch {}
+
+    let STORE_COLUMNS, PERSONAL_COLUMNS;
+    if (branchDataList.length > 0) {
+      // 有動態名單：store/wholesale 歸入 STORE_COLUMNS
+      STORE_COLUMNS = branchDataList.filter(b => b.type === 'store' || b.type === 'wholesale').map(b => b.name);
+      // personal 歸入 PERSONAL_COLUMNS（如果有的話）
+      const personals = branchDataList.filter(b => b.type === 'personal').map(b => b.name);
+      PERSONAL_COLUMNS = personals.length > 0 ? personals : DEFAULT_PERSONALS;
+    } else {
+      STORE_COLUMNS = DEFAULT_STORES;
+      PERSONAL_COLUMNS = DEFAULT_PERSONALS;
+    }
+
+    // 額外：從 Google Sheet 表頭自動發現新欄位（不在名單裡的也匯入）
+    function detectExtraColumns(header) {
+      const known = new Set([...STORE_COLUMNS, ...PERSONAL_COLUMNS,
+        '狀態','結單日','商品編號','商品名稱','數量','庫存','破損','售價','廠商','分店價']);
+      const extra = header.filter(h => h.trim() && !known.has(h.trim()));
+      return extra.map(h => h.trim());
+    }
 
     // ===== 全域變數 =====
     let allRows = [];

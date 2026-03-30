@@ -257,6 +257,23 @@
           throw new Error('Auth 已建立但 employees 寫入失敗: ' + (err2.message || ''));
         }
 
+        // 如果是分店/批發角色，自動加入 branchDataList
+        if (v.role === 'store' && v.store) {
+          try {
+            var bdl = JSON.parse(localStorage.getItem('branchDataList') || '[]');
+            if (!bdl.find(function(b) { return b.name === v.store; })) {
+              bdl.push({ name: v.store, type: v.store_type || 'store' });
+              localStorage.setItem('branchDataList', JSON.stringify(bdl));
+              // 同步到雲端 shared_kv（upsert）
+              fetch(SB_URL + '/shared_kv', {
+                method: 'POST',
+                headers: H({ 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates,return=minimal' }),
+                body: JSON.stringify({ key: 'branchDataList', value: JSON.stringify(bdl) })
+              }).catch(function(e) { console.warn('shared_kv sync failed:', e); });
+            }
+          } catch(e) { console.warn('branchDataList 同步失敗:', e); }
+        }
+
         Swal.fire({ icon: 'success', title: '新增成功', text: v.username + ' (' + v.role + ')', timer: 1500, showConfirmButton: false });
         loadAccounts();
       } catch(e) {
