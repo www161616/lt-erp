@@ -1569,8 +1569,8 @@ function siParse1688Raw(lines) {
       let name = nameIdx >= 0 ? rest[nameIdx] : '';
       name = name.replace(/\s*(颜色|规格|尺寸|型号)\s*[:：].*/i, '').trim();
 
-      // 找數值欄位（金額、數量、重量）
-      const nums = rest.filter(c => /^\d+\.?\d*$/.test(c)).map(Number);
+      // 找數值欄位（金額、數量、重量）— 排除已識別的運單號
+      const nums = rest.filter((c, idx) => idx !== trackIdx && /^\d+\.?\d*$/.test(c)).map(Number);
 
       current = {
         order_number: orderNum,
