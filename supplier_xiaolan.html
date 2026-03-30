@@ -785,7 +785,7 @@ function getFilteredPurchases() {
   if (month) data = data.filter(r => r.order_date && r.order_date.startsWith(month));
   if (source) data = data.filter(r => r.source === source);
   if (kw) data = data.filter(r => fuzzyMatch(r.product_name, kw) || (r.order_number || '').includes(kw) || (r.tracking_number || '').toLowerCase().includes(kw) || (r.tracking_number || '').split(/[,，、;；\s]+/).some(t => t.trim().toLowerCase() === kw));
-  data.sort((a, b) => (b.order_date || '').localeCompare(a.order_date || ''));
+  // 不排序，保留原始順序（DB 依 id 降冪載入）
   return data;
 }
 
