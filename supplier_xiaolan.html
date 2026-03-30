@@ -1208,22 +1208,6 @@ function autoMatchPurchases(importedItems) {
     }
   });
 
-  // 建立名稱索引（用於模糊比對）
-  const otNames = otItems.map(ot => ({
-    ot,
-    name: (ot.name || '').toLowerCase(),
-    // 提取 2-4 字的中文子串作為關鍵字
-    keywords: (() => {
-      const n = (ot.name || '').replace(/[\-\(\)（）\/\s]/g, '');
-      const kws = [];
-      for (let len = 4; len >= 2; len--) {
-        for (let i = 0; i <= n.length - len; i++) {
-          kws.push(n.slice(i, i + len).toLowerCase());
-        }
-      }
-      return [...new Set(kws)];
-    })()
-  }));
 
   const details = [];
   let matched = 0, unmatched = 0;
@@ -1242,53 +1226,7 @@ function autoMatchPurchases(importedItems) {
       matchType = 'offer_id';
     }
 
-    // 2. 商品名稱模糊比對（核心名詞比對，排除通用詞）
-    if (!bestMatch && r.product_name) {
-      // 通用詞黑名單（這些詞到處出現，不算分）
-      const STOP_WORDS = new Set(['多功能','二合一','三合一','四合一','五合一','家用','新款','升级','加厚','加大','大号','小号',
-        '批发','厂家','直销','包邮','现货','爆款','热销','创意','迷你','便携','折叠','不锈钢','塑料','硅胶',
-        '男女','通用','随机','颜色','尺寸','规格','型号','款式']);
-
-      const rClean = r.product_name.replace(/\s*(颜色|规格|尺寸|型号)\s*[:：].*/i, '').replace(/[\-\(\)（）\/\s\d]/g, '').trim().toLowerCase();
-      let bestScore = 0;
-
-      otNames.forEach(({ ot, name: otName }) => {
-        const otClean = otName.replace(/[\-\(\)（）\/\s\d]/g, '').toLowerCase();
-        // 用 3-6 字的子串比對，只算非通用詞的匹配
-        const matchedSubs = new Set();
-
-        for (let len = 6; len >= 3; len--) {
-          for (let i = 0; i <= otClean.length - len; i++) {
-            const sub = otClean.slice(i, i + len);
-            if (STOP_WORDS.has(sub)) continue;
-            if (!/[\u4e00-\u9fff]{2,}/.test(sub)) continue;
-            if (rClean.includes(sub)) matchedSubs.add(sub);
-          }
-        }
-
-        // 計算覆蓋率：匹配的字元數 / 開團商品名長度
-        let coveredChars = 0;
-        const usedPositions = new Set();
-        // 按長度排序，長的先算
-        [...matchedSubs].sort((a, b) => b.length - a.length).forEach(sub => {
-          const idx = otClean.indexOf(sub);
-          if (idx >= 0) {
-            let isNew = false;
-            for (let j = idx; j < idx + sub.length; j++) {
-              if (!usedPositions.has(j)) { isNew = true; usedPositions.add(j); coveredChars++; }
-            }
-          }
-        });
-
-        const coverage = otClean.length > 0 ? coveredChars / otClean.length : 0;
-        // 至少覆蓋 40% 且至少 3 個字元才算配對
-        if (coveredChars >= 3 && coverage > 0.4 && coveredChars > bestScore) {
-          bestScore = coveredChars;
-          bestMatch = ot;
-          matchType = 'fuzzy';
-        }
-      });
-    }
+    // 模糊比對已移除（不可靠），只用 offer_id 精準配對
 
     if (bestMatch) {
       matched++;
