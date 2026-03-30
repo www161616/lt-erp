@@ -1720,12 +1720,13 @@ function siParseAndPreview() {
   });
 
   parsed.forEach(r => {
-    r._checked = true;
     r._dup = false;
     if (r.tracking_number) {
       const tns = r.tracking_number.split(/[,，;；\s]+/).filter(Boolean);
       r._dup = tns.some(t => existingTNs.has(t.trim()));
     }
+    // 重複的自動跳過不勾選
+    r._checked = !r._dup;
   });
 
   _smartImportParsed = parsed;
