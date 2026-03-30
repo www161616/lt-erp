@@ -2905,7 +2905,8 @@ function addRequest() {
   const note = document.getElementById('reqNote').value.trim();
   if (!name) { Swal.fire('提醒', isInquiry ? '請填寫詢問內容' : '請填寫商品名稱', 'warning'); return; }
   if (!isInquiry && (!qty || qty <= 0)) { Swal.fire('提醒', '請填寫正確數量', 'warning'); return; }
-  requestList.unshift({ id: 'REQ' + String(reqCounter++).padStart(3,'0'), storeId: currentStore?.name || '未知', category, code: code || '', name, price: price || 0, qty, note, createdAt: new Date(), status: 'pending', reply: '' });
+  const uniqueId = 'REQ' + Date.now().toString(36).toUpperCase();
+  requestList.unshift({ id: uniqueId, storeId: currentStore?.name || '未知', category, code: code || '', name, price: price || 0, qty, note, createdAt: new Date(), status: 'pending', reply: '' });
   localStorage.setItem('portalAllRequests', JSON.stringify(requestList));
   cloudSave('portalAllRequests');
   document.getElementById('reqName').value = '';

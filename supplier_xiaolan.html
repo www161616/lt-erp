@@ -1115,9 +1115,18 @@ function openPasteDialog() {
             ship_order: item.ship_order || '',
             ship_to: '直寄龍潭'
           };
-          if (pMatch && pMatch.linked_product) {
+          if (pMatch) {
             const otItems = getOrderTrackOptions();
-            const otMatch = otItems.find(o => (o.productId || o.name || '') === pMatch.linked_product);
+            let otMatch = null;
+            if (pMatch.linked_product) {
+              otMatch = otItems.find(o => (o.productId || o.name || '') === pMatch.linked_product);
+            }
+            if (!otMatch && pMatch.offer_id) {
+              otMatch = otItems.find(o => {
+                const oid = extractOfferId(o.url) || extractOfferId(OT_ORDER_URLS[o.productId]);
+                return oid && oid === pMatch.offer_id;
+              });
+            }
             if (otMatch) {
               arrRow.product_name = otMatch.name || '';
               arrRow.product_id = otMatch.productId || '';
@@ -2300,20 +2309,23 @@ function getLiveArrivalData(trackingNumber, seqIndex) {
   result.qty = pMatch.qty || 0;
   result.unit_cost = pMatch.unit_cost || 0;
   result.offer_id = pMatch.offer_id || '';
+  // 配對開團商品：先用 linked_product，再用 offer_id
+  const otItems = getOrderTrackOptions();
+  let otMatch = null;
   if (pMatch.linked_product) {
-    const otItems = getOrderTrackOptions();
-    console.log('[到貨比對] 陸貨訂購資料筆數:', otItems.length, '比對 linked_product:', pMatch.linked_product);
-    const otMatch = otItems.find(o => (o.productId || o.name || '') === pMatch.linked_product);
-    if (otMatch) {
-      result.product_name = otMatch.name || '';
-      result.product_id = otMatch.productId || '';
-      result.selling_price = parseFloat(otMatch.price) || 0;
-      console.log('[到貨比對] ✓ 找到對應商品:', result.product_name, result.product_id);
-    } else {
-      console.log('[到貨比對] ✗ 陸貨訂購找不到 linked_product:', pMatch.linked_product);
-    }
-  } else {
-    console.log('[到貨比對] 該訂單沒有設定對應商品(linked_product)');
+    otMatch = otItems.find(o => (o.productId || o.name || '') === pMatch.linked_product);
+  }
+  if (!otMatch && pMatch.offer_id) {
+    // 用 offer_id 比對開團商品的 url
+    otMatch = otItems.find(o => {
+      const oid = extractOfferId(o.url) || extractOfferId(OT_ORDER_URLS[o.productId]);
+      return oid && oid === pMatch.offer_id;
+    });
+  }
+  if (otMatch) {
+    result.product_name = otMatch.name || '';
+    result.product_id = otMatch.productId || '';
+    result.selling_price = parseFloat(otMatch.price) || 0;
   }
   if (!result.product_name) result.product_name = pMatch.product_name || '';
   return result;
@@ -2494,10 +2506,19 @@ function importPackageExcel(e) {
             ship_to: '直寄龍潭'
           };
 
-          // 從陸貨訂購帶入商品名稱、商品編號、售價
-          if (pMatch && pMatch.linked_product) {
+          // 從開團商品帶入商品名稱、商品編號、售價（linked_product 或 offer_id 配對）
+          if (pMatch) {
             const otItems = getOrderTrackOptions();
-            const otMatch = otItems.find(o => (o.productId || o.name || '') === pMatch.linked_product);
+            let otMatch = null;
+            if (pMatch.linked_product) {
+              otMatch = otItems.find(o => (o.productId || o.name || '') === pMatch.linked_product);
+            }
+            if (!otMatch && pMatch.offer_id) {
+              otMatch = otItems.find(o => {
+                const oid = extractOfferId(o.url) || extractOfferId(OT_ORDER_URLS[o.productId]);
+                return oid && oid === pMatch.offer_id;
+              });
+            }
             if (otMatch) {
               arrRow.product_name = otMatch.name || '';
               arrRow.product_id = otMatch.productId || '';
