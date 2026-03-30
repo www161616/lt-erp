@@ -1713,17 +1713,24 @@ function siParseAndPreview() {
     return;
   }
 
-  // 標記重複運單
+  // 標記重複（運單號碼 或 訂單號碼）
   const existingTNs = new Set();
+  const existingONs = new Set();
   purchaseRows.forEach(r => {
     if (r.tracking_number) r.tracking_number.split(/[,，、;；\s]+/).forEach(t => { if (t) existingTNs.add(t.trim()); });
+    if (r.order_number) existingONs.add(r.order_number.trim());
   });
 
   parsed.forEach(r => {
     r._dup = false;
+    // 比對運單號碼
     if (r.tracking_number) {
       const tns = r.tracking_number.split(/[,，;；\s]+/).filter(Boolean);
       r._dup = tns.some(t => existingTNs.has(t.trim()));
+    }
+    // 比對訂單號碼
+    if (!r._dup && r.order_number && existingONs.has(r.order_number.trim())) {
+      r._dup = true;
     }
     // 重複的自動跳過不勾選
     r._checked = !r._dup;
