@@ -174,6 +174,7 @@
         <input type="file" id="importExcel" accept=".xlsx,.xls,.csv" style="display:none;" onchange="importExcelFile(event)">
         <button class="btn" style="background:#e67e22;color:#fff;" onclick="toggleOrderLinks()">叫貨清單</button>
         <button class="btn" style="background:#2b6cb0;color:#fff;" onclick="openPasteDialog()">📋 智能匯入</button>
+        <button class="btn" style="background:#276749;color:#fff;" onclick="runAutoMatchAll()">🔗 自動配對</button>
         <button class="btn btn-outline" onclick="document.getElementById('importExcel').click()">匯入 Excel</button>
         <button class="btn btn-outline" onclick="addPurchaseRows(5)">+5 行</button>
         <button class="btn btn-outline" onclick="exportPurchasesExcel()">下載 Excel</button>
@@ -1182,8 +1183,8 @@ function openPasteDialog() {
       pPage = 1;
       renderPurchaseGrid();
       // 自動配對開團商品
-      const matchResult = autoMatchPurchases(items);
-      if (matchResult.matched > 0 || matchResult.unmatched > 0) {
+      const matchResult = autoMatchPurchases(true);
+      if (matchResult.matched > 0) {
         showAutoMatchResult(matchResult);
       } else {
         Swal.fire({ icon: 'success', title: `已匯入 ${imported} 筆`, text: '請確認後按「儲存」', timer: 2000, showConfirmButton: false });
@@ -1227,11 +1228,9 @@ function autoMatchPurchases(importedItems) {
   const details = [];
   let matched = 0, unmatched = 0;
 
-  // 找需要配對的（新匯入的 + 沒有 linked_product 的）
+  // 找需要配對的（沒有 linked_product 的所有訂單）
   const allRows = [...purchaseRows, ...newPurchaseRows];
-  const toMatch = importedItems
-    ? allRows.filter(r => !r.linked_product && r.offer_id)
-    : [];
+  const toMatch = allRows.filter(r => !r.linked_product && (r.offer_id || r.product_name));
 
   toMatch.forEach(r => {
     let bestMatch = null;
@@ -1355,6 +1354,19 @@ function showAutoMatchResult(result) {
       Swal.fire({ icon: 'success', title: `已套用 ${applied} 筆`, text: '對應商品和售價已自動填入，請確認後儲存', timer: 2500, showConfirmButton: false });
     }
   });
+}
+
+function runAutoMatchAll() {
+  const result = autoMatchPurchases(true);
+  if (result.matched === 0 && result.unmatched === 0) {
+    Swal.fire({ icon: 'info', title: '沒有需要配對的訂單', text: '所有訂單都已有對應商品', timer: 1500, showConfirmButton: false });
+    return;
+  }
+  if (result.matched === 0) {
+    Swal.fire({ icon: 'warning', title: `${result.unmatched} 筆無法自動配對`, text: '請手動選擇對應商品' });
+    return;
+  }
+  showAutoMatchResult(result);
 }
 
 function siSelectFormat(fmt) {
