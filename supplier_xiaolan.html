@@ -175,6 +175,8 @@
         <button class="btn" style="background:#e67e22;color:#fff;" onclick="toggleOrderLinks()">叫貨清單</button>
         <button class="btn" style="background:#2b6cb0;color:#fff;" onclick="openPasteDialog()">📋 智能匯入</button>
         <button class="btn" style="background:#276749;color:#fff;" onclick="runAutoMatchAll()">🔗 自動配對</button>
+        <input type="file" id="importOfferIdFile" accept=".xlsx,.xls" style="display:none;" onchange="importOfferIds(event)">
+        <button class="btn btn-outline" style="color:#805ad5;border-color:#805ad5;" onclick="document.getElementById('importOfferIdFile').click()">補 Offer ID</button>
         <button class="btn btn-outline" onclick="document.getElementById('importExcel').click()">匯入 Excel</button>
         <button class="btn btn-outline" onclick="addPurchaseRows(5)">+5 行</button>
         <button class="btn btn-outline" onclick="exportPurchasesExcel()">下載 Excel</button>
@@ -1325,6 +1327,87 @@ function runAutoMatchAll() {
     return;
   }
   showAutoMatchResult(result);
+}
+
+// 從 1688 Excel 補 offer_id 到現有訂單（用訂單號碼比對）
+function importOfferIds(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = async (ev) => {
+    try {
+      Swal.fire({ title: '解析中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+      const wb = XLSX.read(ev.target.result, { type: 'binary' });
+      const ws = wb.Sheets[wb.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
+      if (data.length < 2) { Swal.fire('提示', '檔案沒有資料', 'info'); return; }
+
+      const headers = data[0].map(h => String(h || '').trim());
+      const findCol = (keywords) => headers.findIndex(h => keywords.some(k => h.includes(k)));
+      const cOrder = findCol(['订单编号']);
+      const cOffer = findCol(['Offer ID', 'offer', 'Offer']);
+      const cTrack = findCol(['运单号', '物流单号']);
+      const cSeller = findCol(['卖家公司名', '卖家', '供应商']);
+
+      if (cOrder < 0 || cOffer < 0) {
+        Swal.fire('格式錯誤', '找不到「订单编号」或「Offer ID」欄位', 'error');
+        return;
+      }
+
+      // 建立 訂單號 → {offer_id, tracking, seller} 的對照表
+      const excelMap = {};
+      for (let i = 1; i < data.length; i++) {
+        const row = data[i];
+        const orderNum = row[cOrder] ? String(row[cOrder]).trim() : '';
+        const offerId = row[cOffer] ? String(row[cOffer]).trim() : '';
+        if (!orderNum || !offerId) continue;
+        if (!excelMap[orderNum]) {
+          excelMap[orderNum] = {
+            offer_id: offerId,
+            tracking_number: cTrack >= 0 && row[cTrack] ? String(row[cTrack]).trim() : '',
+            seller: cSeller >= 0 && row[cSeller] ? String(row[cSeller]).trim() : ''
+          };
+        }
+      }
+
+      // 比對現有訂單，補上 offer_id
+      let updated = 0, notFound = 0;
+      const toUpdate = [];
+      purchaseRows.forEach(r => {
+        if (r.offer_id) return; // 已有的不覆蓋
+        const match = excelMap[r.order_number];
+        if (match) {
+          r.offer_id = match.offer_id;
+          if (!r.tracking_number && match.tracking_number) r.tracking_number = match.tracking_number;
+          if (!r.seller && match.seller) r.seller = match.seller;
+          r._dirty = true;
+          toUpdate.push(r);
+          updated++;
+        } else {
+          notFound++;
+        }
+      });
+
+      if (updated > 0) {
+        // 批次更新 DB
+        for (const r of toUpdate) {
+          const { _dirty, id, created_at, ...rest } = r;
+          await fetch(`${SB_URL}/xiaolan_purchases?id=eq.${id}`, { method: 'PATCH', headers: JSON_H, body: JSON.stringify({ offer_id: rest.offer_id, tracking_number: rest.tracking_number, seller: rest.seller }) });
+        }
+        renderPurchaseGrid();
+      }
+
+      Swal.fire({
+        icon: updated > 0 ? 'success' : 'warning',
+        title: `補 Offer ID 完成`,
+        html: `<b style="color:#276749;">${updated} 筆已補上</b>${notFound > 0 ? `<br>${notFound} 筆訂單號未匹配` : ''}<br><br>現在可以按「🔗 自動配對」`,
+      });
+    } catch (err) {
+      Swal.fire('讀取失敗', err.message, 'error');
+    }
+    e.target.value = '';
+  };
+  reader.readAsBinaryString(file);
 }
 
 function siSelectFormat(fmt) {
