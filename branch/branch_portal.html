@@ -5070,9 +5070,9 @@ async function renderHistorySummaryCards() {
           if (tf.direction === 'in') totalIn += amt;
           else totalOut += amt;
         });
-        // 淨額 = 轉入 - 轉出，負數代表分店要多付
+        // 淨額 = 轉入 - 轉出：正數=收到多(要多付)，負數=送出多(可扣抵)
         const net = totalIn - totalOut;
-        transferCharge = -net; // 取反：淨額負(欠總倉)→charge正(要多付)
+        transferCharge = net; // 轉入多→charge正(要多付)；轉出多→charge負(可扣抵)
       } catch(e) {}
     }
   }
