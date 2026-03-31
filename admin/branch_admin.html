@@ -6400,7 +6400,7 @@
         id: t.id,
         fromStore: t.from_store || '',
         toStore: t.to_store || '',
-        items: (t.items || []).map(i => ({ code: i.product_code||'', name: i.product_name||'', qty: i.qty||0, temp: i.temp||'', price: i.price||0, expiry: i.note||'' })),
+        items: (t.items || []).map(i => ({ itemId: i.id, code: i.product_code||'', name: i.product_name||'', qty: i.qty||0, temp: i.temp||'', price: i.price||0, expiry: i.note||'', damage_qty: i.damage_qty||null, damage_note: i.damage_note||'' })),
         tempNote: t.temp_note || '常溫',
         note: t.note || '',
         status: t.admin_status || 'pending',
@@ -6594,7 +6594,10 @@
     const tempColor   = { '冷凍':'#2b6cb0', '冷藏':'#0891b2', '常溫':'#b7791f', '混合':'#7c3aed' };
 
     tbody.innerHTML = [...data].reverse().map(t => {
-      const itemsSummary = t.items.map(i => `<span style="display:inline-block; background:#f1f5f9; border-radius:3px; padding:1px 6px; margin:1px; font-size:11px; white-space:nowrap;">${i.name} ×${i.qty}</span>`).join('');
+      const itemsSummary = t.items.map(i => {
+        const dmgTag = i.damage_qty ? `<span style="display:inline-block; background:#fee2e2; color:#c53030; border-radius:3px; padding:1px 6px; margin:1px; font-size:10px; font-weight:700; white-space:nowrap;">⚠️ 損壞 ${i.damage_qty} 件</span>` : '';
+        return `<span style="display:inline-block; background:#f1f5f9; border-radius:3px; padding:1px 6px; margin:1px; font-size:11px; white-space:nowrap;">${i.name} ×${i.qty}</span>${dmgTag}`;
+      }).join('');
       const tc = tempColor[t.tempNote] || '#718096';
 
       let actionBtn = '';
@@ -6631,7 +6634,14 @@
             onchange="updateTransferNote('${t.id}', this.value)"
             style="width:100%; padding:4px 6px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px; font-family:inherit;">
         </td>
-        <td style="padding:10px 12px; text-align:center;">${actionBtn}</td>
+        <td style="padding:10px 12px; text-align:center;">
+          ${actionBtn}
+          ${(() => {
+            const hasDmg = t.items.some(i => i.damage_qty);
+            if (hasDmg) return `<button class="btn" style="padding:4px 10px; font-size:11px; background:#c05621; white-space:nowrap; margin-top:4px;" onclick="showDamageDetail('${t.id}')">⚠️ 已登記損壞</button>`;
+            return `<button class="btn" style="padding:4px 10px; font-size:11px; background:#718096; white-space:nowrap; margin-top:4px;" onclick="openDamageModal('${t.id}')">🔴 登記損壞</button>`;
+          })()}
+        </td>
       </tr>`;
     }).join('');
   }
@@ -6732,6 +6742,151 @@
       showConfirmButton: false,
       width: 620
     });
+  }
+
+  // ============================
+  // 🔴 店轉店損壞登記
+  // ============================
+  function openDamageModal(transferId) {
+    const t = mockTransfers.find(x => x.id === transferId);
+    if (!t) return;
+    const itemOptions = t.items.map(i => `<option value="${i.itemId}" data-qty="${i.qty}" data-name="${(i.name||'').replace(/"/g,'&quot;')}">${i.name} (×${i.qty})</option>`).join('');
+
+    Swal.fire({
+      title: '登記運送損壞',
+      html: `<div style="text-align:left; font-size:13px;">
+        <div style="background:#eef1f5; padding:10px 12px; border-radius:6px; margin-bottom:14px;">
+          <b>${transferId}</b>　${t.fromStore} → ${t.toStore}
+        </div>
+        <div style="margin-bottom:10px;">
+          <label style="font-size:12px; font-weight:700; color:#64748b; display:block; margin-bottom:4px;">品項</label>
+          <select id="transfer-damage-item" style="width:100%; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px; font-size:13px; font-family:inherit;" onchange="(function(sel){var o=sel.options[sel.selectedIndex]; document.getElementById('transfer-damage-max').textContent=o?o.dataset.qty:'0';})(this)">
+            <option value="">-- 選擇品項 --</option>
+            ${itemOptions}
+          </select>
+        </div>
+        <div style="margin-bottom:10px;">
+          <label style="font-size:12px; font-weight:700; color:#64748b; display:block; margin-bottom:4px;">損壞數量 <span style="font-weight:400; color:#94a3b8;">(上限 <span id="transfer-damage-max">0</span>)</span></label>
+          <input type="number" id="transfer-damage-qty" min="1" placeholder="請輸入正整數" style="width:100%; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px; font-size:13px; font-family:inherit;">
+        </div>
+        <div>
+          <label style="font-size:12px; font-weight:700; color:#64748b; display:block; margin-bottom:4px;">備註（選填）</label>
+          <input type="text" id="transfer-damage-note" placeholder="選填" style="width:100%; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px; font-size:13px; font-family:inherit;">
+        </div>
+      </div>`,
+      showCancelButton: true,
+      confirmButtonText: '確定登記',
+      cancelButtonText: '取消',
+      confirmButtonColor: '#c53030',
+      width: 480,
+      preConfirm: () => {
+        const itemId = document.getElementById('transfer-damage-item').value;
+        const qty = parseInt(document.getElementById('transfer-damage-qty').value) || 0;
+        const note = document.getElementById('transfer-damage-note').value.trim();
+        const sel = document.getElementById('transfer-damage-item');
+        const maxQty = parseInt(sel.options[sel.selectedIndex]?.dataset?.qty) || 0;
+        if (!itemId) { Swal.showValidationMessage('請選擇品項'); return false; }
+        if (qty <= 0) { Swal.showValidationMessage('請輸入正整數數量'); return false; }
+        if (qty > maxQty) { Swal.showValidationMessage(`數量不可超過 ${maxQty}`); return false; }
+        return { transferId, itemId: parseInt(itemId), qty, note };
+      }
+    }).then(async (res) => {
+      if (!res.isConfirmed || !res.value) return;
+      const { transferId: tid, itemId, qty, note } = res.value;
+      try {
+        Swal.fire({ title: '處理中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+        const rpcRes = await fetch(`${SB_URL}/rpc/process_transfer_damage`, {
+          method: 'POST', headers: HEADERS,
+          body: JSON.stringify({ p_transfer_id: tid, p_item_id: itemId, p_damage_qty: qty, p_damage_note: note })
+        });
+        if (!rpcRes.ok) {
+          const err = await rpcRes.json().catch(() => ({}));
+          throw new Error(err.message || '登記失敗');
+        }
+        Swal.fire({ icon: 'success', title: '損壞登記完成', timer: 1500, showConfirmButton: false });
+        await refreshTransferTable();
+      } catch (e) {
+        Swal.fire('登記失敗', e.message, 'error');
+      }
+    });
+  }
+
+  function showDamageDetail(transferId) {
+    const t = mockTransfers.find(x => x.id === transferId);
+    if (!t) return;
+    const damagedItems = t.items.filter(i => i.damage_qty);
+    if (damagedItems.length === 0) { openDamageModal(transferId); return; }
+
+    const rows = damagedItems.map(i => `
+      <tr>
+        <td style="padding:8px 10px; border:1px solid #e2e8f0;">${i.name}</td>
+        <td style="padding:8px 10px; border:1px solid #e2e8f0; text-align:center;">${i.qty}</td>
+        <td style="padding:8px 10px; border:1px solid #e2e8f0; text-align:center; color:#c53030; font-weight:700;">${i.damage_qty}</td>
+        <td style="padding:8px 10px; border:1px solid #e2e8f0; text-align:right; color:#c53030; font-weight:600;">$${(i.damage_qty * i.price).toLocaleString()}</td>
+        <td style="padding:8px 10px; border:1px solid #e2e8f0; font-size:12px; color:#718096;">${i.damage_note || '—'}</td>
+        <td style="padding:8px 10px; border:1px solid #e2e8f0; text-align:center;">
+          <button class="btn" style="padding:3px 8px; font-size:11px; background:#c53030;" onclick="cancelDamageItem(${i.itemId}, '${(i.name||'').replace(/'/g,"\\'")}', ${i.damage_qty})">取消</button>
+        </td>
+      </tr>`).join('');
+
+    Swal.fire({
+      title: `${transferId} 損壞登記明細`,
+      html: `<div style="text-align:left; font-size:13px;">
+        <div style="background:#fef2f2; padding:8px 12px; border-radius:6px; margin-bottom:12px; color:#c53030;">
+          ${t.fromStore} → ${t.toStore}
+        </div>
+        <table style="width:100%; border-collapse:collapse; font-size:13px;">
+          <thead><tr style="background:#fef2f2;">
+            <th style="padding:8px 10px; border:1px solid #e2e8f0; text-align:left;">品名</th>
+            <th style="padding:8px 10px; border:1px solid #e2e8f0; text-align:center;">原數量</th>
+            <th style="padding:8px 10px; border:1px solid #e2e8f0; text-align:center;">損壞</th>
+            <th style="padding:8px 10px; border:1px solid #e2e8f0; text-align:right;">金額</th>
+            <th style="padding:8px 10px; border:1px solid #e2e8f0; text-align:left;">備註</th>
+            <th style="padding:8px 10px; border:1px solid #e2e8f0; text-align:center;">操作</th>
+          </tr></thead>
+          <tbody>${rows}</tbody>
+        </table>
+        <div style="margin-top:12px;">
+          <button class="btn" style="padding:5px 12px; font-size:12px; background:#718096;" onclick="Swal.close(); openDamageModal('${transferId}')">+ 追加登記其他品項</button>
+        </div>
+      </div>`,
+      showCloseButton: true,
+      showConfirmButton: false,
+      width: 680
+    });
+  }
+
+  async function cancelDamageItem(itemId, itemName, dmgQty) {
+    const confirmRes = await Swal.fire({
+      title: '確定取消損壞登記？',
+      html: `<div style="text-align:left; font-size:14px;">
+        品項：<b>${itemName}</b><br>
+        損壞數量：<b style="color:#c53030;">${dmgQty}</b> 件<br><br>
+        <span style="font-size:12px; color:#718096;">取消後將反轉 transfer_settlements 的補償金額</span>
+      </div>`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: '確定取消',
+      cancelButtonText: '返回',
+      confirmButtonColor: '#c53030',
+    });
+    if (!confirmRes.isConfirmed) return;
+
+    try {
+      Swal.fire({ title: '處理中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+      const rpcRes = await fetch(`${SB_URL}/rpc/cancel_transfer_damage`, {
+        method: 'POST', headers: HEADERS,
+        body: JSON.stringify({ p_item_id: itemId })
+      });
+      if (!rpcRes.ok) {
+        const err = await rpcRes.json().catch(() => ({}));
+        throw new Error(err.message || '取消失敗');
+      }
+      Swal.fire({ icon: 'success', title: '已取消損壞登記', timer: 1500, showConfirmButton: false });
+      await refreshTransferTable();
+    } catch (e) {
+      Swal.fire('取消失敗', e.message, 'error');
+    }
   }
 
   // ============================
