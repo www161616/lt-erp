@@ -12332,6 +12332,7 @@
   // ============================
   let cnArrivalRows = [];
   let cnPurchaseRows = [];
+  let _cnaOrderList = [];
   let cnaPage = 1;
   const CNA_PER = 100;
   const cnaCheckedOrders = new Set();
@@ -12345,7 +12346,18 @@
       return p.tracking_number.toLowerCase().split(/[,，;；\s]+/).some(t => t.trim() === needle);
     });
     if (!match) return null;
-    return { product_name: match.product_name || '', qty: match.qty || 0, unit_cost: match.unit_cost || 0, selling_price: match.selling_price || 0, category: match.category || '' };
+    const result = { product_name: match.product_name || '', qty: match.qty || 0, unit_cost: match.unit_cost || 0, selling_price: match.selling_price || 0, category: match.category || '' };
+    // 用 linked_product 從 branchOrderList 找開團中文名稱
+    if (match.linked_product) {
+      const orderList = _cnaOrderList;
+      const pid = match.linked_product;
+      const otMatch = orderList.find(o => (o.productId || o.id || '').replace(/_.*$/, '') === pid);
+      if (otMatch && otMatch.name) {
+        result.product_name = otMatch.name;
+        result.selling_price = Number(otMatch.price) || result.selling_price;
+      }
+    }
+    return result;
   }
 
   async function renderCnArrivals() {
@@ -12357,6 +12369,7 @@
         cnFetchAll('xiaolan_purchases', 'id.desc')
       ]);
     } catch { cnArrivalRows = []; cnPurchaseRows = []; }
+    _cnaOrderList = JSON.parse(localStorage.getItem('branchOrderList') || '[]');
     cnaPage = 1;
     renderCnArrivalGrid();
   }
