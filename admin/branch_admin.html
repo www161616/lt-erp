@@ -2607,6 +2607,7 @@
     // === 動態揀貨資料來源（優先使用匯入的開團資料）===
     let pickingStoreNames = branchNames;
     let pickingArrivals = mockArrivals;
+    const _priceCache = {}; // 分店價快取：{ productId: { price, price_branch, cost } }
 
     async function initPickingData() {
       try {
@@ -2628,22 +2629,7 @@
             pickingStoreNames = pickingStoreNames.concat(importedPersonal);
           }
 
-          // 批次查詢 products 表的分店價
-          const _priceMap = {};
-          try {
-            const allPids = [...new Set(orderList.map(i => i.productId || i.id).filter(Boolean))];
-            let offset = 0;
-            while (offset < allPids.length) {
-              const batch = allPids.slice(offset, offset + 200).map(id => `"${id}"`).join(',');
-              const pRes = await fetch(`${SB_URL}/products?id=in.(${batch})&select=id,price,price_branch,cost`, { headers: HEADERS });
-              if (pRes.ok) {
-                const pData = await pRes.json();
-                pData.forEach(p => { _priceMap[p.id] = p; });
-              }
-              offset += 200;
-            }
-          } catch(e) { console.warn('查詢分店價失敗，使用匯入價格:', e); }
-
+          // 分店價改為搜尋時懶載入（fetchPricesForItems），不在初始化時全查
           pickingArrivals = orderList.map(item => {
             const alloc = {};
             let totalAllocQty = 0;
@@ -2653,7 +2639,6 @@
               totalAllocQty += qty;
             });
             const pid = item.productId || item.id;
-            const dbP = _priceMap[pid];
             return {
               id: item.id,
               productId: pid,
@@ -2666,12 +2651,12 @@
               pickedQty: 0,
               alloc: alloc,
               pickingHistory: [],
-              price: dbP ? (Number(dbP.price) || item.price || 0) : (item.price || 0),
-              storePrice: dbP ? (Number(dbP.price_branch) || Number(dbP.price) || item.price || 0) : (item.storePrice || item.price || 0),
-              cost: dbP ? (Number(dbP.cost) || 0) : (item.cost || 0)
+              price: item.price || 0,
+              storePrice: item.storePrice || item.price || 0,
+              cost: item.cost || 0
             };
           });
-          console.log(`[揀貨站] 已載入匯入資料：${pickingArrivals.length} 筆商品，${pickingStoreNames.length} 家店（含分店價查詢）`);
+          console.log(`[揀貨站] 已載入匯入資料：${pickingArrivals.length} 筆商品，${pickingStoreNames.length} 家店`);
         } else {
           pickingStoreNames = branchNames;
           pickingArrivals = mockArrivals;
@@ -2903,7 +2888,30 @@
     }
 
     // 1. 搜尋商品
-    function searchArrivals() {
+    // 懶載入分店價：只查尚未 cache 的商品，查完更新 pickingArrivals
+    async function fetchPricesForItems(items) {
+      const needFetch = [...new Set(items.map(i => i.productId).filter(pid => pid && !_priceCache[pid]))];
+      if (needFetch.length === 0) return;
+      try {
+        const batch = needFetch.map(id => `"${id}"`).join(',');
+        const res = await fetch(`${SB_URL}/products?id=in.(${batch})&select=id,price,price_branch,cost`, { headers: HEADERS });
+        if (res.ok) {
+          const data = await res.json();
+          data.forEach(p => { _priceCache[p.id] = p; });
+        }
+      } catch(e) { console.warn('查詢分店價失敗:', e); }
+      // 更新 pickingArrivals 裡已查到的價格
+      items.forEach(item => {
+        const dbP = _priceCache[item.productId];
+        if (dbP) {
+          item.price = Number(dbP.price) || item.price || 0;
+          item.storePrice = Number(dbP.price_branch) || Number(dbP.price) || item.storePrice || 0;
+          item.cost = Number(dbP.cost) || item.cost || 0;
+        }
+      });
+    }
+
+    async function searchArrivals() {
       const endDateF = document.getElementById('pickEndDateFilter')?.value || '';
       const kw = document.getElementById('pickSearchKw').value.trim().toLowerCase();
       const resContainer = document.getElementById('pickSearchResults');
@@ -2914,8 +2922,27 @@
         return dateMatch && kMatch;
       });
 
+      // 懶載入：只查這次篩選結果的分店價
+      if (matches.length > 0) await fetchPricesForItems(matches);
+
       if (matches.length === 0) {
         resContainer.innerHTML = `<div style="color: var(--text2); font-size: 13px; text-align: center; padding: 20px;">查無符合商品</div>`;
+        return;
+      }
+
+      // 過濾掉剩餘 0 且無欠品的商品
+      matches = matches.filter(m => {
+        const remainQty = m.purchasedQty - m.pickedQty;
+        if (remainQty > 0) return true;
+        const hasShortage = pickingStoreNames.some(b => {
+          const distributed = (m.pickingHistory || []).reduce((s, h) => s + (h.branchData[b] || 0), 0);
+          return (m.alloc[b] || 0) - distributed > 0;
+        });
+        return hasShortage;
+      });
+
+      if (matches.length === 0) {
+        resContainer.innerHTML = `<div style="color: var(--text2); font-size: 13px; text-align: center; padding: 20px;">查無符合商品（已完成分發的不顯示）</div>`;
         return;
       }
 
