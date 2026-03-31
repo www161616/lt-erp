@@ -4525,7 +4525,7 @@ async function printBillingLabels() {
   var pageCSS, labelCSS, codeSize, nameSize, priceSize;
   if (size === '40x30') {
     pageCSS = '@page { margin: 0mm; size: 30mm 40mm; }';
-    labelCSS = '.label { width: 28mm; padding: 1mm 1mm; border-bottom: none; page-break-after: always; box-sizing: border-box; text-align: center; display: flex; flex-direction: column; justify-content: center; height: 38mm; }';
+    labelCSS = '.label { width: 28mm; padding: 1mm 1mm; border-bottom: none; box-sizing: border-box; text-align: center; display: flex; flex-direction: column; justify-content: center; height: 38mm; }';
     codeSize = '10px'; nameSize = '13px'; priceSize = '16px';
   } else {
     pageCSS = '@page { margin: 0mm; size: 80mm auto; }';
@@ -4533,10 +4533,12 @@ async function printBillingLabels() {
     codeSize = '18px'; nameSize = '24px'; priceSize = '36px';
   }
 
-  var labels = items.map(function(item) {
+  var labels = items.map(function(item, idx) {
+    var isLast = idx === items.length - 1;
+    var pageBreak = (size === '40x30' && !isLast) ? 'page-break-after:always;' : '';
     var price = item.sellingPrice ? '$' + Number(item.sellingPrice).toLocaleString() : '';
     var code = item.productId ? '<div class="code">' + item.productId + '</div>' : '';
-    return '<div class="label">' + code + '<div class="name">' + item.name + '</div><div class="price">' + price + '</div></div>';
+    return '<div class="label" style="' + pageBreak + '">' + code + '<div class="name">' + item.name + '</div><div class="price">' + price + '</div></div>';
   }).join('');
 
   var win = window.open('', '_blank', 'width=350,height=600');
