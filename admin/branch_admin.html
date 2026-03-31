@@ -11079,11 +11079,13 @@
       }
 
       // 同步到 portal
+      var _rtNow = new Date();
+      var _rtTime = `${_rtNow.getFullYear()}/${String(_rtNow.getMonth()+1).padStart(2,'0')}/${String(_rtNow.getDate()).padStart(2,'0')} ${String(_rtNow.getHours()).padStart(2,'0')}:${String(_rtNow.getMinutes()).padStart(2,'0')}`;
       mockSalesOrders.push({
         id: newId, waveId: 'RETURN-' + id, storeName: o.storeName,
-        createdAt: new Date().toLocaleString('zh-TW', { hour12: false }),
+        createdAt: _rtTime,
         storeConfirmedAt: null, status: 'issued',
-        issuedAt: new Date().toLocaleString('zh-TW', { hour12: false }),
+        issuedAt: _rtTime,
         finalAmount: -subtotal, orderType: 'return',
         note: soData.note,
         items: retItems.map(function(i) {
@@ -11265,11 +11267,13 @@
           } catch(e) { console.warn('庫存回補失敗:', bIt.product_id, e); }
         }
 
+        var _brtNow = new Date();
+        var _brtTime = `${_brtNow.getFullYear()}/${String(_brtNow.getMonth()+1).padStart(2,'0')}/${String(_brtNow.getDate()).padStart(2,'0')} ${String(_brtNow.getHours()).padStart(2,'0')}:${String(_brtNow.getMinutes()).padStart(2,'0')}`;
         mockSalesOrders.push({
           id: newId, waveId: 'RETURN-' + o.id, storeName: o.storeName,
-          createdAt: new Date().toLocaleString('zh-TW', { hour12: false }),
+          createdAt: _brtTime,
           storeConfirmedAt: null, status: 'issued',
-          issuedAt: new Date().toLocaleString('zh-TW', { hour12: false }),
+          issuedAt: _brtTime,
           finalAmount: -subtotal, orderType: 'return',
           note: bSoData.note,
           items: storeRetItems.map(function(it) {
@@ -11787,11 +11791,13 @@
       });
 
       // 10. 同步到 portal（讓分店月結對帳看到退貨單）
+      var _tfrtNow = new Date();
+      var _tfrtTime = `${_tfrtNow.getFullYear()}/${String(_tfrtNow.getMonth()+1).padStart(2,'0')}/${String(_tfrtNow.getDate()).padStart(2,'0')} ${String(_tfrtNow.getHours()).padStart(2,'0')}:${String(_tfrtNow.getMinutes()).padStart(2,'0')}`;
       mockSalesOrders.push({
         id: newId, waveId: 'RETURN-' + tfId, storeName: tfOrder.from_store,
-        createdAt: new Date().toLocaleString('zh-TW', { hour12: false }),
+        createdAt: _tfrtTime,
         storeConfirmedAt: null, status: 'issued',
-        issuedAt: new Date().toLocaleString('zh-TW', { hour12: false }),
+        issuedAt: _tfrtTime,
         finalAmount: -subtotal, orderType: 'return',
         note: soData.note,
         items: tfItems.map(i => ({
