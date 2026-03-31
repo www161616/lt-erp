@@ -696,6 +696,22 @@ document.addEventListener('DOMContentLoaded', async () => {
   loadGlobalRateSettings();
   linkRows = JSON.parse(localStorage.getItem('xiaolan_links') || '[]');
   await Promise.all([loadPurchases(), loadArrivals(), loadReturns(), loadOrderTrack()]);
+  // 全量補寫 product_id（purchaseRows + arrivalRows 都已載入）
+  (function autoFillProductIds() {
+    let filled = 0;
+    const tnCount = {};
+    arrivalRows.forEach(r => {
+      if (r.product_id || !r.tracking_number) return;
+      const tn = r.tracking_number.trim().toLowerCase();
+      if (!tnCount[tn]) tnCount[tn] = 0;
+      const live = getLiveArrivalData(r.tracking_number, tnCount[tn]++, r);
+      if (live && live.product_id && r._dirty) filled++;
+    });
+    if (filled > 0) {
+      console.log(`[自動補寫] 補寫了 ${filled} 筆 product_id`);
+      saveArrivals(true);
+    }
+  })();
   initNewRows();
   renderPurchaseGrid();
   renderArrivalGrid();
