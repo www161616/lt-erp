@@ -812,36 +812,24 @@
     // ===== 待審單據檢查 =====
     async function checkPendingReview() {
       try {
-        let salesCount = 0, purchaseCount = 0;
-        const [kvRes, ipRes] = await Promise.all([
-          fetch(`${SB_URL}/shared_kv?key=eq.portalSalesOrders&select=value`, { headers: getHeaders() }),
-          fetch(`${SB_URL}/internal_purchases?status=eq.待審核&select=id`, { headers: getHeaders() })
-        ]);
-        if (kvRes.ok) {
-          const kvData = await kvRes.json();
-          const allOrders = kvData.length > 0 ? (kvData[0].value || []) : [];
-          salesCount = allOrders.filter(o => o.status === 'pending' || o.status === 'confirmed').length;
-        }
+        let purchaseCount = 0;
+        const ipRes = await fetch(`${SB_URL}/internal_purchases?status=eq.待審核&select=id`, { headers: getHeaders() });
         if (ipRes.ok) {
           const ipData = await ipRes.json();
           purchaseCount = ipData.length;
         }
-        const total = salesCount + purchaseCount;
         // 更新 sidebar badge
         const badge = document.getElementById('pendingBadge');
         if (badge) {
-          badge.textContent = total;
-          badge.style.display = total > 0 ? '' : 'none';
+          badge.textContent = purchaseCount;
+          badge.style.display = purchaseCount > 0 ? '' : 'none';
         }
         // 更新儀表板提醒
         const alert = document.getElementById('pendingAlert');
         const detail = document.getElementById('pendingAlertDetail');
         if (alert && detail) {
-          if (total > 0) {
-            let parts = [];
-            if (salesCount > 0) parts.push(`銷貨單 ${salesCount} 筆`);
-            if (purchaseCount > 0) parts.push(`進貨單 ${purchaseCount} 筆`);
-            detail.textContent = parts.join('、');
+          if (purchaseCount > 0) {
+            detail.textContent = `進貨單 ${purchaseCount} 筆`;
             alert.style.display = '';
           } else {
             alert.style.display = 'none';
