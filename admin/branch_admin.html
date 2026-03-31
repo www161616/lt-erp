@@ -8346,7 +8346,7 @@
     // 取得有銷貨單的揀貨單ID（按日期排序）
     const waveIds = [...new Set(mockSalesOrders.map(o => o.waveId))];
     const months = [...new Set(mockSalesOrders.map(o => o.createdAt.slice(0, 7)))].sort().reverse();
-    const currentMonth = new Date().toISOString().slice(0, 7);
+    const currentMonth = `${new Date().getFullYear()}/${String(new Date().getMonth()+1).padStart(2,'0')}`;
 
     const html = `
       <div style="display:flex; flex-direction:column; gap:15px; height:100%;">
