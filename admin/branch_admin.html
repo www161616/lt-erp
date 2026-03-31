@@ -11173,7 +11173,7 @@
   // ============================
   let gbOrderRows = [];
   let gbPage = 1;
-  const GB_PER = 50;
+  const GB_PER = 100;
 
   function gbEsc(v) { return (v || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
@@ -11192,8 +11192,10 @@
   function getFilteredGB() {
     const kw = document.getElementById('gbSearch')?.value?.trim().toLowerCase() || '';
     const month = document.getElementById('gbMonth')?.value || '';
+    const date = document.getElementById('gbDate')?.value || '';
     let data = [...gbOrderRows];
-    if (month) data = data.filter(r => (r.end_date || '').startsWith(month));
+    if (date) data = data.filter(r => (r.end_date || '') === date);
+    else if (month) data = data.filter(r => (r.end_date || '').startsWith(month));
     if (kw) data = data.filter(r => (r.product_id||'').toLowerCase().includes(kw) || (r.product_name||'').toLowerCase().includes(kw));
     data.sort((a,b) => (b.end_date||'').localeCompare(a.end_date||''));
     return data;
@@ -11229,6 +11231,7 @@
     const container = document.getElementById('mainContainer');
     const kw = document.getElementById('gbSearch')?.value || '';
     const monthVal = document.getElementById('gbMonth')?.value || '';
+    const dateVal = document.getElementById('gbDate')?.value || '';
     const data = getFilteredGB();
     const totalPages = Math.max(1, Math.ceil(data.length / GB_PER));
     if (gbPage > totalPages) gbPage = totalPages;
@@ -11243,12 +11246,13 @@
         <h3 style="margin:0;">📋 團購叫貨區 <span style="font-size:13px;color:#718096;font-weight:normal;">（唯讀，資料來自小瀾採購系統）</span></h3>
       </div>
       <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;flex-wrap:wrap;">
-        <select id="gbMonth" onchange="gbPage=1;renderGBGrid();" style="padding:5px 8px;border:1px solid #ddd;border-radius:4px;font-size:13px;">
+        <select id="gbMonth" onchange="document.getElementById('gbDate').value='';gbPage=1;renderGBGrid();" style="padding:5px 8px;border:1px solid #ddd;border-radius:4px;font-size:13px;">
           <option value="">全部月份</option>${months.map(m=>`<option value="${m}" ${m===monthVal?'selected':''}>${m}</option>`).join('')}
         </select>
+        <input id="gbDate" type="date" value="${gbEsc(dateVal)}" onchange="document.getElementById('gbMonth').value='';gbPage=1;renderGBGrid();" style="padding:5px 8px;border:1px solid #ddd;border-radius:4px;font-size:13px;">
         <input id="gbSearch" type="text" placeholder="搜尋商品編號/名稱" value="${gbEsc(kw)}" style="padding:5px 8px;border:1px solid #ddd;border-radius:4px;font-size:13px;width:200px;" onkeydown="if(event.key==='Enter'){gbPage=1;renderGBGrid();}">
         <button class="btn" onclick="gbPage=1;renderGBGrid()">查詢</button>
-        <button class="btn" onclick="document.getElementById('gbMonth').value='';document.getElementById('gbSearch').value='';gbPage=1;renderGBGrid();">清除</button>
+        <button class="btn" onclick="document.getElementById('gbMonth').value='';document.getElementById('gbDate').value='';document.getElementById('gbSearch').value='';gbPage=1;renderGBGrid();">清除</button>
         <span style="font-size:12px;color:#718096;margin-left:auto;">共 ${data.length} 筆</span>
       </div>
       <div style="display:flex;gap:4px;margin-bottom:6px;align-items:center;flex-wrap:wrap;">${paginationHtml}</div>
