@@ -4,6 +4,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # 龍潭總倉 ERP 系統
 
+## 近期完成功能（2026/03/31）
+- 新建 damage_orders 表 + process_damage_order / cancel_damage_order RPC
+- 新增 DamageOrders.html（庫存耗損單查詢/開立/作廢/列印）
+- transfer_items 加 damage_qty / damage_note 欄位
+- 新增 process_transfer_damage / cancel_transfer_damage RPC（店轉店損壞登記）
+- branch_admin 店轉店審核加損壞登記 UI
+- branch_admin 銷貨單管理：soId 解析 bug 修正、退貨單 createdAt 格式統一、MANUAL 改顯示「手動開單」、月份預設當月
+- branch_admin 陸貨到貨清單：加出貨日期篩選、預設直寄龍潭、列印改用 live 資料
+- branch_portal 印標籤加尺寸選擇（80mm / 40×30mm）
+- supplier_xiaolan getLiveArrivalData 自動補寫 product_id bug 修正
+
 ## 專案概述
 - 純 HTML/CSS/JS 單檔架構，無框架
 - 這是**唯一工作資料夾**，直接在此編輯＋git push 部署

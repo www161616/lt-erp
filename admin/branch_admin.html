@@ -12555,16 +12555,8 @@
   function renderCnArrivalGrid() {
     const container = document.getElementById('mainContainer');
     const kw = document.getElementById('cnaSearch')?.value?.trim().toLowerCase() || '';
-    const shipTo = document.getElementById('cnaShipTo')?.value || '直寄龍潭';
-    let data = [...cnArrivalRows];
-    // 預設只顯示直寄龍潭和小蘭拿去龍潭
-    if (shipTo === '__all__') {
-      // 全部顯示
-    } else if (shipTo) {
-      data = data.filter(r => r.ship_to === shipTo);
-    } else {
-      data = data.filter(r => r.ship_to === '直寄龍潭' || r.ship_to === '小蘭拿去龍潭');
-    }
+    const shipTo = '直寄龍潭';
+    let data = cnArrivalRows.filter(r => r.ship_to === shipTo);
     if (kw) data = data.filter(r => (r.product_name||'').toLowerCase().includes(kw) || (r.product_id||'').toLowerCase().includes(kw) || (r.tracking_number||'').toLowerCase().includes(kw));
     const dateFrom = document.getElementById('cnaDateFrom')?.value;
     const dateTo = document.getElementById('cnaDateTo')?.value;
@@ -12582,17 +12574,11 @@
       </div>
       <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;flex-wrap:wrap;">
         <input id="cnaSearch" type="text" placeholder="搜尋商編/品名/快遞單號" value="${kw}" style="padding:5px 8px;border:1px solid #ddd;border-radius:4px;font-size:13px;width:200px;" onkeydown="if(event.key==='Enter')renderCnArrivalGrid()">
-        <select id="cnaShipTo" onchange="cnaPage=1;renderCnArrivalGrid();" style="padding:5px 8px;border:1px solid #ddd;border-radius:4px;font-size:13px;">
-          <option value="">龍潭相關</option>
-          <option value="直寄龍潭" ${shipTo==='直寄龍潭'?'selected':''}>直寄龍潭</option>
-          <option value="小蘭拿去龍潭" ${shipTo==='小蘭拿去龍潭'?'selected':''}>小蘭拿去龍潭</option>
-          <option value="__all__" ${shipTo==='__all__'?'selected':''}>全部（含我家）</option>
-        </select>
         <input type="date" id="cnaDateFrom" value="${document.getElementById('cnaDateFrom')?.value||''}" onchange="cnaPage=1;renderCnArrivalGrid();" style="padding:5px 8px;border:1px solid #ddd;border-radius:4px;font-size:13px;width:130px;" placeholder="出貨日期起">
         <span style="color:#718096;">~</span>
         <input type="date" id="cnaDateTo" value="${document.getElementById('cnaDateTo')?.value||''}" onchange="cnaPage=1;renderCnArrivalGrid();" style="padding:5px 8px;border:1px solid #ddd;border-radius:4px;font-size:13px;width:130px;" placeholder="出貨日期迄">
         <button class="btn" onclick="renderCnArrivalGrid()">查詢</button>
-        <button class="btn" onclick="document.getElementById('cnaSearch').value='';document.getElementById('cnaShipTo').value='直寄龍潭';document.getElementById('cnaDateFrom').value='';document.getElementById('cnaDateTo').value='';cnaPage=1;renderCnArrivalGrid();">清除</button>
+        <button class="btn" onclick="document.getElementById('cnaSearch').value='';document.getElementById('cnaDateFrom').value='';document.getElementById('cnaDateTo').value='';cnaPage=1;renderCnArrivalGrid();">清除</button>
         <span style="font-size:12px;color:#718096;">共 ${data.length} 筆</span>
       </div>`;
 
@@ -12723,15 +12709,8 @@
 
     // 篩選出當前顯示的資料
     const kw = document.getElementById('cnaSearch')?.value?.trim().toLowerCase() || '';
-    const shipTo = document.getElementById('cnaShipTo')?.value || '';
-    let data = [...cnArrivalRows];
-    if (shipTo === '__all__') {
-      // 全部
-    } else if (shipTo) {
-      data = data.filter(r => r.ship_to === shipTo);
-    } else {
-      data = data.filter(r => r.ship_to === '直寄龍潭' || r.ship_to === '小蘭拿去龍潭');
-    }
+    const shipTo = '直寄龍潭';
+    let data = cnArrivalRows.filter(r => r.ship_to === shipTo);
     if (kw) data = data.filter(r => (r.product_name||'').toLowerCase().includes(kw) || (r.product_id||'').toLowerCase().includes(kw) || (r.tracking_number||'').toLowerCase().includes(kw));
     const dateFrom = document.getElementById('cnaDateFrom')?.value;
     const dateTo = document.getElementById('cnaDateTo')?.value;
