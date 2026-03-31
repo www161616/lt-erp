@@ -4524,8 +4524,8 @@ async function printBillingLabels() {
 
   var pageCSS, labelCSS, codeSize, nameSize, priceSize;
   if (size === '40x30') {
-    pageCSS = '@page { margin: 0mm; size: 40mm 30mm; }';
-    labelCSS = '.label { width: 38mm; padding: 1mm 1mm; border-bottom: none; page-break-after: always; box-sizing: border-box; text-align: center; display: flex; flex-direction: column; justify-content: center; height: 28mm; }';
+    pageCSS = '@page { margin: 0mm; size: 30mm 40mm; }';
+    labelCSS = '.label { width: 28mm; padding: 1mm 1mm; border-bottom: none; page-break-after: always; box-sizing: border-box; text-align: center; display: flex; flex-direction: column; justify-content: center; height: 38mm; }';
     codeSize = '10px'; nameSize = '13px'; priceSize = '16px';
   } else {
     pageCSS = '@page { margin: 0mm; size: 80mm auto; }';
