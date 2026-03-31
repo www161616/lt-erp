@@ -8587,13 +8587,21 @@
       var res = await fetch(SB_URL + '/rpc/web_save_sales_order', { method: 'POST', headers: HEADERS, body: JSON.stringify({ p_order_data: orderData }) });
       if (res.ok) {
         var resData = await res.json();
-        dbId = resData.order_id || resData.id || '';
+        // RPC 回傳純 TEXT 字串（如 "SO20260331001"），不是物件
+        if (typeof resData === 'string' && resData) {
+          dbId = resData;
+        } else {
+          dbId = resData.order_id || resData.id || '';
+        }
         soId = dbId;
       } else {
         throw new Error(await res.text());
       }
     } catch(e) {
       console.error('手動新增寫入 DB 失敗:', e);
+      soId = 'SO-' + dateStr.replace(/-/g, '') + '-' + String(mockSalesOrders.length + 1).padStart(3, '0');
+    }
+    if (!soId) {
       soId = 'SO-' + dateStr.replace(/-/g, '') + '-' + String(mockSalesOrders.length + 1).padStart(3, '0');
     }
 
