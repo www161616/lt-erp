@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>庫存耗損單 - 龍潭總倉</title>
+  <script src="libs/sweetalert2.min.js"></script>
+  <style>
+    :root {
+      --bg: #f8f9fb; --surface: #ffffff; --surface2: #f1f5f9; --border: #e2e8f0;
+      --accent: #475569; --accent-hover: #334155; --text: #1e293b; --text2: #64748b;
+      --danger: #c53030; --success: #276749; --warning: #b7791f; --orange: #c05621;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI','Microsoft JhengHei',sans-serif; padding: 20px; background: var(--bg); color: var(--text); }
+    .container { background: var(--surface); padding: 24px; border-radius: 10px; max-width: 1400px; margin: 0 auto; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+    h2 { color: var(--accent); margin-bottom: 20px; font-size: 20px; }
+
+    /* Toolbar */
+    .toolbar { display: flex; gap: 10px; align-items: flex-end; margin-bottom: 16px; flex-wrap: wrap; }
+    .toolbar label { font-size: 12px; font-weight: 700; color: var(--text2); display: block; margin-bottom: 4px; }
+    .toolbar input, .toolbar select { padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; font-family: inherit; }
+    .btn { padding: 8px 16px; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; font-weight: 600; font-family: inherit; transition: all .2s; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-danger:hover { background: #9b2c2c; }
+    .btn-success { background: var(--success); color: #fff; }
+    .btn-success:hover { background: #22543d; }
+    .btn:disabled { opacity: .5; cursor: not-allowed; }
+
+    /* Stat bar */
+    .stat-bar { display: flex; gap: 16px; margin-bottom: 16px; flex-wrap: wrap; }
+    .stat-item { background: var(--surface2); padding: 10px 16px; border-radius: 8px; }
+    .stat-item .label { font-size: 11px; color: var(--text2); }
+    .stat-item .value { font-size: 16px; font-weight: 700; color: var(--accent); }
+
+    /* Table */
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th { background: var(--surface2); color: var(--text2); font-size: 12px; font-weight: 700; padding: 8px 10px; text-align: left; border-bottom: 2px solid var(--border); white-space: nowrap; position: relative; }
+    td { padding: 8px 10px; font-size: 13px; border-bottom: 1px solid var(--surface2); }
+    tr:hover { background: #fefce8; }
+    .empty { text-align: center; padding: 40px; color: #94a3b8; font-size: 14px; }
+
+    /* Column resize */
+    .th-resizer { position: absolute; right: 0; top: 0; width: 5px; height: 100%; cursor: col-resize; user-select: none; }
+    .th-resizer:hover { background: var(--accent); opacity: 0.3; }
+
+    /* Status badge */
+    .badge-active { background: #d1fae5; color: var(--success); padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; }
+    .badge-cancelled { background: #fee2e2; color: var(--danger); padding: 2px 8px; border-radius: 10px; font-size: 12px; font-weight: 600; }
+
+    /* Pagination */
+    .pagination { display: flex; justify-content: center; gap: 4px; margin-top: 16px; }
+    .pagination button { padding: 5px 12px; border: 1px solid var(--border); background: white; border-radius: 4px; font-size: 12px; cursor: pointer; font-family: inherit; }
+    .pagination button.active { background: var(--accent); color: white; border-color: var(--accent); }
+    .pagination button:hover:not(.active) { background: var(--surface2); }
+
+    /* Modal overlay */
+    .modal-overlay { display: none; position: fixed; inset: 0; background: rgba(30,41,59,0.4); z-index: 1000; align-items: center; justify-content: center; }
+    .modal-overlay.show { display: flex; }
+    .modal { background: var(--surface); border-radius: 12px; padding: 28px; width: 480px; max-width: 95vw; box-shadow: 0 8px 32px rgba(0,0,0,0.15); }
+    .modal h3 { font-size: 17px; color: var(--accent); margin-bottom: 20px; }
+    .form-group { display: flex; flex-direction: column; gap: 5px; margin-bottom: 14px; }
+    .form-group label { font-size: 12px; font-weight: 600; color: var(--text2); }
+    .form-group input, .form-group select, .form-group textarea {
+      padding: 9px 12px; border: 1px solid var(--border); border-radius: 6px;
+      font-size: 14px; font-family: inherit; outline: none; transition: border-color .2s;
+    }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus { border-color: var(--accent); }
+    .form-group input[readonly] { background: var(--surface2); color: var(--text2); }
+    .form-group textarea { resize: vertical; min-height: 60px; }
+    .form-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+    .stock-hint { font-size: 12px; color: var(--text2); margin-top: 2px; }
+    .stock-hint.warn { color: var(--danger); font-weight: 600; }
+  </style>
+</head>
+<body>
+<div class="container">
+  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+    <h2>庫存耗損單</h2>
+    <button class="btn btn-success" onclick="openCreateModal()">+ 開立耗損單</button>
+  </div>
+
+  <!-- 搜尋列 -->
+  <div class="toolbar">
+    <div>
+      <label>單號 / 商品編號 / 名稱</label>
+      <input type="text" id="filterKeyword" placeholder="輸入關鍵字..." style="min-width:220px;" onkeypress="if(event.key==='Enter') doSearch()">
+    </div>
+    <div>
+      <label>原因</label>
+      <select id="filterReason">
+        <option value="">全部</option>
+        <option value="破損">破損</option>
+        <option value="報廢">報廢</option>
+        <option value="過期">過期</option>
+        <option value="其他">其他</option>
+      </select>
+    </div>
+    <div>
+      <label>起始日期</label>
+      <input type="date" id="dateFrom">
+    </div>
+    <div>
+      <label>結束日期</label>
+      <input type="date" id="dateTo">
+    </div>
+    <div>
+      <label>狀態</label>
+      <select id="filterStatus">
+        <option value="">全部</option>
+        <option value="active" selected>有效</option>
+        <option value="cancelled">已取消</option>
+      </select>
+    </div>
+    <div style="display:flex; gap:8px; align-items:flex-end;">
+      <button class="btn btn-primary" onclick="doSearch()">查詢</button>
+      <button class="btn" style="background:#e2e8f0; color:#374151;" onclick="clearFilters()">清除</button>
+    </div>
+  </div>
+
+  <!-- 統計列 -->
+  <div class="stat-bar" id="statBar" style="display:none;">
+    <div class="stat-item"><div class="label">耗損單數</div><div class="value" id="statCount">0</div></div>
+    <div class="stat-item"><div class="label">有效單數</div><div class="value" id="statActive">0</div></div>
+    <div class="stat-item"><div class="label">已取消</div><div class="value" id="statCancelled" style="color:var(--danger);">0</div></div>
+  </div>
+
+  <!-- 上方分頁 -->
+  <div class="pagination" id="paginationTop"></div>
+
+  <!-- 表格 -->
+  <table id="mainTable">
+    <thead>
+      <tr>
+        <th style="min-width:150px;">單號<span class="th-resizer" data-col="0"></span></th>
+        <th style="min-width:100px;">日期<span class="th-resizer" data-col="1"></span></th>
+        <th style="min-width:110px;">商品編號<span class="th-resizer" data-col="2"></span></th>
+        <th style="min-width:160px;">商品名稱<span class="th-resizer" data-col="3"></span></th>
+        <th style="min-width:60px; text-align:right;">數量<span class="th-resizer" data-col="4"></span></th>
+        <th style="min-width:70px;">原因<span class="th-resizer" data-col="5"></span></th>
+        <th style="min-width:100px;">備註<span class="th-resizer" data-col="6"></span></th>
+        <th style="min-width:70px;">經手人<span class="th-resizer" data-col="7"></span></th>
+        <th style="min-width:70px;">狀態<span class="th-resizer" data-col="8"></span></th>
+        <th style="min-width:140px;">操作<span class="th-resizer" data-col="9"></span></th>
+      </tr>
+    </thead>
+    <tbody id="resultBody">
+      <tr><td colspan="10" class="empty">請點擊「查詢」載入資料</td></tr>
+    </tbody>
+  </table>
+
+  <!-- 下方分頁 -->
+  <div class="pagination" id="paginationBottom"></div>
+</div>
+
+<!-- 開立耗損單 Modal -->
+<div class="modal-overlay" id="createModal">
+  <div class="modal">
+    <h3>開立耗損單</h3>
+    <div class="form-group">
+      <label>商品編號</label>
+      <input type="text" id="dmgProductId" placeholder="輸入商品編號後按 Tab 或 Enter" onkeydown="if(event.key==='Enter'||event.key==='Tab'){event.preventDefault();lookupProduct();}">
+    </div>
+    <div class="form-group">
+      <label>商品名稱</label>
+      <input type="text" id="dmgProductName" readonly>
+    </div>
+    <div class="form-group">
+      <label>現有庫存</label>
+      <input type="text" id="dmgCurrentStock" readonly>
+    </div>
+    <div class="form-group">
+      <label>耗損數量</label>
+      <input type="number" id="dmgQty" min="1" placeholder="請輸入正整數" oninput="validateQty()">
+      <div class="stock-hint" id="dmgQtyHint"></div>
+    </div>
+    <div class="form-group">
+      <label>原因</label>
+      <select id="dmgReason" onchange="toggleCustomReason()">
+        <option value="">-- 請選擇 --</option>
+        <option value="破損">破損</option>
+        <option value="報廢">報廢</option>
+        <option value="過期">過期</option>
+        <option value="其他">其他</option>
+      </select>
+    </div>
+    <div class="form-group" id="customReasonGroup" style="display:none;">
+      <label>自填原因</label>
+      <input type="text" id="dmgCustomReason" placeholder="請輸入原因">
+    </div>
+    <div class="form-group">
+      <label>備註（選填）</label>
+      <textarea id="dmgNote" placeholder="選填"></textarea>
+    </div>
+    <div class="form-actions">
+      <button class="btn" style="background:#e2e8f0; color:#374151;" onclick="closeCreateModal()">取消</button>
+      <button class="btn btn-primary" id="btnSubmitDmg" onclick="submitDamageOrder()">確定開立</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const SB_URL = 'https://asugjynpocwygggttxyo.supabase.co/rest/v1';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFzdWdqeW5wb2N3eWdnZ3R0eHlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNzU3MjksImV4cCI6MjA4ODk1MTcyOX0.LzcRQAl80rZxKKD8NIYWGvylfwCbs1ek5LtKpmZodBc';
+function getToken() { return sessionStorage.getItem('sb_auth_token') || SB_KEY; }
+const HEADERS = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + getToken(), 'Content-Type': 'application/json' };
+
+let allData = [];
+let filteredData = [];
+let currentPage = 1;
+const PER_PAGE = 50;
+let _lookupStock = null; // 暫存查到的庫存數量
+
+// ===== 搜尋 =====
+async function doSearch() {
+  const keyword = document.getElementById('filterKeyword').value.trim();
+  const reason = document.getElementById('filterReason').value;
+  const dateFrom = document.getElementById('dateFrom').value;
+  const dateTo = document.getElementById('dateTo').value;
+  const status = document.getElementById('filterStatus').value;
+
+  // 從 DB 撈全部（分頁 loop）
+  allData = [];
+  let offset = 0;
+  const limit = 1000;
+  while (true) {
+    let url = `${SB_URL}/damage_orders?select=*&order=created_at.desc&limit=${limit}&offset=${offset}`;
+    if (status) url += `&status=eq.${status}`;
+    if (reason) url += `&reason=eq.${encodeURIComponent(reason)}`;
+    if (dateFrom) url += `&created_at=gte.${dateFrom}T00:00:00`;
+    if (dateTo) url += `&created_at=lte.${dateTo}T23:59:59`;
+    try {
+      const res = await fetch(url, { headers: HEADERS });
+      if (!res.ok) throw new Error(await res.text());
+      const rows = await res.json();
+      allData = allData.concat(rows);
+      if (rows.length < limit) break;
+      offset += limit;
+    } catch (e) {
+      Swal.fire('查詢失敗', e.message, 'error');
+      return;
+    }
+  }
+
+  // 前端關鍵字篩選
+  if (keyword) {
+    const kw = keyword.toLowerCase();
+    allData = allData.filter(r =>
+      (r.order_no || '').toLowerCase().includes(kw) ||
+      (r.product_id || '').toLowerCase().includes(kw) ||
+      (r.product_name || '').toLowerCase().includes(kw)
+    );
+  }
+
+  filteredData = allData;
+  currentPage = 1;
+  renderResults();
+}
+
+function clearFilters() {
+  document.getElementById('filterKeyword').value = '';
+  document.getElementById('filterReason').value = '';
+  document.getElementById('dateFrom').value = '';
+  document.getElementById('dateTo').value = '';
+  document.getElementById('filterStatus').value = 'active';
+  allData = [];
+  filteredData = [];
+  document.getElementById('resultBody').innerHTML = '<tr><td colspan="10" class="empty">請點擊「查詢」載入資料</td></tr>';
+  document.getElementById('paginationTop').innerHTML = '';
+  document.getElementById('paginationBottom').innerHTML = '';
+  document.getElementById('statBar').style.display = 'none';
+}
+
+// ===== 渲染結果 =====
+function renderResults() {
+  const totalPages = Math.ceil(filteredData.length / PER_PAGE) || 1;
+  if (currentPage > totalPages) currentPage = totalPages;
+  const start = (currentPage - 1) * PER_PAGE;
+  const pageData = filteredData.slice(start, start + PER_PAGE);
+
+  // 統計
+  const activeCount = filteredData.filter(r => r.status === 'active').length;
+  const cancelledCount = filteredData.filter(r => r.status === 'cancelled').length;
+  document.getElementById('statCount').textContent = filteredData.length;
+  document.getElementById('statActive').textContent = activeCount;
+  document.getElementById('statCancelled').textContent = cancelledCount;
+  document.getElementById('statBar').style.display = 'flex';
+
+  const tbody = document.getElementById('resultBody');
+  if (pageData.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="10" class="empty">查無資料</td></tr>';
+  } else {
+    tbody.innerHTML = pageData.map(r => {
+      const dt = r.created_at ? new Date(r.created_at) : null;
+      const dateStr = dt ? `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}` : '';
+      const isActive = r.status === 'active';
+      const badgeClass = isActive ? 'badge-active' : 'badge-cancelled';
+      const badgeText = isActive ? '有效' : '已取消';
+      const cancelInfo = !isActive && r.cancelled_by ? `<div style="font-size:11px; color:var(--text2); margin-top:2px;">by ${r.cancelled_by}</div>` : '';
+      return `<tr>
+        <td style="font-weight:600; color:var(--accent);">${r.order_no}</td>
+        <td style="color:var(--text2); white-space:nowrap;">${dateStr}</td>
+        <td>${r.product_id}</td>
+        <td style="font-weight:500;">${r.product_name}</td>
+        <td style="text-align:right; font-weight:700;">${r.qty}</td>
+        <td>${r.reason}</td>
+        <td style="color:var(--text2); font-size:12px; max-width:150px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;" title="${(r.note||'').replace(/"/g,'&quot;')}">${r.note || ''}</td>
+        <td style="font-size:12px;">${r.created_by || ''}</td>
+        <td><span class="${badgeClass}">${badgeText}</span>${cancelInfo}</td>
+        <td>
+          ${isActive ? `<button class="btn btn-danger" style="padding:4px 10px; font-size:12px;" onclick="cancelOrder('${r.order_no}', ${r.qty}, '${r.product_name.replace(/'/g,"\\'")}', this)">作廢</button>` : ''}
+          <button class="btn" style="padding:4px 10px; font-size:12px; background:#e2e8f0; color:#374151;" onclick="printOrder('${r.order_no}')">列印</button>
+        </td>
+      </tr>`;
+    }).join('');
+  }
+
+  renderPagination(totalPages);
+}
+
+// ===== 分頁 =====
+function renderPagination(totalPages) {
+  if (totalPages <= 1) {
+    document.getElementById('paginationTop').innerHTML = '';
+    document.getElementById('paginationBottom').innerHTML = '';
+    return;
+  }
+  let html = '';
+  if (currentPage > 1) html += `<button onclick="goPage(1)">&laquo;</button><button onclick="goPage(${currentPage-1})">&lsaquo;</button>`;
+  for (let i = Math.max(1, currentPage - 2); i <= Math.min(totalPages, currentPage + 2); i++) {
+    html += `<button class="${i === currentPage ? 'active' : ''}" onclick="goPage(${i})">${i}</button>`;
+  }
+  if (currentPage < totalPages) html += `<button onclick="goPage(${currentPage+1})">&rsaquo;</button><button onclick="goPage(${totalPages})">&raquo;</button>`;
+  document.getElementById('paginationTop').innerHTML = html;
+  document.getElementById('paginationBottom').innerHTML = html;
+}
+
+function goPage(p) {
+  currentPage = p;
+  renderResults();
+  window.scrollTo(0, 0);
+}
+
+// ===== 開立耗損單 Modal =====
+function openCreateModal() {
+  document.getElementById('dmgProductId').value = '';
+  document.getElementById('dmgProductName').value = '';
+  document.getElementById('dmgCurrentStock').value = '';
+  document.getElementById('dmgQty').value = '';
+  document.getElementById('dmgQtyHint').textContent = '';
+  document.getElementById('dmgQtyHint').className = 'stock-hint';
+  document.getElementById('dmgReason').value = '';
+  document.getElementById('dmgCustomReason').value = '';
+  document.getElementById('customReasonGroup').style.display = 'none';
+  document.getElementById('dmgNote').value = '';
+  document.getElementById('btnSubmitDmg').disabled = false;
+  _lookupStock = null;
+  document.getElementById('createModal').classList.add('show');
+  document.getElementById('dmgProductId').focus();
+}
+
+function closeCreateModal() {
+  document.getElementById('createModal').classList.remove('show');
+}
+
+function toggleCustomReason() {
+  const v = document.getElementById('dmgReason').value;
+  document.getElementById('customReasonGroup').style.display = v === '其他' ? '' : 'none';
+}
+
+// 查商品
+async function lookupProduct() {
+  const pid = document.getElementById('dmgProductId').value.trim();
+  if (!pid) return;
+
+  document.getElementById('dmgProductName').value = '查詢中...';
+  document.getElementById('dmgCurrentStock').value = '';
+  _lookupStock = null;
+
+  try {
+    // 查 products
+    const pRes = await fetch(`${SB_URL}/products?id=eq.${encodeURIComponent(pid)}&select=id,name`, { headers: HEADERS });
+    if (!pRes.ok) throw new Error('查詢商品失敗');
+    const products = await pRes.json();
+    if (products.length === 0) {
+      document.getElementById('dmgProductName').value = '（查無此商品）';
+      document.getElementById('dmgCurrentStock').value = '';
+      return;
+    }
+    document.getElementById('dmgProductName').value = products[0].name;
+
+    // 查 inventory
+    const iRes = await fetch(`${SB_URL}/inventory?product_id=eq.${encodeURIComponent(pid)}&select=qty`, { headers: HEADERS });
+    if (!iRes.ok) throw new Error('查詢庫存失敗');
+    const inv = await iRes.json();
+    const stock = inv.length > 0 ? Number(inv[0].qty) || 0 : 0;
+    _lookupStock = stock;
+    document.getElementById('dmgCurrentStock').value = stock;
+    validateQty();
+  } catch (e) {
+    document.getElementById('dmgProductName').value = '（查詢失敗）';
+    console.error(e);
+  }
+}
+
+function validateQty() {
+  const qty = parseInt(document.getElementById('dmgQty').value) || 0;
+  const hint = document.getElementById('dmgQtyHint');
+  if (_lookupStock !== null && qty > _lookupStock) {
+    hint.textContent = `超過現有庫存（${_lookupStock}），無法開立`;
+    hint.className = 'stock-hint warn';
+  } else {
+    hint.textContent = '';
+    hint.className = 'stock-hint';
+  }
+}
+
+// 產生單號
+async function generateOrderNo() {
+  const now = new Date();
+  const dateStr = `${now.getFullYear()}${String(now.getMonth()+1).padStart(2,'0')}${String(now.getDate()).padStart(2,'0')}`;
+  const prefix = `DMG-${dateStr}-`;
+  try {
+    const res = await fetch(`${SB_URL}/damage_orders?order_no=like.${encodeURIComponent(prefix)}*&select=order_no&order=order_no.desc&limit=1`, { headers: HEADERS });
+    const rows = await res.json();
+    if (rows.length > 0) {
+      const lastSeq = parseInt(rows[0].order_no.split('-')[2]) || 0;
+      return prefix + String(lastSeq + 1).padStart(3, '0');
+    }
+  } catch (e) {}
+  return prefix + '001';
+}
+
+// 送出
+async function submitDamageOrder() {
+  const productId = document.getElementById('dmgProductId').value.trim();
+  const productName = document.getElementById('dmgProductName').value.trim();
+  const qty = parseInt(document.getElementById('dmgQty').value) || 0;
+  const reasonSelect = document.getElementById('dmgReason').value;
+  const customReason = document.getElementById('dmgCustomReason').value.trim();
+  const note = document.getElementById('dmgNote').value.trim();
+
+  // 驗證
+  if (!productId || !productName || productName.startsWith('（')) {
+    Swal.fire('請輸入有效的商品編號', '', 'warning'); return;
+  }
+  if (qty <= 0) {
+    Swal.fire('請輸入正整數數量', '', 'warning'); return;
+  }
+  if (_lookupStock !== null && qty > _lookupStock) {
+    Swal.fire('數量超過現有庫存', `現有庫存 ${_lookupStock}，無法開立`, 'warning'); return;
+  }
+  if (!reasonSelect) {
+    Swal.fire('請選擇原因', '', 'warning'); return;
+  }
+  const reason = reasonSelect === '其他' ? (customReason || '其他') : reasonSelect;
+
+  // 二次確認
+  const confirmResult = await Swal.fire({
+    title: '確定開立耗損單？',
+    html: `<div style="text-align:left; font-size:14px;">
+      <b>${productId}</b> ${productName}<br>
+      數量：<b style="color:#c53030;">${qty}</b><br>
+      原因：${reason}<br>
+      ${note ? `備註：${note}<br>` : ''}
+      <br><span style="color:#c53030; font-size:12px;">此操作將扣減庫存，無法還原（僅可作廢）</span>
+    </div>`,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: '確定開立',
+    cancelButtonText: '取消',
+    confirmButtonColor: '#475569',
+  });
+  if (!confirmResult.isConfirmed) return;
+
+  // 防重複點擊
+  const btn = document.getElementById('btnSubmitDmg');
+  btn.disabled = true;
+  btn.textContent = '處理中...';
+
+  try {
+    const orderNo = await generateOrderNo();
+    const meta = JSON.parse(sessionStorage.getItem('user_meta') || '{}');
+    const createdBy = meta.full_name || meta.username || '';
+
+    // 呼叫 RPC
+    const rpcRes = await fetch(`${SB_URL}/rpc/process_damage_order`, {
+      method: 'POST',
+      headers: HEADERS,
+      body: JSON.stringify({
+        p_order_no: orderNo,
+        p_product_id: productId,
+        p_product_name: productName,
+        p_qty: qty,
+        p_reason: reason,
+        p_note: note,
+        p_created_by: createdBy
+      })
+    });
+
+    if (!rpcRes.ok) {
+      const errBody = await rpcRes.json().catch(() => ({}));
+      throw new Error(errBody.message || errBody.error || '開立失敗');
+    }
+
+    closeCreateModal();
+    Swal.fire('開立成功', `耗損單 ${orderNo} 已建立`, 'success');
+    doSearch();
+  } catch (e) {
+    Swal.fire('開立失敗', e.message, 'error');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '確定開立';
+  }
+}
+
+// ===== 作廢 =====
+async function cancelOrder(orderNo, qty, productName, btn) {
+  if (btn && btn.disabled) return;
+  const confirmResult = await Swal.fire({
+    title: '確定作廢此耗損單？',
+    html: `<div style="text-align:left; font-size:14px;">
+      單號：<b>${orderNo}</b><br>
+      商品：${productName}<br>
+      庫存將回補 <b style="color:#276749;">${qty}</b> 件
+    </div>`,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: '確定作廢',
+    cancelButtonText: '取消',
+    confirmButtonColor: '#c53030',
+  });
+  if (!confirmResult.isConfirmed) return;
+
+  if (btn) btn.disabled = true;
+
+  try {
+    const meta = JSON.parse(sessionStorage.getItem('user_meta') || '{}');
+    const cancelledBy = meta.full_name || meta.username || '';
+
+    const rpcRes = await fetch(`${SB_URL}/rpc/cancel_damage_order`, {
+      method: 'POST',
+      headers: HEADERS,
+      body: JSON.stringify({
+        p_order_no: orderNo,
+        p_cancelled_by: cancelledBy
+      })
+    });
+
+    if (!rpcRes.ok) {
+      const errBody = await rpcRes.json().catch(() => ({}));
+      throw new Error(errBody.message || errBody.error || '作廢失敗');
+    }
+
+    Swal.fire('作廢成功', `耗損單 ${orderNo} 已作廢，庫存已回補 ${qty} 件`, 'success');
+    doSearch();
+  } catch (e) {
+    Swal.fire('作廢失敗', e.message, 'error');
+    if (btn) btn.disabled = false;
+  }
+}
+
+// ===== 列印 =====
+function printOrder(orderNo) {
+  const row = allData.find(r => r.order_no === orderNo);
+  if (!row) return;
+
+  const dt = row.created_at ? new Date(row.created_at) : new Date();
+  const dateStr = `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,'0')}-${String(dt.getDate()).padStart(2,'0')}`;
+  const isCancelled = row.status === 'cancelled';
+  const cancelledMark = isCancelled ? '<div style="color:#c53030; font-size:18px; font-weight:900; margin-top:4px;">【已作廢】</div>' : '';
+  const cancelledInfo = isCancelled && row.cancelled_at
+    ? `<tr><td style="padding:6px 10px; font-size:12px; color:#c53030;" colspan="2">作廢時間：${new Date(row.cancelled_at).toLocaleString('zh-TW')}　作廢人：${row.cancelled_by || ''}</td></tr>`
+    : '';
+
+  const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>耗損單 ${orderNo}</title>
+<style>
+  @page { margin: 3mm; }
+  body { font-family: 'Microsoft JhengHei', sans-serif; padding: 20px; color: #1e293b; }
+  .no-print { position: fixed; top: 10px; right: 10px; z-index: 100; display: flex; gap: 8px; }
+  .no-print button { padding: 8px 16px; border: none; border-radius: 6px; font-size: 14px; cursor: pointer; font-weight: 600; }
+  @media print { .no-print { display: none !important; } }
+  table { width: 100%; border-collapse: collapse; margin-top: 16px; }
+  th { background: #f1f5f9; padding: 8px 10px; text-align: left; font-size: 12px; color: #64748b; border-bottom: 2px solid #e2e8f0; }
+  td { padding: 8px 10px; font-size: 13px; border-bottom: 1px solid #e2e8f0; }
+</style></head><body>
+<div class="no-print">
+  <button onclick="window.print()" style="background:#475569; color:white;">🖨️ 列印</button>
+  <button onclick="window.close()" style="background:#e2e8f0; color:#374151;">✕ 關閉</button>
+</div>
+<div style="text-align:center;">
+  <div style="font-size:22px; font-weight:900;">丸十水產股份有限公司</div>
+  <div style="font-size:15px; letter-spacing:8px; color:#64748b; margin-top:4px;">庫存耗損單</div>
+  ${cancelledMark}
+</div>
+<div style="display:flex; justify-content:space-between; margin-top:16px; font-size:13px; color:#475569;">
+  <span>單號：${orderNo}</span>
+  <span>日期：${dateStr}</span>
+  <span>經手人：${row.created_by || ''}</span>
+</div>
+<table>
+  <thead><tr><th>項目</th><th>內容</th></tr></thead>
+  <tbody>
+    <tr><td style="width:120px; font-weight:600;">商品編號</td><td>${row.product_id}</td></tr>
+    <tr><td style="font-weight:600;">商品名稱</td><td>${row.product_name}</td></tr>
+    <tr><td style="font-weight:600;">數量</td><td style="font-weight:700; color:#c53030;">${row.qty}</td></tr>
+    <tr><td style="font-weight:600;">原因</td><td>${row.reason}</td></tr>
+    <tr><td style="font-weight:600;">備註</td><td>${row.note || '—'}</td></tr>
+    ${cancelledInfo}
+  </tbody>
+</table>
+</body></html>`;
+
+  const blob = new Blob([html], { type: 'text/html' });
+  const url = URL.createObjectURL(blob);
+  window.open(url, '_blank');
+}
+
+// ===== 欄寬拖拉 =====
+(function initResize() {
+  let startX, startW, th;
+  document.querySelectorAll('.th-resizer').forEach(el => {
+    el.addEventListener('mousedown', function(e) {
+      th = this.parentElement;
+      startX = e.pageX;
+      startW = th.offsetWidth;
+      document.addEventListener('mousemove', onDrag);
+      document.addEventListener('mouseup', stopDrag);
+      e.preventDefault();
+    });
+  });
+  function onDrag(e) { if (th) th.style.width = Math.max(40, startW + e.pageX - startX) + 'px'; }
+  function stopDrag() { document.removeEventListener('mousemove', onDrag); document.removeEventListener('mouseup', stopDrag); th = null; }
+})();
+
+// 頁面載入自動查詢
+window.addEventListener('DOMContentLoaded', () => { doSearch(); });
+</script>
+</body>
+</html>
