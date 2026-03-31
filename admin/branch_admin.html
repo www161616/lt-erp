@@ -2398,6 +2398,7 @@
       } catch(e) { console.warn('Google Sheets 同步失敗:', e); }
 
       // ③ 同步至 branch_portal localStorage（結單填表用）
+      console.warn('[syncToERP] branchOrderList key 用純商品編號，與 ImportGroupBuy 的 商品編號_結單日 格式不同，請確保 ImportGroupBuy 在分店填單前完成匯入');
       const saved = JSON.parse(localStorage.getItem('branchOrderList') || '[]');
       stagingList.forEach(item => {
         const entry = {
