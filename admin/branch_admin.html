@@ -10734,6 +10734,14 @@
       o.finalAmount = finalAmt;
       o.closedAt = new Date().toISOString();
       syncSalesOrdersToPortal();
+      // 同步結案狀態到 DB
+      if (o.dbId) {
+        fetch(`${SB_URL}/sales_orders?id=eq.${o.dbId}`, {
+          method: 'PATCH',
+          headers: { ...HEADERS, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'closed', grand_total: finalAmt })
+        }).catch(e => console.error('closeSalesOrder DB sync error:', e));
+      }
       logActivity('銷貨單結案', id, { store: o.storeName, finalAmount: finalAmt });
       Swal.fire({ title:'已結案', html:`📁 <b>${id}</b> 已結案<br>最終金額 $${finalAmt.toLocaleString()}`, icon:'success', timer:2000, showConfirmButton:false })
         .then(() => renderAccountingStation());
