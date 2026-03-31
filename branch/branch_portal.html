@@ -1085,7 +1085,7 @@
 
     async function cloudLoadAll() {
       try {
-        const resp = await fetch(`${SB_URL}/shared_kv?key=in.("branchOrderList","branchOrders","branchDataList","branchTypeMap","portalAllRequests","portalMutualAidBoard","portalTrackingData","portalBulletin","portalSalesOrders","branchOrdersLocked")`, { headers: SB_HEADERS });
+        const resp = await fetch(`${SB_URL}/shared_kv?key=in.("branchOrderList","branchOrders","branchDataList","branchTypeMap","portalAllRequests","portalMutualAidBoard","portalTrackingData","portalBulletin","portalSalesOrders","branchOrdersLocked","shortageNegotiations")`, { headers: SB_HEADERS });
         if (resp.ok) {
           const rows = await resp.json();
           rows.forEach(r => {
@@ -6867,6 +6867,7 @@ function submitShortageReply(negoId, replyData) {
   }
 
   localStorage.setItem('shortageNegotiations', JSON.stringify(list));
+  cloudSave('shortageNegotiations');
 
   // 同步更新 branchOrders：原商品數量歸零，換品商品加上數量
   const branchOrders = JSON.parse(localStorage.getItem('branchOrders') || '{}');

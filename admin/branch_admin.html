@@ -193,7 +193,7 @@
 
     async function cloudLoadAll() {
       try {
-        const resp = await fetch(`${SB_URL}/shared_kv?key=in.("branchOrderList","branchOrders","branchDataList","branchTypeMap","portalAllRequests","portalTransferList","portalMutualAidBoard","portalSalesOrders","importedStoreNames","importedPersonalNames","lt_savedWaves","lt_backorderMeta","branchOrdersLocked")`, { headers: HEADERS });
+        const resp = await fetch(`${SB_URL}/shared_kv?key=in.("branchOrderList","branchOrders","branchDataList","branchTypeMap","portalAllRequests","portalTransferList","portalMutualAidBoard","portalSalesOrders","importedStoreNames","importedPersonalNames","lt_savedWaves","lt_backorderMeta","branchOrdersLocked","shortageNegotiations")`, { headers: HEADERS });
         if (resp.ok) {
           const rows = await resp.json();
           rows.forEach(r => {
@@ -5137,6 +5137,7 @@
       list = list.filter(n => !(n.orderKey === orderKey && n.status !== 'finalized'));
       list.push(nego);
       localStorage.setItem('shortageNegotiations', JSON.stringify(list));
+      cloudSave('shortageNegotiations');
 
       syncProcurementToPortal();
     }
@@ -5237,6 +5238,7 @@
       nego.status = 'finalized';
       nego.finalizedAt = new Date().toISOString();
       localStorage.setItem('shortageNegotiations', JSON.stringify(list));
+      cloudSave('shortageNegotiations');
 
       // 重新同步追蹤資料
       syncOrderTrackingData();
