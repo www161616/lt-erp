@@ -134,6 +134,7 @@
     <div class="menu-item" id="menu-cnReturns" onclick="switchTab('cnReturns', this)">🔄 退換貨處理</div>
 
     <div id="label-warehouse" style="padding: 10px 20px; font-size: 11px; color: var(--text2); margin-top: 10px;">倉儲與物流</div>
+    <div class="menu-item" id="menu-warehouseReturn" onclick="switchTab('warehouseReturn', this)">🔄 轉回總倉記錄</div>
     <div class="menu-item" id="menu-picking" onclick="switchTab('picking', this)">📦 新增揀貨單</div>
     <div class="menu-item" id="menu-pickingHistory" onclick="switchTab('pickingHistory', this)">📋 揀貨歷史查詢</div>
     <div class="menu-item" id="menu-accounting" onclick="switchTab('accounting', this)">💳 銷貨單管理</div>
@@ -649,6 +650,9 @@
       } else if (tabId === 'accounting') {
         title.innerText = '當前功能：銷貨單管理';
         renderAccountingStation();
+      } else if (tabId === 'warehouseReturn') {
+        title.innerText = '當前功能：轉回總倉記錄';
+        renderWarehouseReturn();
       } else if (tabId === 'searchReturns') {
         title.innerText = '當前功能：退貨單查詢';
         renderSearchReturnsStation();
@@ -11332,6 +11336,317 @@
   }
 
   // onGBExtraChange 和 gbSyncToSupplier 已移除（團購叫貨區改唯讀）
+
+  // ============================
+  // 轉回總倉記錄（獨立功能，不動現有函式）
+  // ============================
+  let wrData = [];
+  let wrPage = 1;
+  const WR_PER = 50;
+
+  async function renderWarehouseReturn() {
+    const container = document.getElementById('mainContainer');
+    container.innerHTML = '<div class="panel"><p>載入中...</p></div>';
+
+    // 從 RPC 取得總倉相關的 TF 單
+    const monthVal = document.getElementById('wrMonth')?.value || '';
+    const currentMonth = monthVal || new Date().toISOString().slice(0, 7);
+    try {
+      const res = await fetch(`${SB_URL}/rpc/get_store_transfers`, {
+        method: 'POST',
+        headers: { ...HEADERS, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ p_month: currentMonth, p_store: '總倉' })
+      });
+      const all = res.ok ? await res.json() : [];
+      // 只顯示 to_store = 總倉（direction = 'in' 對總倉來說就是收到貨）
+      wrData = all.filter(t => t.direction === 'in');
+    } catch(e) { console.error('renderWarehouseReturn error:', e); wrData = []; }
+
+    // 取得每筆 TF 單的 admin_status（RPC 沒回傳這個欄位，需額外查）
+    if (wrData.length > 0) {
+      try {
+        const ids = wrData.map(t => `"${t.tf_id}"`).join(',');
+        const statusRes = await fetch(`${SB_URL}/transfer_orders?id=in.(${ids})&select=id,admin_status,from_store`, { headers: HEADERS });
+        const statusData = statusRes.ok ? await statusRes.json() : [];
+        const statusMap = {};
+        statusData.forEach(s => { statusMap[s.id] = s; });
+        wrData.forEach(t => {
+          const info = statusMap[t.tf_id] || {};
+          t._adminStatus = info.admin_status || 'pending';
+          t._fromStore = info.from_store || t.counterpart || '';
+        });
+      } catch(e) { console.warn('查詢 admin_status 失敗:', e); }
+    }
+
+    wrPage = 1;
+    renderWarehouseReturnGrid(currentMonth);
+  }
+
+  function renderWarehouseReturnGrid(monthVal) {
+    const container = document.getElementById('mainContainer');
+    const data = wrData.filter(t => t._adminStatus !== 'cancelled');
+    const totalPages = Math.max(1, Math.ceil(data.length / WR_PER));
+    if (wrPage > totalPages) wrPage = totalPages;
+    const start = (wrPage - 1) * WR_PER;
+    const pageItems = data.slice(start, start + WR_PER);
+
+    // 月份選項
+    const now = new Date();
+    const months = [];
+    for (let i = 0; i < 6; i++) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      months.push(d.toISOString().slice(0, 7));
+    }
+
+    const statusLabel = { pending: '📋 待處理', shipped: '🚚 已出貨', received: '✅ 已收貨', return_created: '📤 已開退貨單', direct: '⚡ 直送' };
+    const statusColor = { pending: '#b7791f', shipped: '#2b6cb0', received: '#047857', return_created: '#718096', direct: '#6b21a8' };
+
+    let html = `<div class="panel">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
+        <h3 style="margin:0;">🔄 轉回總倉記錄</h3>
+      </div>
+      <div style="display:flex;gap:8px;margin-bottom:8px;align-items:center;flex-wrap:wrap;">
+        <select id="wrMonth" onchange="wrPage=1;renderWarehouseReturn();" style="padding:5px 8px;border:1px solid #ddd;border-radius:4px;font-size:13px;">
+          ${months.map(m => `<option value="${m}" ${m === monthVal ? 'selected' : ''}>${m}</option>`).join('')}
+        </select>
+        <span style="font-size:12px;color:#718096;">共 ${data.length} 筆（不含已取消）</span>
+      </div>
+      <div style="overflow-x:auto;">
+      <table style="width:100%;border-collapse:collapse;font-size:12px;">
+        <thead><tr style="background:#edf2f7;">
+          <th style="width:36px;padding:6px;border:1px solid #e2e8f0;">#</th>
+          <th style="width:140px;padding:6px;border:1px solid #e2e8f0;">TF 單號</th>
+          <th style="width:80px;padding:6px;border:1px solid #e2e8f0;">日期</th>
+          <th style="width:80px;padding:6px;border:1px solid #e2e8f0;">來源店</th>
+          <th style="min-width:200px;padding:6px;border:1px solid #e2e8f0;">商品明細</th>
+          <th style="width:80px;padding:6px;border:1px solid #e2e8f0;">金額</th>
+          <th style="width:90px;padding:6px;border:1px solid #e2e8f0;">狀態</th>
+          <th style="width:100px;padding:6px;border:1px solid #e2e8f0;">操作</th>
+        </tr></thead><tbody>`;
+
+    if (pageItems.length === 0) {
+      html += `<tr><td colspan="8" style="text-align:center;padding:40px;color:#718096;border:1px solid #e2e8f0;">本月無轉回總倉記錄</td></tr>`;
+    }
+
+    const tdS = 'border:1px solid #e2e8f0;padding:5px 6px;';
+    pageItems.forEach((t, pi) => {
+      const i = start + pi;
+      const items = t.items || [];
+      const itemsHtml = items.map(it => `${it.product_name} x${it.qty}`).join('<br>');
+      const amt = Number(t.total_amount) || 0;
+      const st = t._adminStatus || 'pending';
+      const isReturnCreated = st === 'return_created';
+      const btnHtml = isReturnCreated
+        ? `<button class="btn" style="padding:3px 8px;font-size:11px;background:#cbd5e0;color:#718096;cursor:not-allowed;" disabled>已開退貨單</button>`
+        : `<button class="btn" style="padding:3px 8px;font-size:11px;background:#b7791f;color:#fff;" onclick="createReturnFromTF('${t.tf_id}')">📤 開立退貨單</button>`;
+
+      html += `<tr>
+        <td style="${tdS}text-align:center;color:#a0aec0;">${i + 1}</td>
+        <td style="${tdS}font-family:monospace;font-size:11px;">${t.tf_id}</td>
+        <td style="${tdS}white-space:nowrap;">${t.created_at ? new Date(t.created_at).toLocaleDateString('zh-TW') : ''}</td>
+        <td style="${tdS}font-weight:600;">${t._fromStore || t.counterpart || ''}</td>
+        <td style="${tdS}font-size:11px;line-height:1.6;">${itemsHtml}</td>
+        <td style="${tdS}text-align:right;font-weight:600;">$${amt.toLocaleString()}</td>
+        <td style="${tdS}text-align:center;"><span style="color:${statusColor[st] || '#718096'};font-weight:600;font-size:11px;">${statusLabel[st] || st}</span></td>
+        <td style="${tdS}text-align:center;">${btnHtml}</td>
+      </tr>`;
+    });
+
+    html += `</tbody></table></div></div>`;
+    container.innerHTML = html;
+    enableTableResize(container.querySelector('table'));
+  }
+
+  async function createReturnFromTF(tfId) {
+    // 1. 讀取 TF 單主單和明細
+    let tfOrder, tfItems;
+    try {
+      const oRes = await fetch(`${SB_URL}/transfer_orders?id=eq.${tfId}&select=*`, { headers: HEADERS });
+      const oData = await oRes.json();
+      if (!oData.length) { Swal.fire('錯誤', '找不到 TF 單 ' + tfId, 'error'); return; }
+      tfOrder = oData[0];
+
+      const iRes = await fetch(`${SB_URL}/transfer_items?transfer_id=eq.${tfId}`, { headers: HEADERS });
+      tfItems = iRes.ok ? await iRes.json() : [];
+      if (!tfItems.length) { Swal.fire('錯誤', '此 TF 單沒有商品明細', 'error'); return; }
+    } catch(e) { Swal.fire('錯誤', '讀取 TF 單失敗: ' + e.message, 'error'); return; }
+
+    // 2. 補齊 price = 0 的商品（從 products 查 price_branch）
+    const zeroPriceIds = tfItems.filter(i => !Number(i.price)).map(i => i.product_code).filter(Boolean);
+    if (zeroPriceIds.length > 0) {
+      try {
+        const batch = zeroPriceIds.map(id => `"${id}"`).join(',');
+        const pRes = await fetch(`${SB_URL}/products?id=in.(${batch})&select=id,price_branch`, { headers: HEADERS });
+        if (pRes.ok) {
+          const pData = await pRes.json();
+          const priceMap = {};
+          pData.forEach(p => { priceMap[p.id] = Number(p.price_branch) || 0; });
+          tfItems.forEach(i => {
+            if (!Number(i.price) && i.product_code && priceMap[i.product_code]) {
+              i.price = priceMap[i.product_code];
+              i.amount = i.qty * i.price;
+            }
+          });
+        }
+      } catch(e) { console.warn('查詢分店價失敗:', e); }
+    }
+
+    // 3. 確認彈窗
+    const subtotal = tfItems.reduce((s, i) => s + (Number(i.amount) || i.qty * Number(i.price) || 0), 0);
+    const itemsPreview = tfItems.map(i =>
+      `<tr><td style="padding:4px 8px;border-bottom:1px solid #f3f4f6;">${i.product_name}</td>` +
+      `<td style="padding:4px 8px;text-align:center;border-bottom:1px solid #f3f4f6;">${i.qty}</td>` +
+      `<td style="padding:4px 8px;text-align:right;border-bottom:1px solid #f3f4f6;">$${Number(i.price).toLocaleString()}</td>` +
+      `<td style="padding:4px 8px;text-align:right;border-bottom:1px solid #f3f4f6;">$${(i.qty * Number(i.price)).toLocaleString()}</td></tr>`
+    ).join('');
+
+    const result = await Swal.fire({
+      title: '📤 從 TF 單開立退貨單',
+      html: `<div style="text-align:left;font-size:13px;">
+        <p>TF 單號：<b>${tfId}</b></p>
+        <p>來源店：<b>${tfOrder.from_store}</b> → 總倉</p>
+        <div style="max-height:200px;overflow-y:auto;margin:8px 0;">
+          <table style="width:100%;border-collapse:collapse;font-size:12px;">
+            <thead><tr style="background:#fef3c7;">
+              <th style="padding:4px 8px;text-align:left;">品名</th>
+              <th style="padding:4px 8px;text-align:center;">數量</th>
+              <th style="padding:4px 8px;text-align:right;">單價</th>
+              <th style="padding:4px 8px;text-align:right;">小計</th>
+            </tr></thead>
+            <tbody>${itemsPreview}</tbody>
+          </table>
+        </div>
+        <p style="font-weight:700;font-size:14px;color:#c53030;">退貨金額：-$${subtotal.toLocaleString()}</p>
+      </div>`,
+      width: 520,
+      showCancelButton: true,
+      confirmButtonText: '確認開立退貨單',
+      cancelButtonText: '取消',
+      confirmButtonColor: '#b7791f'
+    });
+
+    if (!result.isConfirmed) return;
+
+    Swal.fire({ title: '開立中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+    try {
+      // 4. 找客戶 ID（用 from_store 當客戶名）
+      const custRes = await fetch(`${SB_URL}/customers?name=ilike.*${encodeURIComponent(tfOrder.from_store)}*&select=id,name,tax_type&limit=1`, { headers: HEADERS });
+      const custData = await custRes.json();
+      const cust = custData.length > 0 ? custData[0] : { id: null, name: tfOrder.from_store, tax_type: '免稅' };
+
+      // 5. 產生 RT 開頭的退貨單 ID
+      const today = new Date();
+      const ds = today.getFullYear().toString() + String(today.getMonth() + 1).padStart(2, '0') + String(today.getDate()).padStart(2, '0');
+      const prefix = 'RT' + ds;
+      const seqRes = await fetch(`${SB_URL}/sales_orders?id=like.${prefix}*&select=id&order=id.desc&limit=1`, { headers: HEADERS });
+      const seqData = await seqRes.json();
+      const seq = seqData.length > 0 ? parseInt(seqData[0].id.slice(-3)) + 1 : 1;
+      const newId = prefix + String(seq).padStart(3, '0');
+
+      // 6. 寫入 sales_orders
+      const soData = {
+        id: newId,
+        order_date: today.toISOString().split('T')[0],
+        customer_id: cust.id,
+        customer_name: cust.name,
+        subtotal: -subtotal,
+        shipping: 0,
+        deduction: 0,
+        tax_amount: 0,
+        grand_total: -subtotal,
+        payment_status: '未收款',
+        order_type: 'return',
+        ref_order_id: tfId,
+        note: '轉回總倉退貨：TF 單 ' + tfId + '（' + tfOrder.from_store + ' → 總倉）'
+      };
+      const oRes = await fetch(`${SB_URL}/sales_orders`, {
+        method: 'POST', headers: { ...HEADERS, 'Prefer': 'return=representation' },
+        body: JSON.stringify(soData)
+      });
+      if (!oRes.ok) throw new Error('退貨單寫入失敗: ' + (await oRes.text()));
+
+      // 7. 寫入 sales_details
+      const detailsData = tfItems.map((item, idx) => ({
+        id: newId + '-' + String(idx + 1).padStart(3, '0'),
+        order_id: newId,
+        product_id: item.product_code || null,
+        product_name: item.product_name,
+        qty: -item.qty,
+        unit: '件',
+        unit_price: Number(item.price) || 0,
+        subtotal: -(item.qty * (Number(item.price) || 0)),
+        unit_cost: Number(item.price) || 0
+      }));
+      const dRes = await fetch(`${SB_URL}/sales_details`, {
+        method: 'POST', headers: { ...HEADERS, 'Prefer': 'return=representation' },
+        body: JSON.stringify(detailsData)
+      });
+      if (!dRes.ok) throw new Error('明細寫入失敗: ' + (await dRes.text()));
+
+      // 8. 庫存回補
+      for (const item of tfItems) {
+        if (!item.product_code) continue;
+        try {
+          const invR = await fetch(`${SB_URL}/inventory?product_id=eq.${encodeURIComponent(item.product_code)}&select=qty`, { headers: HEADERS });
+          const invD = await invR.json();
+          if (invD.length > 0) {
+            const newQty = (Number(invD[0].qty) || 0) + item.qty;
+            await fetch(`${SB_URL}/inventory?product_id=eq.${encodeURIComponent(item.product_code)}`, {
+              method: 'PATCH', headers: HEADERS,
+              body: JSON.stringify({ qty: newQty, last_updated: new Date().toISOString() })
+            });
+            await fetch(`${SB_URL}/inventory_logs`, {
+              method: 'POST', headers: HEADERS,
+              body: JSON.stringify({
+                product_id: item.product_code, log_type: '轉回總倉',
+                qty_change: item.qty, after_qty: newQty,
+                doc_no: newId, log_date: new Date().toISOString()
+              })
+            });
+          }
+        } catch(e) { console.warn('庫存回補失敗:', item.product_code, e); }
+      }
+
+      // 9. 標記 TF 單 admin_status = 'return_created'
+      await fetch(`${SB_URL}/transfer_orders?id=eq.${tfId}`, {
+        method: 'PATCH', headers: HEADERS,
+        body: JSON.stringify({ admin_status: 'return_created' })
+      });
+
+      // 10. 同步到 portal（讓分店月結對帳看到退貨單）
+      mockSalesOrders.push({
+        id: newId, waveId: 'RETURN-' + tfId, storeName: tfOrder.from_store,
+        createdAt: new Date().toLocaleString('zh-TW', { hour12: false }),
+        storeConfirmedAt: null, status: 'issued',
+        issuedAt: new Date().toLocaleString('zh-TW', { hour12: false }),
+        finalAmount: -subtotal, orderType: 'return',
+        note: soData.note,
+        items: tfItems.map(i => ({
+          productId: i.product_code, name: i.product_name, qty: -i.qty,
+          unitPrice: Number(i.price) || 0, returnQty: 0, returnStatus: 'none',
+          returnReason: '', returnDate: '', damaged: false, note: '轉回總倉'
+        }))
+      });
+      syncSalesOrdersToPortal();
+
+      // 11. 記錄操作
+      logActivity('從TF單開立退貨單', newId, { tfId: tfId, store: tfOrder.from_store, amount: -subtotal });
+
+      Swal.fire({
+        icon: 'success',
+        title: '退貨單已開立！',
+        html: `單號：<b>${newId}</b><br>金額：<b style="color:#c53030;">-$${subtotal.toLocaleString()}</b><br>來源：${tfOrder.from_store} → 總倉`,
+        confirmButtonColor: '#047857'
+      });
+
+      // 重新載入頁面
+      renderWarehouseReturn();
+
+    } catch(e) {
+      Swal.fire('開立失敗', e.message, 'error');
+    }
+  }
 
   // ============================
   // 陸貨專區：漂漂館區
