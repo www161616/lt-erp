@@ -8346,15 +8346,16 @@
     // 取得有銷貨單的揀貨單ID（按日期排序）
     const waveIds = [...new Set(mockSalesOrders.map(o => o.waveId))];
     const months = [...new Set(mockSalesOrders.map(o => o.createdAt.slice(0, 7)))].sort().reverse();
+    const currentMonth = new Date().toISOString().slice(0, 7);
 
     const html = `
       <div style="display:flex; flex-direction:column; gap:15px; height:100%;">
         <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--border); padding-bottom:10px; flex-shrink:0;">
-          <div style="font-size:16px; font-weight:bold; color:#2d3748;">💳 銷貨單管理</div>
+          <div style="font-size:16px; font-weight:bold; color:#2d3748; display:flex; align-items:center; gap:10px;">💳 銷貨單管理 <button class="btn" style="padding:4px 12px; font-size:12px; background:#1a365d;" onclick="openSharedLink('https://www161616.github.io/lt-erp/')">🔍 前往 index 查詢/列印</button></div>
           <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
             <select id="accountingMonthFilter" onchange="refreshAccountingTable()" style="padding:6px 10px; border:1px solid var(--border); border-radius:4px; font-family:inherit; font-size:13px;">
               <option value="">全部月份</option>
-              ${months.map(m => `<option value="${m}">${m.replace('/','-')}</option>`).join('')}
+              ${months.map(m => `<option value="${m}" ${m === currentMonth ? 'selected' : ''}>${m.replace('/','-')}</option>`).join('')}
             </select>
             <select id="accountingFilter" onchange="refreshAccountingTable()" style="padding:6px 10px; border:1px solid var(--border); border-radius:4px; font-family:inherit; font-size:13px;">
               <option value="all">全部狀態</option>
