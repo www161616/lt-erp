@@ -12555,7 +12555,7 @@
   function renderCnArrivalGrid() {
     const container = document.getElementById('mainContainer');
     const kw = document.getElementById('cnaSearch')?.value?.trim().toLowerCase() || '';
-    const shipTo = document.getElementById('cnaShipTo')?.value || '';
+    const shipTo = document.getElementById('cnaShipTo')?.value || '直寄龍潭';
     let data = [...cnArrivalRows];
     // 預設只顯示直寄龍潭和小蘭拿去龍潭
     if (shipTo === '__all__') {
