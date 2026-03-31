@@ -2315,7 +2315,7 @@ function exportArrivalsExcel() {
     if (r.tracking_number) {
       const tn = r.tracking_number.trim().toLowerCase();
       if (!tnCount[tn]) tnCount[tn] = 0;
-      const live = getLiveArrivalData(r.tracking_number, tnCount[tn]++);
+      const live = getLiveArrivalData(r.tracking_number, tnCount[tn]++, r);
       if (live) { name = live.product_name || name; pid = live.product_id || pid; price = live.selling_price || price; qty = live.qty || qty; cost = live.unit_cost || cost; oid = live.offer_id || oid; }
     }
     return [oid, r.arrived ? '是' : '否', r.tracking_number||'', name, pid, price, qty, cost, r.note||'', r.ship_date||'', r.ship_order||'', r.ship_to||''];
@@ -2371,7 +2371,7 @@ function renderArrivalGrid() {
     const arrivedClass = r.arrived ? 'arrived-yes' : '';
 
     // 即時從所有訂單帶出品名、品編、數量、單個價、商品頁
-    const live = r.tracking_number ? getLiveArrivalData(r.tracking_number, r._tnSeq || 0) : null;
+    const live = r.tracking_number ? getLiveArrivalData(r.tracking_number, r._tnSeq || 0, r) : null;
     const liveProductName = live ? live.product_name : (r.product_name || '');
     const liveProductId = live ? live.product_id : (r.product_id || '');
     const liveQty = live ? live.qty : (r.qty || 0);
@@ -2552,7 +2552,7 @@ function findAllPurchasesByTracking(tn) {
 }
 
 // 從所有訂單即時取得到貨清單的顯示值
-function getLiveArrivalData(trackingNumber, seqIndex) {
+function getLiveArrivalData(trackingNumber, seqIndex, row) {
   const pMatches = findAllPurchasesByTracking(trackingNumber);
   const pMatch = pMatches[seqIndex] || pMatches[0];
   const result = { product_name: '', product_id: '', qty: 0, unit_cost: 0, offer_id: '', selling_price: 0, category: '' };
@@ -2588,6 +2588,11 @@ function getLiveArrivalData(trackingNumber, seqIndex) {
     result.selling_price = parseFloat(otMatch.price) || 0;
   }
   if (!result.product_name) result.product_name = pMatch.product_name || '';
+  // 自動補寫 product_id 到 arrivalRows，讓自動儲存寫回 DB
+  if (row && result.product_id && !row.product_id) {
+    row.product_id = result.product_id;
+    row._dirty = true;
+  }
   return result;
 }
 
