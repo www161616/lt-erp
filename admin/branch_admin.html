@@ -12566,6 +12566,10 @@
       data = data.filter(r => r.ship_to === '直寄龍潭' || r.ship_to === '小蘭拿去龍潭');
     }
     if (kw) data = data.filter(r => (r.product_name||'').toLowerCase().includes(kw) || (r.product_id||'').toLowerCase().includes(kw) || (r.tracking_number||'').toLowerCase().includes(kw));
+    const dateFrom = document.getElementById('cnaDateFrom')?.value;
+    const dateTo = document.getElementById('cnaDateTo')?.value;
+    if (dateFrom) data = data.filter(r => (r.ship_date || '') >= dateFrom);
+    if (dateTo) data = data.filter(r => (r.ship_date || '') <= dateTo);
     const totalPages = Math.max(1, Math.ceil(data.length / CNA_PER));
     if (cnaPage > totalPages) cnaPage = totalPages;
     const start = (cnaPage - 1) * CNA_PER;
@@ -12584,8 +12588,11 @@
           <option value="小蘭拿去龍潭" ${shipTo==='小蘭拿去龍潭'?'selected':''}>小蘭拿去龍潭</option>
           <option value="__all__" ${shipTo==='__all__'?'selected':''}>全部（含我家）</option>
         </select>
+        <input type="date" id="cnaDateFrom" value="${document.getElementById('cnaDateFrom')?.value||''}" onchange="cnaPage=1;renderCnArrivalGrid();" style="padding:5px 8px;border:1px solid #ddd;border-radius:4px;font-size:13px;width:130px;" placeholder="出貨日期起">
+        <span style="color:#718096;">~</span>
+        <input type="date" id="cnaDateTo" value="${document.getElementById('cnaDateTo')?.value||''}" onchange="cnaPage=1;renderCnArrivalGrid();" style="padding:5px 8px;border:1px solid #ddd;border-radius:4px;font-size:13px;width:130px;" placeholder="出貨日期迄">
         <button class="btn" onclick="renderCnArrivalGrid()">查詢</button>
-        <button class="btn" onclick="document.getElementById('cnaSearch').value='';document.getElementById('cnaShipTo').value='';cnaPage=1;renderCnArrivalGrid();">清除</button>
+        <button class="btn" onclick="document.getElementById('cnaSearch').value='';document.getElementById('cnaShipTo').value='直寄龍潭';document.getElementById('cnaDateFrom').value='';document.getElementById('cnaDateTo').value='';cnaPage=1;renderCnArrivalGrid();">清除</button>
         <span style="font-size:12px;color:#718096;">共 ${data.length} 筆</span>
       </div>`;
 
@@ -12726,15 +12733,25 @@
       data = data.filter(r => r.ship_to === '直寄龍潭' || r.ship_to === '小蘭拿去龍潭');
     }
     if (kw) data = data.filter(r => (r.product_name||'').toLowerCase().includes(kw) || (r.product_id||'').toLowerCase().includes(kw) || (r.tracking_number||'').toLowerCase().includes(kw));
+    const dateFrom = document.getElementById('cnaDateFrom')?.value;
+    const dateTo = document.getElementById('cnaDateTo')?.value;
+    if (dateFrom) data = data.filter(r => (r.ship_date || '') >= dateFrom);
+    if (dateTo) data = data.filter(r => (r.ship_date || '') <= dateTo);
 
     // 只取勾選訂單號的資料
     const printData = data.filter(r => selectedOrders.has(r.ship_order || ''));
 
-    let rows = printData.map((r,i) => `<tr>
+    let rows = printData.map((r,i) => {
+      const live = cnaGetLive(r.tracking_number);
+      const name = live ? live.product_name : (r.product_name || '');
+      const price = live ? live.selling_price : (r.selling_price || '');
+      const cost = live ? live.unit_cost : (r.unit_cost || '');
+      return `<tr>
       <td>${i+1}</td><td>${r.arrived?'✅':''}</td><td>${r.tracking_number||''}</td>
-      <td>${r.product_id||''}</td><td>${r.product_name||''}</td>
-      <td style="text-align:right;">${r.selling_price||''}</td><td style="text-align:right;">${r.unit_cost||''}</td>
-    </tr>`).join('');
+      <td>${r.product_id||''}</td><td>${name}</td>
+      <td style="text-align:right;">${price}</td><td style="text-align:right;">${cost}</td>
+    </tr>`;
+    }).join('');
 
     const w = window.open('','_blank');
     if (!w) return Swal.fire('提示','請允許彈出視窗','warning');
