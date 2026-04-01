@@ -61,8 +61,6 @@
       tbody tr:not([id^="detail-"]) { border-bottom: 1.5px solid #cbd5e1 !important; }
       /* 隱藏展開箭頭欄 */
       th:first-child, td:first-child { display: none !important; }
-      /* 隱藏螢幕版專用欄位 */
-      .no-print { display: none !important; }
     }
   </style>
 </head>
@@ -180,10 +178,6 @@ async function doQuery() {
       d._profit = (Number(d.subtotal) || 0) - d._costSubtotal;
     });
 
-    // orderMap: order_id → customer_name
-    const orderMap = {};
-    orders.forEach(o => { orderMap[o.id] = o.customer_name || ''; });
-
     // 按商品分組（單個價格 + 數量加總）
     const grouped = {};
     allDetails.forEach(d => {
@@ -197,26 +191,21 @@ async function doQuery() {
           unitCost: 0,
           unitProfit: 0,
           profit: 0,
-          orders: []
+          priceGroups: []
         };
       }
       grouped[pid].qty += Number(d.qty) || 0;
       grouped[pid].unitCost = d._effectiveCost;
-      const customerName = orderMap[d.order_id] || '';
-      const existing = grouped[pid].orders.find(o => o.customerName === customerName);
-      if (existing) {
-        existing.qty += Number(d.qty) || 0;
-        existing.subtotal = Math.round(existing.unitPrice * existing.qty);
+      const up = Number(d.unit_price) || 0;
+      const existingGroup = grouped[pid].priceGroups.find(g => g.unitPrice === up);
+      if (existingGroup) {
+        existingGroup.qty += Number(d.qty) || 0;
+        existingGroup.subtotal = Math.round(existingGroup.unitPrice * existingGroup.qty);
       } else {
-        grouped[pid].orders.push({
-          orderId: d.order_id,
-          customerName,
+        grouped[pid].priceGroups.push({
+          unitPrice: up,
           qty: Number(d.qty) || 0,
-          unitPrice: Number(d.unit_price) || 0,
-          unitCost: d._effectiveCost,
-          unitProfit: (Number(d.unit_price) || 0) - d._effectiveCost,
-          subtotal: Math.round((Number(d.unit_price) || 0) * (Number(d.qty) || 0)),
-          hasRealCost: (Number(d.unit_cost) || 0) > 0
+          subtotal: Math.round(up * (Number(d.qty) || 0))
         });
       }
     });
@@ -281,19 +270,13 @@ async function doQuery() {
         <td class="text-right bold ${profitColor}">$${unitProfit.toLocaleString()}</td>
         <td class="text-right bold ${profitColor}">$${profit.toLocaleString()}</td>
       </tr>`;
-      // 展開明細列
-      const detailRows = r.orders.map(o => {
-        const costStyle = !o.hasRealCost ? 'color:#c53030;' : '';
-        const costWarn = !o.hasRealCost ? ' ⚠️' : '';
-        const profitStyle = o.unitProfit < 0 ? 'color:#c53030;' : '';
+      // 展開明細列（按單價分組，數量降冪）
+      const sortedGroups = [...r.priceGroups].sort((a, b) => b.qty - a.qty);
+      const detailRows = sortedGroups.map(g => {
         return `<tr style="border-bottom:1px solid #f1f5f9;">
-          <td>${o.customerName}</td>
-          <td class="text-right">${o.qty}</td>
-          <td class="text-right">$${Math.round(o.unitPrice).toLocaleString()}</td>
-          <td class="text-right" style="${costStyle}">$${Math.round(o.unitCost).toLocaleString()}${costWarn}</td>
-          <td class="text-right" style="${profitStyle}">$${Math.round(o.unitProfit).toLocaleString()}</td>
-          <td class="text-right">$${o.subtotal.toLocaleString()}</td>
-          <td class="no-print"><a href="#" onclick="event.stopPropagation();openOrder('${o.orderId}')" style="color:#2563eb; font-family:monospace; font-size:11px; text-decoration:underline;">${o.orderId}</a></td>
+          <td class="text-right">$${Math.round(g.unitPrice).toLocaleString()}</td>
+          <td class="text-right bold">${g.qty.toLocaleString()} 件</td>
+          <td class="text-right">$${g.subtotal.toLocaleString()}</td>
         </tr>`;
       }).join('');
       html += `<tr id="detail-${safePid}" style="display:none; background:#f8fafc;">
@@ -301,13 +284,9 @@ async function doQuery() {
         <td colspan="7">
           <table style="width:100%; font-size:12px; border-collapse:collapse;">
             <thead><tr style="background:#eef1f5;">
-              <th style="padding:4px 8px; text-align:left;">客戶/分店</th>
-              <th style="padding:4px 8px; text-align:right;">數量</th>
               <th style="padding:4px 8px; text-align:right;">單價</th>
-              <th style="padding:4px 8px; text-align:right;">成本</th>
-              <th style="padding:4px 8px; text-align:right;">單價-成本</th>
+              <th style="padding:4px 8px; text-align:right;">數量</th>
               <th style="padding:4px 8px; text-align:right;">小計</th>
-              <th style="padding:4px 8px; text-align:left;" class="no-print">單號</th>
             </tr></thead>
             <tbody>${detailRows}</tbody>
           </table>
@@ -341,14 +320,6 @@ function toggleProductDetail(safePid) {
   if (indicator) indicator.textContent = isHidden ? '▼' : '▶';
 }
 
-function openOrder(orderId) {
-  sessionStorage.setItem('searchSalesKeyword', orderId);
-  if (window.parent && window.parent.loadPage) {
-    window.parent.loadPage('SearchSales.html', '查詢銷貨單');
-  } else {
-    window.open('SearchSales.html', '_blank');
-  }
-}
 </script>
 </body>
 </html>
