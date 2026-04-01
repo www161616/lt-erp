@@ -51,6 +51,16 @@
       body { padding: 0; background: white; }
       .container { box-shadow: none; padding: 0; }
       @page { margin: 10mm; }
+      /* 列印時展開所有明細 */
+      [id^="detail-"] { display: table-row !important; }
+      [id^="detail-"] td { padding: 3px 8px; font-size: 11px; color: #475569; }
+      [id^="detail-"] { background: #f8fafc !important; }
+      [id^="indicator-"] { display: none !important; }
+      tr { cursor: default !important; }
+      /* 主列加分隔線 */
+      tbody tr:not([id^="detail-"]) { border-bottom: 1.5px solid #cbd5e1 !important; }
+      /* 隱藏展開箭頭欄 */
+      th:first-child, td:first-child { display: none !important; }
     }
   </style>
 </head>
@@ -157,7 +167,7 @@ async function doQuery() {
       }
     }
 
-    // 計算有效成本 + 分店價
+    // 計算有效成本 + 單價
     allDetails.forEach(d => {
       const uc = Number(d.unit_cost) || 0;
       d._effectiveCost = uc > 0 ? uc : (productCostMap[d.product_id] || 0);
@@ -172,41 +182,47 @@ async function doQuery() {
     const orderMap = {};
     orders.forEach(o => { orderMap[o.id] = o.customer_name || ''; });
 
-    // 按商品分組加總
+    // 按商品分組（單個價格 + 數量加總）
     const grouped = {};
     allDetails.forEach(d => {
       const pid = d.product_id || '未知';
       if (!grouped[pid]) {
-        grouped[pid] = { product_id: pid, product_name: d.product_name || '', qty: 0, revenue: 0, cost: 0, profit: 0, branchRevenue: 0, branchProfit: 0, orders: [] };
+        grouped[pid] = {
+          product_id: pid,
+          product_name: d.product_name || '',
+          qty: 0,
+          unitPrice: Number(d.unit_price) || 0,
+          unitCost: 0,
+          unitProfit: 0,
+          profit: 0,
+          orders: []
+        };
       }
       grouped[pid].qty += Number(d.qty) || 0;
-      grouped[pid].revenue += Number(d.subtotal) || 0;
-      grouped[pid].cost += d._costSubtotal;
-      grouped[pid].profit += d._profit;
-      grouped[pid].branchRevenue += d._branchSubtotal;
-      grouped[pid].branchProfit += d._branchProfit;
+      grouped[pid].unitCost = d._effectiveCost;
       grouped[pid].orders.push({
         orderId: d.order_id,
         customerName: orderMap[d.order_id] || '',
         qty: Number(d.qty) || 0,
-        subtotal: Math.round(Number(d.subtotal) || 0),
-        branchSubtotal: Math.round(d._branchSubtotal),
-        unitCost: d._effectiveCost,
+        branchSubtotal: Math.round((Number(d.unit_price) || 0) * (Number(d.qty) || 0)),
         costSubtotal: Math.round(d._costSubtotal),
         hasRealCost: (Number(d.unit_cost) || 0) > 0
       });
     });
 
+    // forEach 結束後才計算 unitProfit 和 profit
+    Object.values(grouped).forEach(r => {
+      r.unitProfit = r.unitPrice - r.unitCost;
+      r.profit = r.unitProfit * r.qty;
+    });
     const rows = Object.values(grouped).sort((a, b) => b.profit - a.profit);
 
     // 統計摘要
     const totalQty = rows.reduce((s, r) => s + r.qty, 0);
-    const totalRevenue = Math.round(rows.reduce((s, r) => s + r.revenue, 0));
-    const totalBranchRevenue = Math.round(rows.reduce((s, r) => s + r.branchRevenue, 0));
-    const totalCost = Math.round(rows.reduce((s, r) => s + r.cost, 0));
-    const totalProfit = totalRevenue - totalCost;
-    const totalBranchProfit = totalBranchRevenue - totalCost;
-    const marginRate = totalBranchRevenue > 0 ? ((totalBranchProfit / totalBranchRevenue) * 100).toFixed(1) : '0.0';
+    const totalProfit = Math.round(rows.reduce((s, r) => s + r.profit, 0));
+    const totalBranchRevenue = Math.round(rows.reduce((s, r) => s + r.unitPrice * r.qty, 0));
+    const totalCost = Math.round(rows.reduce((s, r) => s + r.unitCost * r.qty, 0));
+    const marginRate = totalBranchRevenue > 0 ? ((totalProfit / totalBranchRevenue) * 100).toFixed(1) : '0.0';
 
     document.getElementById('summaryArea').innerHTML = `
       <div class="summary">
@@ -216,20 +232,16 @@ async function doQuery() {
           <div class="sub">${orders.length} 張銷貨單 / ${rows.length} 個品項</div>
         </div>
         <div class="summary-card">
-          <div class="label">售價合計</div>
-          <div class="value">$${totalRevenue.toLocaleString()}</div>
-        </div>
-        <div class="summary-card">
-          <div class="label">分店價合計</div>
+          <div class="label">單價合計</div>
           <div class="value" style="color:#2b6cb0;">$${totalBranchRevenue.toLocaleString()}</div>
         </div>
         <div class="summary-card">
           <div class="label">成本合計</div>
-          <div class="value" style="color:var(--danger);">$${totalCost.toLocaleString()}</div>
+          <div class="value" style="color:var(--text2);">$${totalCost.toLocaleString()}</div>
         </div>
         <div class="summary-card">
-          <div class="label">分店毛利</div>
-          <div class="value" style="color:${totalBranchProfit >= 0 ? 'var(--success)' : 'var(--danger)'};">$${totalBranchProfit.toLocaleString()}</div>
+          <div class="label">毛利合計</div>
+          <div class="value" style="color:${totalProfit >= 0 ? 'var(--success)' : 'var(--danger)'};">$${totalProfit.toLocaleString()}</div>
           <div class="sub">毛利率 ${marginRate}%</div>
         </div>
       </div>`;
@@ -237,27 +249,26 @@ async function doQuery() {
     // 表格
     let html = '<table><thead><tr>';
     html += '<th style="width:30px;"></th><th>商品編號</th><th>商品名稱</th>';
-    html += '<th class="text-right">數量</th><th class="text-right">售價小計</th>';
-    html += '<th class="text-right">分店價小計</th><th class="text-right">成本小計</th>';
-    html += '<th class="text-right">分店毛利</th>';
+    html += '<th class="text-right">數量</th><th class="text-right">單價</th>';
+    html += '<th class="text-right">成本</th><th class="text-right">單價-成本</th>';
+    html += '<th class="text-right">毛利合計</th>';
     html += '</tr></thead><tbody>';
 
     rows.forEach(r => {
       const safePid = r.product_id.replace(/[^a-zA-Z0-9]/g, '_');
-      const revenue = Math.round(r.revenue);
-      const branchRevenue = Math.round(r.branchRevenue);
-      const cost = Math.round(r.cost);
-      const branchProfit = Math.round(r.branchProfit);
-      const profitColor = branchProfit >= 0 ? 'green' : 'red';
+      const unitProfit = Math.round(r.unitProfit);
+      const profit = Math.round(r.profit);
+      const profitColor = unitProfit >= 0 ? 'green' : 'red';
+      const costDisplay = r.unitCost > 0 ? `$${Math.round(r.unitCost).toLocaleString()}` : '<span style="color:#c53030;">$0 ⚠️</span>';
       html += `<tr onclick="toggleProductDetail('${safePid}')" style="cursor:pointer;">
         <td class="text-center"><span id="indicator-${safePid}" style="font-size:10px; color:var(--text2);">▶</span></td>
         <td class="mono">${r.product_id}</td>
         <td>${r.product_name}</td>
         <td class="text-right bold">${r.qty.toLocaleString()}</td>
-        <td class="text-right">$${revenue.toLocaleString()}</td>
-        <td class="text-right" style="color:#2b6cb0;">$${branchRevenue.toLocaleString()}</td>
-        <td class="text-right red">$${cost.toLocaleString()}</td>
-        <td class="text-right bold ${profitColor}">$${branchProfit.toLocaleString()}</td>
+        <td class="text-right" style="color:#2b6cb0;">$${Math.round(r.unitPrice).toLocaleString()}</td>
+        <td class="text-right">${costDisplay}</td>
+        <td class="text-right bold ${profitColor}">$${unitProfit.toLocaleString()}</td>
+        <td class="text-right bold ${profitColor}">$${profit.toLocaleString()}</td>
       </tr>`;
       // 展開明細列
       const detailRows = r.orders.map(o => {
@@ -267,7 +278,6 @@ async function doQuery() {
           <td><a href="#" onclick="event.stopPropagation();openOrder('${o.orderId}')" style="color:#2563eb; font-family:monospace; text-decoration:underline;">${o.orderId}</a></td>
           <td>${o.customerName}</td>
           <td class="text-right">${o.qty}</td>
-          <td class="text-right">$${o.subtotal.toLocaleString()}</td>
           <td class="text-right" style="color:#2b6cb0;">$${o.branchSubtotal.toLocaleString()}</td>
           <td class="text-right" style="${costStyle}">$${o.costSubtotal.toLocaleString()}${costWarn}</td>
         </tr>`;
@@ -280,8 +290,7 @@ async function doQuery() {
               <th style="padding:4px 8px; text-align:left;">單號</th>
               <th style="padding:4px 8px; text-align:left;">客戶/分店</th>
               <th style="padding:4px 8px; text-align:right;">數量</th>
-              <th style="padding:4px 8px; text-align:right;">售價小計</th>
-              <th style="padding:4px 8px; text-align:right;">分店價小計</th>
+              <th style="padding:4px 8px; text-align:right;">單價小計</th>
               <th style="padding:4px 8px; text-align:right;">成本小計</th>
             </tr></thead>
             <tbody>${detailRows}</tbody>
@@ -293,12 +302,10 @@ async function doQuery() {
     // 合計列
     html += `<tr style="background:var(--surface2); font-weight:700; border-top:2px solid var(--border);">
       <td></td>
-      <td colspan="2">合計</td>
+      <td colspan="3">合計</td>
       <td class="text-right">${totalQty.toLocaleString()}</td>
-      <td class="text-right">$${totalRevenue.toLocaleString()}</td>
-      <td class="text-right" style="color:#2b6cb0;">$${totalBranchRevenue.toLocaleString()}</td>
-      <td class="text-right red">$${totalCost.toLocaleString()}</td>
-      <td class="text-right ${totalBranchProfit >= 0 ? 'green' : 'red'}">$${totalBranchProfit.toLocaleString()}</td>
+      <td colspan="2"></td>
+      <td class="text-right ${totalProfit >= 0 ? 'green' : 'red'}">$${totalProfit.toLocaleString()}</td>
     </tr>`;
     html += '</tbody></table>';
 
