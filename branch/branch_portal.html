@@ -4290,6 +4290,8 @@ function exportDeliveryPreviewExcel() {
 function initBillingPage() {
   // 重讀最新資料
   const freshSO = JSON.parse(localStorage.getItem('portalSalesOrders') || '[]');
+  console.log('[billing] currentStore.name:', currentStore?.name);
+  console.log('[billing] portalSalesOrders storeName samples:', freshSO.slice(0,3).map(o=>o.storeName));
   portalOrders = freshSO.filter(o => o.storeName === currentStore?.name);
   const months = [...new Set(portalOrders.map(r => r.createdAt.substring(0,7)))].sort().reverse();
   const now = new Date();

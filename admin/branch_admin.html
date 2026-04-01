@@ -4301,6 +4301,7 @@
               if (!soId) { successCount++; continue; }
               const issuedTime = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
               // 同步到 mockSalesOrders（讓 portal 今日進貨單也看得到）
+              console.log('[generateSalesOrder] push storeName:', branch);
               mockSalesOrders.push({
                 id: soId,
                 dbId: soId,
