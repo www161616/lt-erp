@@ -50,7 +50,7 @@
       .print-header { display: block !important; }
       body { padding: 0; background: white; }
       .container { box-shadow: none; padding: 0; }
-      @page { margin: 10mm; }
+      @page { margin: 10mm; size: portrait; }
       table { font-size: 11px; }
       th, td { padding: 4px 6px !important; }
     }
@@ -145,21 +145,13 @@ async function doQuery() {
     // 第三步：查所有商品的定價
     const allProductIds = [...new Set(allDetails.map(d => d.product_id).filter(Boolean))];
     const productCostMap = {};
-    const productPriceMap = {};
     for (let i = 0; i < allProductIds.length; i += 50) {
       const batch = allProductIds.slice(i, i + 50);
       const idsParam = batch.map(id => `"${id}"`).join(',');
-      const res = await fetch(`${SB_URL}/products?id=in.(${idsParam})&select=id,cost,price_branch,price_wholesale,price_group`, { headers: HEADERS });
+      const res = await fetch(`${SB_URL}/products?id=in.(${idsParam})&select=id,cost`, { headers: HEADERS });
       if (res.ok) {
         const data = await res.json();
-        data.forEach(p => {
-          productCostMap[p.id] = Number(p.cost) || 0;
-          productPriceMap[p.id] = {
-            price_branch: Number(p.price_branch) || 0,
-            price_wholesale: Number(p.price_wholesale) || 0,
-            price_group: Number(p.price_group) || 0
-          };
-        });
+        data.forEach(p => { productCostMap[p.id] = Number(p.cost) || 0; });
       }
     }
 
@@ -168,16 +160,6 @@ async function doQuery() {
       const uc = Number(d.unit_cost) || 0;
       d._effectiveCost = uc > 0 ? uc : (productCostMap[d.product_id] || 0);
     });
-
-    // 判斷售價屬於哪個價格類型
-    function getPriceType(pid, unitPrice) {
-      const pm = productPriceMap[pid];
-      if (!pm) return 'branch';
-      if (unitPrice === pm.price_branch) return 'branch';
-      if (unitPrice === pm.price_wholesale) return 'wholesale';
-      if (unitPrice === pm.price_group) return 'group';
-      return 'branch';
-    }
 
     // 按商品分組，每種售價一列
     const grouped = {};
@@ -195,7 +177,6 @@ async function doQuery() {
       }
       const qty = Number(d.qty) || 0;
       const up = Number(d.unit_price) || 0;
-      const priceType = getPriceType(pid, up);
       grouped[pid].totalQty += qty;
       grouped[pid].unitCost = d._effectiveCost;
 
@@ -203,7 +184,7 @@ async function doQuery() {
       if (existing) {
         existing.qty += qty;
       } else {
-        grouped[pid].priceRows.push({ unitPrice: up, qty, priceType });
+        grouped[pid].priceRows.push({ unitPrice: up, qty });
       }
     });
 
@@ -247,9 +228,8 @@ async function doQuery() {
     // 表格（直接展開，不用收合）
     let html = '<table><thead><tr>';
     html += '<th>商品編號</th><th>商品名稱</th>';
-    html += '<th class="text-right">數量</th><th class="text-right">分店價</th>';
-    html += '<th class="text-right">批發價</th><th class="text-right">團購價</th>';
-    html += '<th class="text-right">成本</th><th class="text-right">價格-成本</th>';
+    html += '<th class="text-right">數量</th><th class="text-right">售價</th>';
+    html += '<th class="text-right">成本</th><th class="text-right">售價-成本</th>';
     html += '<th class="text-right">合計</th>';
     html += '</tr></thead><tbody>';
 
@@ -258,18 +238,13 @@ async function doQuery() {
       r.priceRows.forEach((pr, pi) => {
         const isFirst = pi === 0;
         const borderTop = ri > 0 && isFirst ? 'border-top:2px solid #cbd5e1;' : '';
-        const branchVal = pr.priceType === 'branch' ? `$${Math.round(pr.unitPrice).toLocaleString()}` : '';
-        const wholesaleVal = pr.priceType === 'wholesale' ? `$${Math.round(pr.unitPrice).toLocaleString()}` : '';
-        const groupVal = pr.priceType === 'group' ? `$${Math.round(pr.unitPrice).toLocaleString()}` : '';
         const priceDiff = Math.round(pr.unitPrice - r.unitCost);
         const diffColor = priceDiff >= 0 ? 'var(--success)' : 'var(--danger)';
         html += `<tr style="${borderTop}">
           <td class="mono">${isFirst ? r.product_id : ''}</td>
           <td>${isFirst ? r.product_name : ''}</td>
           <td class="text-right bold">${pr.qty.toLocaleString()}</td>
-          <td class="text-right" style="color:#2b6cb0;">${branchVal}</td>
-          <td class="text-right" style="color:#7c3aed;">${wholesaleVal}</td>
-          <td class="text-right" style="color:#b45309;">${groupVal}</td>
+          <td class="text-right" style="color:#2b6cb0;">$${Math.round(pr.unitPrice).toLocaleString()}</td>
           <td class="text-right">${costDisplay}</td>
           <td class="text-right bold" style="color:${diffColor};">$${priceDiff.toLocaleString()}</td>
           <td class="text-right bold">$${pr.subtotal.toLocaleString()}</td>
@@ -282,7 +257,7 @@ async function doQuery() {
       <td>合計</td>
       <td></td>
       <td class="text-right">${totalQty.toLocaleString()}</td>
-      <td colspan="5"></td>
+      <td colspan="3"></td>
       <td class="text-right ${totalProfit >= 0 ? 'green' : 'red'}">$${totalProfit.toLocaleString()}</td>
     </tr>`;
     html += '</tbody></table>';
