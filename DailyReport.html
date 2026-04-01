@@ -40,14 +40,8 @@
     .green { color: var(--success); }
     .red { color: var(--danger); }
 
-    .print-header { display: none; text-align: center; margin-bottom: 16px; }
-    .print-header h1 { font-size: 22px; font-weight: 900; }
-    .print-header .sub { font-size: 15px; letter-spacing: 8px; color: var(--text2); margin-top: 4px; }
-    .print-header .date-range { font-size: 15px; font-weight: 700; color: var(--text); }
-
     @media print {
       .toolbar { display: none !important; }
-      .print-header { display: block !important; }
       body { padding: 0; background: white; }
       .container { box-shadow: none; padding: 0; }
       @page { margin: 10mm; size: portrait; }
@@ -58,7 +52,7 @@
 </head>
 <body>
 <div class="container">
-  <h2>每日出貨報表</h2>
+  <h2>每日出貨報表 <span id="reportDateLabel" style="font-size:14px; font-weight:400; color:var(--text2); margin-left:12px;"></span></h2>
 
   <div class="toolbar">
     <div>
@@ -73,10 +67,6 @@
       <button class="btn btn-primary" onclick="doQuery()">查詢</button>
       <button class="btn btn-print" onclick="window.print()">列印</button>
     </div>
-  </div>
-
-  <div class="print-header">
-    <div class="date-range" id="printDateRange"></div>
   </div>
 
   <div id="summaryArea"></div>
@@ -102,7 +92,8 @@ async function doQuery() {
   const dateTo = document.getElementById('dateTo').value;
   if (!dateFrom || !dateTo) { alert('請選擇日期'); return; }
 
-  document.getElementById('printDateRange').textContent = `${dateFrom} ~ ${dateTo}`;
+  const dateLabel = document.getElementById('reportDateLabel');
+  if (dateLabel) dateLabel.textContent = `${dateFrom} ~ ${dateTo}`;
   document.getElementById('summaryArea').innerHTML = '';
   document.getElementById('tableArea').innerHTML = '<div class="empty">查詢中...</div>';
 
