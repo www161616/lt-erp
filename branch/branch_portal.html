@@ -4010,8 +4010,10 @@ let portalOrders = [];
 const MONTHLY_FEE = 5000;
 
 function calcPortalOrderAmount(order) {
-  if (order.finalAmount !== null) return order.finalAmount;
-  return order.items.reduce((s, i) => s + i.qty * i.unitPrice, 0);
+  if (order.items && order.items.length > 0) {
+    return order.items.reduce((s, i) => s + i.qty * i.unitPrice, 0);
+  }
+  return order.finalAmount || 0;
 }
 
 // ============================
