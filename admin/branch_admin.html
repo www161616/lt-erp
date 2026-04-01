@@ -4295,7 +4295,9 @@
             });
             if (res.ok) {
               const soData = await res.json();
-              const soId = typeof soData === 'string' ? soData : (soData.order_id || soData.id || '');
+              const soRaw = Array.isArray(soData) ? soData[0] : soData;
+              const soId = typeof soRaw === 'string' ? soRaw : (soRaw?.order_id || soRaw?.id || '');
+              console.log('[generateSalesOrder] branch:', branch, 'soData:', soData, '→ soId:', soId);
               if (!soId) { successCount++; continue; }
               const issuedTime = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
               // 同步到 mockSalesOrders（讓 portal 今日進貨單也看得到）
