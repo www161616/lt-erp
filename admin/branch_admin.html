@@ -1431,22 +1431,27 @@
         });
         if (!detRes.ok) throw new Error('明細寫入失敗: ' + await detRes.text());
 
-        // 自動更新 products 表的分店價（只在送出審核時，且 price_branch > 0）
+        // 自動更新 products 表的價格（只在送出審核時，有值才更新）
         let priceUpdated = 0;
         if (status === '待審核') {
           for (const it of ipCart) {
-            if (Number(it.price_branch) > 0) {
+            const pricePayload = {};
+            if (Number(it.price_branch) > 0) pricePayload.price_branch = Number(it.price_branch);
+            if (Number(it.cost) > 0) pricePayload.cost = Number(it.cost);
+            if (Number(it.price) > 0) pricePayload.price = Number(it.price);
+
+            if (Object.keys(pricePayload).length > 0) {
               try {
                 await fetch(`${SB_URL}/products?id=eq.${encodeURIComponent(it.id)}`, {
                   method: 'PATCH',
                   headers: { ...HEADERS, 'Prefer': 'return=minimal' },
-                  body: JSON.stringify({ price_branch: Number(it.price_branch) })
+                  body: JSON.stringify(pricePayload)
                 });
                 priceUpdated++;
-              } catch(e) { console.warn('更新分店價失敗:', it.id, e); }
+              } catch(e) { console.warn('更新商品價格失敗:', it.id, e); }
             }
           }
-          if (priceUpdated > 0) console.log(`[採購單] 已更新 ${priceUpdated} 筆商品分店價`);
+          if (priceUpdated > 0) console.log(`[採購單] 已更新 ${priceUpdated} 筆商品價格（分店價/成本/售價）`);
         }
 
         // 自動更新訂貨追蹤：採購單開了 = 已向廠商叫貨
