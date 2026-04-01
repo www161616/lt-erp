@@ -61,6 +61,8 @@
       tbody tr:not([id^="detail-"]) { border-bottom: 1.5px solid #cbd5e1 !important; }
       /* 隱藏展開箭頭欄 */
       th:first-child, td:first-child { display: none !important; }
+      /* 隱藏螢幕版專用欄位 */
+      .no-print { display: none !important; }
     }
   </style>
 </head>
@@ -204,8 +206,10 @@ async function doQuery() {
         orderId: d.order_id,
         customerName: orderMap[d.order_id] || '',
         qty: Number(d.qty) || 0,
-        branchSubtotal: Math.round((Number(d.unit_price) || 0) * (Number(d.qty) || 0)),
-        costSubtotal: Math.round(d._costSubtotal),
+        unitPrice: Number(d.unit_price) || 0,
+        unitCost: d._effectiveCost,
+        unitProfit: (Number(d.unit_price) || 0) - d._effectiveCost,
+        subtotal: Math.round((Number(d.unit_price) || 0) * (Number(d.qty) || 0)),
         hasRealCost: (Number(d.unit_cost) || 0) > 0
       });
     });
@@ -274,12 +278,15 @@ async function doQuery() {
       const detailRows = r.orders.map(o => {
         const costStyle = !o.hasRealCost ? 'color:#c53030;' : '';
         const costWarn = !o.hasRealCost ? ' ⚠️' : '';
+        const profitStyle = o.unitProfit < 0 ? 'color:#c53030;' : '';
         return `<tr style="border-bottom:1px solid #f1f5f9;">
-          <td><a href="#" onclick="event.stopPropagation();openOrder('${o.orderId}')" style="color:#2563eb; font-family:monospace; text-decoration:underline;">${o.orderId}</a></td>
           <td>${o.customerName}</td>
           <td class="text-right">${o.qty}</td>
-          <td class="text-right" style="color:#2b6cb0;">$${o.branchSubtotal.toLocaleString()}</td>
-          <td class="text-right" style="${costStyle}">$${o.costSubtotal.toLocaleString()}${costWarn}</td>
+          <td class="text-right">$${Math.round(o.unitPrice).toLocaleString()}</td>
+          <td class="text-right" style="${costStyle}">$${Math.round(o.unitCost).toLocaleString()}${costWarn}</td>
+          <td class="text-right" style="${profitStyle}">$${Math.round(o.unitProfit).toLocaleString()}</td>
+          <td class="text-right">$${o.subtotal.toLocaleString()}</td>
+          <td class="no-print"><a href="#" onclick="event.stopPropagation();openOrder('${o.orderId}')" style="color:#2563eb; font-family:monospace; font-size:11px; text-decoration:underline;">${o.orderId}</a></td>
         </tr>`;
       }).join('');
       html += `<tr id="detail-${safePid}" style="display:none; background:#f8fafc;">
@@ -287,11 +294,13 @@ async function doQuery() {
         <td colspan="7">
           <table style="width:100%; font-size:12px; border-collapse:collapse;">
             <thead><tr style="background:#eef1f5;">
-              <th style="padding:4px 8px; text-align:left;">單號</th>
               <th style="padding:4px 8px; text-align:left;">客戶/分店</th>
               <th style="padding:4px 8px; text-align:right;">數量</th>
-              <th style="padding:4px 8px; text-align:right;">單價小計</th>
-              <th style="padding:4px 8px; text-align:right;">成本小計</th>
+              <th style="padding:4px 8px; text-align:right;">單價</th>
+              <th style="padding:4px 8px; text-align:right;">成本</th>
+              <th style="padding:4px 8px; text-align:right;">單價-成本</th>
+              <th style="padding:4px 8px; text-align:right;">小計</th>
+              <th style="padding:4px 8px; text-align:left;" class="no-print">單號</th>
             </tr></thead>
             <tbody>${detailRows}</tbody>
           </table>
