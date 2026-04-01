@@ -932,6 +932,12 @@
           <div id="salesUploadArea">
             <div style="background:white; border:1px solid var(--border); border-radius:8px; padding:20px; margin-bottom:16px;">
               <div style="font-size:14px; font-weight:600; color:var(--primary); margin-bottom:12px;">上傳樂樂 CSV 報表</div>
+              <div style="background:var(--surface2); border:1px solid var(--border); border-radius:6px; padding:10px 14px; margin-bottom:12px; font-size:12px; color:var(--text2); line-height:1.8;">
+                📋 <b>匯出步驟：</b><br>
+                請在樂樂系統篩選：<br>
+                ① 照訂單結單　② 起始與結束選<b>今日</b>　③ 已全部收款　④ 分群選<b>自己店家</b><br>
+                匯出 Excel 後直接上傳即可
+              </div>
               <input type="file" id="leleCsvInput" accept=".csv" onchange="handleLeleCsvUpload(this)" style="margin-bottom:12px; font-family:inherit;">
               <div id="csvParseInfo" style="font-size:12px; color:var(--text2); margin-bottom:8px;"></div>
             </div>
