@@ -303,6 +303,8 @@
       <div class="menu-item" id="menuArrival" onclick="switchPage('pageArrival', this)">📦 到貨狀況</div>
       <div class="menu-item" id="menuPriceSearch" onclick="switchPage('pagePriceSearch', this)">💲 商品查價</div>
       <div class="menu-item" id="menuCommon" onclick="switchPage('pageCommon', this)">⭐ 常用功能</div>
+      <div class="menu-item" id="menuInventory" onclick="switchPage('pageInventory', this)">📦 庫存管理</div>
+      <div class="menu-item" id="menuSales" onclick="switchPage('pageSales', this)">🛍️ 今日銷貨</div>
 
       <div class="sidebar-footer">
         <div id="realTimeClock" style="font-size: 12px; color: var(--text2); text-align: center; margin-bottom: 12px; font-family: monospace; letter-spacing: 0.5px;">
@@ -901,8 +903,45 @@
           </div>
         </div>
 
+        <!-- 庫存管理 -->
+        <div id="pageInventory" class="page">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+            <div style="font-size:16px; font-weight:700; color:var(--primary);">📦 庫存管理</div>
+            <div style="display:flex; gap:8px;">
+              <button style="padding:6px 14px; background:var(--accent); color:white; border:none; border-radius:6px; font-size:13px; cursor:pointer; font-weight:600; font-family:inherit;" onclick="openAddInventoryItem()">＋ 新增商品</button>
+              <button style="padding:6px 14px; background:#2b6cb0; color:white; border:none; border-radius:6px; font-size:13px; cursor:pointer; font-weight:600; font-family:inherit;" onclick="downloadInventoryTemplate()">📥 下載範本</button>
+              <button style="padding:6px 14px; background:#047857; color:white; border:none; border-radius:6px; font-size:13px; cursor:pointer; font-weight:600; font-family:inherit;" onclick="document.getElementById('inventoryImportInput').click()">📤 匯入盤點</button>
+              <input type="file" id="inventoryImportInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleInventoryImport(this)">
+            </div>
+          </div>
+          <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap;">
+            <input type="text" id="invSearchInput" placeholder="搜尋商品名稱/編號..." oninput="renderInventory()" style="flex:1; min-width:200px; padding:8px 12px; border:1px solid var(--border); border-radius:6px; font-size:13px; font-family:inherit;">
+          </div>
+          <div id="inventoryTableArea" style="overflow-x:auto;">
+            <div style="text-align:center; padding:40px; color:var(--text2);">尚無庫存資料，請手動新增商品</div>
+          </div>
+        </div>
 
-      
+        <!-- 今日銷貨 -->
+        <div id="pageSales" class="page">
+          <div style="font-size:16px; font-weight:700; color:var(--primary); margin-bottom:16px;">🛍️ 今日銷貨</div>
+          <div style="display:flex; gap:0; margin-bottom:16px;">
+            <button id="salesTabUpload" onclick="switchSalesTab('upload')" style="flex:1; padding:10px; border:1px solid var(--border); background:var(--accent); color:white; font-size:13px; font-weight:600; cursor:pointer; border-radius:6px 0 0 6px; font-family:inherit;">📤 上傳銷貨</button>
+            <button id="salesTabHistory" onclick="switchSalesTab('history')" style="flex:1; padding:10px; border:1px solid var(--border); background:white; color:var(--text); font-size:13px; font-weight:600; cursor:pointer; border-radius:0 6px 6px 0; font-family:inherit;">📋 銷貨記錄</button>
+          </div>
+          <div id="salesUploadArea">
+            <div style="background:white; border:1px solid var(--border); border-radius:8px; padding:20px; margin-bottom:16px;">
+              <div style="font-size:14px; font-weight:600; color:var(--primary); margin-bottom:12px;">上傳樂樂 CSV 報表</div>
+              <input type="file" id="leleCsvInput" accept=".csv" onchange="handleLeleCsvUpload(this)" style="margin-bottom:12px; font-family:inherit;">
+              <div id="csvParseInfo" style="font-size:12px; color:var(--text2); margin-bottom:8px;"></div>
+            </div>
+            <div id="csvPreviewArea"></div>
+            <div id="csvConfirmArea" style="display:none; margin-top:12px; text-align:right;">
+              <button id="btnConfirmDeduct" onclick="confirmDeductInventory()" disabled style="padding:8px 20px; background:var(--accent); color:white; border:none; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit;">確認扣庫存</button>
+            </div>
+          </div>
+          <div id="salesHistoryArea" style="display:none;"></div>
+        </div>
 
 <div id="pageBackorder" class="page">
   <div style="background:white; border-radius:8px; border:1px solid var(--border); padding:18px 24px; margin-bottom:20px; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
@@ -1544,6 +1583,8 @@
       hide('menuArrival');         // 到貨狀況
       hide('menuPriceSearch');     // 商品查價
       hide('menuCommon');          // 常用功能
+      hide('menuInventory');       // 庫存管理
+      hide('menuSales');           // 今日銷貨
       hide('importExcelWrap');     // 匯入樂樂報表
     }
 
@@ -2332,6 +2373,8 @@
       pagePriceSearch: '💲 商品查價',
       pageAid:      '🤝 互助交流板',
       pageBulletin: '📢 公告欄',
+      pageInventory: '📦 庫存管理',
+      pageSales: '🛍️ 今日銷貨',
     };
 
     function switchPage(pageId, menuEl) {
@@ -2373,6 +2416,8 @@
         if (pageId === 'pageBulletin') renderBulletinBoard();
         if (pageId === 'pageArrival') renderArrivalStatusPage();
         if (pageId === 'pagePriceSearch') renderPriceSearchPage();
+        if (pageId === 'pageInventory') { loadStoreCloudKey('branch_inventory_').then(() => renderInventory()); }
+        if (pageId === 'pageSales') { loadStoreCloudKey('branch_sales_').then(() => renderSalesPage()); }
         // 進入頁面時標記已讀，並更新徽章
         markPageSeen(pageId);
         updateNotificationBadges();
@@ -4807,6 +4852,26 @@ function confirmReceived(orderId) {
     order.storeConfirmedAt = ts;
     localStorage.setItem('portalSalesOrders', JSON.stringify(allSO));
     cloudSave('portalSalesOrders');
+    // 確認收貨時自動更新分店庫存
+    if (order.items && order.items.length > 0) {
+      const inv = getInventory();
+      const invMap = {};
+      inv.forEach((item, idx) => { if (item.code) invMap[item.code] = idx; });
+      order.items.forEach(item => {
+        const code = item.productId || '';
+        const name = item.name || '';
+        const qty = parseInt(item.qty) || 0;
+        if (!code || qty <= 0) return;
+        if (invMap[code] !== undefined) {
+          inv[invMap[code]].qty += qty;
+          inv[invMap[code]].lastUpdated = ts;
+        } else {
+          inv.push({ code, name, qty, lastUpdated: ts });
+          invMap[code] = inv.length - 1;
+        }
+      });
+      saveInventory(inv);
+    }
     // 同步到 DB（有 dbId 才 PATCH）
     if (order.dbId) {
       fetch(SB_URL + '/sales_orders?id=eq.' + order.dbId, {
@@ -4835,6 +4900,25 @@ function submitReturnReport(orderId, itemIdx, data) {
 
   localStorage.setItem('portalSalesOrders', JSON.stringify(allSO));
   cloudSave('portalSalesOrders');
+
+  // 退貨時自動將庫存加回
+  const returnQty = parseInt(data.qty) || 0;
+  const code = item.productId || '';
+  const name = item.name || '';
+  if (code && returnQty > 0) {
+    const inv = getInventory();
+    const invMap = {};
+    inv.forEach((invItem, idx) => { if (invItem.code) invMap[invItem.code] = idx; });
+    const now = new Date();
+    const ts = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+    if (invMap[code] !== undefined) {
+      inv[invMap[code]].qty += returnQty;
+      inv[invMap[code]].lastUpdated = ts;
+    } else {
+      inv.push({ code, name, qty: returnQty, lastUpdated: ts });
+    }
+    saveInventory(inv);
+  }
 
   // 同步更新本地 portalOrders
   portalOrders = allSO.filter(o => o.storeName === currentStore?.name);
@@ -7612,6 +7696,500 @@ function updateClock() {
 setInterval(updateClock, 1000);
 // 網頁載入時立刻執行一次，避免出現「載入時間中...」的空窗期
 updateClock();
+
+// ============================
+// 雲端載入分店專屬 key
+// ============================
+async function loadStoreCloudKey(prefix) {
+  const key = prefix + (currentStore?.name || '');
+  try {
+    const resp = await fetch(`${SB_URL}/shared_kv?key=eq.${encodeURIComponent(key)}&select=value`, { headers: SB_HEADERS });
+    if (resp.ok) {
+      const rows = await resp.json();
+      if (rows.length > 0 && rows[0].value !== null) {
+        localStorage.setItem(key, JSON.stringify(rows[0].value));
+      }
+    }
+  } catch(e) { console.warn('loadStoreCloudKey error:', key, e); }
+}
+
+// ============================
+// 📦 庫存管理
+// ============================
+function getInventory() {
+  return JSON.parse(localStorage.getItem('branch_inventory_' + (currentStore?.name || '')) || '[]');
+}
+function saveInventory(data) {
+  const key = 'branch_inventory_' + (currentStore?.name || '');
+  localStorage.setItem(key, JSON.stringify(data));
+  cloudSave(key);
+}
+
+function renderInventory() {
+  const area = document.getElementById('inventoryTableArea');
+  if (!area) return;
+  const kw = (document.getElementById('invSearchInput')?.value || '').trim().toLowerCase();
+  let inv = getInventory();
+  if (kw) inv = inv.filter(i => (i.name || '').toLowerCase().includes(kw) || (i.code || '').toLowerCase().includes(kw));
+
+  if (inv.length === 0) {
+    area.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text2);">尚無庫存資料，請手動新增商品</div>';
+    return;
+  }
+
+  let html = '<table style="width:100%; border-collapse:collapse; font-size:13px;">';
+  html += '<thead><tr style="background:var(--surface2);">';
+  html += '<th style="padding:8px 10px; text-align:left; border-bottom:2px solid var(--border); color:var(--text2); font-size:12px;">商品編號</th>';
+  html += '<th style="padding:8px 10px; text-align:left; border-bottom:2px solid var(--border); color:var(--text2); font-size:12px;">商品名稱</th>';
+  html += '<th style="padding:8px 10px; text-align:right; border-bottom:2px solid var(--border); color:var(--text2); font-size:12px;">現有庫存</th>';
+  html += '<th style="padding:8px 10px; text-align:center; border-bottom:2px solid var(--border); color:var(--text2); font-size:12px;">最後更新</th>';
+  html += '<th style="padding:8px 10px; text-align:center; border-bottom:2px solid var(--border); color:var(--text2); font-size:12px;">操作</th>';
+  html += '</tr></thead><tbody>';
+
+  inv.forEach((item, idx) => {
+    const qtyColor = item.qty < 0 ? '#c53030' : item.qty === 0 ? '#b7791f' : 'var(--text)';
+    html += `<tr style="border-bottom:1px solid var(--surface2);">
+      <td style="padding:8px 10px; font-family:monospace;">${item.code || ''}</td>
+      <td style="padding:8px 10px; font-weight:500;">${item.name || ''}</td>
+      <td style="padding:8px 10px; text-align:right; font-weight:700; color:${qtyColor};">${item.qty}</td>
+      <td style="padding:8px 10px; text-align:center; font-size:11px; color:var(--text2);">${item.lastUpdated || ''}</td>
+      <td style="padding:8px 10px; text-align:center;">
+        <button onclick="adjustInventoryQty(${idx}, 1)" style="padding:2px 8px; border:1px solid var(--border); background:white; border-radius:4px; cursor:pointer; font-size:13px; font-weight:700;">＋</button>
+        <button onclick="adjustInventoryQty(${idx}, -1)" style="padding:2px 8px; border:1px solid var(--border); background:white; border-radius:4px; cursor:pointer; font-size:13px; font-weight:700;">－</button>
+        <button onclick="editInventoryItem(${idx})" style="padding:2px 8px; border:1px solid var(--border); background:white; border-radius:4px; cursor:pointer; font-size:11px;">修改</button>
+      </td>
+    </tr>`;
+  });
+  html += '</tbody></table>';
+  area.innerHTML = html;
+}
+
+function adjustInventoryQty(idx, delta) {
+  const inv = getInventory();
+  if (!inv[idx]) return;
+  inv[idx].qty = (inv[idx].qty || 0) + delta;
+  inv[idx].lastUpdated = new Date().toLocaleString('zh-TW', { hour12: false }).replace(/\//g, '-');
+  saveInventory(inv);
+  renderInventory();
+}
+
+async function openAddInventoryItem() {
+  const { value: formValues } = await Swal.fire({
+    title: '新增商品',
+    html: `<div style="text-align:left;">
+      <div style="margin-bottom:10px;"><label style="font-size:12px; font-weight:600; color:#64748b;">商品編號</label><input id="swal-inv-code" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:14px; font-family:inherit; margin-top:4px;"></div>
+      <div style="margin-bottom:10px;"><label style="font-size:12px; font-weight:600; color:#64748b;">商品名稱</label><input id="swal-inv-name" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:14px; font-family:inherit; margin-top:4px;"></div>
+      <div><label style="font-size:12px; font-weight:600; color:#64748b;">初始庫存</label><input id="swal-inv-qty" type="number" value="0" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:14px; font-family:inherit; margin-top:4px;"></div>
+    </div>`,
+    showCancelButton: true, confirmButtonText: '新增', cancelButtonText: '取消', confirmButtonColor: 'var(--accent)',
+    preConfirm: () => {
+      const code = document.getElementById('swal-inv-code').value.trim();
+      const name = document.getElementById('swal-inv-name').value.trim();
+      const qty = parseInt(document.getElementById('swal-inv-qty').value) || 0;
+      if (!name) { Swal.showValidationMessage('請輸入商品名稱'); return false; }
+      return { code, name, qty };
+    }
+  });
+  if (!formValues) return;
+  const inv = getInventory();
+  inv.push({ code: formValues.code, name: formValues.name, qty: formValues.qty, lastUpdated: new Date().toLocaleString('zh-TW', { hour12: false }).replace(/\//g, '-') });
+  saveInventory(inv);
+  renderInventory();
+}
+
+async function editInventoryItem(idx) {
+  const inv = getInventory();
+  const item = inv[idx];
+  if (!item) return;
+  const result = await Swal.fire({
+    title: '修改商品',
+    html: `<div style="text-align:left;">
+      <div style="margin-bottom:10px;"><label style="font-size:12px; font-weight:600; color:#64748b;">商品編號</label><input id="swal-inv-code" value="${item.code || ''}" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:14px; font-family:inherit; margin-top:4px;"></div>
+      <div style="margin-bottom:10px;"><label style="font-size:12px; font-weight:600; color:#64748b;">商品名稱</label><input id="swal-inv-name" value="${item.name || ''}" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:14px; font-family:inherit; margin-top:4px;"></div>
+      <div><label style="font-size:12px; font-weight:600; color:#64748b;">庫存數量</label><input id="swal-inv-qty" type="number" value="${item.qty}" style="width:100%; padding:8px; border:1px solid #ddd; border-radius:6px; font-size:14px; font-family:inherit; margin-top:4px;"></div>
+    </div>`,
+    showCancelButton: true, confirmButtonText: '儲存', cancelButtonText: '取消', confirmButtonColor: 'var(--accent)',
+    showDenyButton: true, denyButtonText: '刪除', denyButtonColor: '#c53030',
+    preConfirm: () => {
+      const code = document.getElementById('swal-inv-code').value.trim();
+      const name = document.getElementById('swal-inv-name').value.trim();
+      const qty = parseInt(document.getElementById('swal-inv-qty').value) || 0;
+      if (!name) { Swal.showValidationMessage('請輸入商品名稱'); return false; }
+      return { code, name, qty };
+    }
+  });
+  if (result.isDismissed) return;
+  if (result.isDenied) {
+    inv.splice(idx, 1);
+    saveInventory(inv);
+    renderInventory();
+    return;
+  }
+  if (result.isConfirmed && result.value) {
+    inv[idx].code = result.value.code;
+    inv[idx].name = result.value.name;
+    inv[idx].qty = result.value.qty;
+    inv[idx].lastUpdated = new Date().toLocaleString('zh-TW', { hour12: false }).replace(/\//g, '-');
+    saveInventory(inv);
+    renderInventory();
+  }
+}
+
+// ============================
+// 🛍️ 今日銷貨
+// ============================
+let _parsedCsvItems = [];
+
+function getSalesRecords() {
+  return JSON.parse(localStorage.getItem('branch_sales_' + (currentStore?.name || '')) || '[]');
+}
+function saveSalesRecords(data) {
+  const key = 'branch_sales_' + (currentStore?.name || '');
+  localStorage.setItem(key, JSON.stringify(data));
+  cloudSave(key);
+}
+
+function renderSalesPage() {
+  switchSalesTab('upload');
+}
+
+function switchSalesTab(tab) {
+  const btnUpload = document.getElementById('salesTabUpload');
+  const btnHistory = document.getElementById('salesTabHistory');
+  const areaUpload = document.getElementById('salesUploadArea');
+  const areaHistory = document.getElementById('salesHistoryArea');
+  if (!btnUpload) return;
+  if (tab === 'upload') {
+    btnUpload.style.background = 'var(--accent)'; btnUpload.style.color = 'white';
+    btnHistory.style.background = 'white'; btnHistory.style.color = 'var(--text)';
+    areaUpload.style.display = ''; areaHistory.style.display = 'none';
+  } else {
+    btnHistory.style.background = 'var(--accent)'; btnHistory.style.color = 'white';
+    btnUpload.style.background = 'white'; btnUpload.style.color = 'var(--text)';
+    areaUpload.style.display = 'none'; areaHistory.style.display = '';
+    renderSalesHistory();
+  }
+}
+
+function parseCsvLine(line) {
+  const result = [];
+  let cur = '', inQ = false;
+  for (let i = 0; i < line.length; i++) {
+    const c = line[i];
+    if (c === '"') { inQ = !inQ; continue; }
+    if (c === ',' && !inQ) { result.push(cur.trim()); cur = ''; continue; }
+    cur += c;
+  }
+  result.push(cur.trim());
+  return result;
+}
+
+function parseLeleCsv(csvText) {
+  // 去 BOM
+  if (csvText.charCodeAt(0) === 0xFEFF) csvText = csvText.slice(1);
+  const lines = csvText.split(/\r?\n/);
+  if (lines.length < 2) return [];
+
+  // 找表頭
+  const header = parseCsvLine(lines[0]);
+  const nameIdx = header.findIndex(h => h === '名稱' || h === '商品名稱');
+  const styleIdx = header.findIndex(h => h === '款式' || h === '規格');
+  const qtyIdx = header.findIndex(h => h === '數量' || h === '銷售數量');
+  const amountIdx = header.findIndex(h => h === '金額');
+  if (qtyIdx < 0) return [];
+
+  const codeMap = {};
+  for (let i = 1; i < lines.length; i++) {
+    const cols = parseCsvLine(lines[i]);
+    if (cols.length <= qtyIdx) continue;
+    const qty = parseInt(cols[qtyIdx]) || 0;
+    if (qty <= 0) continue;
+
+    // 從名稱和款式欄搜尋 #(\d{9,})# pattern
+    let code = '';
+    const nameVal = nameIdx >= 0 ? (cols[nameIdx] || '') : '';
+    const styleVal = styleIdx >= 0 ? (cols[styleIdx] || '') : '';
+    const nameMatch = nameVal.match(/#(\d{9,})#/);
+    const styleMatch = styleVal.match(/#(\d{9,})#/);
+    if (nameMatch) code = nameMatch[1];
+    else if (styleMatch) code = styleMatch[1];
+
+    if (code) {
+      if (!codeMap[code]) codeMap[code] = { qty: 0, amount: 0 };
+      codeMap[code].qty += qty;
+      codeMap[code].amount += (amountIdx >= 0 ? parseFloat(cols[amountIdx]) : 0) || 0;
+    }
+  }
+
+  return Object.entries(codeMap).map(([code, data]) => ({ code, qty: data.qty, amount: data.amount }));
+}
+
+function handleLeleCsvUpload(input) {
+  const file = input.files[0];
+  if (!file) return;
+  const info = document.getElementById('csvParseInfo');
+  info.textContent = '解析中...';
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    _parsedCsvItems = parseLeleCsv(e.target.result);
+    if (_parsedCsvItems.length === 0) {
+      info.textContent = '解析失敗或無有效資料，請確認 CSV 格式';
+      document.getElementById('csvPreviewArea').innerHTML = '';
+      document.getElementById('csvConfirmArea').style.display = 'none';
+      return;
+    }
+    info.textContent = `解析完成：${_parsedCsvItems.length} 個品項`;
+    renderCsvPreview();
+  };
+  reader.readAsText(file, 'utf-8');
+}
+
+function renderCsvPreview() {
+  const area = document.getElementById('csvPreviewArea');
+  const inv = getInventory();
+  const invMap = {};
+  inv.forEach(i => { if (i.code) invMap[i.code] = i; });
+
+  let html = '<table style="width:100%; border-collapse:collapse; font-size:13px;">';
+  html += '<thead><tr style="background:var(--surface2);">';
+  html += '<th style="padding:8px 10px; text-align:left; border-bottom:2px solid var(--border); font-size:12px; color:var(--text2);">品號</th>';
+  html += '<th style="padding:8px 10px; text-align:left; border-bottom:2px solid var(--border); font-size:12px; color:var(--text2);">商品名稱</th>';
+  html += '<th style="padding:8px 10px; text-align:right; border-bottom:2px solid var(--border); font-size:12px; color:var(--text2);">銷售數量</th>';
+  html += '<th style="padding:8px 10px; text-align:right; border-bottom:2px solid var(--border); font-size:12px; color:var(--text2);">現有庫存</th>';
+  html += '<th style="padding:8px 10px; text-align:right; border-bottom:2px solid var(--border); font-size:12px; color:var(--text2);">扣完後</th>';
+  html += '</tr></thead><tbody>';
+
+  let totalQty = 0;
+  _parsedCsvItems.forEach(item => {
+    const match = invMap[item.code];
+    const currentQty = match ? match.qty : null;
+    const afterQty = currentQty !== null ? currentQty - item.qty : null;
+    const noMatch = !match;
+    const negative = afterQty !== null && afterQty < 0;
+    const rowBg = noMatch ? 'background:#fef2f2;' : negative ? 'background:#fffbeb;' : '';
+    totalQty += item.qty;
+
+    html += `<tr style="border-bottom:1px solid var(--surface2); ${rowBg}">
+      <td style="padding:8px 10px; font-family:monospace;">${item.code}</td>
+      <td style="padding:8px 10px;">${match ? match.name : '<span style="color:#c53030; font-weight:600;">⚠ 庫存無此商品</span>'}</td>
+      <td style="padding:8px 10px; text-align:right; font-weight:700;">${item.qty}</td>
+      <td style="padding:8px 10px; text-align:right; color:${noMatch ? '#c53030' : 'var(--text)'};">${currentQty !== null ? currentQty : '—'}</td>
+      <td style="padding:8px 10px; text-align:right; font-weight:700; color:${negative ? '#c53030' : afterQty !== null ? '#047857' : '#999'};">${afterQty !== null ? afterQty : '—'}</td>
+    </tr>`;
+  });
+  html += `<tr style="background:var(--surface2);"><td colspan="2" style="padding:8px 10px; font-weight:700;">合計</td><td style="padding:8px 10px; text-align:right; font-weight:700;">${totalQty}</td><td colspan="2"></td></tr>`;
+  html += '</tbody></table>';
+  area.innerHTML = html;
+
+  document.getElementById('csvConfirmArea').style.display = '';
+  document.getElementById('btnConfirmDeduct').disabled = false;
+}
+
+async function confirmDeductInventory() {
+  const inv = getInventory();
+  const invMap = {};
+  inv.forEach((item, idx) => { if (item.code) invMap[item.code] = idx; });
+
+  const matchCount = _parsedCsvItems.filter(i => invMap[i.code] !== undefined).length;
+  const noMatchCount = _parsedCsvItems.length - matchCount;
+  const negatives = _parsedCsvItems.filter(i => {
+    const idx = invMap[i.code];
+    return idx !== undefined && (inv[idx].qty - i.qty) < 0;
+  }).length;
+
+  let warnHtml = `將扣減 <b>${matchCount}</b> 個品項的庫存`;
+  if (noMatchCount > 0) warnHtml += `<br><span style="color:#c53030;">⚠ ${noMatchCount} 個品項無法比對（將跳過）</span>`;
+  if (negatives > 0) warnHtml += `<br><span style="color:#b7791f;">⚠ ${negatives} 個品項扣完後庫存為負數</span>`;
+
+  const result = await Swal.fire({
+    title: '確認扣庫存？',
+    html: warnHtml,
+    icon: 'warning',
+    showCancelButton: true,
+    confirmButtonText: '確認扣減',
+    cancelButtonText: '取消',
+    confirmButtonColor: 'var(--accent)',
+  });
+  if (!result.isConfirmed) return;
+
+  const btn = document.getElementById('btnConfirmDeduct');
+  btn.disabled = true;
+  btn.textContent = '處理中...';
+
+  const now = new Date().toLocaleString('zh-TW', { hour12: false }).replace(/\//g, '-');
+  const deductedItems = [];
+
+  _parsedCsvItems.forEach(item => {
+    const idx = invMap[item.code];
+    if (idx === undefined) return;
+    inv[idx].qty = (inv[idx].qty || 0) - item.qty;
+    inv[idx].lastUpdated = now;
+    deductedItems.push({ code: item.code, name: inv[idx].name, qty: item.qty });
+  });
+
+  saveInventory(inv);
+
+  // 儲存銷貨記錄
+  const records = getSalesRecords();
+  records.unshift({
+    date: now.split(' ')[0],
+    uploadedAt: now,
+    items: deductedItems,
+    totalQty: deductedItems.reduce((s, i) => s + i.qty, 0)
+  });
+  saveSalesRecords(records);
+
+  // 統計（在清除 _parsedCsvItems 之前計算）
+  const totalRevenue = _parsedCsvItems.reduce((s, i) => s + (i.amount || 0), 0);
+  const totalQtyAll = _parsedCsvItems.reduce((s, i) => s + i.qty, 0);
+  const totalSkipped = _parsedCsvItems.length - deductedItems.length;
+
+  _parsedCsvItems = [];
+  document.getElementById('csvPreviewArea').innerHTML = '';
+  document.getElementById('csvConfirmArea').style.display = 'none';
+  document.getElementById('csvParseInfo').textContent = '';
+  document.getElementById('leleCsvInput').value = '';
+  btn.disabled = false;
+  btn.textContent = '確認扣庫存';
+
+  Swal.fire({
+    icon: 'success',
+    title: '扣庫存完成',
+    html: `<div style="text-align:left; font-size:14px; line-height:2;">
+      <div style="border-bottom:1px solid #e2e8f0; margin-bottom:8px; padding-bottom:8px; font-weight:700; color:#be185d;">📊 本批銷貨統計</div>
+      <div>💰 今日營收（售價）<b style="float:right;">$${totalRevenue.toLocaleString()}</b></div>
+      <div>📦 銷售品項<b style="float:right;">${totalSkipped + deductedItems.length} 個</b></div>
+      <div>🔢 銷售總數量<b style="float:right;">${totalQtyAll} 件</b></div>
+      ${totalSkipped > 0 ? `<div style="color:#c53030; margin-top:4px;">⚠ 未比對到庫存：${totalSkipped} 個品項（已跳過）</div>` : ''}
+    </div>`,
+    confirmButtonText: '確認',
+    confirmButtonColor: '#be185d'
+  });
+}
+
+function renderSalesHistory() {
+  const area = document.getElementById('salesHistoryArea');
+  if (!area) return;
+  const records = getSalesRecords();
+
+  if (records.length === 0) {
+    area.innerHTML = '<div style="text-align:center; padding:40px; color:var(--text2);">尚無銷貨記錄</div>';
+    return;
+  }
+
+  let html = records.map((rec, ri) => {
+    const detailId = 'salesDetail_' + ri;
+    return `<div style="background:white; border:1px solid var(--border); border-radius:8px; margin-bottom:10px; overflow:hidden;">
+      <div onclick="document.getElementById('${detailId}').style.display=document.getElementById('${detailId}').style.display==='none'?'':'none'" style="padding:12px 16px; cursor:pointer; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <span style="font-weight:700; color:var(--primary);">${rec.date}</span>
+          <span style="font-size:12px; color:var(--text2); margin-left:8px;">${rec.items.length} 品項，共 ${rec.totalQty} 件</span>
+        </div>
+        <span style="color:var(--text2); font-size:12px;">▼</span>
+      </div>
+      <div id="${detailId}" style="display:none; border-top:1px solid var(--border); padding:10px 16px;">
+        <table style="width:100%; border-collapse:collapse; font-size:12px;">
+          <thead><tr style="background:var(--surface2);"><th style="padding:6px 8px; text-align:left;">品號</th><th style="padding:6px 8px; text-align:left;">商品名稱</th><th style="padding:6px 8px; text-align:right;">數量</th></tr></thead>
+          <tbody>${rec.items.map(i => `<tr style="border-bottom:1px solid var(--surface2);"><td style="padding:6px 8px; font-family:monospace;">${i.code}</td><td style="padding:6px 8px;">${i.name || ''}</td><td style="padding:6px 8px; text-align:right; font-weight:600;">${i.qty}</td></tr>`).join('')}</tbody>
+        </table>
+      </div>
+    </div>`;
+  }).join('');
+
+  area.innerHTML = html;
+}
+
+// ============================
+// 📥 庫存範本下載 / 📤 匯入盤點
+// ============================
+function downloadInventoryTemplate() {
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet([['商品編號', '商品名稱', '數量']]);
+  ws['!cols'] = [{ wch: 15 }, { wch: 35 }, { wch: 10 }];
+  XLSX.utils.book_append_sheet(wb, ws, '期初存貨');
+  const today = new Date().toISOString().split('T')[0];
+  XLSX.writeFile(wb, `期初存貨_${currentStore?.name || ''}_${today}.xlsx`);
+}
+
+async function handleInventoryImport(input) {
+  const file = input.files[0];
+  if (!file) return;
+  input.value = '';
+
+  try {
+    const data = await file.arrayBuffer();
+    const wb = XLSX.read(data);
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    const rows = XLSX.utils.sheet_to_json(ws, { defval: '' });
+
+    // 找欄位名稱
+    const findCol = (row, names) => {
+      const candidates = names.map(n => n.replace(/\s/g, ''));
+      for (const key of Object.keys(row)) {
+        const k = key.replace(/\s/g, '');
+        if (candidates.includes(k)) return key;
+      }
+      return null;
+    };
+    if (rows.length === 0) { Swal.fire('提示', '檔案無資料', 'info'); return; }
+    const codeCol = findCol(rows[0], ['商品編號', 'code', '品號']);
+    const nameCol = findCol(rows[0], ['商品名稱', 'name', '品名']);
+    const qtyCol = findCol(rows[0], ['數量', 'qty', '庫存']);
+    if (!qtyCol) { Swal.fire('錯誤', '找不到「數量」欄位', 'error'); return; }
+
+    // 解析
+    const parsed = rows
+      .map(r => ({
+        code: String(r[codeCol] || '').trim(),
+        name: String(r[nameCol] || '').trim(),
+        qty: parseInt(r[qtyCol]) || 0
+      }))
+      .filter(r => r.code && r.qty !== 0);
+
+    if (parsed.length === 0) { Swal.fire('提示', '無有效資料（數量為空或 0 的列已略過）', 'info'); return; }
+
+    // 計算影響範圍
+    const inv = getInventory();
+    const invMap = {};
+    inv.forEach((item, idx) => { if (item.code) invMap[item.code] = idx; });
+    let overwriteCount = 0, newCount = 0;
+    parsed.forEach(p => {
+      if (invMap[p.code] !== undefined) overwriteCount++;
+      else newCount++;
+    });
+
+    const result = await Swal.fire({
+      title: `確認匯入 ${parsed.length} 筆？`,
+      html: `<div style="text-align:left; font-size:14px;">
+        <div>覆蓋既有：<b>${overwriteCount}</b> 筆</div>
+        <div>新增：<b>${newCount}</b> 筆</div>
+      </div>`,
+      icon: 'question',
+      showCancelButton: true,
+      confirmButtonText: '確認匯入',
+      cancelButtonText: '取消',
+      confirmButtonColor: 'var(--accent)'
+    });
+    if (!result.isConfirmed) return;
+
+    const now = new Date().toLocaleString('zh-TW', { hour12: false }).replace(/\//g, '-');
+    parsed.forEach(p => {
+      if (invMap[p.code] !== undefined) {
+        inv[invMap[p.code]].qty = p.qty;
+        inv[invMap[p.code]].name = p.name || inv[invMap[p.code]].name;
+        inv[invMap[p.code]].lastUpdated = now;
+      } else {
+        inv.push({ code: p.code, name: p.name, qty: p.qty, lastUpdated: now });
+      }
+    });
+    saveInventory(inv);
+    renderInventory();
+    Swal.fire({ icon: 'success', title: '匯入完成', text: `覆蓋 ${overwriteCount} 筆，新增 ${newCount} 筆`, timer: 2000, showConfirmButton: false });
+  } catch (e) {
+    Swal.fire('匯入失敗', e.message, 'error');
+  }
+}
 
   </script>
 </body>
