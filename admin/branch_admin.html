@@ -1794,6 +1794,7 @@
               <button onclick="ipExportDetail()" style="padding:8px 16px; background:#276749; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">📊 Excel</button>
               ${canSubmit ? `<button onclick="ipChangeStatus('${o.orderId}','待審核')" style="padding:8px 16px; background:#b7791f; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">📤 送出審核</button>` : ''}
               ${canDelete ? `<button onclick="ipDeleteOrder('${o.orderId}')" style="padding:8px 16px; background:#c53030; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">🗑️ 刪除</button>` : ''}
+              <button onclick="ipBackfillPrices()" style="padding:8px 16px; background:#0e7490; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">💰 補寫商品價格</button>
             </div>
           </div>
           <datalist id="ipSupplierList2">${allSuppliers.map(s => `<option value="${s.name}">`).join('')}</datalist>
@@ -2004,6 +2005,51 @@
       } catch (err) {
         Swal.fire('錯誤', '刪除失敗: ' + err.message, 'error');
       }
+    }
+
+    async function ipBackfillPrices() {
+      if (!ipCurrentDetail || !ipCurrentDetail.items || ipCurrentDetail.items.length === 0) {
+        Swal.fire('無資料', '請先開啟一張採購單明細', 'info');
+        return;
+      }
+      const result = await Swal.fire({
+        title: '補寫商品價格？',
+        html: `將把此採購單 <b>${ipCurrentDetail.items.length}</b> 筆商品的<br>售價、分店價、成本補寫回商品資料表<br><span style="font-size:12px; color:#6b7280;">只更新有填寫（>0）的欄位，不會用 0 覆蓋</span>`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: '確認補寫',
+        cancelButtonText: '取消',
+        confirmButtonColor: '#0e7490'
+      });
+      if (!result.isConfirmed) return;
+
+      Swal.fire({ title: '補寫中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+      let updated = 0, failed = 0;
+      for (const it of ipCurrentDetail.items) {
+        const payload = {};
+        if (Number(it.price) > 0) payload.price = Number(it.price);
+        if (Number(it.price_branch) > 0) payload.price_branch = Number(it.price_branch);
+        if (Number(it.cost) > 0) payload.cost = Number(it.cost);
+        if (Number(it.price_wholesale) > 0) payload.price_wholesale = Number(it.price_wholesale);
+        if (Number(it.price_group) > 0) payload.price_group = Number(it.price_group);
+        if (Object.keys(payload).length === 0) continue;
+        try {
+          const res = await fetch(`${SB_URL}/products?id=eq.${encodeURIComponent(it.productId)}`, {
+            method: 'PATCH',
+            headers: { ...HEADERS, 'Prefer': 'return=minimal' },
+            body: JSON.stringify(payload)
+          });
+          if (res.ok) updated++;
+          else failed++;
+        } catch(e) { failed++; console.warn('補寫失敗:', it.productId, e); }
+      }
+      Swal.fire({
+        icon: failed > 0 ? 'warning' : 'success',
+        title: '補寫完成',
+        text: `成功 ${updated} 筆${failed > 0 ? `，失敗 ${failed} 筆` : ''}`,
+        timer: 2000,
+        showConfirmButton: false
+      });
     }
 
     function renderImportGroupBuy() {
