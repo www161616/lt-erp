@@ -9897,6 +9897,7 @@
             <button onclick="batchSummaryStatus('open')" style="background:#2b6cb0; color:#fff; border:none; border-radius:6px; padding:5px 14px; font-size:13px; cursor:pointer; font-weight:600;">🟢 批次開放</button>
             <button onclick="generatePOFromSummary()" style="background:#047857; color:#fff; border:none; border-radius:6px; padding:5px 14px; font-size:13px; cursor:pointer; font-weight:600;">📝 產生採購單</button>
             <button onclick="clearBranchOrderQty()" style="background:#b7791f; color:#fff; border:none; border-radius:6px; padding:5px 14px; font-size:13px; cursor:pointer; font-weight:600;">🧹 清除本期數量</button>
+            <button onclick="batchDeleteSummaryItems()" style="background:#c53030; color:#fff; border:none; border-radius:6px; padding:5px 14px; font-size:13px; cursor:pointer; font-weight:600;">🗑️ 批次刪除</button>
           </div>
           <div id="asPagination" style="display:flex; align-items:center; gap:6px; margin-top:8px; flex-wrap:wrap;"></div>
         </div>
@@ -10109,6 +10110,49 @@
       filterAdminSummary(false, asPageNum);
       Swal.fire({ title: `已${label}`, text: `共 ${checked.length} 筆`, icon: 'success', timer: 1500, showConfirmButton: false });
     });
+  }
+
+  async function batchDeleteSummaryItems() {
+    const checked = [...document.querySelectorAll('.as-checkbox:checked')].map(cb => cb.value);
+    if (checked.length === 0) {
+      Swal.fire('請先勾選', '請勾選要刪除的商品', 'info');
+      return;
+    }
+    const result = await Swal.fire({
+      title: `確定刪除 ${checked.length} 筆商品？`,
+      html: '<span style="color:#c53030;">此操作無法復原，商品將從開團總表和各分店叫貨數量中移除</span>',
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: `確定刪除 ${checked.length} 筆`,
+      cancelButtonText: '取消',
+      confirmButtonColor: '#c53030'
+    });
+    if (!result.isConfirmed) return;
+
+    const saved = JSON.parse(localStorage.getItem('branchOrderList') || '[]');
+    const branchOrdersData = JSON.parse(localStorage.getItem('branchOrders') || '{}');
+    const deleteSet = new Set(checked);
+
+    // 從 branchOrderList 移除
+    const newList = saved.filter(item => !deleteSet.has(item.id));
+
+    // 從 branchOrders 的每個分店移除這些商品 key
+    Object.keys(branchOrdersData).forEach(store => {
+      checked.forEach(id => {
+        if (branchOrdersData[store] && branchOrdersData[store][id] !== undefined) {
+          delete branchOrdersData[store][id];
+        }
+      });
+    });
+
+    localStorage.setItem('branchOrderList', JSON.stringify(newList));
+    cloudSave('branchOrderList');
+    localStorage.setItem('branchOrders', JSON.stringify(branchOrdersData));
+    cloudSave('branchOrders');
+
+    logActivity('批次刪除開團商品', 'SUMMARY', { count: checked.length, ids: checked.slice(0, 10).join(', ') });
+    filterAdminSummary(false, asPageNum);
+    Swal.fire({ title: '已刪除', text: `共刪除 ${checked.length} 筆商品`, icon: 'success', timer: 1500, showConfirmButton: false });
   }
 
   function editSummaryQty(td, storeName, itemId, currentQty) {

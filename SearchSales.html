@@ -189,7 +189,16 @@
 
       document.getElementById('dateFrom').value = localFirstDay;
       document.getElementById('dateTo').value = localToday;
-      
+
+      // 從 DailyReport 帶過來的單號自動搜尋
+      const autoKeyword = sessionStorage.getItem('searchSalesKeyword');
+      if (autoKeyword) {
+        document.getElementById('keyword').value = autoKeyword;
+        document.getElementById('dateFrom').value = '';
+        document.getElementById('dateTo').value = '';
+        sessionStorage.removeItem('searchSalesKeyword');
+      }
+
       loadCustomers().then(() => doSearch());
     };
 

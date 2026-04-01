@@ -1,0 +1,331 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>每日出貨報表 - 龍潭總倉</title>
+  <style>
+    :root {
+      --bg: #f8f9fb; --surface: #ffffff; --surface2: #f1f5f9; --border: #e2e8f0;
+      --accent: #475569; --accent-hover: #334155; --text: #1e293b; --text2: #64748b;
+      --danger: #c53030; --success: #276749; --warning: #b7791f;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI','Microsoft JhengHei',sans-serif; padding: 20px; background: var(--bg); color: var(--text); }
+    .container { background: var(--surface); padding: 24px; border-radius: 10px; max-width: 1200px; margin: 0 auto; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+    h2 { color: var(--accent); margin-bottom: 20px; font-size: 20px; }
+
+    .toolbar { display: flex; gap: 10px; align-items: flex-end; margin-bottom: 20px; flex-wrap: wrap; }
+    .toolbar label { font-size: 12px; font-weight: 700; color: var(--text2); display: block; margin-bottom: 4px; }
+    .toolbar input { padding: 8px 12px; border: 1px solid var(--border); border-radius: 6px; font-size: 13px; font-family: inherit; }
+    .btn { padding: 8px 16px; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; font-weight: 600; font-family: inherit; transition: all .2s; }
+    .btn-primary { background: var(--accent); color: #fff; }
+    .btn-primary:hover { background: var(--accent-hover); }
+    .btn-print { background: #475569; color: #fff; }
+
+    .summary { display: flex; gap: 16px; margin-bottom: 24px; flex-wrap: wrap; }
+    .summary-card { flex: 1; min-width: 140px; background: var(--surface2); border-radius: 8px; padding: 16px; text-align: center; }
+    .summary-card .label { font-size: 11px; color: var(--text2); margin-bottom: 4px; }
+    .summary-card .value { font-size: 22px; font-weight: 800; color: var(--accent); }
+    .summary-card .sub { font-size: 12px; color: var(--text2); margin-top: 2px; }
+
+    table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    th { background: var(--surface2); color: var(--text2); font-size: 12px; font-weight: 700; padding: 8px 10px; text-align: left; border-bottom: 2px solid var(--border); }
+    td { padding: 8px 10px; font-size: 13px; border-bottom: 1px solid var(--surface2); }
+    tr:hover { background: #fefce8; }
+    .empty { text-align: center; padding: 40px; color: #94a3b8; font-size: 14px; }
+    .text-right { text-align: right; }
+    .text-center { text-align: center; }
+    .mono { font-family: monospace; }
+    .bold { font-weight: 700; }
+    .green { color: var(--success); }
+    .red { color: var(--danger); }
+
+    .print-header { display: none; text-align: center; margin-bottom: 16px; }
+    .print-header h1 { font-size: 22px; font-weight: 900; }
+    .print-header .sub { font-size: 15px; letter-spacing: 8px; color: var(--text2); margin-top: 4px; }
+    .print-header .date-range { font-size: 13px; color: var(--text2); margin-top: 8px; }
+
+    @media print {
+      .toolbar { display: none !important; }
+      .print-header { display: block !important; }
+      body { padding: 0; background: white; }
+      .container { box-shadow: none; padding: 0; }
+      @page { margin: 10mm; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h2>每日出貨報表</h2>
+
+  <div class="toolbar">
+    <div>
+      <label>日期起</label>
+      <input type="date" id="dateFrom">
+    </div>
+    <div>
+      <label>日期訖</label>
+      <input type="date" id="dateTo">
+    </div>
+    <div style="display:flex; gap:8px; align-items:flex-end;">
+      <button class="btn btn-primary" onclick="doQuery()">查詢</button>
+      <button class="btn btn-print" onclick="window.print()">列印</button>
+    </div>
+  </div>
+
+  <div class="print-header">
+    <h1>丸十水產股份有限公司</h1>
+    <div class="sub">每日出貨報表</div>
+    <div class="date-range" id="printDateRange"></div>
+  </div>
+
+  <div id="summaryArea"></div>
+  <div id="tableArea"><div class="empty">請選擇日期後點擊「查詢」</div></div>
+</div>
+
+<script>
+const SB_URL = 'https://asugjynpocwygggttxyo.supabase.co/rest/v1';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFzdWdqeW5wb2N3eWdnZ3R0eHlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNzU3MjksImV4cCI6MjA4ODk1MTcyOX0.LzcRQAl80rZxKKD8NIYWGvylfwCbs1ek5LtKpmZodBc';
+let HEADERS = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' };
+
+window.addEventListener('DOMContentLoaded', () => {
+  const token = sessionStorage.getItem('sb_auth_token');
+  if (token) HEADERS['Authorization'] = 'Bearer ' + token;
+  const today = new Date();
+  const ds = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  document.getElementById('dateFrom').value = ds;
+  document.getElementById('dateTo').value = ds;
+});
+
+async function doQuery() {
+  const dateFrom = document.getElementById('dateFrom').value;
+  const dateTo = document.getElementById('dateTo').value;
+  if (!dateFrom || !dateTo) { alert('請選擇日期'); return; }
+
+  document.getElementById('printDateRange').textContent = `${dateFrom} ~ ${dateTo}`;
+  document.getElementById('summaryArea').innerHTML = '';
+  document.getElementById('tableArea').innerHTML = '<div class="empty">查詢中...</div>';
+
+  try {
+    // 第一步：撈 sales_orders
+    let orders = [], offset = 0;
+    while (true) {
+      const res = await fetch(`${SB_URL}/sales_orders?order_date=gte.${dateFrom}&order_date=lte.${dateTo}&order_type=eq.normal&select=id,order_date,customer_name&limit=1000&offset=${offset}`, { headers: HEADERS });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      orders = orders.concat(data);
+      if (data.length < 1000) break;
+      offset += 1000;
+    }
+
+    if (orders.length === 0) {
+      document.getElementById('tableArea').innerHTML = '<div class="empty">查無資料</div>';
+      return;
+    }
+
+    // 第二步：撈 sales_details（分批，每次 50 個 order_id）
+    const orderIds = orders.map(o => o.id);
+    let allDetails = [];
+    for (let i = 0; i < orderIds.length; i += 50) {
+      const batch = orderIds.slice(i, i + 50);
+      const idsParam = batch.map(id => `"${id}"`).join(',');
+      let detailOffset = 0;
+      while (true) {
+        const res = await fetch(`${SB_URL}/sales_details?order_id=in.(${idsParam})&select=order_id,product_id,product_name,qty,unit_price,subtotal,unit_cost,profit&limit=1000&offset=${detailOffset}`, { headers: HEADERS });
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        allDetails = allDetails.concat(data);
+        if (data.length < 1000) break;
+        detailOffset += 1000;
+      }
+    }
+
+    // 第三步：查所有商品的 cost 和 price_branch
+    const allProductIds = [...new Set(allDetails.map(d => d.product_id).filter(Boolean))];
+    const productCostMap = {};
+    const productBranchMap = {};
+    for (let i = 0; i < allProductIds.length; i += 50) {
+      const batch = allProductIds.slice(i, i + 50);
+      const idsParam = batch.map(id => `"${id}"`).join(',');
+      const res = await fetch(`${SB_URL}/products?id=in.(${idsParam})&select=id,cost,price_branch`, { headers: HEADERS });
+      if (res.ok) {
+        const data = await res.json();
+        data.forEach(p => {
+          productCostMap[p.id] = Number(p.cost) || 0;
+          productBranchMap[p.id] = Number(p.price_branch) || 0;
+        });
+      }
+    }
+
+    // 計算有效成本 + 分店價
+    allDetails.forEach(d => {
+      const uc = Number(d.unit_cost) || 0;
+      d._effectiveCost = uc > 0 ? uc : (productCostMap[d.product_id] || 0);
+      d._costSubtotal = d._effectiveCost * (Number(d.qty) || 0);
+      d._branchPrice = productBranchMap[d.product_id] || 0;
+      d._branchSubtotal = d._branchPrice * (Number(d.qty) || 0);
+      d._branchProfit = d._branchSubtotal - d._costSubtotal;
+      d._profit = (Number(d.subtotal) || 0) - d._costSubtotal;
+    });
+
+    // orderMap: order_id → customer_name
+    const orderMap = {};
+    orders.forEach(o => { orderMap[o.id] = o.customer_name || ''; });
+
+    // 按商品分組加總
+    const grouped = {};
+    allDetails.forEach(d => {
+      const pid = d.product_id || '未知';
+      if (!grouped[pid]) {
+        grouped[pid] = { product_id: pid, product_name: d.product_name || '', qty: 0, revenue: 0, cost: 0, profit: 0, branchRevenue: 0, branchProfit: 0, orders: [] };
+      }
+      grouped[pid].qty += Number(d.qty) || 0;
+      grouped[pid].revenue += Number(d.subtotal) || 0;
+      grouped[pid].cost += d._costSubtotal;
+      grouped[pid].profit += d._profit;
+      grouped[pid].branchRevenue += d._branchSubtotal;
+      grouped[pid].branchProfit += d._branchProfit;
+      grouped[pid].orders.push({
+        orderId: d.order_id,
+        customerName: orderMap[d.order_id] || '',
+        qty: Number(d.qty) || 0,
+        subtotal: Math.round(Number(d.subtotal) || 0),
+        branchSubtotal: Math.round(d._branchSubtotal),
+        unitCost: d._effectiveCost,
+        costSubtotal: Math.round(d._costSubtotal),
+        hasRealCost: (Number(d.unit_cost) || 0) > 0
+      });
+    });
+
+    const rows = Object.values(grouped).sort((a, b) => b.profit - a.profit);
+
+    // 統計摘要
+    const totalQty = rows.reduce((s, r) => s + r.qty, 0);
+    const totalRevenue = Math.round(rows.reduce((s, r) => s + r.revenue, 0));
+    const totalBranchRevenue = Math.round(rows.reduce((s, r) => s + r.branchRevenue, 0));
+    const totalCost = Math.round(rows.reduce((s, r) => s + r.cost, 0));
+    const totalProfit = totalRevenue - totalCost;
+    const totalBranchProfit = totalBranchRevenue - totalCost;
+    const marginRate = totalBranchRevenue > 0 ? ((totalBranchProfit / totalBranchRevenue) * 100).toFixed(1) : '0.0';
+
+    document.getElementById('summaryArea').innerHTML = `
+      <div class="summary">
+        <div class="summary-card">
+          <div class="label">出貨總數量</div>
+          <div class="value">${totalQty.toLocaleString()}</div>
+          <div class="sub">${orders.length} 張銷貨單 / ${rows.length} 個品項</div>
+        </div>
+        <div class="summary-card">
+          <div class="label">售價合計</div>
+          <div class="value">$${totalRevenue.toLocaleString()}</div>
+        </div>
+        <div class="summary-card">
+          <div class="label">分店價合計</div>
+          <div class="value" style="color:#2b6cb0;">$${totalBranchRevenue.toLocaleString()}</div>
+        </div>
+        <div class="summary-card">
+          <div class="label">成本合計</div>
+          <div class="value" style="color:var(--danger);">$${totalCost.toLocaleString()}</div>
+        </div>
+        <div class="summary-card">
+          <div class="label">分店毛利</div>
+          <div class="value" style="color:${totalBranchProfit >= 0 ? 'var(--success)' : 'var(--danger)'};">$${totalBranchProfit.toLocaleString()}</div>
+          <div class="sub">毛利率 ${marginRate}%</div>
+        </div>
+      </div>`;
+
+    // 表格
+    let html = '<table><thead><tr>';
+    html += '<th style="width:30px;"></th><th>商品編號</th><th>商品名稱</th>';
+    html += '<th class="text-right">數量</th><th class="text-right">售價小計</th>';
+    html += '<th class="text-right">分店價小計</th><th class="text-right">成本小計</th>';
+    html += '<th class="text-right">分店毛利</th>';
+    html += '</tr></thead><tbody>';
+
+    rows.forEach(r => {
+      const safePid = r.product_id.replace(/[^a-zA-Z0-9]/g, '_');
+      const revenue = Math.round(r.revenue);
+      const branchRevenue = Math.round(r.branchRevenue);
+      const cost = Math.round(r.cost);
+      const branchProfit = Math.round(r.branchProfit);
+      const profitColor = branchProfit >= 0 ? 'green' : 'red';
+      html += `<tr onclick="toggleProductDetail('${safePid}')" style="cursor:pointer;">
+        <td class="text-center"><span id="indicator-${safePid}" style="font-size:10px; color:var(--text2);">▶</span></td>
+        <td class="mono">${r.product_id}</td>
+        <td>${r.product_name}</td>
+        <td class="text-right bold">${r.qty.toLocaleString()}</td>
+        <td class="text-right">$${revenue.toLocaleString()}</td>
+        <td class="text-right" style="color:#2b6cb0;">$${branchRevenue.toLocaleString()}</td>
+        <td class="text-right red">$${cost.toLocaleString()}</td>
+        <td class="text-right bold ${profitColor}">$${branchProfit.toLocaleString()}</td>
+      </tr>`;
+      // 展開明細列
+      const detailRows = r.orders.map(o => {
+        const costStyle = !o.hasRealCost ? 'color:#c53030;' : '';
+        const costWarn = !o.hasRealCost ? ' ⚠️' : '';
+        return `<tr style="border-bottom:1px solid #f1f5f9;">
+          <td><a href="#" onclick="event.stopPropagation();openOrder('${o.orderId}')" style="color:#2563eb; font-family:monospace; text-decoration:underline;">${o.orderId}</a></td>
+          <td>${o.customerName}</td>
+          <td class="text-right">${o.qty}</td>
+          <td class="text-right">$${o.subtotal.toLocaleString()}</td>
+          <td class="text-right" style="color:#2b6cb0;">$${o.branchSubtotal.toLocaleString()}</td>
+          <td class="text-right" style="${costStyle}">$${o.costSubtotal.toLocaleString()}${costWarn}</td>
+        </tr>`;
+      }).join('');
+      html += `<tr id="detail-${safePid}" style="display:none; background:#f8fafc;">
+        <td></td>
+        <td colspan="7">
+          <table style="width:100%; font-size:12px; border-collapse:collapse;">
+            <thead><tr style="background:#eef1f5;">
+              <th style="padding:4px 8px; text-align:left;">單號</th>
+              <th style="padding:4px 8px; text-align:left;">客戶/分店</th>
+              <th style="padding:4px 8px; text-align:right;">數量</th>
+              <th style="padding:4px 8px; text-align:right;">售價小計</th>
+              <th style="padding:4px 8px; text-align:right;">分店價小計</th>
+              <th style="padding:4px 8px; text-align:right;">成本小計</th>
+            </tr></thead>
+            <tbody>${detailRows}</tbody>
+          </table>
+        </td>
+      </tr>`;
+    });
+
+    // 合計列
+    html += `<tr style="background:var(--surface2); font-weight:700; border-top:2px solid var(--border);">
+      <td></td>
+      <td colspan="2">合計</td>
+      <td class="text-right">${totalQty.toLocaleString()}</td>
+      <td class="text-right">$${totalRevenue.toLocaleString()}</td>
+      <td class="text-right" style="color:#2b6cb0;">$${totalBranchRevenue.toLocaleString()}</td>
+      <td class="text-right red">$${totalCost.toLocaleString()}</td>
+      <td class="text-right ${totalBranchProfit >= 0 ? 'green' : 'red'}">$${totalBranchProfit.toLocaleString()}</td>
+    </tr>`;
+    html += '</tbody></table>';
+
+    document.getElementById('tableArea').innerHTML = html;
+
+  } catch (e) {
+    document.getElementById('tableArea').innerHTML = `<div class="empty" style="color:var(--danger);">查詢失敗：${e.message}</div>`;
+  }
+}
+
+function toggleProductDetail(safePid) {
+  const el = document.getElementById('detail-' + safePid);
+  if (!el) return;
+  const isHidden = el.style.display === 'none' || el.style.display === '';
+  el.style.display = isHidden ? 'table-row' : 'none';
+  const indicator = document.getElementById('indicator-' + safePid);
+  if (indicator) indicator.textContent = isHidden ? '▼' : '▶';
+}
+
+function openOrder(orderId) {
+  sessionStorage.setItem('searchSalesKeyword', orderId);
+  if (window.parent && window.parent.loadPage) {
+    window.parent.loadPage('SearchSales.html', '查詢銷貨單');
+  } else {
+    window.open('SearchSales.html', '_blank');
+  }
+}
+</script>
+</body>
+</html>
