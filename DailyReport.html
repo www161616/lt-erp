@@ -202,16 +202,23 @@ async function doQuery() {
       }
       grouped[pid].qty += Number(d.qty) || 0;
       grouped[pid].unitCost = d._effectiveCost;
-      grouped[pid].orders.push({
-        orderId: d.order_id,
-        customerName: orderMap[d.order_id] || '',
-        qty: Number(d.qty) || 0,
-        unitPrice: Number(d.unit_price) || 0,
-        unitCost: d._effectiveCost,
-        unitProfit: (Number(d.unit_price) || 0) - d._effectiveCost,
-        subtotal: Math.round((Number(d.unit_price) || 0) * (Number(d.qty) || 0)),
-        hasRealCost: (Number(d.unit_cost) || 0) > 0
-      });
+      const customerName = orderMap[d.order_id] || '';
+      const existing = grouped[pid].orders.find(o => o.customerName === customerName);
+      if (existing) {
+        existing.qty += Number(d.qty) || 0;
+        existing.subtotal = Math.round(existing.unitPrice * existing.qty);
+      } else {
+        grouped[pid].orders.push({
+          orderId: d.order_id,
+          customerName,
+          qty: Number(d.qty) || 0,
+          unitPrice: Number(d.unit_price) || 0,
+          unitCost: d._effectiveCost,
+          unitProfit: (Number(d.unit_price) || 0) - d._effectiveCost,
+          subtotal: Math.round((Number(d.unit_price) || 0) * (Number(d.qty) || 0)),
+          hasRealCost: (Number(d.unit_cost) || 0) > 0
+        });
+      }
     });
 
     // forEach 結束後才計算 unitProfit 和 profit
