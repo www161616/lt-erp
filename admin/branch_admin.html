@@ -4233,7 +4233,8 @@
         });
 
         const now = new Date();
-        const dateStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+        // 銷貨單日期優先用揀貨單的配送日，沒設定才用今天
+        const dateStr = wave.delivery_date || `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
         let successCount = 0;
 
         // 2. 為每間分店建立銷貨單
@@ -4261,11 +4262,14 @@
             // 寫入 mockSalesOrders，讓銷貨單管理可以看到
             const soId = `SO-${dateStr.replace(/-/g,'')}-${String(mockSalesOrders.length + 1).padStart(3,'0')}`;
             const issuedTime = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+            const createdAtTime = wave.delivery_date
+              ? `${wave.delivery_date.replace(/-/g, '/')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`
+              : issuedTime;
             mockSalesOrders.push({
               id: soId,
               waveId: waveId,
               storeName: branch,
-              createdAt: issuedTime,
+              createdAt: createdAtTime,
               storeConfirmedAt: null,
               status: 'pending',
               issuedAt: issuedTime,
@@ -4300,6 +4304,10 @@
               console.log('[generateSalesOrder] branch:', branch, 'soData:', soData, '→ soId:', soId);
               if (!soId) { successCount++; continue; }
               const issuedTime = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+              // createdAt 用配送日（跟 order_date 一致），時間用當下
+              const createdAtTime = wave.delivery_date
+                ? `${wave.delivery_date.replace(/-/g, '/')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`
+                : issuedTime;
               // 同步到 mockSalesOrders（讓 portal 今日進貨單也看得到）
               console.log('[generateSalesOrder] push storeName:', branch);
               mockSalesOrders.push({
@@ -4307,7 +4315,7 @@
                 dbId: soId,
                 waveId: waveId,
                 storeName: branch,
-                createdAt: issuedTime,
+                createdAt: createdAtTime,
                 storeConfirmedAt: null,
                 status: 'pending',
                 issuedAt: issuedTime,
