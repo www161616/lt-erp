@@ -161,7 +161,14 @@
   let allProducts = [];
   let selectedIds = new Set();
 
-  window.onload = () => { fetchProducts(); };
+  window.onload = () => {
+    const autoKeyword = sessionStorage.getItem('productListKeyword');
+    if (autoKeyword) {
+      document.getElementById('searchInput').value = autoKeyword;
+      sessionStorage.removeItem('productListKeyword');
+    }
+    fetchProducts();
+  };
 
   // ========== 1. 讀取商品（分頁抓取，突破 1000 筆限制）==========
   async function fetchProducts() {

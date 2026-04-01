@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <title>異常價格清單 - 龍潭總倉</title>
+  <style>
+    :root {
+      --bg: #f8f9fb; --surface: #ffffff; --surface2: #f1f5f9; --border: #e2e8f0;
+      --accent: #475569; --accent-hover: #334155; --text: #1e293b; --text2: #64748b;
+      --danger: #c53030; --success: #276749; --warning: #b7791f;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Segoe UI','Microsoft JhengHei',sans-serif; padding: 20px; background: var(--bg); color: var(--text); }
+    .container { background: var(--surface); padding: 24px; border-radius: 10px; max-width: 1200px; margin: 0 auto; box-shadow: 0 2px 10px rgba(0,0,0,0.06); }
+    h2 { color: var(--accent); margin-bottom: 20px; font-size: 20px; }
+    .toolbar { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; }
+    .btn { padding: 8px 16px; border: none; border-radius: 6px; font-size: 13px; cursor: pointer; font-weight: 600; font-family: inherit; }
+    .btn-print { background: #475569; color: #fff; }
+    .summary { display: flex; gap: 16px; margin-bottom: 20px; flex-wrap: wrap; }
+    .summary-card { min-width: 140px; background: var(--surface2); border-radius: 8px; padding: 14px 20px; text-align: center; }
+    .summary-card .label { font-size: 11px; color: var(--text2); margin-bottom: 4px; }
+    .summary-card .value { font-size: 22px; font-weight: 800; }
+    table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+    th { background: var(--surface2); color: var(--text2); font-size: 12px; font-weight: 700; padding: 8px 10px; text-align: left; border-bottom: 2px solid var(--border); }
+    td { padding: 8px 10px; font-size: 13px; border-bottom: 1px solid var(--surface2); }
+    tr:hover { background: #fefce8; }
+    .text-right { text-align: right; }
+    .mono { font-family: monospace; }
+    .bold { font-weight: 700; }
+    .red { color: var(--danger); }
+    .empty { text-align: center; padding: 40px; color: #94a3b8; font-size: 14px; }
+    @media print {
+      .toolbar { display: none !important; }
+      body { padding: 0; background: white; }
+      .container { box-shadow: none; padding: 0; }
+      @page { margin: 10mm; size: portrait; }
+    }
+  </style>
+</head>
+<body>
+<div class="container">
+  <h2>異常價格清單 <span style="font-size:13px; font-weight:400; color:var(--text2);">（售價 < 成本）</span></h2>
+  <div class="toolbar">
+    <div>
+      <label style="font-size:12px; font-weight:700; color:var(--text2); display:block; margin-bottom:4px;">日期起</label>
+      <input type="date" id="dateFrom" style="padding:8px 12px; border:1px solid var(--border); border-radius:6px; font-size:13px;">
+    </div>
+    <div>
+      <label style="font-size:12px; font-weight:700; color:var(--text2); display:block; margin-bottom:4px;">日期訖</label>
+      <input type="date" id="dateTo" style="padding:8px 12px; border:1px solid var(--border); border-radius:6px; font-size:13px;">
+    </div>
+    <div style="display:flex; gap:8px; align-items:flex-end;">
+      <button class="btn" onclick="doQuery()" style="background:var(--accent); color:white;">🔍 查詢</button>
+      <button class="btn btn-print" onclick="window.print()">🖨️ 列印</button>
+    </div>
+    <span id="statusText" style="font-size:12px; color:var(--text2);"></span>
+  </div>
+  <div id="summaryArea"></div>
+  <div id="tableArea"><div class="empty">請選擇日期後點擊「查詢」</div></div>
+</div>
+
+<script>
+const SB_URL = 'https://asugjynpocwygggttxyo.supabase.co/rest/v1';
+const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFzdWdqeW5wb2N3eWdnZ3R0eHlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNzU3MjksImV4cCI6MjA4ODk1MTcyOX0.LzcRQAl80rZxKKD8NIYWGvylfwCbs1ek5LtKpmZodBc';
+let HEADERS = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' };
+
+window.addEventListener('DOMContentLoaded', () => {
+  const token = sessionStorage.getItem('sb_auth_token');
+  if (token) HEADERS['Authorization'] = 'Bearer ' + token;
+  const today = new Date();
+  const todayStr = `${today.getFullYear()}-${String(today.getMonth()+1).padStart(2,'0')}-${String(today.getDate()).padStart(2,'0')}`;
+  document.getElementById('dateFrom').value = '2026-03-01';
+  document.getElementById('dateTo').value = todayStr;
+});
+
+async function doQuery() {
+  const dateFrom = document.getElementById('dateFrom').value;
+  const dateTo = document.getElementById('dateTo').value;
+  if (!dateFrom || !dateTo) { alert('請選擇日期'); return; }
+
+  document.getElementById('summaryArea').innerHTML = '';
+  document.getElementById('tableArea').innerHTML = '<div class="empty">查詢中...</div>';
+  document.getElementById('statusText').textContent = '查詢中...';
+
+  try {
+    // 第一步：撈指定日期的 sales_orders
+    let orders = [], offset = 0;
+    while (true) {
+      const res = await fetch(`${SB_URL}/sales_orders?order_date=gte.${dateFrom}&order_date=lte.${dateTo}&order_type=eq.normal&select=id&limit=1000&offset=${offset}`, { headers: HEADERS });
+      if (!res.ok) throw new Error(await res.text());
+      const data = await res.json();
+      orders = orders.concat(data);
+      if (data.length < 1000) break;
+      offset += 1000;
+    }
+    if (orders.length === 0) {
+      document.getElementById('tableArea').innerHTML = '<div class="empty">此日期區間無銷貨單</div>';
+      document.getElementById('statusText').textContent = '查詢完成';
+      return;
+    }
+
+    // 第二步：用 order_id 撈 sales_details（分批 50 個）
+    const orderIds = orders.map(o => o.id);
+    let allDetails = [];
+    for (let i = 0; i < orderIds.length; i += 50) {
+      const batch = orderIds.slice(i, i + 50);
+      const idsParam = batch.map(id => `"${id}"`).join(',');
+      let detailOffset = 0;
+      while (true) {
+        const res = await fetch(`${SB_URL}/sales_details?order_id=in.(${idsParam})&unit_price=gt.0&select=order_id,product_id,product_name,unit_price,unit_cost,qty,subtotal&limit=1000&offset=${detailOffset}`, { headers: HEADERS });
+        if (!res.ok) throw new Error(await res.text());
+        const data = await res.json();
+        allDetails = allDetails.concat(data);
+        if (data.length < 1000) break;
+        detailOffset += 1000;
+      }
+    }
+
+    // 第二步：unit_cost = 0 的商品查 products.cost
+    const zeroCostIds = [...new Set(allDetails.filter(d => !d.unit_cost || d.unit_cost == 0).map(d => d.product_id).filter(Boolean))];
+    const productCostMap = {};
+    for (let i = 0; i < zeroCostIds.length; i += 50) {
+      const batch = zeroCostIds.slice(i, i + 50);
+      const idsParam = batch.map(id => `"${id}"`).join(',');
+      const res = await fetch(`${SB_URL}/products?id=in.(${idsParam})&select=id,cost`, { headers: HEADERS });
+      if (res.ok) {
+        const data = await res.json();
+        data.forEach(p => { productCostMap[p.id] = Number(p.cost) || 0; });
+      }
+    }
+
+    // 計算有效成本，篩選售價 < 成本
+    const abnormal = [];
+    allDetails.forEach(d => {
+      const unitPrice = Number(d.unit_price) || 0;
+      const uc = Number(d.unit_cost) || 0;
+      const effectiveCost = uc > 0 ? uc : (productCostMap[d.product_id] || 0);
+      if (effectiveCost <= 0) return; // 成本未知的不列入
+      if (unitPrice >= effectiveCost) return; // 正常的不列入
+      abnormal.push({
+        orderId: d.order_id,
+        productId: d.product_id,
+        productName: d.product_name || '',
+        qty: Number(d.qty) || 0,
+        unitPrice,
+        effectiveCost,
+        diff: Math.round(unitPrice - effectiveCost)
+      });
+    });
+
+    // 按差異升冪（差最多的在上面）
+    abnormal.sort((a, b) => a.diff - b.diff);
+
+    // 統計
+    const uniqueProducts = new Set(abnormal.map(a => a.productId)).size;
+    document.getElementById('summaryArea').innerHTML = `
+      <div class="summary">
+        <div class="summary-card">
+          <div class="label">異常筆數</div>
+          <div class="value red">${abnormal.length}</div>
+        </div>
+        <div class="summary-card">
+          <div class="label">涉及商品數</div>
+          <div class="value" style="color:var(--accent);">${uniqueProducts}</div>
+        </div>
+      </div>`;
+
+    // 表格
+    if (abnormal.length === 0) {
+      document.getElementById('tableArea').innerHTML = '<div class="empty">沒有異常價格的商品</div>';
+      document.getElementById('statusText').textContent = '查詢完成，無異常';
+      return;
+    }
+
+    let html = '<table><thead><tr>';
+    html += '<th>單號</th><th>商品編號</th><th>商品名稱</th>';
+    html += '<th class="text-right">數量</th><th class="text-right">售價</th>';
+    html += '<th class="text-right">成本</th><th class="text-right">差異</th>';
+    html += '<th>操作</th>';
+    html += '</tr></thead><tbody>';
+
+    abnormal.forEach(a => {
+      html += `<tr>
+        <td class="mono" style="font-size:11px;">${a.orderId}</td>
+        <td class="mono">${a.productId}</td>
+        <td>${a.productName}</td>
+        <td class="text-right">${a.qty}</td>
+        <td class="text-right" style="color:#2b6cb0;">$${a.unitPrice.toLocaleString()}</td>
+        <td class="text-right">$${a.effectiveCost.toLocaleString()}</td>
+        <td class="text-right bold red">$${a.diff.toLocaleString()}</td>
+        <td><button onclick="goEditProduct('${a.productId}')" style="padding:3px 10px; background:var(--accent); color:white; border:none; border-radius:4px; font-size:11px; cursor:pointer;">修改商品</button></td>
+      </tr>`;
+    });
+    html += '</tbody></table>';
+
+    document.getElementById('tableArea').innerHTML = html;
+    document.getElementById('statusText').textContent = `查詢完成，共 ${allDetails.length} 筆明細`;
+
+  } catch (e) {
+    document.getElementById('tableArea').innerHTML = `<div class="empty" style="color:var(--danger);">查詢失敗：${e.message}</div>`;
+    document.getElementById('statusText').textContent = '查詢失敗';
+  }
+}
+
+function goEditProduct(productId) {
+  sessionStorage.setItem('productListKeyword', productId);
+  if (window.parent && window.parent.loadPage) {
+    window.parent.loadPage('ProductList.html', '商品管理');
+  } else {
+    window.open('ProductList.html', '_blank');
+  }
+}
+</script>
+</body>
+</html>
