@@ -2468,7 +2468,7 @@ function buildArrivalLinkedSelect(currentName, currentId, idx, trackingNumber) {
   const options = getOrderTrackOptions();
   const listId = `adl_${idx}`;
   let html = `<input list="${listId}" value="${currentName || ''}" data-idx="${idx}" data-tn="${trackingNumber || ''}"
-    oninput="onArrivalLinkedChange(this)" onchange="onArrivalLinkedChange(this)" placeholder="搜尋商品..."
+    onchange="onArrivalLinkedChange(this)" placeholder="搜尋商品..."
     style="width:100%;font-size:12px;padding:4px 6px;border:none;background:transparent;outline:none;">`;
   html += `<datalist id="${listId}">`;
   options.forEach(o => {
@@ -2578,7 +2578,14 @@ function getLiveArrivalData(trackingNumber, seqIndex, row) {
   const pMatch = pMatches[seqIndex] || pMatches[0];
   const result = { product_name: '', product_id: '', qty: 0, unit_cost: 0, offer_id: '', selling_price: 0, category: '' };
   if (!pMatch) {
-    console.log('[到貨比對] 運單', trackingNumber, '→ 找不到匹配的所有訂單');
+    // 找不到採購紀錄時，用到貨清單自身的資料
+    if (row) {
+      result.product_name = row.product_name || '';
+      result.product_id = row.product_id || '';
+      result.selling_price = row.selling_price || 0;
+      result.qty = row.qty || 0;
+      result.unit_cost = row.unit_cost || 0;
+    }
     return result;
   }
   console.log('[到貨比對] 運單', trackingNumber, '→ 匹配訂單:', {
@@ -2608,7 +2615,9 @@ function getLiveArrivalData(trackingNumber, seqIndex, row) {
     result.product_id = otMatch.productId || '';
     result.selling_price = parseFloat(otMatch.price) || 0;
   }
-  if (!result.product_name) result.product_name = pMatch.product_name || '';
+  if (!result.product_name) result.product_name = (row && row.product_name) || pMatch.product_name || '';
+  if (!result.product_id && row && row.product_id) result.product_id = row.product_id;
+  if (!result.selling_price && row && row.selling_price) result.selling_price = row.selling_price;
   // 自動補寫 product_id 到 arrivalRows，讓自動儲存寫回 DB
   if (row && result.product_id && !row.product_id) {
     row.product_id = result.product_id;
