@@ -36,6 +36,8 @@
       .container { box-shadow: none; padding: 0; }
       @page { margin: 10mm; size: portrait; }
     }
+    table { position: relative; }
+    thead th { position: sticky; top: 0; z-index: 1; background: var(--surface2); }
   </style>
 </head>
 <body>
@@ -180,19 +182,6 @@ async function doQuery() {
     });
     noCostProducts.sort((a, b) => a.productId.localeCompare(b.productId));
 
-    // 查成本未填商品的 products 定價
-    const allNoCostIds = [...noCostSet];
-    const productPriceMap = {};
-    for (let i = 0; i < allNoCostIds.length; i += 50) {
-      const batch = allNoCostIds.slice(i, i + 50);
-      const idsParam = batch.map(id => `"${id}"`).join(',');
-      const res = await fetch(`${SB_URL}/products?id=in.(${idsParam})&select=id,price_branch`, { headers: HEADERS });
-      if (res.ok) {
-        const data = await res.json();
-        data.forEach(p => { productPriceMap[p.id] = Number(p.price_branch) || 0; });
-      }
-    }
-
     // 統計
     const uniqueProducts = new Set(abnormal.map(a => a.productId)).size;
     document.getElementById('summaryArea').innerHTML = `
@@ -245,18 +234,17 @@ async function doQuery() {
       document.getElementById('noCostArea').innerHTML = '<div class="empty">所有商品都有成本資料</div>';
     } else {
       let html2 = '<table><thead><tr>';
-      html2 += '<th>商品編號</th><th>商品名稱</th><th class="text-right">開單售價</th><th class="text-right">商品定價</th><th>銷貨單號</th><th>操作</th>';
+      html2 += '<th>商品編號</th><th>商品名稱</th><th class="text-right">開單售價</th><th>銷貨單號</th><th>操作</th>';
       html2 += '</tr></thead><tbody>';
       noCostProducts.forEach(p => {
-        const catalogPrice = productPriceMap[p.productId] || 0;
-        const priceMismatch = catalogPrice > 0 && catalogPrice !== p.unitPrice;
-        const priceStyle = priceMismatch ? 'color:#b45309; font-weight:700;' : '';
+        const orderLinks = p.orderIds.map(id =>
+          `<a href="#" onclick="event.preventDefault(); goToOrder('${id}')" style="color:#2563eb; margin-right:4px;">${id}</a>`
+        ).join(' ');
         html2 += `<tr>
           <td class="mono">${p.productId}</td>
           <td>${p.productName}</td>
           <td class="text-right" style="color:#2b6cb0;">$${p.unitPrice.toLocaleString()}</td>
-          <td class="text-right" style="${priceStyle}">${catalogPrice > 0 ? '$' + catalogPrice.toLocaleString() : '<span style="color:#c53030;">未設定</span>'}</td>
-          <td style="font-size:11px; color:var(--text2); max-width:200px; word-break:break-all;">${p.orderIds.join('、')}</td>
+          <td style="font-size:11px; max-width:200px; word-break:break-all;">${orderLinks}</td>
           <td><button onclick="editProductCost('${p.productId}', '${p.productName.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', ${p.unitPrice})" style="padding:3px 10px; background:var(--warning); color:white; border:none; border-radius:4px; font-size:11px; cursor:pointer;">填成本</button></td>
         </tr>`;
       });
@@ -278,6 +266,15 @@ function goEditProduct(productId) {
     window.parent.loadPage('ProductList.html', '商品管理');
   } else {
     window.open('ProductList.html', '_blank');
+  }
+}
+
+function goToOrder(orderId) {
+  sessionStorage.setItem('searchSalesKeyword', orderId);
+  if (window.parent && window.parent.loadPage) {
+    window.parent.loadPage('SearchSales.html', '查詢銷貨單');
+  } else {
+    window.open('SearchSales.html', '_blank');
   }
 }
 
