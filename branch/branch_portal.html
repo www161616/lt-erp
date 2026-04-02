@@ -911,6 +911,7 @@
               <button style="padding:6px 14px; background:var(--accent); color:white; border:none; border-radius:6px; font-size:13px; cursor:pointer; font-weight:600; font-family:inherit;" onclick="openAddInventoryItem()">＋ 新增商品</button>
               <button style="padding:6px 14px; background:#2b6cb0; color:white; border:none; border-radius:6px; font-size:13px; cursor:pointer; font-weight:600; font-family:inherit;" onclick="downloadInventoryTemplate()">📥 下載範本</button>
               <button style="padding:6px 14px; background:#047857; color:white; border:none; border-radius:6px; font-size:13px; cursor:pointer; font-weight:600; font-family:inherit;" onclick="document.getElementById('inventoryImportInput').click()">📤 匯入盤點</button>
+              <button onclick="importFromSalesOrders()" style="padding:6px 14px; background:#0e7490; color:white; border:none; border-radius:6px; font-size:13px; cursor:pointer; font-weight:600; font-family:inherit;">📦 補匯進貨單庫存</button>
               <input type="file" id="inventoryImportInput" accept=".xlsx,.xls,.csv" style="display:none" onchange="handleInventoryImport(this)">
             </div>
           </div>
@@ -8105,6 +8106,105 @@ function renderSalesHistory() {
   }).join('');
 
   area.innerHTML = html;
+}
+
+// ============================
+// 📦 補匯進貨單庫存
+// ============================
+async function importFromSalesOrders() {
+  const { value: fromDate } = await Swal.fire({
+    title: '補匯進貨單庫存',
+    html: `<div style="text-align:left; font-size:13px; margin-bottom:8px; color:#64748b;">
+      將把指定日期之後的進貨單數量加入庫存<br>
+      <span style="color:#c53030;">⚠️ 請確認期初庫存是此日期之前的盤點數量</span>
+    </div>
+    <label style="font-size:12px; font-weight:700; color:#64748b;">起始日期（含）</label>
+    <input type="date" id="importFromDate" value="2026-03-15"
+      style="width:100%; padding:8px; border:1px solid #e2e8f0; border-radius:6px; font-size:14px; margin-top:4px;">`,
+    showCancelButton: true,
+    confirmButtonText: '確認匯入',
+    cancelButtonText: '取消',
+    confirmButtonColor: '#0e7490',
+    preConfirm: () => {
+      const d = document.getElementById('importFromDate').value;
+      if (!d) { Swal.showValidationMessage('請選擇起始日期'); return false; }
+      return d;
+    }
+  });
+  if (!fromDate) return;
+
+  const allSO = JSON.parse(localStorage.getItem('portalSalesOrders') || '[]');
+  const myOrders = allSO.filter(o =>
+    o.storeName === currentStore?.name &&
+    o.createdAt && o.createdAt.replace(/\//g, '-').substring(0, 10) >= fromDate
+  );
+
+  if (myOrders.length === 0) {
+    Swal.fire('無資料', `${fromDate} 之後沒有進貨單`, 'info');
+    return;
+  }
+
+  const addMap = {};
+  myOrders.forEach(order => {
+    (order.items || []).forEach(item => {
+      const code = (item.productId || '').replace(/_.*$/, '').trim();
+      const name = item.name || '';
+      const qty = parseInt(item.qty) || 0;
+      if (!code || qty <= 0) return;
+      if (!addMap[code]) addMap[code] = { name, qty: 0 };
+      addMap[code].qty += qty;
+    });
+  });
+
+  const addList = Object.entries(addMap);
+  if (addList.length === 0) {
+    Swal.fire('無商品', '進貨單裡沒有商品資料', 'info');
+    return;
+  }
+
+  const totalQty = addList.reduce((s, [, v]) => s + v.qty, 0);
+  const confirmResult = await Swal.fire({
+    title: '確認補匯庫存？',
+    html: `共 <b>${myOrders.length}</b> 張進貨單，<b>${addList.length}</b> 個品項，<b>${totalQty}</b> 件<br>
+      <span style="font-size:12px; color:#64748b;">將加入現有庫存數量（不會覆蓋）</span>
+      <br><span style="color:#c53030; font-weight:700;">⚠️ 此操作不可重複執行！重複按會重複加庫存。</span>`,
+    icon: 'question',
+    showCancelButton: true,
+    confirmButtonText: '確認',
+    cancelButtonText: '取消',
+    confirmButtonColor: '#0e7490'
+  });
+  if (!confirmResult.isConfirmed) return;
+
+  const inv = getInventory();
+  const invMap = {};
+  inv.forEach((item, idx) => { if (item.code) invMap[item.code] = idx; });
+  const now = new Date();
+  const ts = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
+
+  let added = 0, updated = 0;
+  addList.forEach(([code, { name, qty }]) => {
+    if (invMap[code] !== undefined) {
+      inv[invMap[code]].qty += qty;
+      inv[invMap[code]].lastUpdated = ts;
+      updated++;
+    } else {
+      inv.push({ code, name, qty, lastUpdated: ts });
+      invMap[code] = inv.length - 1;
+      added++;
+    }
+  });
+
+  saveInventory(inv);
+  renderInventory();
+
+  Swal.fire({
+    icon: 'success',
+    title: '補匯完成',
+    html: `更新 <b>${updated}</b> 個商品，新增 <b>${added}</b> 個商品<br>共加入 <b>${totalQty}</b> 件`,
+    timer: 3000,
+    showConfirmButton: true
+  });
 }
 
 // ============================
