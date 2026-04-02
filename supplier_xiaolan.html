@@ -2468,7 +2468,7 @@ function buildArrivalLinkedSelect(currentName, currentId, idx, trackingNumber) {
   const options = getOrderTrackOptions();
   const listId = `adl_${idx}`;
   let html = `<input list="${listId}" value="${currentName || ''}" data-idx="${idx}" data-tn="${trackingNumber || ''}"
-    onchange="onArrivalLinkedChange(this)" placeholder="搜尋商品..."
+    oninput="onArrivalLinkedInput(this)" onchange="onArrivalLinkedInput(this)" placeholder="搜尋商品..."
     style="width:100%;font-size:12px;padding:4px 6px;border:none;background:transparent;outline:none;">`;
   html += `<datalist id="${listId}">`;
   options.forEach(o => {
@@ -2480,6 +2480,19 @@ function buildArrivalLinkedSelect(currentName, currentId, idx, trackingNumber) {
 }
 
 // 到貨清單選了商品 → 反向回寫所有訂單的 linked_product
+function onArrivalLinkedInput(input) {
+  // 只在值完全匹配到選項時才處理（代表使用者點了 datalist 選項，不是還在打字）
+  const val = input.value.trim();
+  if (!val) return;
+  const options = getOrderTrackOptions();
+  const isMatch = options.some(o => {
+    const label = (o.productId ? o.productId + ' ' : '') + (o.name || '');
+    return label === val || o.name === val || (o.productId && val.startsWith(o.productId));
+  });
+  if (!isMatch) return;
+  onArrivalLinkedChange(input);
+}
+
 function onArrivalLinkedChange(input) {
   const idx = input.dataset.idx;
   const tn = input.dataset.tn;
@@ -3385,6 +3398,7 @@ function renderProcurement() {
     <th style="width:50px;padding:6px;border:1px solid #e2e8f0;text-align:center;">叫貨量</th>
     <th style="width:50px;padding:6px;border:1px solid #e2e8f0;text-align:right;">售價</th>
     <th style="width:45px;padding:6px;border:1px solid #e2e8f0;text-align:center;">下單</th>
+    <th style="width:120px;padding:6px;border:1px solid #e2e8f0;text-align:center;">1688連結</th>
     <th style="border-left:3px solid #2b6cb0;width:75px;padding:6px;border-top:1px solid #e2e8f0;border-bottom:1px solid #e2e8f0;border-right:1px solid #e2e8f0;background:#f0f7ff;">訂單日</th>
     <th style="width:60px;padding:6px;border:1px solid #e2e8f0;background:#f0f7ff;text-align:right;">付款RMB</th>
     <th style="width:45px;padding:6px;border:1px solid #e2e8f0;background:#f0f7ff;text-align:center;">數量</th>
@@ -3425,6 +3439,7 @@ function renderProcurement() {
       html += `<td style="${tdL}text-align:center;font-weight:700;color:${(item.orderQty||0)>0?'#c53030':'#047857'};">${item.orderQty != null ? item.orderQty : item.totalQty || 0}</td>`;
       html += `<td style="${tdL}text-align:right;">${item.price ? '$' + Number(item.price).toLocaleString() : ''}</td>`;
       html += `<td style="${tdL}text-align:center;">${orderLink}</td>`;
+      html += `<td style="${tdL}text-align:center;">${buildOtUrlCell(pid, item.url)}</td>`;
 
       if (lp) {
         html += `<td style="${tdR}font-size:11px;">${lp.order_date || ''}</td>`;
@@ -3456,6 +3471,7 @@ function renderProcurement() {
           html += `<td style="${tdL}text-align:center;font-weight:700;color:${(item.orderQty||0)>0?'#c53030':'#047857'};" rowspan="${purchases.length}">${item.orderQty != null ? item.orderQty : item.totalQty || 0}</td>`;
           html += `<td style="${tdL}text-align:right;" rowspan="${purchases.length}">${item.price ? '$' + Number(item.price).toLocaleString() : ''}</td>`;
           html += `<td style="${tdL}text-align:center;" rowspan="${purchases.length}">${orderLink}</td>`;
+          html += `<td style="${tdL}text-align:center;" rowspan="${purchases.length}">${buildOtUrlCell(pid, item.url)}</td>`;
         }
         html += `<td style="${pi2===0?tdR:tdRn}font-size:11px;">${p.order_date || ''}</td>`;
         html += `<td style="${tdRn}text-align:right;font-size:11px;">¥${(p.payment_rmb||0).toFixed(1)}</td>`;
@@ -3473,7 +3489,7 @@ function renderProcurement() {
   });
 
   if (data.length === 0) {
-    html += `<tr><td colspan="14" style="text-align:center;padding:40px;color:#718096;">沒有開團商品資料（需先在調度中心同步）</td></tr>`;
+    html += `<tr><td colspan="15" style="text-align:center;padding:40px;color:#718096;">沒有開團商品資料（需先在調度中心同步）</td></tr>`;
   }
 
   // 未配對的團購採購紀錄
@@ -3483,6 +3499,36 @@ function renderProcurement() {
 
   html += '</tbody></table>';
   document.getElementById('procBody').innerHTML = html;
+}
+
+function buildOtUrlCell(pid, url) {
+  if (url) {
+    const oid = extractOfferId(url);
+    return `<span class="shared-link" data-url="${url}" style="color:#2b6cb0;cursor:pointer;text-decoration:underline;font-size:11px;" title="${url}">${oid || '前往'}</span>
+      <span onclick="this.nextElementSibling.style.display='inline';this.style.display='none';" style="cursor:pointer;font-size:10px;margin-left:3px;color:#a0aec0;" title="編輯">✏️</span>
+      <input type="text" value="${url}" data-pid="${pid}" onblur="onOtUrlChange(this)" style="display:none;width:100px;font-size:11px;padding:2px 4px;border:1px solid #e2e8f0;border-radius:3px;">`;
+  }
+  return `<input type="text" placeholder="貼上連結" data-pid="${pid}" onblur="onOtUrlChange(this)" style="width:100px;font-size:11px;padding:2px 4px;border:1px solid #e2e8f0;border-radius:3px;">`;
+}
+
+async function onOtUrlChange(input) {
+  const pid = input.dataset.pid;
+  if (!pid) return;
+  const url = input.value.trim();
+  try {
+    const res = await fetch(`${SB_URL}/xiaolan_order_tracking?product_id=eq.${encodeURIComponent(pid)}`, {
+      method: 'PATCH',
+      headers: JSON_H,
+      body: JSON.stringify({ url: url, updated_at: new Date().toISOString() })
+    });
+    if (!res.ok) throw new Error(await res.text());
+    // 更新本地資料
+    const ot = orderTrackData.find(o => o.productId === pid);
+    if (ot) ot.url = url;
+    renderProcurement();
+  } catch (err) {
+    Swal.fire('儲存失敗', err.message, 'error');
+  }
 }
 
 function buildProcPagination(total, totalPages) {
