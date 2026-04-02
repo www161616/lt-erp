@@ -322,6 +322,16 @@
       <input type="date" id="dateTo">
     </div>
     <button class="btn btn-search" onclick="analyze()">📊 開始分析</button>
+    <div class="input-group">
+      <label>類別</label>
+      <select id="catFilter" onchange="filterDisplay()" style="padding:8px; border:1px solid #e2e8f0; border-radius:6px; font-size:14px; min-width:120px;">
+        <option value="">全部類別</option>
+      </select>
+    </div>
+    <div class="input-group">
+      <label>搜尋</label>
+      <input type="text" id="kwFilter" placeholder="商品名稱/編號..." oninput="filterDisplay()" style="padding:8px; border:1px solid #e2e8f0; border-radius:6px; font-size:14px; min-width:160px;">
+    </div>
   </div>
 
   <!-- 摘要列 -->
@@ -441,6 +451,25 @@
 
   // ========== 4. 渲染結果 (保留原版優美 UI) ==========
   function display(data) {
+    // 填充類別下拉（只在有新資料時）
+    const cats = [...new Set(data.map(d => d.category).filter(Boolean))].sort();
+    const catSel = document.getElementById('catFilter');
+    const prevCat = catSel.value;
+    catSel.innerHTML = '<option value="">全部類別</option>' + cats.map(c => `<option value="${c}">${c}</option>`).join('');
+    catSel.value = prevCat;
+    document.getElementById('kwFilter').value = '';
+
+    currentData = data;
+    filterDisplay();
+  }
+
+  function filterDisplay() {
+    const cat = document.getElementById('catFilter')?.value || '';
+    const kw = (document.getElementById('kwFilter')?.value || '').trim().toLowerCase();
+    let data = currentData;
+    if (cat) data = data.filter(d => d.category === cat);
+    if (kw) data = data.filter(d => (d.productName || '').toLowerCase().includes(kw) || (d.productId || '').toLowerCase().includes(kw));
+
     if (data.length === 0) {
       document.getElementById('resultList').innerHTML =
         '<p style="text-align:center;padding:30px;color:var(--text2);">查無資料</p>';
