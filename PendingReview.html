@@ -860,7 +860,8 @@
       return;
     }
 
-    list.innerHTML = data.map((g, gi) => {
+    list.innerHTML = data.map((g) => {
+      const gi = supplierViewData.indexOf(g);
       const totalAmt = g.items.reduce((s, it) => s + it.subtotal, 0);
       const isUnknown = g.supplier === '未指定供應商';
       const headerBg = isUnknown ? '#fef3c7' : '#d1fae5';
