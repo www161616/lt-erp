@@ -1410,8 +1410,9 @@ function importOfferIds(e) {
       const toUpdate = [];
       purchaseRows.forEach(r => {
         if (r.offer_id) return; // 已有的不覆蓋
-        const match = excelMap[r.order_number] ||
-          Object.entries(excelMap).find(([k]) => k.endsWith(r.order_number) || r.order_number.endsWith(k))?.[1];
+        const on = r.order_number || '';
+        const match = excelMap[on] ||
+          (on && Object.entries(excelMap).find(([k]) => k.endsWith(on) || on.endsWith(k))?.[1]);
         if (match) {
           r.offer_id = match.offer_id;
           if (!r.tracking_number && match.tracking_number) r.tracking_number = match.tracking_number;
