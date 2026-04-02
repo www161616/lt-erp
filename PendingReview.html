@@ -802,9 +802,8 @@
       const groups = {};
       details.forEach(d => {
         const ord = orderMap[d.order_id] || {};
-        // supplier 優先取 detail 的，fallback 取主單的
+        // supplier 只取 detail 的，空的歸「未指定供應商」
         let supp = (d.supplier || '').trim();
-        if (!supp) supp = (ord.supplier_name || '').trim();
         if (!supp) supp = '未指定供應商';
         if (!groups[supp]) groups[supp] = [];
         groups[supp].push({
