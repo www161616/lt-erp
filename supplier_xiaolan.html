@@ -1185,13 +1185,28 @@ function openPasteDialog() {
         ...newPurchaseRows.map(r => r.order_number).filter(Boolean)
       ]);
 
-      let skipped = 0;
+      // 建立 offer_id → 開團商品 索引（匯入時即時配對用）
+      const otItems = getOrderTrackOptions();
+      const importOfferIndex = {};
+      otItems.forEach(ot => {
+        const oid = extractOfferId(ot.url) || extractOfferId(OT_ORDER_URLS[ot.productId]);
+        if (oid) {
+          if (!importOfferIndex[oid]) importOfferIndex[oid] = [];
+          importOfferIndex[oid].push(ot);
+        }
+      });
+
+      let skipped = 0, autoMatched = 0;
+      const matchDetails = [];
       items.forEach(item => {
         const orderNum = (item.order_number || '').trim();
         if (orderNum && existingOrderNumbers.has(orderNum)) {
           skipped++;
           return;
         }
+        const offerId = item.offer_id || '';
+        const otMatch = offerId && importOfferIndex[offerId] ? importOfferIndex[offerId][0] : null;
+
         const row = {
           order_date: item.order_date || '',
           order_number: item.order_number || '',
@@ -1200,13 +1215,13 @@ function openPasteDialog() {
           payment_rmb: parseFloat(item.payment_rmb) || 0,
           qty: parseInt(item.qty) || 0,
           weight_kg: parseFloat(item.weight_kg) || 0,
-          selling_price: parseFloat(item.selling_price) || 0,
-          category: _smartImportCategory,
+          selling_price: otMatch ? (parseFloat(otMatch.price) || parseFloat(item.selling_price) || 0) : (parseFloat(item.selling_price) || 0),
+          category: otMatch ? '團購' : _smartImportCategory,
           source: item.source || '1688',
           seller: item.seller || '',
-          offer_id: item.offer_id || '',
+          offer_id: offerId,
           note: item.note || '',
-          linked_product: '',
+          linked_product: otMatch ? (otMatch.productId || '') : '',
           total_twd: 0, unit_cost: 0,
           used_rate: getRate(), used_ship: getShip()
         };
@@ -1214,18 +1229,48 @@ function openPasteDialog() {
         newPurchaseRows.push(row);
         if (orderNum) existingOrderNumbers.add(orderNum);
         imported++;
+
+        if (otMatch) {
+          autoMatched++;
+          matchDetails.push({ srcName: item.product_name || '', pid: otMatch.productId || '', otName: otMatch.name || '' });
+        }
       });
       pPage = 1;
       renderPurchaseGrid();
       // 直接存入 DB
       await savePurchases(false);
-      // 自動配對開團商品
-      const matchResult = autoMatchPurchases(true);
-      if (matchResult.matched > 0) {
-        showAutoMatchResult(matchResult);
-      } else {
-        Swal.fire({ icon: 'success', title: `已匯入 ${imported} 筆${skipped > 0 ? `，略過重複 ${skipped} 筆` : ''}，已存入資料庫`, timer: 2000, showConfirmButton: false });
+
+      // 顯示匯入結果（含配對統計）
+      const unmatched = imported - autoMatched;
+      let resultHtml = `<div style="text-align:left;font-size:13px;">`;
+      resultHtml += `<p>已匯入 <b>${imported}</b> 筆${skipped > 0 ? `，略過重複 <b>${skipped}</b> 筆` : ''}，已存入資料庫</p>`;
+      if (autoMatched > 0) {
+        resultHtml += `<p style="color:#276749;">✅ 自動配對 <b>${autoMatched}</b> 筆（團購）</p>`;
       }
+      if (unmatched > 0) {
+        resultHtml += `<p style="color:#b7791f;">❌ 未配對 <b>${unmatched}</b> 筆（需手動確認用途）</p>`;
+      }
+      if (matchDetails.length > 0 && matchDetails.length <= 30) {
+        resultHtml += `<div style="max-height:250px;overflow:auto;border:1px solid #e2e8f0;border-radius:6px;margin-top:8px;">`;
+        resultHtml += `<table style="width:100%;border-collapse:collapse;font-size:11px;">`;
+        resultHtml += `<tr style="background:#f0fdf4;position:sticky;top:0;"><th style="padding:4px 6px;text-align:left;border-bottom:1px solid #e2e8f0;">1688商品</th><th style="padding:4px 6px;text-align:center;">→</th><th style="padding:4px 6px;text-align:left;border-bottom:1px solid #e2e8f0;">開團商品</th></tr>`;
+        matchDetails.forEach(d => {
+          resultHtml += `<tr style="border-bottom:1px solid #f0f0f0;">`;
+          resultHtml += `<td style="padding:3px 6px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${esc(d.srcName)}">${esc((d.srcName || '').slice(0, 25))}</td>`;
+          resultHtml += `<td style="padding:3px;text-align:center;color:#a0aec0;">→</td>`;
+          resultHtml += `<td style="padding:3px 6px;"><b style="color:#2b6cb0;">${d.pid}</b> ${esc(d.otName)}</td>`;
+          resultHtml += `</tr>`;
+        });
+        resultHtml += `</table></div>`;
+      }
+      resultHtml += `</div>`;
+      Swal.fire({
+        icon: autoMatched > 0 ? 'success' : 'info',
+        title: '匯入完成',
+        html: resultHtml,
+        width: autoMatched > 0 ? '650px' : undefined,
+        confirmButtonText: '確認'
+      });
     }
   });
 }
