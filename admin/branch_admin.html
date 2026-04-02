@@ -11536,7 +11536,11 @@
     if (date) data = data.filter(r => (r.end_date || '') === date);
     else if (month) data = data.filter(r => (r.end_date || '').startsWith(month));
     if (kw) data = data.filter(r => (r.product_id||'').toLowerCase().includes(kw) || (r.product_name||'').toLowerCase().includes(kw));
-    data.sort((a,b) => (b.end_date||'').localeCompare(a.end_date||''));
+    data.sort((a,b) => {
+      const nameCompare = (a.product_name||'').localeCompare(b.product_name||'', 'zh-TW');
+      if (nameCompare !== 0) return nameCompare;
+      return (b.end_date||'').localeCompare(a.end_date||'');
+    });
     return data;
   }
 
