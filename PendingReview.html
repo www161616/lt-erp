@@ -95,12 +95,20 @@
   <div class="content-area">
     <div class="tab-content active" id="tabPurchase">
       <div class="summary-bar" id="purchaseSummary"></div>
+      <div style="padding:0 18px 8px;">
+        <input type="text" id="purchaseSearchInput" placeholder="搜尋廠商名稱..." oninput="filterPurchaseList()"
+          style="width:100%; padding:8px 12px; border:1px solid #e2e8f0; border-radius:6px; font-size:13px; font-family:inherit;">
+      </div>
       <div class="list-scroll" id="purchaseList">
         <div class="empty-state">載入中...</div>
       </div>
     </div>
     <div class="tab-content" id="tabSupplier">
       <div class="summary-bar" id="supplierSummary"></div>
+      <div style="padding:0 18px 8px;">
+        <input type="text" id="supplierSearchInput" placeholder="搜尋廠商或商品名稱/編號..." oninput="filterSupplierCards()"
+          style="width:100%; padding:8px 12px; border:1px solid #e2e8f0; border-radius:6px; font-size:13px; font-family:inherit;">
+      </div>
       <div class="list-scroll" id="supplierList">
         <div class="empty-state">載入中...</div>
       </div>
@@ -137,6 +145,10 @@
     el.classList.add('active');
     const tabMap = { purchase: 'tabPurchase', supplier: 'tabSupplier' };
     document.getElementById(tabMap[tab]).classList.add('active');
+    const pi = document.getElementById('purchaseSearchInput');
+    const si = document.getElementById('supplierSearchInput');
+    if (pi) pi.value = '';
+    if (si) si.value = '';
     if (tab === 'supplier') loadSupplierView();
   }
 
@@ -449,7 +461,8 @@
     }
   }
 
-  function renderPurchaseList() {
+  function renderPurchaseList(data) {
+    data = data || pendingPurchaseOrders;
     const badge = document.getElementById('badgePurchase');
     badge.textContent = pendingPurchaseOrders.length;
 
@@ -461,14 +474,14 @@
     `;
 
     const list = document.getElementById('purchaseList');
-    if (pendingPurchaseOrders.length === 0) {
+    if (data.length === 0) {
       list.innerHTML = '<div class="empty-state">🎉 目前沒有待審進貨單</div>';
       return;
     }
 
     list.innerHTML = `<div style="background:#fef3c7; border:1px solid #fde68a; border-radius:8px; padding:10px 16px; margin:12px 18px 12px; font-size:13px; color:#92400e; display:flex; align-items:center; gap:8px;">
       ⚠️ 請至「依廠商到貨」tab 依廠商分批確認到貨並轉入正式進貨單
-    </div>` + pendingPurchaseOrders.map(o => {
+    </div>` + data.map(o => {
       const amount = Number(o.grand_total || o.subtotal || 0);
       const statusText = o.status === '部分到貨' ? '部分到貨' : '待審核';
       const statusStyle = o.status === '部分到貨' ? 'background:#dbeafe; color:#1e40af;' : '';
@@ -839,14 +852,15 @@
     }
   }
 
-  function renderSupplierCards() {
+  function renderSupplierCards(data) {
+    data = data || supplierViewData;
     const list = document.getElementById('supplierList');
-    if (supplierViewData.length === 0) {
+    if (data.length === 0) {
       list.innerHTML = '<div class="empty-state">🎉 目前沒有待到貨的採購品項</div>';
       return;
     }
 
-    list.innerHTML = supplierViewData.map((g, gi) => {
+    list.innerHTML = data.map((g, gi) => {
       const totalAmt = g.items.reduce((s, it) => s + it.subtotal, 0);
       const isUnknown = g.supplier === '未指定供應商';
       const headerBg = isUnknown ? '#fef3c7' : '#d1fae5';
@@ -1033,6 +1047,28 @@
   // ============================
   // 頁面初始化
   // ============================
+  function filterPurchaseList() {
+    const kw = (document.getElementById('purchaseSearchInput')?.value || '').trim().toLowerCase();
+    const filtered = kw
+      ? pendingPurchaseOrders.filter(o => (o.supplier_name || '').toLowerCase().includes(kw) || (o.id || '').toLowerCase().includes(kw))
+      : pendingPurchaseOrders;
+    renderPurchaseList(filtered);
+  }
+
+  function filterSupplierCards() {
+    const kw = (document.getElementById('supplierSearchInput')?.value || '').trim().toLowerCase();
+    const filtered = kw
+      ? supplierViewData.filter(s =>
+          (s.supplier || '').toLowerCase().includes(kw) ||
+          (s.items || []).some(item =>
+            (item.productId || '').toLowerCase().includes(kw) ||
+            (item.productName || '').toLowerCase().includes(kw)
+          )
+        )
+      : supplierViewData;
+    renderSupplierCards(filtered);
+  }
+
   window.onload = function() {
     loadAllPending();
   };
