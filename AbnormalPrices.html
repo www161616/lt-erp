@@ -155,22 +155,43 @@ async function doQuery() {
     // 按差異升冪（差最多的在上面）
     abnormal.sort((a, b) => a.diff - b.diff);
 
-    // 收集成本未填商品
+    // 收集成本未填商品（按商品分組，記錄所有銷貨單號）
     const noCostProducts = [];
     const noCostSet = new Set();
     allDetails.forEach(d => {
       const uc = Number(d.unit_cost) || 0;
       const pc = productCostMap[d.product_id] || 0;
-      if (uc === 0 && pc === 0 && d.product_id && !noCostSet.has(d.product_id)) {
-        noCostSet.add(d.product_id);
-        noCostProducts.push({
-          productId: d.product_id,
-          productName: d.product_name || '',
-          unitPrice: Number(d.unit_price) || 0
-        });
+      if (uc === 0 && pc === 0 && d.product_id) {
+        if (!noCostSet.has(d.product_id)) {
+          noCostSet.add(d.product_id);
+          noCostProducts.push({
+            productId: d.product_id,
+            productName: d.product_name || '',
+            unitPrice: Number(d.unit_price) || 0,
+            orderIds: [d.order_id]
+          });
+        } else {
+          const existing = noCostProducts.find(p => p.productId === d.product_id);
+          if (existing && !existing.orderIds.includes(d.order_id)) {
+            existing.orderIds.push(d.order_id);
+          }
+        }
       }
     });
     noCostProducts.sort((a, b) => a.productId.localeCompare(b.productId));
+
+    // 查成本未填商品的 products 定價
+    const allNoCostIds = [...noCostSet];
+    const productPriceMap = {};
+    for (let i = 0; i < allNoCostIds.length; i += 50) {
+      const batch = allNoCostIds.slice(i, i + 50);
+      const idsParam = batch.map(id => `"${id}"`).join(',');
+      const res = await fetch(`${SB_URL}/products?id=in.(${idsParam})&select=id,price_branch`, { headers: HEADERS });
+      if (res.ok) {
+        const data = await res.json();
+        data.forEach(p => { productPriceMap[p.id] = Number(p.price_branch) || 0; });
+      }
+    }
 
     // 統計
     const uniqueProducts = new Set(abnormal.map(a => a.productId)).size;
@@ -224,13 +245,18 @@ async function doQuery() {
       document.getElementById('noCostArea').innerHTML = '<div class="empty">所有商品都有成本資料</div>';
     } else {
       let html2 = '<table><thead><tr>';
-      html2 += '<th>商品編號</th><th>商品名稱</th><th class="text-right">售價</th><th>操作</th>';
+      html2 += '<th>商品編號</th><th>商品名稱</th><th class="text-right">開單售價</th><th class="text-right">商品定價</th><th>銷貨單號</th><th>操作</th>';
       html2 += '</tr></thead><tbody>';
       noCostProducts.forEach(p => {
+        const catalogPrice = productPriceMap[p.productId] || 0;
+        const priceMismatch = catalogPrice > 0 && catalogPrice !== p.unitPrice;
+        const priceStyle = priceMismatch ? 'color:#b45309; font-weight:700;' : '';
         html2 += `<tr>
           <td class="mono">${p.productId}</td>
           <td>${p.productName}</td>
           <td class="text-right" style="color:#2b6cb0;">$${p.unitPrice.toLocaleString()}</td>
+          <td class="text-right" style="${priceStyle}">${catalogPrice > 0 ? '$' + catalogPrice.toLocaleString() : '<span style="color:#c53030;">未設定</span>'}</td>
+          <td style="font-size:11px; color:var(--text2); max-width:200px; word-break:break-all;">${p.orderIds.join('、')}</td>
           <td><button onclick="editProductCost('${p.productId}', '${p.productName.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', ${p.unitPrice})" style="padding:3px 10px; background:var(--warning); color:white; border:none; border-radius:4px; font-size:11px; cursor:pointer;">填成本</button></td>
         </tr>`;
       });
