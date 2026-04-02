@@ -219,7 +219,7 @@ async function doQuery() {
     html += '<th>商品編號</th><th>商品名稱</th>';
     html += '<th class="text-right">數量</th><th class="text-right">售價</th>';
     html += '<th class="text-right">成本</th><th class="text-right">售價-成本</th>';
-    html += '<th class="text-right">合計</th>';
+    html += '<th class="text-right">成本合計</th><th class="text-right">利潤合計</th>';
     html += '</tr></thead><tbody>';
 
     rows.forEach((r, ri) => {
@@ -229,6 +229,9 @@ async function doQuery() {
         const borderTop = ri > 0 && isFirst ? 'border-top:2px solid #cbd5e1;' : '';
         const priceDiff = Math.round(pr.unitPrice - r.unitCost);
         const diffColor = priceDiff >= 0 ? 'var(--success)' : 'var(--danger)';
+        const costTotal = Math.round(r.unitCost * pr.qty);
+        const profitTotal = Math.round(priceDiff * pr.qty);
+        const profitColor = profitTotal >= 0 ? 'var(--success)' : 'var(--danger)';
         html += `<tr style="${borderTop}">
           <td class="mono">${isFirst ? r.product_id : ''}</td>
           <td>${isFirst ? r.product_name : ''}</td>
@@ -236,7 +239,8 @@ async function doQuery() {
           <td class="text-right" style="color:#2b6cb0;">$${Math.round(pr.unitPrice).toLocaleString()}</td>
           <td class="text-right">${costDisplay}</td>
           <td class="text-right bold" style="color:${diffColor};">$${priceDiff.toLocaleString()}</td>
-          <td class="text-right bold">$${pr.subtotal.toLocaleString()}</td>
+          <td class="text-right">$${costTotal.toLocaleString()}</td>
+          <td class="text-right bold" style="color:${profitColor};">$${profitTotal.toLocaleString()}</td>
         </tr>`;
       });
     });
@@ -247,8 +251,9 @@ async function doQuery() {
       <td></td>
       <td class="text-right">${totalQty.toLocaleString()}</td>
       <td></td>
-      <td class="text-right">$${totalCost.toLocaleString()}</td>
       <td></td>
+      <td></td>
+      <td class="text-right">$${totalCost.toLocaleString()}</td>
       <td class="text-right ${totalProfit >= 0 ? 'green' : 'red'}">$${totalProfit.toLocaleString()}</td>
     </tr>`;
     html += '</tbody></table>';
