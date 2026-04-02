@@ -11516,14 +11516,27 @@
 
   function gbEsc(v) { return (v || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
+  let gbCostMap = {}; // product_id → unit_cost（從陸貨到貨清單取最新）
+
   async function renderGBOrder() {
     const container = document.getElementById('mainContainer');
     container.innerHTML = '<div class="panel"><p>載入中...</p></div>';
     // 從 DB 讀取
     try {
-      const res = await fetch(`${SB_URL}/xiaolan_order_tracking?order=end_date.desc&limit=1000`, { headers: HEADERS });
-      gbOrderRows = res.ok ? await res.json() : [];
-    } catch { gbOrderRows = []; }
+      const [otRes, arrRes] = await Promise.all([
+        fetch(`${SB_URL}/xiaolan_order_tracking?order=end_date.desc&limit=1000`, { headers: HEADERS }),
+        fetch(`${SB_URL}/xiaolan_arrivals?product_id=not.is.null&unit_cost=gt.0&order=ship_date.desc,id.desc&limit=1000`, { headers: HEADERS })
+      ]);
+      gbOrderRows = otRes.ok ? await otRes.json() : [];
+      const arrivals = arrRes.ok ? await arrRes.json() : [];
+      // 建立 product_id → unit_cost（ship_date 最新的優先，已排序所以第一筆就是最新）
+      gbCostMap = {};
+      arrivals.forEach(a => {
+        if (a.product_id && !gbCostMap[a.product_id]) {
+          gbCostMap[a.product_id] = a.unit_cost;
+        }
+      });
+    } catch { gbOrderRows = []; gbCostMap = {}; }
     gbPage = 1;
     renderGBGrid();
   }
@@ -11629,7 +11642,8 @@
       html += `<td style="${tdS}font-weight:500;">${gbEsc(r.product_name)}</td>`;
       html += `<td style="${tdS}text-align:center;font-weight:700;color:${(r.order_qty||0)>0?'#c53030':'#047857'};">${r.order_qty || 0}</td>`;
       html += `<td style="${tdS}text-align:center;">${r.selling_price ? '$' + Number(r.selling_price).toLocaleString() : ''}</td>`;
-      html += `<td style="${tdS}text-align:center;color:#2b6cb0;font-weight:600;">${r.unit_cost ? '$' + Number(r.unit_cost).toFixed(1) : ''}</td>`;
+      const gbUC = gbCostMap[pid] || 0;
+      html += `<td style="${tdS}text-align:center;color:#2b6cb0;font-weight:600;">${gbUC ? '$' + Number(gbUC).toFixed(1) : ''}</td>`;
       html += `<td style="${tdS}text-align:center;"><span style="color:${procColor[ordered]||'#718096'};font-weight:600;font-size:11px;">${procLabel[ordered]||'⏳ 待處理'}</span></td>`;
       html += `</tr>`;
     });
