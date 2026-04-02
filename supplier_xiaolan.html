@@ -2488,20 +2488,31 @@ function onArrivalLinkedChange(input) {
   // 支援用「商編 品名」或「品名」比對
   const matched = options.find(o => {
     const label = (o.productId ? o.productId + ' ' : '') + (o.name || '');
-    return label === typedVal || o.name === typedVal;
+    return label === typedVal || o.name === typedVal || (o.productId && typedVal.startsWith(o.productId));
   });
   if (!matched) return;
   const linkedVal = matched.productId || matched.name || '';
-  // 找到對應的所有訂單，回寫 linked_product
-  if (tn) {
-    const pMatch = findPurchaseByTracking(tn);
-    if (pMatch) {
-      pMatch.linked_product = linkedVal;
-      pMatch._dirty = true;
-      triggerAutoSave();
-    }
+  const linkedName = matched.name || '';
+  const linkedPrice = parseFloat(matched.price) || 0;
+
+  // 直接更新到貨清單本身
+  const arrRow = getARowByIdx(idx);
+  if (arrRow) {
+    arrRow.product_id = linkedVal;
+    arrRow.product_name = linkedName;
+    if (linkedPrice > 0 && !arrRow.selling_price) arrRow.selling_price = linkedPrice;
+    arrRow._dirty = true;
   }
-  // 重新渲染到貨清單（live 會自動帶出新值，品名品編分開顯示）
+
+  // 也回寫對應的採購紀錄 linked_product
+  if (tn) {
+    const pMatches = findAllPurchasesByTracking(tn);
+    pMatches.forEach(p => {
+      p.linked_product = linkedVal;
+      p._dirty = true;
+    });
+  }
+  triggerAutoSave();
   renderArrivalGrid();
 }
 
