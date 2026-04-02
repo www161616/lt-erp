@@ -52,6 +52,7 @@
     <div style="display:flex; gap:8px; align-items:flex-end;">
       <button class="btn" onclick="doQuery()" style="background:var(--accent); color:white;">🔍 查詢</button>
       <button class="btn btn-print" onclick="window.print()">🖨️ 列印</button>
+      <button class="btn" onclick="printNoCost()" style="background:#b7791f; color:white;">🖨️ 印成本未填</button>
     </div>
     <span id="statusText" style="font-size:12px; color:var(--text2);"></span>
   </div>
@@ -251,6 +252,43 @@ function goEditProduct(productId) {
   } else {
     window.open('ProductList.html', '_blank');
   }
+}
+
+function printNoCost() {
+  const area = document.getElementById('noCostArea');
+  if (!area || !area.innerHTML || area.innerHTML.includes('empty')) {
+    alert('目前沒有成本未填的商品');
+    return;
+  }
+  const rows = Array.from(area.querySelectorAll('tbody tr')).map(tr => {
+    const tds = tr.querySelectorAll('td');
+    return `<tr>
+      <td>${tds[0]?.textContent || ''}</td>
+      <td>${tds[1]?.textContent || ''}</td>
+      <td>${tds[2]?.textContent || ''}</td>
+      <td><input class="cost-input" type="number" placeholder="填成本"></td>
+    </tr>`;
+  }).join('');
+  const win = window.open('', '_blank');
+  win.document.write(`<!DOCTYPE html><html lang="zh-TW"><head><meta charset="UTF-8"><title>成本未填商品</title>
+<style>
+  body { font-family: 'Microsoft JhengHei', sans-serif; padding: 16px; }
+  h2 { font-size: 16px; margin-bottom: 4px; }
+  .sub { font-size: 12px; color: #666; margin-bottom: 12px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { background: #f1f5f9; padding: 6px 8px; text-align: left; border-bottom: 2px solid #e2e8f0; font-size: 11px; }
+  td { padding: 6px 8px; border-bottom: 1px solid #f1f5f9; }
+  .cost-input { width: 80px; border: 1px solid #ccc; border-radius: 4px; padding: 4px; }
+  @page { margin: 10mm; size: portrait; }
+</style></head><body>
+  <h2>成本未填商品</h2>
+  <div class="sub">請員工填寫成本欄位後回交</div>
+  <table><thead><tr>
+    <th>商品編號</th><th>商品名稱</th><th>售價</th><th>成本（請填寫）</th>
+  </tr></thead><tbody>${rows}</tbody></table>
+</body></html>`);
+  win.document.close();
+  win.print();
 }
 </script>
 </body>
