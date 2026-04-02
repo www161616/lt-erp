@@ -1510,6 +1510,7 @@
                 <option value="">— 全部供應商 —</option>
               </select>
               <input type="text" id="ipKeyword" placeholder="🔍 單號關鍵字 (IP...)" onkeypress="if(event.key==='Enter') ipDoSearch()" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:4px; font-size:14px; margin-bottom:8px;">
+              <input type="text" id="ipProductKeyword" placeholder="🔍 商品名稱/編號..." onkeypress="if(event.key==='Enter') ipDoSearch()" style="width:100%; padding:8px; border:1px solid var(--border); border-radius:4px; font-size:14px; margin-bottom:8px;">
               <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:8px;">
                 <div>
                   <label style="font-size:12px; color:var(--text2);">起始日期</label>
@@ -1576,6 +1577,7 @@
     async function ipDoSearch() {
       const suppId = document.getElementById('ipSuppSelect').value;
       const keyword = document.getElementById('ipKeyword').value.trim();
+      const productKw = document.getElementById('ipProductKeyword')?.value.trim() || '';
       const dateFrom = document.getElementById('ipDateFrom').value;
       const dateTo = document.getElementById('ipDateTo').value;
       const status = document.getElementById('ipStatusFilter').value;
@@ -1592,6 +1594,25 @@
         if (suppId) query += `&supplier_id=eq.${suppId}`;
         if (keyword) query += `&id=ilike.*${keyword}*`;
         if (status !== 'ALL') query += `&status=eq.${status}`;
+
+        // 商品搜尋：先查明細找符合的 order_id
+        if (productKw) {
+          const detailRes = await fetch(
+            `${SB_URL}/internal_purchase_details?or=(product_name.ilike.*${encodeURIComponent(productKw)}*,product_id.ilike.*${encodeURIComponent(productKw)}*)&select=order_id`,
+            { headers: HEADERS }
+          );
+          if (detailRes.ok) {
+            const details = await detailRes.json();
+            const matchOrderIds = [...new Set(details.map(d => d.order_id))];
+            if (matchOrderIds.length === 0) {
+              ipSearchOrders = [];
+              ipRenderList([]);
+              document.getElementById('ipOrderList').innerHTML = '<div style="text-align:center; padding:30px; color:#aaa;">查無符合商品的採購單</div>';
+              return;
+            }
+            query += `&id=in.(${matchOrderIds.map(id => `"${id}"`).join(',')})`;
+          }
+        }
 
         const res = await fetch(query, { headers: HEADERS });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
