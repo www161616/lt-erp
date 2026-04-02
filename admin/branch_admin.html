@@ -2028,13 +2028,14 @@
       Swal.fire({ title: '補寫中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
       let updated = 0, failed = 0;
       for (const it of ipCurrentDetail.items) {
-        const payload = {};
+        const payload = { status: '啟用' };
         if (Number(it.price) > 0) payload.price = Number(it.price);
         if (Number(it.price_branch) > 0) payload.price_branch = Number(it.price_branch);
         if (Number(it.cost) > 0) payload.cost = Number(it.cost);
         if (Number(it.price_wholesale) > 0) payload.price_wholesale = Number(it.price_wholesale);
         if (Number(it.price_group) > 0) payload.price_group = Number(it.price_group);
-        if (Object.keys(payload).length === 0) continue;
+        const itemSupplier = (it.supplier || '').trim() || (ipCurrentDetail.supplierName || '').trim();
+        if (itemSupplier) payload.supplier = itemSupplier;
         try {
           const res = await fetch(`${SB_URL}/products?id=eq.${encodeURIComponent(it.productId)}`, {
             method: 'PATCH',
