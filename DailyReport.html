@@ -246,7 +246,9 @@ async function doQuery() {
       <td>合計</td>
       <td></td>
       <td class="text-right">${totalQty.toLocaleString()}</td>
-      <td colspan="3"></td>
+      <td></td>
+      <td class="text-right">$${totalCost.toLocaleString()}</td>
+      <td></td>
       <td class="text-right ${totalProfit >= 0 ? 'green' : 'red'}">$${totalProfit.toLocaleString()}</td>
     </tr>`;
     html += '</tbody></table>';
