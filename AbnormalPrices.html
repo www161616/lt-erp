@@ -57,6 +57,8 @@
   </div>
   <div id="summaryArea"></div>
   <div id="tableArea"><div class="empty">請選擇日期後點擊「查詢」</div></div>
+  <h3 id="noCostTitle" style="display:none; margin-top:32px; margin-bottom:12px; font-size:16px; color:var(--warning);">📋 成本未填商品 <span style="font-size:13px; font-weight:400; color:var(--text2);">（sales_details 和 products 都沒有成本）</span></h3>
+  <div id="noCostArea"></div>
 </div>
 
 <script>
@@ -151,6 +153,23 @@ async function doQuery() {
     // 按差異升冪（差最多的在上面）
     abnormal.sort((a, b) => a.diff - b.diff);
 
+    // 收集成本未填商品
+    const noCostProducts = [];
+    const noCostSet = new Set();
+    allDetails.forEach(d => {
+      const uc = Number(d.unit_cost) || 0;
+      const pc = productCostMap[d.product_id] || 0;
+      if (uc === 0 && pc === 0 && d.product_id && !noCostSet.has(d.product_id)) {
+        noCostSet.add(d.product_id);
+        noCostProducts.push({
+          productId: d.product_id,
+          productName: d.product_name || '',
+          unitPrice: Number(d.unit_price) || 0
+        });
+      }
+    });
+    noCostProducts.sort((a, b) => a.productId.localeCompare(b.productId));
+
     // 統計
     const uniqueProducts = new Set(abnormal.map(a => a.productId)).size;
     document.getElementById('summaryArea').innerHTML = `
@@ -163,13 +182,15 @@ async function doQuery() {
           <div class="label">涉及商品數</div>
           <div class="value" style="color:var(--accent);">${uniqueProducts}</div>
         </div>
+        <div class="summary-card">
+          <div class="label">成本未填商品</div>
+          <div class="value" style="color:var(--warning);">${noCostProducts.length}</div>
+        </div>
       </div>`;
 
     // 表格
     if (abnormal.length === 0) {
       document.getElementById('tableArea').innerHTML = '<div class="empty">沒有異常價格的商品</div>';
-      document.getElementById('statusText').textContent = '查詢完成，無異常';
-      return;
     }
 
     let html = '<table><thead><tr>';
@@ -194,6 +215,27 @@ async function doQuery() {
     html += '</tbody></table>';
 
     document.getElementById('tableArea').innerHTML = html;
+
+    // 成本未填區塊
+    document.getElementById('noCostTitle').style.display = '';
+    if (noCostProducts.length === 0) {
+      document.getElementById('noCostArea').innerHTML = '<div class="empty">所有商品都有成本資料</div>';
+    } else {
+      let html2 = '<table><thead><tr>';
+      html2 += '<th>商品編號</th><th>商品名稱</th><th class="text-right">售價</th><th>操作</th>';
+      html2 += '</tr></thead><tbody>';
+      noCostProducts.forEach(p => {
+        html2 += `<tr>
+          <td class="mono">${p.productId}</td>
+          <td>${p.productName}</td>
+          <td class="text-right" style="color:#2b6cb0;">$${p.unitPrice.toLocaleString()}</td>
+          <td><button onclick="goEditProduct('${p.productId}')" style="padding:3px 10px; background:var(--warning); color:white; border:none; border-radius:4px; font-size:11px; cursor:pointer;">修改商品</button></td>
+        </tr>`;
+      });
+      html2 += '</tbody></table>';
+      document.getElementById('noCostArea').innerHTML = html2;
+    }
+
     document.getElementById('statusText').textContent = `查詢完成，共 ${allDetails.length} 筆明細`;
 
   } catch (e) {
