@@ -998,7 +998,7 @@
         payment_method: '',
         note: noteText,
         items: selectedItems.map(it => ({
-          product_id: it.productId,
+          product_id: (it.productId || '').replace(/_.*$/, ''),
           product_name: it.productName,
           spec: '',
           qty: it.qty,
