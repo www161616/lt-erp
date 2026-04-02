@@ -950,15 +950,25 @@
     }
 
     const subtotal = selectedItems.reduce((s, it) => s + it.subtotal, 0);
+    const now = new Date();
+    const todayStr = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
     const confirm = await Swal.fire({
       title: '確認到貨，轉入進貨單？',
       html: `廠商：<b>${g.supplier}</b><br>品項：<b>${selectedItems.length}</b> 項<br>金額：<b style="color:#047857; font-size:18px;">$${subtotal.toLocaleString()}</b>
+        <br><br>
+        <div style="text-align:left; font-size:13px; margin-bottom:4px; color:#64748b; font-weight:600;">到貨日期</div>
+        <input type="date" id="arrivalDate" value="${todayStr}" style="width:100%; padding:8px; border:1px solid #e2e8f0; border-radius:6px; font-size:14px; font-family:inherit;">
         <br><br><span style="color:#047857; font-size:13px;">✅ 將為此廠商建立一張正式進貨單。</span>`,
       icon: 'question',
       showCancelButton: true,
       confirmButtonText: '確認轉入',
       confirmButtonColor: '#047857',
-      cancelButtonText: '再看看'
+      cancelButtonText: '再看看',
+      preConfirm: () => {
+        const d = document.getElementById('arrivalDate').value;
+        if (!d) { Swal.showValidationMessage('請選擇到貨日期'); return false; }
+        return { arrivalDate: d };
+      }
     });
     if (!confirm.isConfirmed) return;
 
@@ -969,8 +979,8 @@
       const suppMatch = allSuppliers.find(s => s.name === g.supplier);
       const supplierId = suppMatch ? suppMatch.id : null;
 
-      // 用第一筆的 orderDate 當進貨單日期
-      const orderDate = selectedItems[0].orderDate || new Date().toISOString().split('T')[0];
+      // 用使用者選的到貨日期
+      const orderDate = confirm.value.arrivalDate;
 
       // 組來源單號備註
       const sourceOrders = [...new Set(selectedItems.map(it => it.orderId))];
