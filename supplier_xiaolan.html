@@ -1410,7 +1410,8 @@ function importOfferIds(e) {
       const toUpdate = [];
       purchaseRows.forEach(r => {
         if (r.offer_id) return; // 已有的不覆蓋
-        const match = excelMap[r.order_number];
+        const match = excelMap[r.order_number] ||
+          Object.entries(excelMap).find(([k]) => k.endsWith(r.order_number) || r.order_number.endsWith(k))?.[1];
         if (match) {
           r.offer_id = match.offer_id;
           if (!r.tracking_number && match.tracking_number) r.tracking_number = match.tracking_number;
@@ -1461,7 +1462,7 @@ function siHandleFile(e) {
     try {
       const wb = XLSX.read(ev.target.result, { type: 'binary' });
       const ws = wb.Sheets[wb.SheetNames[0]];
-      const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
+      const data = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false });
       // 轉成 tab-separated 貼到 textarea
       const text = data.map(row => row.map(c => c == null ? '' : String(c)).join('\t')).join('\n');
       document.getElementById('siPasteArea').value = text;
