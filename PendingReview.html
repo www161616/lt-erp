@@ -877,6 +877,7 @@
             <div style="display:flex; align-items:center; gap:10px;" onclick="event.stopPropagation()">
               <span style="font-size:15px; font-weight:bold; color:#c05621; font-family:monospace;" id="suppTotal_${gi}">$${totalAmt.toLocaleString()}</span>
               <button class="btn btn-approve" onclick="convertSupplierGroup(${gi})" style="padding:8px 16px;">✅ 確認到貨，轉入進貨單</button>
+              <button onclick="cancelSupplierGroup(${gi})" style="padding:6px 12px; background:#fee2e2; color:#c53030; border:1px solid #fca5a5; border-radius:6px; font-size:13px; cursor:pointer; font-weight:600;">❌ 作廢整張</button>
             </div>
           </div>
           <div id="suppBody_${gi}" style="display:none;">
@@ -890,6 +891,7 @@
                   <th style="text-align:center;">數量</th>
                   <th style="text-align:right;">成本單價</th>
                   <th style="text-align:right;">小計</th>
+                  <th style="width:60px; text-align:center;">操作</th>
                 </tr>
               </thead>
               <tbody>
@@ -902,6 +904,7 @@
                     <td style="text-align:center;">${it.qty} ${it.unit}</td>
                     <td style="text-align:right; font-family:monospace;">$${it.cost.toLocaleString()}</td>
                     <td style="text-align:right; font-family:monospace; font-weight:600;">$${it.subtotal.toLocaleString()}</td>
+                    <td style="text-align:center;"><button onclick="cancelSupplierItem('${it.detailId}', '${(it.productName||'').replace(/'/g, "\\'")}')" style="padding:2px 8px; background:#fee2e2; color:#c53030; border:1px solid #fca5a5; border-radius:4px; font-size:11px; cursor:pointer;">❌</button></td>
                   </tr>
                 `).join('')}
               </tbody>
@@ -1144,6 +1147,61 @@
         )
       : supplierViewData;
     renderSupplierCards(filtered);
+  }
+
+  async function cancelSupplierItem(detailId, productName) {
+    const result = await Swal.fire({
+      title: '確定作廢此品項？',
+      html: `<b>${productName}</b><br><span style="color:#6b7280; font-size:13px;">作廢後不會進貨，但不影響其他品項。</span>`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: '確定作廢',
+      cancelButtonText: '取消',
+      confirmButtonColor: '#c53030'
+    });
+    if (!result.isConfirmed) return;
+
+    try {
+      const res = await fetch(`${SB_URL}/internal_purchase_details?id=eq.${detailId}`, {
+        method: 'PATCH',
+        headers: { ...HEADERS, 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ converted_po_id: 'CANCELLED' })
+      });
+      if (!res.ok) throw new Error(await res.text());
+      Swal.fire({ icon: 'success', title: '已作廢', timer: 1200, showConfirmButton: false });
+      await loadSupplierView();
+    } catch(e) {
+      Swal.fire('失敗', e.message, 'error');
+    }
+  }
+
+  async function cancelSupplierGroup(gi) {
+    const g = supplierViewData[gi];
+    if (!g || g.items.length === 0) return;
+    const result = await Swal.fire({
+      title: '作廢整張？',
+      html: `廠商：<b>${g.supplier}</b><br>品項：<b>${g.items.length}</b> 項<br><span style="color:#6b7280; font-size:13px;">所有品項將標記為作廢，不會進貨。</span>`,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: `確定作廢 ${g.items.length} 項`,
+      cancelButtonText: '取消',
+      confirmButtonColor: '#c53030'
+    });
+    if (!result.isConfirmed) return;
+
+    try {
+      const ids = g.items.map(it => `"${it.detailId}"`).join(',');
+      const res = await fetch(`${SB_URL}/internal_purchase_details?id=in.(${ids})`, {
+        method: 'PATCH',
+        headers: { ...HEADERS, 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ converted_po_id: 'CANCELLED' })
+      });
+      if (!res.ok) throw new Error(await res.text());
+      Swal.fire({ icon: 'success', title: `已作廢 ${g.items.length} 個品項`, timer: 1500, showConfirmButton: false });
+      await loadSupplierView();
+    } catch(e) {
+      Swal.fire('失敗', e.message, 'error');
+    }
   }
 
   window.onload = function() {

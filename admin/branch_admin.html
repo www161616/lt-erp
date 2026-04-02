@@ -1372,7 +1372,7 @@
     async function ipSaveOrder(status) {
       if (!ipCart.length) return Swal.fire('提示', '請加入至少一項商品', 'warning');
       // 供應商從品項取（取第一個有填的，或空字串）
-      const suppName = ipCart.find(it => it.supplier)?.supplier || '';
+      const suppName = (ipCart.find(it => it.supplier)?.supplier || '').trim();
       const suppMatch = allSuppliers.find(s => s.name === suppName);
       const suppId = suppMatch ? suppMatch.id : null;
 
