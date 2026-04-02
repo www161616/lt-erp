@@ -1435,10 +1435,12 @@
         let priceUpdated = 0;
         if (status === '待審核') {
           for (const it of ipCart) {
-            const pricePayload = {};
+            const pricePayload = { status: '啟用' };
             if (Number(it.price_branch) > 0) pricePayload.price_branch = Number(it.price_branch);
             if (Number(it.cost) > 0) pricePayload.cost = Number(it.cost);
             if (Number(it.price) > 0) pricePayload.price = Number(it.price);
+            const itemSupplier = (it.supplier || '').trim() || suppName;
+            if (itemSupplier) pricePayload.supplier = itemSupplier;
 
             if (Object.keys(pricePayload).length > 0) {
               try {
