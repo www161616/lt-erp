@@ -1996,11 +1996,9 @@ async function savePurchases(isAuto) {
   }
 }
 
-// 同步進貨價到 xiaolan_order_tracking
+// 同步進貨價到 xiaolan_order_tracking（僅用 linked_product 精準配對）
 async function syncUnitCostToDB() {
   try {
-    // 收集所有有 linked_product 且有 unit_cost 的採購紀錄
-    // 同一個 product_id 可能有多筆，取最新的（最後一筆）
     const costMap = {}; // product_id → unit_cost
     const allRows = [...purchaseRows, ...newPurchaseRows];
     allRows.forEach(r => {
@@ -2008,25 +2006,6 @@ async function syncUnitCostToDB() {
         costMap[r.linked_product] = r.unit_cost;
       }
     });
-
-    // 也用 offer_id 配對
-    if (orderTrackData.length > 0) {
-      const offerToProducts = {};
-      orderTrackData.forEach(ot => {
-        const oid = extractOfferId(ot.url) || extractOfferId(OT_ORDER_URLS[ot.productId]);
-        if (oid) {
-          if (!offerToProducts[oid]) offerToProducts[oid] = [];
-          offerToProducts[oid].push(ot.productId);
-        }
-      });
-      allRows.forEach(r => {
-        if (r.offer_id && r.unit_cost > 0 && offerToProducts[r.offer_id]) {
-          offerToProducts[r.offer_id].forEach(pid => {
-            if (!costMap[pid]) costMap[pid] = r.unit_cost;
-          });
-        }
-      });
-    }
 
     // 批次更新
     for (const [pid, uc] of Object.entries(costMap)) {
