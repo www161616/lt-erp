@@ -2468,12 +2468,12 @@ function buildArrivalLinkedSelect(currentName, currentId, idx, trackingNumber) {
   const options = getOrderTrackOptions();
   const listId = `adl_${idx}`;
   let html = `<input list="${listId}" value="${currentName || ''}" data-idx="${idx}" data-tn="${trackingNumber || ''}"
-    onchange="onArrivalLinkedChange(this)" placeholder="搜尋商品..."
+    oninput="onArrivalLinkedChange(this)" onchange="onArrivalLinkedChange(this)" placeholder="搜尋商品..."
     style="width:100%;font-size:12px;padding:4px 6px;border:none;background:transparent;outline:none;">`;
   html += `<datalist id="${listId}">`;
   options.forEach(o => {
     const label = (o.productId ? o.productId + ' ' : '') + (o.name || '');
-    html += `<option value="${label}" label="${o.name || ''}"></option>`;
+    html += `<option value="${label}"></option>`;
   });
   html += `</datalist>`;
   return html;
