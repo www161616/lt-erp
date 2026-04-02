@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>每日出貨報表 - 龍潭總倉</title>
+  <script src="libs/xlsx.full.min.js"></script>
   <style>
     :root {
       --bg: #f8f9fb; --surface: #ffffff; --surface2: #f1f5f9; --border: #e2e8f0;
@@ -66,6 +67,7 @@
     <div style="display:flex; gap:8px; align-items:flex-end;">
       <button class="btn btn-primary" onclick="doQuery()">查詢</button>
       <button class="btn btn-print" onclick="window.print()">列印</button>
+      <button class="btn" onclick="exportExcel()" style="background:#1D6F42; color:white;">📥 Excel</button>
     </div>
   </div>
 
@@ -77,6 +79,7 @@
 const SB_URL = 'https://asugjynpocwygggttxyo.supabase.co/rest/v1';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFzdWdqeW5wb2N3eWdnZ3R0eHlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNzU3MjksImV4cCI6MjA4ODk1MTcyOX0.LzcRQAl80rZxKKD8NIYWGvylfwCbs1ek5LtKpmZodBc';
 let HEADERS = { 'apikey': SB_KEY, 'Authorization': 'Bearer ' + SB_KEY, 'Content-Type': 'application/json' };
+let _reportRows = []; // 全域暫存，供匯出 Excel 用
 
 window.addEventListener('DOMContentLoaded', () => {
   const token = sessionStorage.getItem('sb_auth_token');
@@ -184,6 +187,7 @@ async function doQuery() {
       g.totalProfit = g.priceRows.reduce((s, r) => s + (r.unitPrice - g.unitCost) * r.qty, 0);
     });
     const rows = Object.values(grouped).sort((a, b) => b.totalProfit - a.totalProfit);
+    _reportRows = rows;
 
     // 統計摘要
     const totalQty = rows.reduce((s, r) => s + r.totalQty, 0);
@@ -265,6 +269,43 @@ async function doQuery() {
   }
 }
 
+function exportExcel() {
+  if (_reportRows.length === 0) { alert('請先查詢'); return; }
+  const dateFrom = document.getElementById('dateFrom').value;
+  const dateTo = document.getElementById('dateTo').value;
+
+  const header = ['商品編號', '商品名稱', '數量', '售價', '成本', '售價-成本', '成本合計', '利潤合計'];
+  const data = [];
+  _reportRows.forEach(r => {
+    r.priceRows.forEach((pr, pi) => {
+      const priceDiff = Math.round(pr.unitPrice - r.unitCost);
+      const costTotal = Math.round(r.unitCost * pr.qty);
+      const profitTotal = Math.round(priceDiff * pr.qty);
+      data.push([
+        pi === 0 ? r.product_id : '',
+        pi === 0 ? r.product_name : '',
+        pr.qty,
+        Math.round(pr.unitPrice),
+        Math.round(r.unitCost),
+        priceDiff,
+        costTotal,
+        profitTotal
+      ]);
+    });
+  });
+
+  // 合計列
+  const totalQty = _reportRows.reduce((s, r) => s + r.totalQty, 0);
+  const totalCost = Math.round(_reportRows.reduce((s, r) => s + r.unitCost * r.totalQty, 0));
+  const totalProfit = Math.round(_reportRows.reduce((s, r) => s + r.totalProfit, 0));
+  data.push(['合計', '', totalQty, '', '', '', totalCost, totalProfit]);
+
+  const ws = XLSX.utils.aoa_to_sheet([header, ...data]);
+  ws['!cols'] = [{ wch: 12 }, { wch: 30 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 10 }, { wch: 10 }, { wch: 10 }];
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, '每日出貨報表');
+  XLSX.writeFile(wb, `每日出貨報表_${dateFrom}_${dateTo}.xlsx`);
+}
 
 </script>
 </body>
