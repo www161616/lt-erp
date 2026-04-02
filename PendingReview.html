@@ -1027,20 +1027,87 @@
         });
       }
 
-      Swal.fire({
-        title: '轉入成功',
-        html: `正式進貨單號：<b>${newPoId}</b><br>廠商：${g.supplier}<br>金額：$${subtotal.toLocaleString()}`,
+      const payNow = await Swal.fire({
+        title: '轉入成功！',
+        html: `正式進貨單號：<b>${newPoId}</b><br>廠商：${g.supplier}<br>金額：<b style="color:#047857; font-size:18px;">$${subtotal.toLocaleString()}</b>`,
         icon: 'success',
-        timer: 2500,
-        showConfirmButton: true
+        showCancelButton: true,
+        confirmButtonText: '💸 立即付款',
+        cancelButtonText: '稍後再付',
+        confirmButtonColor: '#0e7490',
+        cancelButtonColor: '#6b7280'
       });
 
       // 重新載入
       await loadSupplierView();
       await loadPendingPurchases();
+
+      if (payNow.isConfirmed) {
+        await triggerPaymentFromPending(newPoId, subtotal, supplierId, g.supplier);
+      }
     } catch(e) {
       console.error('convertSupplierGroup error:', e);
       Swal.fire('轉入失敗', e.message, 'error');
+    }
+  }
+
+  async function triggerPaymentFromPending(orderId, totalAmount, supplierId, supplierName) {
+    const amount = Math.round(totalAmount);
+    const result = await Swal.fire({
+      title: '💸 支付貨款',
+      html: `
+        <div style="text-align:left; font-size:14px;">
+          單號：<b>${orderId}</b><br>
+          廠商：<b>${supplierName}</b><br>
+          應付：<b>$${amount.toLocaleString()}</b>
+        </div><br>
+        <input type="number" id="payAmount" class="swal2-input" value="${amount}" style="margin-bottom:10px;">
+        <select id="payMethod" class="swal2-input" style="margin-bottom:10px;">
+          <option value="老闆付款">老闆付款</option>
+          <option value="現金">現金</option>
+          <option value="零用金">零用金</option>
+          <option value="匯款">匯款</option>
+        </select>
+        <input type="text" id="payNote" class="swal2-input" placeholder="備註（例如：匯款後五碼）">`,
+      showCancelButton: true,
+      confirmButtonText: '確定付款',
+      confirmButtonColor: '#0e7490',
+      cancelButtonText: '取消',
+      preConfirm: () => {
+        const payAmt = parseFloat(document.getElementById('payAmount').value);
+        if (!payAmt || payAmt <= 0) { Swal.showValidationMessage('請輸入有效金額'); return false; }
+        return {
+          amount: payAmt,
+          paymentMethod: document.getElementById('payMethod').value,
+          note: document.getElementById('payNote').value
+        };
+      }
+    });
+
+    if (!result.isConfirmed) return;
+
+    Swal.fire({ title: '處理中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+    try {
+      const now = new Date();
+      const payDate = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
+      const paymentRecord = {
+        payment_date: payDate,
+        supplier_id: supplierId || null,
+        supplier_name: supplierName,
+        amount: result.value.amount,
+        payment_method: result.value.paymentMethod,
+        order_id: orderId,
+        note: result.value.note || `進貨單 ${orderId} 付款`
+      };
+      const payRes = await fetch(`${SB_URL}/rpc/web_make_payment`, {
+        method: 'POST',
+        headers: HEADERS,
+        body: JSON.stringify({ p_data: paymentRecord })
+      });
+      if (!payRes.ok) throw new Error(await payRes.text());
+      Swal.fire({ icon: 'success', title: '付款成功！', text: `已記錄 $${result.value.amount.toLocaleString()} 付款`, timer: 2000, showConfirmButton: false });
+    } catch(e) {
+      Swal.fire('付款失敗', e.message, 'error');
     }
   }
 
