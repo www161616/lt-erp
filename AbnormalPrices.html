@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>異常價格清單 - 龍潭總倉</title>
+  <script src="libs/sweetalert2.min.js"></script>
   <style>
     :root {
       --bg: #f8f9fb; --surface: #ffffff; --surface2: #f1f5f9; --border: #e2e8f0;
@@ -230,7 +231,7 @@ async function doQuery() {
           <td class="mono">${p.productId}</td>
           <td>${p.productName}</td>
           <td class="text-right" style="color:#2b6cb0;">$${p.unitPrice.toLocaleString()}</td>
-          <td><button onclick="goEditProduct('${p.productId}')" style="padding:3px 10px; background:var(--warning); color:white; border:none; border-radius:4px; font-size:11px; cursor:pointer;">修改商品</button></td>
+          <td><button onclick="editProductCost('${p.productId}', '${p.productName.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}', ${p.unitPrice})" style="padding:3px 10px; background:var(--warning); color:white; border:none; border-radius:4px; font-size:11px; cursor:pointer;">填成本</button></td>
         </tr>`;
       });
       html2 += '</tbody></table>';
@@ -254,10 +255,54 @@ function goEditProduct(productId) {
   }
 }
 
+async function editProductCost(productId, productName, unitPrice) {
+  const { value: cost } = await Swal.fire({
+    title: '填寫成本',
+    html: `<div style="text-align:left; font-size:13px; margin-bottom:12px;">
+      <div style="color:#64748b; margin-bottom:4px;">商品編號：<b>${productId}</b></div>
+      <div style="color:#64748b; margin-bottom:4px;">商品名稱：<b>${productName}</b></div>
+      <div style="color:#64748b; margin-bottom:12px;">目前售價：<b style="color:#2b6cb0;">$${unitPrice}</b></div>
+      <label style="font-size:12px; font-weight:700; color:#64748b;">成本（單個）</label>
+      <input id="swal-cost-input" type="number" min="0" step="0.5"
+        style="width:100%; padding:8px; border:1px solid #e2e8f0; border-radius:6px; font-size:16px; margin-top:4px; text-align:center;">
+    </div>`,
+    showCancelButton: true,
+    confirmButtonText: '儲存',
+    cancelButtonText: '取消',
+    confirmButtonColor: '#475569',
+    didOpen: () => { document.getElementById('swal-cost-input').focus(); },
+    preConfirm: () => {
+      const val = parseFloat(document.getElementById('swal-cost-input').value);
+      if (!val || val <= 0) { Swal.showValidationMessage('請輸入有效成本'); return false; }
+      return val;
+    }
+  });
+  if (!cost) return;
+
+  try {
+    const res = await fetch(`${SB_URL}/products?id=eq.${encodeURIComponent(productId)}`, {
+      method: 'PATCH',
+      headers: { ...HEADERS, 'Prefer': 'return=minimal' },
+      body: JSON.stringify({ cost })
+    });
+    if (!res.ok) throw new Error(await res.text());
+    Swal.fire({ icon: 'success', title: '已更新成本', text: `${productName} 成本已設為 $${cost}`, timer: 1500, showConfirmButton: false });
+    document.querySelectorAll('#noCostArea tbody tr').forEach(tr => {
+      if (tr.querySelector('td')?.textContent === productId) {
+        tr.style.opacity = '0.4';
+        tr.querySelector('button').textContent = '已更新';
+        tr.querySelector('button').disabled = true;
+      }
+    });
+  } catch(e) {
+    Swal.fire({ icon: 'error', title: '更新失敗', text: e.message });
+  }
+}
+
 function printNoCost() {
   const area = document.getElementById('noCostArea');
   if (!area || !area.innerHTML || area.innerHTML.includes('empty')) {
-    alert('目前沒有成本未填的商品');
+    Swal.fire({ icon: 'info', title: '目前沒有成本未填的商品', timer: 1500, showConfirmButton: false });
     return;
   }
   const rows = Array.from(area.querySelectorAll('tbody tr')).map(tr => {
