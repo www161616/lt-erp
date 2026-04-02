@@ -1179,7 +1179,19 @@ function openPasteDialog() {
       Swal.fire({ icon: 'success', title: '包裹匯入完成', html: `到貨清單新增 <b>${arrivalCreated}</b> 筆<br>填入重量 <b>${weightFilled}</b> 筆`, timer: 2500, showConfirmButton: false });
     } else {
       // 一般訂單匯入
+      // 建立已存在的訂單號 Set（DB + 未存）
+      const existingOrderNumbers = new Set([
+        ...purchaseRows.map(r => r.order_number).filter(Boolean),
+        ...newPurchaseRows.map(r => r.order_number).filter(Boolean)
+      ]);
+
+      let skipped = 0;
       items.forEach(item => {
+        const orderNum = (item.order_number || '').trim();
+        if (orderNum && existingOrderNumbers.has(orderNum)) {
+          skipped++;
+          return;
+        }
         const row = {
           order_date: item.order_date || '',
           order_number: item.order_number || '',
@@ -1200,6 +1212,7 @@ function openPasteDialog() {
         };
         calcRow(row);
         newPurchaseRows.push(row);
+        if (orderNum) existingOrderNumbers.add(orderNum);
         imported++;
       });
       pPage = 1;
@@ -1211,7 +1224,7 @@ function openPasteDialog() {
       if (matchResult.matched > 0) {
         showAutoMatchResult(matchResult);
       } else {
-        Swal.fire({ icon: 'success', title: `已匯入 ${imported} 筆，已存入資料庫`, timer: 2000, showConfirmButton: false });
+        Swal.fire({ icon: 'success', title: `已匯入 ${imported} 筆${skipped > 0 ? `，略過重複 ${skipped} 筆` : ''}，已存入資料庫`, timer: 2000, showConfirmButton: false });
       }
     }
   });
