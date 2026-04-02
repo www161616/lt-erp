@@ -1374,7 +1374,7 @@ function importOfferIds(e) {
       Swal.fire({ title: '解析中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
       const wb = XLSX.read(ev.target.result, { type: 'binary' });
       const ws = wb.Sheets[wb.SheetNames[0]];
-      const data = XLSX.utils.sheet_to_json(ws, { header: 1 });
+      const data = XLSX.utils.sheet_to_json(ws, { header: 1, raw: false });
       if (data.length < 2) { Swal.fire('提示', '檔案沒有資料', 'info'); return; }
 
       const headers = data[0].map(h => String(h || '').trim());
