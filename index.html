@@ -816,7 +816,7 @@
     async function checkPendingReview() {
       try {
         let purchaseCount = 0;
-        const ipRes = await fetch(`${SB_URL}/internal_purchases?status=eq.待審核&select=id`, { headers: getHeaders() });
+        const ipRes = await fetch(`${SB_URL}/internal_purchases?status=in.("待審核","部分到貨")&select=id`, { headers: getHeaders() });
         if (ipRes.ok) {
           const ipData = await ipRes.json();
           purchaseCount = ipData.length;
