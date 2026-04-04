@@ -4,7 +4,22 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # 龍潭總倉 ERP 系統
 
-## 近期完成功能（2026/03/31）
+## 近期完成功能（2026/04/02~04/03）
+- supplier_xiaolan 匯入訂單加訂單號重複防呆
+- supplier_xiaolan importOfferIds 加 raw:false 防止長訂單號 JS Number 截斷 + 尾碼匹配修復歷史資料
+- supplier_xiaolan siHandleFile 加 raw:false 修復 Excel 匯入截斷
+- supplier_xiaolan syncUnitCostToDB 移除不可靠的 offer_id 配對，只保留 linked_product 精準配對
+- supplier_xiaolan 到貨清單選商品直接寫入 product_id/product_name + Edge datalist 相容修復
+- supplier_xiaolan 團購採購（陸貨訂購）加「1688連結」欄位，貼 URL 自動存入 xiaolan_order_tracking.url
+- supplier_xiaolan 匯入 Excel 時自動用 Offer ID 配對開團商品，顯示配對統計明細
+- branch_admin 團購叫貨區排序改為先依結單日新到舊、同日依商品名稱
+- branch_admin 團購叫貨區進貨價改從陸貨到貨清單(xiaolan_arrivals)即時查詢
+- branch_admin 團購叫貨區加「1688連結」欄位
+- branch_admin 陸貨到貨清單：表頭固定、進貨價>售價標紅、hover 變色
+- branch_portal 庫存管理加「補匯進貨單庫存」按鈕
+- xiaolan_order_tracking 清除所有錯誤的 unit_cost（已用 SQL 歸零）
+
+## 完成功能（2026/03/31）
 - 新建 damage_orders 表 + process_damage_order / cancel_damage_order RPC
 - 新增 DamageOrders.html（庫存耗損單查詢/開立/作廢/列印）
 - transfer_items 加 damage_qty / damage_note 欄位
