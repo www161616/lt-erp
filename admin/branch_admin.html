@@ -11623,6 +11623,7 @@
           <th style="width:70px;padding:6px;border:1px solid #e2e8f0;background:#edf2f7;">售價</th>
           <th style="width:70px;padding:6px;border:1px solid #e2e8f0;background:#edf2f7;">進貨價</th>
           <th style="width:80px;padding:6px;border:1px solid #e2e8f0;background:#edf2f7;">採購進度</th>
+          <th style="width:130px;padding:6px;border:1px solid #e2e8f0;background:#edf2f7;">1688連結</th>
         </tr></thead><tbody>`;
 
     const tdS = 'border:1px solid #e2e8f0;padding:5px 6px;';
@@ -11645,11 +11646,16 @@
       const gbUC = gbCostMap[pid] || 0;
       html += `<td style="${tdS}text-align:center;color:#2b6cb0;font-weight:600;">${gbUC ? '$' + Number(gbUC).toFixed(1) : ''}</td>`;
       html += `<td style="${tdS}text-align:center;"><span style="color:${procColor[ordered]||'#718096'};font-weight:600;font-size:11px;">${procLabel[ordered]||'⏳ 待處理'}</span></td>`;
+      if (r.url) {
+        html += `<td style="${tdS}text-align:center;"><span class="shared-link" data-url="${gbEsc(r.url)}" style="color:#2b6cb0;cursor:pointer;text-decoration:underline;font-size:11px;">前往</span> <span onclick="this.nextElementSibling.style.display='inline';this.style.display='none';" style="cursor:pointer;font-size:10px;color:#a0aec0;" title="編輯">✏️</span><input type="text" value="${gbEsc(r.url)}" data-pid="${gbEsc(pid)}" onblur="onGBUrlChange(this)" style="display:none;width:100px;font-size:11px;padding:2px 4px;border:1px solid #e2e8f0;border-radius:3px;"></td>`;
+      } else {
+        html += `<td style="${tdS}text-align:center;"><input type="text" placeholder="貼上1688連結" data-pid="${gbEsc(pid)}" onblur="onGBUrlChange(this)" style="width:100px;font-size:11px;padding:2px 4px;border:1px solid #e2e8f0;border-radius:3px;"></td>`;
+      }
       html += `</tr>`;
     });
 
     if (data.length === 0) {
-      html += `<tr><td colspan="11" style="text-align:center;padding:40px;color:#718096;">訂貨追蹤中沒有廠商為「小瀾」的商品</td></tr>`;
+      html += `<tr><td colspan="9" style="text-align:center;padding:40px;color:#718096;">訂貨追蹤中沒有廠商為「小瀾」的商品</td></tr>`;
     }
 
     html += `</tbody></table></div>
@@ -11657,6 +11663,25 @@
     </div>`;
     container.innerHTML = html;
     enableTableResize(container.querySelector('table'));
+  }
+
+  async function onGBUrlChange(input) {
+    var pid = input.dataset.pid;
+    if (!pid) return;
+    var url = input.value.trim();
+    try {
+      var res = await fetch(SB_URL + '/xiaolan_order_tracking?product_id=eq.' + encodeURIComponent(pid), {
+        method: 'PATCH',
+        headers: Object.assign({}, HEADERS, { 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ url: url, updated_at: new Date().toISOString() })
+      });
+      if (!res.ok) throw new Error(await res.text());
+      var row = gbOrderRows.find(function(r) { return r.product_id === pid; });
+      if (row) row.url = url;
+      renderGBGrid();
+    } catch (err) {
+      Swal.fire('儲存失敗', err.message, 'error');
+    }
   }
 
   // onGBExtraChange 和 gbSyncToSupplier 已移除（團購叫貨區改唯讀）
