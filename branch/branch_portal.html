@@ -7294,6 +7294,8 @@ function renderAidBoard() {
 
     const itemsHtml = post.items.map((item, iIdx) => {
       const remaining = item.qty - (item.fulfilledQty || 0);
+      // 全部 tab 隱藏已滿足的個別品項
+      if (currentAidTab === 'all' && remaining <= 0) return '';
       const pct = item.qty > 0 ? Math.round((item.fulfilledQty || 0) / item.qty * 100) : 0;
       const tempColor = item.temp === '冷凍' ? '#3b82f6' : item.temp === '冷藏' ? '#06b6d4' : '#f59e0b';
 
@@ -7366,6 +7368,9 @@ function renderAidBoard() {
         }).join('') +
       '</div>';
     }
+
+    // 全部 tab：如果所有品項都已滿足，整張貼文不顯示
+    if (currentAidTab === 'all' && !itemsHtml.trim()) return '';
 
     return '<div style="background:white; border-radius:8px; border:1px solid var(--border); padding:16px 20px; margin-bottom:12px; box-shadow:0 2px 4px rgba(0,0,0,0.04);">' +
       '<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:6px;">' +
