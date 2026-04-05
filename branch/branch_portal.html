@@ -390,7 +390,7 @@
             <span id="orderPaginationTop" style="margin-left:auto; display:flex; align-items:center; gap:6px; flex-wrap:wrap;"></span>
           </div>
 
-          <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:auto; max-height:65vh; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
+          <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:auto; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
             <table style="width:100%; border-collapse:collapse; min-width:650px;">
               <thead style="position:sticky; top:0; z-index:1;">
                 <tr style="background:#fff0f6;">
@@ -512,7 +512,7 @@
 
   <!-- 待處理 -->
   <div id="reqPanel-pending">
-    <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:auto; max-height:60vh; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
+    <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:auto; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
       <table style="width:100%; border-collapse:collapse; font-size:13px;">
         <thead style="position:sticky; top:0; z-index:1;">
           <tr style="background:#fce7f3;">
@@ -540,7 +540,7 @@
       <select id="doneMonthFilter" onchange="renderRequestPage()" style="padding:6px 10px; border:1.5px solid var(--border); border-radius:6px; font-size:13px; font-family:inherit;">
       </select>
     </div>
-    <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:auto; max-height:60vh; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
+    <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:auto; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
       <table style="width:100%; border-collapse:collapse; font-size:13px;">
         <thead style="position:sticky; top:0; z-index:1;">
           <tr style="background:#fff0f6;">
@@ -573,7 +573,7 @@
         <option value="done">已處理</option>
       </select>
     </div>
-    <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:auto; max-height:60vh; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
+    <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:auto; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
       <table style="width:100%; border-collapse:collapse; font-size:13px;">
         <thead style="position:sticky; top:0; z-index:1;">
           <tr style="background:#f8f9fa;">
@@ -2559,7 +2559,7 @@ function renderSummaryPage() {
 
   // 表格標頭
   let html = `
-    <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:auto; max-height:65vh; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
+    <div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:auto; box-shadow:0 2px 4px rgba(0,0,0,0.04);">
       <table style="border-collapse:collapse; font-size:13px; table-layout:auto; width:100%;">
         <thead style="position:sticky; top:0; z-index:1;">
           <tr style="background:#fff0f6; vertical-align:bottom;">
@@ -6057,7 +6057,7 @@ function renderArrivalGrid() {
         '<input id="arrivalSearchKw" type="text" placeholder="搜尋商品名稱或編號..." value="' + kw + '" oninput="renderArrivalGrid()" style="padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; font-family:inherit; width:220px;">' +
         '<span style="font-size:12px; color:#9ca3af;">共 ' + data.length + ' 筆</span>' +
       '</div>' +
-      '<div style="overflow:auto; max-height:70vh;">' +
+      '<div style="overflow:auto;">' +
         '<table style="width:100%; border-collapse:collapse; font-size:13px;">' +
           '<thead><tr style="background:#fff0f6;">' +
             '<th style="padding:10px 14px; text-align:left; border-bottom:1px solid var(--border);">商品</th>' +
