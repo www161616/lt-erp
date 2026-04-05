@@ -8138,7 +8138,10 @@ async function clrRegisterItem() {
         const qtyEl = document.getElementById('clrQty-' + idx);
         if (qtyEl) item.qty = qtyEl.value.replace(/[^0-9]/g, '');
       });
-      const valid = regItems.filter(i => i.name && i.name.trim() && parseInt(i.qty) > 0);
+      // 檢查是否每個品項都是從商品資料庫選取的
+      const notSelected = regItems.filter(i => i.name && i.name.trim() && !i.code);
+      if (notSelected.length > 0) { Swal.showValidationMessage('請從搜尋結果中選擇商品，不能自行填寫'); return false; }
+      const valid = regItems.filter(i => i.code && i.name && i.name.trim() && parseInt(i.qty) > 0);
       if (!valid.length) { Swal.showValidationMessage('請至少填寫一項商品並輸入數量'); return false; }
       return valid;
     }
