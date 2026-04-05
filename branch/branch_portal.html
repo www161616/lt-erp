@@ -7238,6 +7238,7 @@ function renderAidBoard() {
   const myName = currentStore?.name;
   let list = aidBoard.filter(a => a.status !== 'cancelled');
 
+  if (currentAidTab === 'all')    list = list.filter(a => a.status !== 'fulfilled');
   if (currentAidTab === 'need')   list = list.filter(a => a.type === 'need' && a.status === 'open');
   if (currentAidTab === 'offer')  list = list.filter(a => a.type === 'offer' && a.status === 'open');
   if (currentAidTab === 'mypost') list = list.filter(a => a.posterStore === myName);
