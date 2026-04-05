@@ -1073,13 +1073,7 @@
 
             <div style="padding:15px 20px; background:var(--surface2); border-top:1px solid var(--border);">
               <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px;">
-                <div style="display:flex; gap:12px; align-items:center;">
-                  <label style="font-size:12px; color:var(--text2); font-weight:600;">付款方式</label>
-                  <select id="ipPayMethod" style="padding:6px; border:1px solid var(--border); border-radius:4px;">
-                    <option value="現金">現金</option><option value="匯款">匯款</option><option value="月結">月結</option>
-                  </select>
-                </div>
-                <div style="text-align:right;">
+                <div style="text-align:right; margin-left:auto;">
                   <div style="font-size:13px; color:var(--text2);">未稅小計: <span id="ipSubtotal" style="font-weight:700; color:var(--text);">$0</span></div>
                   <div style="font-size:22px; font-weight:700; color:var(--accent); font-family:monospace;" id="ipGrandTotal">$0</div>
                 </div>
@@ -1377,7 +1371,6 @@
       const suppId = suppMatch ? suppMatch.id : null;
 
       const orderDate = document.getElementById('ipOrderDate').value;
-      const payMethod = document.getElementById('ipPayMethod').value;
       const note = document.getElementById('ipNote').value;
       const subtotal = ipCart.reduce((s, it) => s + it.qty * it.cost, 0);
       const handler = currentUser ? currentUser.name : '調度中心';
@@ -1402,7 +1395,7 @@
             id: orderId, order_date: orderDate, supplier_id: suppId, supplier_name: suppName,
             subtotal: subtotal, tax_amount: 0, grand_total: subtotal,
             handler: handler, status: status,
-            note: (note ? note + ' | ' : '') + '付款方式:' + payMethod
+            note: note || null
           })
         });
         if (!mainRes.ok) throw new Error('主表寫入失敗: ' + await mainRes.text());
@@ -1707,9 +1700,6 @@
         const order = orderData[0];
         const detailData = detailRes.ok ? await detailRes.json() : [];
 
-        let paymentMethod = '現金';
-        if (order.note) { const m = order.note.match(/付款方式[:：](\S+)/); if (m) paymentMethod = m[1]; }
-
         ipCurrentDetail = {
           orderId: order.id,
           date: order.order_date,
@@ -1721,7 +1711,6 @@
           status: order.status || '草稿',
           note: order.note || '',
           handler: order.handler || '',
-          paymentMethod,
           items: detailData.map(d => ({
             productId: d.product_id,
             productName: d.product_name,
@@ -1769,7 +1758,6 @@
       });
 
       let displayNote = o.note || '無';
-      displayNote = displayNote.replace(/\s*\|\s*付款方式[:：]\S+/g, '').replace(/付款方式[:：]\S+\s*\|?\s*/g, '').trim() || '無';
 
       const canSubmit = o.status === '草稿';
       const canDelete = o.status === '草稿' || o.status === '駁回';
@@ -1782,7 +1770,7 @@
                 <span style="font-size:14px; padding:3px 10px; border-radius:12px; color:#fff; background:${statusColors[o.status]||'#718096'}; margin-left:10px; vertical-align:middle;">${o.status}</span>
               </h2>
               <div style="margin-top:5px; font-size:13px; color:#666; display:flex; gap:10px;">
-                <span>📅 ${o.date}</span><span>💰 ${o.paymentMethod}</span><span>👤 ${o.handler || '-'}</span>
+                <span>📅 ${o.date}</span><span>👤 ${o.handler || '-'}</span>
               </div>
             </div>
             <div style="text-align:right; font-size:18px; font-weight:bold; color:#333;">${o.supplierName}</div>
@@ -1915,7 +1903,6 @@
       }).join('');
 
       let displayNote = o.note || '無';
-      displayNote = displayNote.replace(/\s*\|\s*付款方式[:：]\S+/g, '').replace(/付款方式[:：]\S+\s*\|?\s*/g, '').trim() || '無';
 
       const html = `<!DOCTYPE html><html><head><meta charset="UTF-8"><title>內部採購單 - ${o.orderId}</title>
 <style>
@@ -1932,7 +1919,7 @@
 <body>
   <div class="title">龍潭總倉 - 內部採購單</div>
   <div class="info-row"><span><b>供應商：</b>${o.supplierName}</span><span><b>單號：</b>${o.orderId}</span><span><b>日期：</b>${o.date}</span></div>
-  <div class="info-row"><span><b>付款方式：</b>${o.paymentMethod}</span><span><b>狀態：</b>${o.status}</span><span><b>經手人：</b>${o.handler||'-'}</span></div>
+  <div class="info-row"><span><b>狀態：</b>${o.status}</span><span><b>經手人：</b>${o.handler||'-'}</span></div>
   ${displayNote !== '無' ? `<div class="info-row"><span><b>備註：</b>${displayNote}</span></div>` : ''}
   <table>
     <thead><tr>
@@ -3645,11 +3632,11 @@
       const months = [...new Set(mockSavedWaves.map(w => w.date.slice(0, 7)))].sort().reverse();
       const monthOptions = months.map(m => `<option value="${m}">${m.replace('/', '年')}月</option>`).join('');
       const html = `
-        <div style="display:flex; flex-direction:column; gap:15px; height:100%;">
-          <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--border); padding-bottom:10px; flex-shrink:0;">
+        <div style="display:flex; flex-direction:column; gap:15px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--border); padding-bottom:10px;">
             <div style="font-size:16px; font-weight:bold; color:#2d3748;">📋 揀貨紀錄與開立銷貨單</div>
           </div>
-          <div style="display:flex; gap:10px; align-items:center; flex-shrink:0;">
+          <div style="display:flex; gap:10px; align-items:center;">
             <label style="font-size:13px; font-weight:bold; color:#2d3748; white-space:nowrap;">篩選月份：</label>
             <select id="historyMonthFilter" onchange="refreshHistoryTable()" style="padding:6px 10px; border:1px solid var(--border); border-radius:4px; font-family:inherit;">
               <option value="">全部月份</option>
@@ -5456,8 +5443,8 @@
 
   function renderBackorderStation() {
     const html = `
-      <div style="display:flex; flex-direction:column; gap:15px; height:100%;">
-        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--border); padding-bottom:10px; flex-shrink:0;">
+      <div style="display:flex; flex-direction:column; gap:15px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--border); padding-bottom:10px;">
           <div style="font-size:16px; font-weight:bold; color:#2d3748;">🚨 欠品追蹤與補發</div>
           <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
             <label style="font-size:13px; color:#718096;">篩選：</label>
@@ -5869,8 +5856,8 @@
     const pendingBO = pendingBOData.length;
 
     document.getElementById('mainContainer').innerHTML = `
-      <div style="display:flex; flex-direction:column; gap:12px; height:100%;">
-        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--border); padding-bottom:10px; flex-shrink:0;">
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--border); padding-bottom:10px;">
           <div style="display:flex; gap:4px;">
             <button id="dbTab-demand" class="btn" style="padding:8px 16px; font-size:13px;" onclick="demandBackorderTab='demand'; renderDemandBackorderStation();">
               📋 店家需求 <span style="background:#fef2f2; color:#c53030; border-radius:10px; padding:1px 7px; font-size:11px; font-weight:bold; margin-left:4px;">${pendingInq}</span>
@@ -6550,9 +6537,9 @@
     var toStores = [...new Set(mockTransfers.map(function(t) { return t.toStore; }))].sort();
 
     const html = `
-      <div style="display:flex; flex-direction:column; gap:15px; height:100%;">
+      <div style="display:flex; flex-direction:column; gap:15px;">
         ${returnHtml}
-        <div style="border-bottom:2px solid var(--border); padding-bottom:10px; flex-shrink:0;">
+        <div style="border-bottom:2px solid var(--border); padding-bottom:10px;">
           <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
             <div style="font-size:16px; font-weight:bold; color:#2d3748; margin-right:4px;">🔄 店轉店審核總表</div>
             <select id="transferFilter" onchange="filterTransferTable()" style="padding:6px 10px; border:1px solid var(--border); border-radius:4px; font-family:inherit; font-size:13px;">
@@ -7055,7 +7042,7 @@
     var currentKw = document.getElementById('at-kw-filter')?.value || '';
     var opts = [['active','未到倉'],['all','全部'],['待追蹤','待追蹤'],['催貨中','催貨中'],['已到倉','已到倉'],['斷貨','斷貨']];
     var selectHtml = opts.map(function(o) { return '<option value="' + o[0] + '"' + (currentStatus === o[0] ? ' selected' : '') + '>' + o[1] + '</option>'; }).join('');
-    container.innerHTML = '<div style="display:flex; flex-direction:column; gap:15px; height:100%;">' +
+    container.innerHTML = '<div style="display:flex; flex-direction:column; gap:15px;">' +
       '<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; border-bottom:2px solid var(--border); padding-bottom:10px;">' +
         '<div style="font-size:16px; font-weight:bold; color:#2d3748;">📦 到貨追蹤</div>' +
         '<select id="at-status-filter" onchange="_atPageNum=1;updateArrivalTable()" style="padding:6px 10px; border:1px solid var(--border); border-radius:4px; font-family:inherit; font-size:13px;">' + selectHtml + '</select>' +
@@ -7454,15 +7441,15 @@
         }).join('');
 
     container.innerHTML = `
-      <div style="display:flex; flex-direction:column; gap:15px; height:100%;">
-        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--border); padding-bottom:10px; flex-shrink:0;">
+      <div style="display:flex; flex-direction:column; gap:15px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--border); padding-bottom:10px;">
           <div style="font-size:16px; font-weight:bold; color:#2d3748;">📢 公告管理</div>
           <div style="display:flex; gap:8px; align-items:center;">
             <span style="font-size:13px; color:#718096;">共 ${bulletins.length} 則公告</span>
             <button class="btn" style="padding:6px 14px; font-size:13px; background:#2b6cb0;" onclick="addBulletin()">➕ 發佈公告</button>
           </div>
         </div>
-        <div style="flex:1; overflow:auto; min-height:0;">${listHtml}</div>
+        <div>${listHtml}</div>
       </div>`;
   }
 
@@ -7669,8 +7656,8 @@
     await cloudLoadAll();
     await loadAdminProductDB(); // 確保商品資料庫已載入
     const html = `
-      <div style="display:flex; flex-direction:column; gap:15px; height:100%;">
-        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--border); padding-bottom:10px; flex-shrink:0;">
+      <div style="display:flex; flex-direction:column; gap:15px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--border); padding-bottom:10px;">
           <div style="font-size:16px; font-weight:bold; color:#2d3748;">🤝 互助交流板</div>
           <div style="display:flex; gap:8px; align-items:center;">
             <select id="adminAidFilter" onchange="adminAidFilter=this.value; renderAdminAidBoard();" style="padding:6px 10px; border:1px solid var(--border); border-radius:4px; font-family:inherit; font-size:13px;">
@@ -8435,8 +8422,8 @@
     const currentMonth = `${new Date().getFullYear()}/${String(new Date().getMonth()+1).padStart(2,'0')}`;
 
     const html = `
-      <div style="display:flex; flex-direction:column; gap:15px; height:100%;">
-        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--border); padding-bottom:10px; flex-shrink:0;">
+      <div style="display:flex; flex-direction:column; gap:15px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--border); padding-bottom:10px;">
           <div style="font-size:16px; font-weight:bold; color:#2d3748; display:flex; align-items:center; gap:10px;">💳 銷貨單管理 <button class="btn" style="padding:4px 12px; font-size:12px; background:#1a365d;" onclick="openSharedLink('https://www161616.github.io/lt-erp/')">🔍 前往 index 查詢/列印</button></div>
           <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
             <select id="accountingMonthFilter" onchange="refreshAccountingTable()" style="padding:6px 10px; border:1px solid var(--border); border-radius:4px; font-family:inherit; font-size:13px;">
@@ -8463,8 +8450,8 @@
             <span id="soSelectCount" style="font-size:12px; color:#718096; display:none;">已選 0 筆</span>
           </div>
         </div>
-        <div id="accountingSummary" style="flex-shrink:0;"></div>
-        <div id="accountingWaveList" style="flex:1; overflow:auto; min-height:0;"></div>
+        <div id="accountingSummary"></div>
+        <div id="accountingWaveList"></div>
       </div>`;
     document.getElementById('mainContainer').innerHTML = html;
     refreshAccountingTable();
@@ -9189,8 +9176,8 @@
     }
 
     const html = `
-      <div style="display:flex; flex-direction:column; gap:15px; height:100%;">
-        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--border); padding-bottom:10px; flex-shrink:0;">
+      <div style="display:flex; flex-direction:column; gap:15px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--border); padding-bottom:10px;">
           <div>
             <div style="font-size:16px; font-weight:bold; color:#2d3748;">${o.id}
               <span style="font-size:13px; font-weight:normal; color:${sColor[o.status]}; margin-left:8px;">${sLabel[o.status]}</span>
@@ -9947,7 +9934,7 @@
     const N = allColumnNames.length;
 
     container.innerHTML = `
-      <div style="display:flex; flex-direction:column; gap:10px; height:100%; overflow:hidden;">
+      <div style="display:flex; flex-direction:column; gap:10px;">
 
         <!-- 篩選列：固定兩行，不換行 -->
         <div class="panel" style="padding:12px 16px; flex-shrink:0;">
@@ -10405,8 +10392,8 @@
       </tr>`).join('');
 
     document.getElementById('mainContainer').innerHTML = `
-      <div style="display:flex; flex-direction:column; gap:12px; height:100%;">
-        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--border); padding-bottom:10px; flex-shrink:0;">
+      <div style="display:flex; flex-direction:column; gap:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--border); padding-bottom:10px;">
           <div>
             <span style="font-size:16px; font-weight:bold; color:#2d3748;">📝 採購單產生</span>
             <span style="font-size:13px; color:#718096; margin-left:12px;">結單日：<b style="color:#e11d48;">${dateVal}</b>　共 ${poItems.length} 項</span>
@@ -10605,10 +10592,10 @@
     const replied = mockInquiries.filter(i => i.status === 'replied').length;
     const todayReplied = mockInquiries.filter(i => i.status === 'replied' && i.repliedAt && i.repliedAt.startsWith('2026/03/01')).length;
     document.getElementById('mainContainer').innerHTML = `
-      <div style="display:flex; flex-direction:column; gap:12px; height:100%;">
+      <div style="display:flex; flex-direction:column; gap:12px;">
 
         <!-- 頂列：篩選 + 摘要 -->
-        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; border-bottom:2px solid var(--border); padding-bottom:12px; flex-shrink:0;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; border-bottom:2px solid var(--border); padding-bottom:12px;">
           <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
             <select id="svc-filter-month" onchange="refreshServiceTable()" style="padding:6px 10px; border:1px solid var(--border); border-radius:4px; font-family:inherit; font-size:13px;">
               <option value="">全部月份</option>

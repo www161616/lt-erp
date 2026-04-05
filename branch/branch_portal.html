@@ -1189,8 +1189,9 @@
       const seenReqs = JSON.parse(localStorage.getItem('portal_seen_requests_' + myName) || '[]');
       const reqCount = allReqs.filter(r => r.storeId === myName && r.status === 'done' && !seenReqs.includes(r.id)).length;
 
-      // 店轉店：pending 的轉入單數量
-      const tfCount = transferList.filter(t => t.to_store === myName && t.status === 'pending').length;
+      // 店轉店：有新的轉入單尚未看過
+      const seenTf = JSON.parse(localStorage.getItem('portal_seen_transfer_' + myName) || '[]');
+      const tfCount = transferList.filter(t => t.to_store === myName && t.status === 'pending' && !seenTf.includes(t.id)).length;
 
       // 互助交流：本店發的貼文有新回應
       const allAid = JSON.parse(localStorage.getItem('portalMutualAidBoard') || '[]');
@@ -1240,7 +1241,8 @@
         });
         localStorage.setItem('portal_seen_aid_' + myName, JSON.stringify(seen));
       } else if (pageId === 'pageTransfer') {
-        // 不需要額外存 seen，badge 直接看 status=pending 數量
+        const tfIds = transferList.filter(t => t.to_store === myName && t.status === 'pending').map(t => t.id);
+        localStorage.setItem('portal_seen_transfer_' + myName, JSON.stringify(tfIds));
       } else if (pageId === 'pageBulletin') {
         const allBul = JSON.parse(localStorage.getItem('portalBulletin') || '[]');
         localStorage.setItem('portal_seen_bulletin_' + myName, String(allBul.length));
