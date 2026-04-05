@@ -521,7 +521,7 @@
             <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fce7f3;">類別</th>
             <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fce7f3;">商品編號</th>
             <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fce7f3;">商品名稱</th>
-            <th style="padding:10px 16px; text-align:right; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fce7f3;">分店價</th>
+            <th style="padding:10px 16px; text-align:right; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fce7f3;">成本</th>
             <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fce7f3;">數量</th>
             <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fce7f3;">備註</th>
             <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fce7f3;">建立時間</th>
@@ -549,7 +549,7 @@
             <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fff0f6;">類別</th>
             <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fff0f6;">商品編號</th>
             <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fff0f6;">商品名稱</th>
-            <th style="padding:10px 16px; text-align:right; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fff0f6;">分店價</th>
+            <th style="padding:10px 16px; text-align:right; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fff0f6;">成本</th>
             <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fff0f6;">數量</th>
             <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fff0f6;">備註</th>
             <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#fff0f6;">建立時間</th>
@@ -582,7 +582,7 @@
             <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#f8f9fa;">類別</th>
             <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#f8f9fa;">商品編號</th>
             <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#f8f9fa;">商品名稱</th>
-            <th style="padding:10px 16px; text-align:right; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#f8f9fa;">分店價</th>
+            <th style="padding:10px 16px; text-align:right; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#f8f9fa;">成本</th>
             <th style="padding:10px 16px; text-align:center; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#f8f9fa;">數量</th>
             <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#f8f9fa;">備註</th>
             <th style="padding:10px 16px; text-align:left; border-bottom:1px solid var(--border); color:#6b7280; font-weight:600; background:#f8f9fa;">建立時間</th>
@@ -6132,7 +6132,7 @@ function renderPriceSearchPage() {
             <th style="padding:10px 12px; text-align:left; min-width:180px;">商品名稱</th>
             <th style="padding:10px 12px; text-align:left; min-width:80px;">類別</th>
             <th style="padding:10px 12px; text-align:right; min-width:80px;">售價</th>
-            <th style="padding:10px 12px; text-align:right; min-width:80px;">分店價</th>
+            <th style="padding:10px 12px; text-align:right; min-width:80px;">成本</th>
           </tr>
         </thead>
         <tbody>${rows || '<tr><td colspan="5" style="text-align:center; padding:40px; color:var(--text2);">查無商品</td></tr>'}</tbody>
@@ -6181,7 +6181,7 @@ async function searchAllProducts() {
             <th style="padding:10px 12px; text-align:left;">商品名稱</th>
             <th style="padding:10px 12px; text-align:left;">類別</th>
             <th style="padding:10px 12px; text-align:right;">售價</th>
-            <th style="padding:10px 12px; text-align:right;">分店價</th>
+            <th style="padding:10px 12px; text-align:right;">成本</th>
             <th style="padding:10px 12px; text-align:center;">狀態</th>
           </tr></thead>
           <tbody>${rows}</tbody>
@@ -7916,6 +7916,7 @@ function renderClearanceList() {
         <div style="display:flex; gap:16px; margin-top:6px; font-size:12px; color:#6b7280; flex-wrap:wrap;">
           <span>數量：<b>${item.qty}</b></span>
           <span>原價：<b>$${Number(item.price).toLocaleString()}</b></span>
+          <span>成本：<b>$${Number(item.price_branch).toLocaleString()}</b></span>
           <span style="color:#dc2626; font-weight:700;">88折：$${Number(item.price_clearance).toLocaleString()}</span>
           ${item.note ? `<span>備註：${item.note}</span>` : ''}
           ${item.sold_note ? `<span>成交備註：${item.sold_note}</span>` : ''}
@@ -8079,7 +8080,7 @@ async function clrRegisterItem() {
           ${clrPrice}
           ${removeBtn}
         </div>
-        ${item.priceBranch ? `<div style="margin-top:4px; font-size:11px; color:#9ca3af;">分店價：$${item.priceBranch}</div>` : ''}
+        ${item.priceBranch ? `<div style="margin-top:4px; font-size:11px; color:#9ca3af;">成本：$${item.priceBranch}</div>` : ''}
       </div>`;
     }).join('');
   };
@@ -8214,7 +8215,7 @@ async function clrMarkSold(itemId) {
 
   Swal.fire({ title: '處理中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 
-  // 建立店轉店單（出清店 → 買方分店，用分店價）
+  // 建立店轉店單（出清店 → 買方分店，用成本）
   const tfId = await generateTfId();
   const fromStore = item.store;
   const toStore = value.soldTo;
