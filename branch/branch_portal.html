@@ -7892,11 +7892,12 @@ function renderClearanceList() {
     const transferBadge = item.transfer_id ? ` <span style="background:#e0e7ff; color:#4338ca; padding:1px 6px; border-radius:6px; font-size:11px;">${item.transfer_id}</span>` : '';
 
     let actionHtml = '';
+    if (item.status === 'sold' && currentStore?.id === 'www161616') {
+      actionHtml += `<button onclick="clrRevertSold(${item.id})" style="padding:4px 10px; background:white; color:#b45309; border:1px solid #b45309; border-radius:4px; font-size:11px; cursor:pointer; font-family:inherit;">↩ 回溯</button> `;
+      actionHtml += `<button onclick="clrDeleteItem(${item.id})" style="padding:4px 10px; background:white; color:#ef4444; border:1px solid #ef4444; border-radius:4px; font-size:11px; cursor:pointer; font-family:inherit;">刪除</button>`;
+    }
     if (item.status === 'pending' || item.status === 'carried') {
-      if (isMyItem && item.status !== 'carried') {
-        actionHtml += `<button onclick="clrDeleteItem(${item.id})" style="padding:4px 10px; background:white; color:#ef4444; border:1px solid #ef4444; border-radius:4px; font-size:11px; cursor:pointer; font-family:inherit;">刪除</button> `;
-      }
-      if (isMyItem && item.status === 'carried') {
+      if (isMyItem || currentStore?.id === 'www161616') {
         actionHtml += `<button onclick="clrDeleteItem(${item.id})" style="padding:4px 10px; background:white; color:#ef4444; border:1px solid #ef4444; border-radius:4px; font-size:11px; cursor:pointer; font-family:inherit;">刪除</button> `;
       }
       // 任何分店都能標記成交（買方標記）
@@ -8180,6 +8181,37 @@ async function clrDeleteItem(itemId) {
   renderClearancePage();
 }
 
+async function clrRevertSold(itemId) {
+  const item = clrItems.find(i => i.id === itemId);
+  if (!item) return;
+  const r = await Swal.fire({
+    title: '回溯成交？',
+    html: `<b>${item.product_name}</b><br>將此品項改回「未出清」${item.transfer_id ? `<br><br>店轉店單 <b>${item.transfer_id}</b> 也會一併作廢` : ''}`,
+    icon: 'warning', showCancelButton: true, confirmButtonText: '確定回溯', cancelButtonText: '取消', confirmButtonColor: '#b45309'
+  });
+  if (!r.isConfirmed) return;
+
+  Swal.fire({ title: '回溯中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+  // 作廢對應的店轉店單
+  if (item.transfer_id) {
+    await fetch(`${SB_URL}/transfer_orders?id=eq.${item.transfer_id}`, {
+      method: 'PATCH', headers: { ...SB_HEADERS, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ status: 'cancelled', admin_status: 'cancelled', cancel_reason: '88折出清回溯' })
+    });
+  }
+
+  // 品項改回 pending
+  await fetch(`${SB_URL}/clearance_items?id=eq.${itemId}`, {
+    method: 'PATCH', headers: { ...SB_HEADERS, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: 'pending', sold_to: null, sold_note: null, transfer_id: null })
+  });
+
+  await loadTransferList();
+  Swal.fire({ icon: 'success', title: '已回溯', text: '品項已改回未出清', timer: 1500, showConfirmButton: false });
+  renderClearancePage();
+}
+
 async function clrMarkSold(itemId) {
   const item = clrItems.find(i => i.id === itemId);
   if (!item) return;
@@ -8207,7 +8239,7 @@ async function clrMarkSold(itemId) {
     <label style="font-size:13px; font-weight:600;">轉往哪間分店（買方）</label>
     <select id="clrSoldTo" class="swal2-input" style="margin-bottom:8px;">${storeOptions}</select>
     <label style="font-size:13px; font-weight:600;">備註（選填）</label>
-    <input id="clrSoldNote" class="swal2-input" placeholder="例：客人LINE訂購">`,
+    <input id="clrSoldNote" class="swal2-input" placeholder="">`,
     showCancelButton: true, confirmButtonText: '確認成交', cancelButtonText: '取消', confirmButtonColor: '#059669',
     preConfirm: () => {
       const soldTo = document.getElementById('clrSoldTo').value;
