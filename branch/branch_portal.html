@@ -700,7 +700,10 @@
     <button onclick="switchAidTab('offer', this)" id="aidTab-offer" style="padding:10px 18px; border:none; background:transparent; font-size:13px; font-weight:600; color:#6b7280; cursor:pointer; font-family:inherit; border-bottom:2px solid transparent; margin-bottom:-2px; white-space:nowrap;">📦 釋出中</button>
     <button onclick="switchAidTab('mypost', this)" id="aidTab-mypost" style="padding:10px 18px; border:none; background:transparent; font-size:13px; font-weight:600; color:#6b7280; cursor:pointer; font-family:inherit; border-bottom:2px solid transparent; margin-bottom:-2px; white-space:nowrap;">📝 我的發文</button>
     <button onclick="switchAidTab('myresp', this)" id="aidTab-myresp" style="padding:10px 18px; border:none; background:transparent; font-size:13px; font-weight:600; color:#6b7280; cursor:pointer; font-family:inherit; border-bottom:2px solid transparent; margin-bottom:-2px; white-space:nowrap;">🙋 我的回應</button>
+    <button onclick="switchAidTab('clearance', this)" id="aidTab-clearance" style="padding:10px 18px; border:none; background:transparent; font-size:13px; font-weight:600; color:#6b7280; cursor:pointer; font-family:inherit; border-bottom:2px solid transparent; margin-bottom:-2px; white-space:nowrap;">🏷️ 88折出清</button>
   </div>
+  <!-- 互助交流原有區塊 -->
+  <div id="aidOriginalArea">
   <div style="display:flex; align-items:center; gap:8px; padding:10px 14px; background:#fff0f6; border:1px solid #fbcfe8; border-radius:8px; margin-bottom:12px; flex-wrap:wrap;">
     <span style="font-size:13px; font-weight:600; color:#be185d;">🔍</span>
     <input type="text" id="aidSearchInput" placeholder="商品名稱或編號..."
@@ -715,6 +718,13 @@
   </div>
   <div id="aidBoardList"></div>
   <div id="aidPaginationBottom" style="display:flex; align-items:center; justify-content:center; gap:6px; margin-top:12px; flex-wrap:wrap;"></div>
+  </div>
+  <!-- 88折出清區塊 -->
+  <div id="clearanceArea" style="display:none;">
+    <div id="clearanceAdminPanel"></div>
+    <div id="clearancePeriodInfo"></div>
+    <div id="clearanceList"></div>
+  </div>
 </div>
 
 
@@ -1493,6 +1503,8 @@
         sessionStorage.setItem('branch_employee', JSON.stringify(currentStore));
         // 從雲端載入共用資料到 localStorage
         await cloudLoadAll();
+        // 自動遷移 localStorage 常用功能到 DB（只跑一次）
+        await migrateBranchSettings();
         // 從雲端載入分店專屬資料（流水帳、訂包）
         const storeDataKeys = ['ledger', 'bunRecords'].map(k => `${storeName}_${k}`);
         try {
@@ -1554,6 +1566,7 @@
         currentStore.type = autoMetaStoreType || autoTypeMapFallback[storeName] || 'store';
         sessionStorage.setItem('branch_employee', JSON.stringify(currentStore));
         await cloudLoadAll();
+        await migrateBranchSettings();
         // 從雲端載入分店專屬資料（流水帳、訂包）
         const sdKeys = ['ledger', 'bunRecords'].map(k => `${storeName}_${k}`);
         try {
@@ -6206,6 +6219,73 @@ function priceSearchGoPage(p) {
 // 常用功能對應邏輯 (對齊全新草圖版面 + 互動式行事曆)
 // ============================
 
+// --- DB 讀寫 helper (branch_settings 表) ---
+async function loadBranchSetting(key) {
+  if (!currentStore) return null;
+  try {
+    const res = await fetch(`${SB_URL}/branch_settings?store_name=eq.${encodeURIComponent(currentStore.name)}&setting_key=eq.${key}&select=setting_value`, { headers: SB_HEADERS });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.length > 0) return data[0].setting_value;
+    }
+  } catch(e) { console.error('loadBranchSetting error:', e); }
+  return null;
+}
+
+async function saveBranchSetting(key, value) {
+  if (!currentStore) return;
+  try {
+    await fetch(`${SB_URL}/branch_settings`, {
+      method: 'POST',
+      headers: { ...SB_HEADERS, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
+      body: JSON.stringify({ store_name: currentStore.name, setting_key: key, setting_value: value, updated_at: new Date().toISOString() })
+    });
+  } catch(e) { console.error('saveBranchSetting error:', e); }
+}
+
+// 自動遷移 localStorage → DB（只跑一次）
+async function migrateBranchSettings() {
+  if (!currentStore) return;
+  const storeName = currentStore.name;
+  const migratedKey = `lt_settings_migrated_${storeName}`;
+  if (localStorage.getItem(migratedKey)) return;
+
+  let migrated = false;
+
+  // 備忘錄
+  const oldMemos = localStorage.getItem(`memos_${storeName}`);
+  if (oldMemos) {
+    const existing = await loadBranchSetting('memos');
+    if (!existing || (Array.isArray(existing) && existing.length === 0)) {
+      await saveBranchSetting('memos', JSON.parse(oldMemos));
+      migrated = true;
+    }
+  }
+
+  // 自訂網址
+  const oldLinks = localStorage.getItem(`links_${storeName}`);
+  if (oldLinks) {
+    const existing = await loadBranchSetting('links');
+    if (!existing || (Array.isArray(existing) && existing.length === 0)) {
+      await saveBranchSetting('links', JSON.parse(oldLinks));
+      migrated = true;
+    }
+  }
+
+  // 常用語錄
+  const oldPhrases = localStorage.getItem(`phrases_${storeName}`);
+  if (oldPhrases) {
+    const existing = await loadBranchSetting('phrases');
+    if (!existing || (Array.isArray(existing) && existing.length === 0)) {
+      await saveBranchSetting('phrases', JSON.parse(oldPhrases));
+      migrated = true;
+    }
+  }
+
+  localStorage.setItem(migratedKey, '1');
+  if (migrated) console.log('branch_settings: localStorage 資料已遷移至 DB');
+}
+
 // --- 0. 日曆狀態與渲染 ---
 let currentCalYear = new Date().getFullYear();
 let currentCalMonth = new Date().getMonth();
@@ -6271,17 +6351,16 @@ function renderCalendar() {
 // --- 1. 事件與備忘錄 ---
 let myMemos = [];
 
-function loadMemos() {
+async function loadMemos() {
   if (!currentStore) return;
-  const saved = localStorage.getItem(`memos_${currentStore.name}`);
-  if (saved) {
-    const parsed = JSON.parse(saved);
+  const dbData = await loadBranchSetting('memos');
+  if (dbData && Array.isArray(dbData)) {
     // 自動相容舊版資料：如果發現舊版(純字串)，自動轉成今天日期的物件格式
-    if (parsed.length > 0 && typeof parsed[0] === 'string') {
-      myMemos = parsed.map((m, idx) => ({ id: 'M'+Date.now()+idx, date: selectedDate, text: m }));
-      localStorage.setItem(`memos_${currentStore.name}`, JSON.stringify(myMemos));
+    if (dbData.length > 0 && typeof dbData[0] === 'string') {
+      myMemos = dbData.map((m, idx) => ({ id: 'M'+Date.now()+idx, date: selectedDate, text: m }));
+      await saveBranchSetting('memos', myMemos);
     } else {
-      myMemos = parsed;
+      myMemos = dbData;
     }
   } else {
     myMemos = [];
@@ -6315,33 +6394,33 @@ function renderMemos() {
 
 function addMemo() {
   Swal.fire({
-    title: `新增 ${selectedDate} 事件`, 
-    input: 'textarea', 
+    title: `新增 ${selectedDate} 事件`,
+    input: 'textarea',
     inputPlaceholder: '請輸入待辦事項、客訂提醒...',
     showCancelButton: true, confirmButtonText: '儲存', confirmButtonColor: '#be185d'
-  }).then(res => {
+  }).then(async res => {
     if (res.isConfirmed && res.value && res.value.trim()) {
       myMemos.push({ id: 'M' + Date.now(), date: selectedDate, text: res.value.trim() });
-      localStorage.setItem(`memos_${currentStore.name}`, JSON.stringify(myMemos));
-      renderCalendar(); // 重新渲染日曆以更新小綠點
+      await saveBranchSetting('memos', myMemos);
+      renderCalendar();
       renderMemos();
     }
   });
 }
 
-function deleteMemo(id) {
+async function deleteMemo(id) {
   myMemos = myMemos.filter(m => m.id !== id);
-  localStorage.setItem(`memos_${currentStore.name}`, JSON.stringify(myMemos));
-  renderCalendar(); 
+  await saveBranchSetting('memos', myMemos);
+  renderCalendar();
   renderMemos();
 }
 
 // --- 2. 系統工具與自訂網址 (中間一整列) ---
 let myLinks = [];
-function loadCustomLinks() {
+async function loadCustomLinks() {
   if (!currentStore) return;
-  const saved = localStorage.getItem(`links_${currentStore.name}`);
-  myLinks = saved ? JSON.parse(saved) : [];
+  const dbData = await loadBranchSetting('links');
+  myLinks = (dbData && Array.isArray(dbData)) ? dbData : [];
   renderCustomLinks();
 }
 
@@ -6407,24 +6486,24 @@ function addCustomLink() {
       if (!/^https?:\/\//i.test(url)) url = 'https://' + url;
       return { name, url };
     }
-  }).then(res => {
+  }).then(async res => {
     if (res.isConfirmed) {
       myLinks.push(res.value);
-      localStorage.setItem(`links_${currentStore.name}`, JSON.stringify(myLinks));
+      await saveBranchSetting('links', myLinks);
       renderCustomLinks();
     }
   });
 }
-function removeCustomLink(idx) { myLinks.splice(idx, 1); localStorage.setItem(`links_${currentStore.name}`, JSON.stringify(myLinks)); renderCustomLinks(); }
+async function removeCustomLink(idx) { myLinks.splice(idx, 1); await saveBranchSetting('links', myLinks); renderCustomLinks(); }
 
 // --- 3. 常用語錄 (左右切換 Master-Detail) ---
 let myPhrases = [];
 let selectedPhraseIdx = null;
 
-function loadPhrases() {
+async function loadPhrases() {
   if (!currentStore) return;
-  const saved = localStorage.getItem(`phrases_${currentStore.name}`);
-  myPhrases = saved ? JSON.parse(saved) : ['已幫您查到訂單囉！', '商品預計下週到貨，到貨會通知您～', '請提供您的會員手機號碼查詢'];
+  const dbData = await loadBranchSetting('phrases');
+  myPhrases = (dbData && Array.isArray(dbData)) ? dbData : ['已幫您查到訂單囉！', '商品預計下週到貨，到貨會通知您～', '請提供您的會員手機號碼查詢'];
   renderPhrases();
 }
 
@@ -6491,19 +6570,19 @@ function addPhrase() {
   Swal.fire({
     title: '新增常用語錄', input: 'textarea', inputPlaceholder: '請輸入文字...',
     showCancelButton: true, confirmButtonText: '儲存', confirmButtonColor: '#2563eb'
-  }).then(res => {
+  }).then(async res => {
     if (res.isConfirmed && res.value && res.value.trim()) {
       myPhrases.unshift(res.value.trim());
-      localStorage.setItem(`phrases_${currentStore.name}`, JSON.stringify(myPhrases));
-      selectedPhraseIdx = 0; // 新增後自動選中第一個
+      await saveBranchSetting('phrases', myPhrases);
+      selectedPhraseIdx = 0;
       renderPhrases();
     }
   });
 }
 
-function deletePhrase(idx) {
+async function deletePhrase(idx) {
   myPhrases.splice(idx, 1);
-  localStorage.setItem(`phrases_${currentStore.name}`, JSON.stringify(myPhrases));
+  await saveBranchSetting('phrases', myPhrases);
   renderPhrases();
 }
 
@@ -7134,7 +7213,7 @@ function initAidPage() {
 function switchAidTab(tab, btn) {
   currentAidTab = tab;
   aidPageNum = 1;
-  ['all','need','offer','mypost','myresp'].forEach(t => {
+  ['all','need','offer','mypost','myresp','clearance'].forEach(t => {
     const el = document.getElementById('aidTab-' + t);
     if (!el) return;
     const isActive = t === tab;
@@ -7142,7 +7221,17 @@ function switchAidTab(tab, btn) {
     el.style.fontWeight = isActive ? '700' : '600';
     el.style.borderBottom = isActive ? '2px solid var(--primary)' : '2px solid transparent';
   });
-  renderAidBoard();
+  const origArea = document.getElementById('aidOriginalArea');
+  const clrArea = document.getElementById('clearanceArea');
+  if (tab === 'clearance') {
+    if (origArea) origArea.style.display = 'none';
+    if (clrArea) clrArea.style.display = '';
+    renderClearancePage();
+  } else {
+    if (origArea) origArea.style.display = '';
+    if (clrArea) clrArea.style.display = 'none';
+    renderAidBoard();
+  }
 }
 
 function renderAidBoard() {
@@ -7682,6 +7771,502 @@ function cancelAidPost(postId) {
       }
     }
   });
+}
+
+// ============================
+// 88折出清功能
+// ============================
+let clrPeriods = [];
+let clrItems = [];
+let clrCurrentPeriod = null;
+let clrFilterStore = '';
+
+async function loadClearanceData() {
+  try {
+    const pRes = await fetch(`${SB_URL}/clearance_periods?order=id.desc`, { headers: SB_HEADERS });
+    clrPeriods = pRes.ok ? await pRes.json() : [];
+  } catch(e) { clrPeriods = []; }
+}
+
+async function loadClearanceItems(periodId) {
+  try {
+    const res = await fetch(`${SB_URL}/clearance_items?period_id=eq.${periodId}&order=created_at.desc`, { headers: SB_HEADERS });
+    clrItems = res.ok ? await res.json() : [];
+  } catch(e) { clrItems = []; }
+}
+
+async function renderClearancePage() {
+  await loadClearanceData();
+  const isAdmin = currentStore?.id === 'www161616';
+  const adminPanel = document.getElementById('clearanceAdminPanel');
+  const infoPanel = document.getElementById('clearancePeriodInfo');
+  const listPanel = document.getElementById('clearanceList');
+
+  // Admin 管理面板
+  if (isAdmin) {
+    adminPanel.innerHTML = `
+      <div style="background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:14px 20px; margin-bottom:16px;">
+        <div style="font-size:14px; font-weight:700; color:#92400e; margin-bottom:10px;">🔧 檔期管理（管理員）</div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button onclick="clrCreatePeriod()" style="padding:8px 16px; background:#2563eb; color:white; border:none; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;">➕ 建立新檔期</button>
+          <button onclick="clrClosePeriod()" style="padding:8px 16px; background:#b45309; color:white; border:none; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;">🔒 關閉填寫</button>
+          <button onclick="clrCarryOver()" style="padding:8px 16px; background:#7c3aed; color:white; border:none; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;">📦 移轉未出清</button>
+          <button onclick="clrArchivePeriod()" style="padding:8px 16px; background:#6b7280; color:white; border:none; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;">📁 封存檔期</button>
+          <button onclick="clrExportExcel()" style="padding:8px 16px; background:#059669; color:white; border:none; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;">📥 匯出 Excel</button>
+        </div>
+      </div>`;
+  } else {
+    adminPanel.innerHTML = '';
+  }
+
+  // 檔期選擇 + 狀態
+  const activePeriods = clrPeriods.filter(p => p.status !== 'archived');
+  const openPeriod = clrPeriods.find(p => p.status === 'open');
+  const closedPeriod = clrPeriods.find(p => p.status === 'closed');
+  clrCurrentPeriod = openPeriod || closedPeriod || activePeriods[0] || null;
+
+  if (!clrCurrentPeriod) {
+    infoPanel.innerHTML = `<div style="text-align:center; padding:40px; color:#9ca3af; font-size:14px;">目前沒有進行中的出清檔期${isAdmin ? '，請建立新檔期' : ''}</div>`;
+    listPanel.innerHTML = '';
+    return;
+  }
+
+  const periodOptions = clrPeriods.filter(p => p.status !== 'archived')
+    .map(p => `<option value="${p.id}" ${p.id === clrCurrentPeriod.id ? 'selected' : ''}>${p.label}（${p.status === 'open' ? '填寫中' : '已截止'}）</option>`).join('');
+
+  const statusColor = clrCurrentPeriod.status === 'open' ? '#059669' : '#b45309';
+  const statusLabel = clrCurrentPeriod.status === 'open' ? '🟢 填寫中' : '🔒 已截止';
+  const canRegister = clrCurrentPeriod.status === 'open';
+  const canExport = isAdmin || clrCurrentPeriod.status === 'closed';
+
+  infoPanel.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; flex-wrap:wrap; gap:10px;">
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+        <select onchange="clrSwitchPeriod(this.value)" style="padding:7px 12px; border:1.5px solid var(--border); border-radius:6px; font-size:13px; font-family:inherit;">${periodOptions}</select>
+        <span style="color:${statusColor}; font-weight:700; font-size:13px;">${statusLabel}</span>
+        <select id="clrStoreFilter" onchange="clrFilterStore=this.value; renderClearanceList();" style="padding:7px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; font-family:inherit;">
+          <option value="">全部分店</option>
+        </select>
+      </div>
+      <div style="display:flex; gap:8px;">
+        ${canRegister ? `<button onclick="clrRegisterItem()" style="padding:8px 18px; background:linear-gradient(135deg, #f59e0b, #d97706); color:white; border:none; border-radius:8px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit; box-shadow:0 2px 8px rgba(245,158,11,0.3);">🏷️ 登記出清商品</button>` : ''}
+        ${canExport ? `<button onclick="clrExportExcel()" style="padding:8px 16px; background:#059669; color:white; border:none; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;">📥 匯出 Excel</button>` : ''}
+      </div>
+    </div>`;
+
+  await loadClearanceItems(clrCurrentPeriod.id);
+
+  // 填充分店篩選
+  const stores = [...new Set(clrItems.map(i => i.store))].sort();
+  const storeSelect = document.getElementById('clrStoreFilter');
+  if (storeSelect) {
+    storeSelect.innerHTML = '<option value="">全部分店</option>' + stores.map(s => `<option value="${s}" ${clrFilterStore === s ? 'selected' : ''}>${s}</option>`).join('');
+  }
+
+  renderClearanceList();
+}
+
+function renderClearanceList() {
+  const listPanel = document.getElementById('clearanceList');
+  if (!listPanel) return;
+  const myName = currentStore?.name;
+
+  let list = clrItems;
+  if (clrFilterStore) list = list.filter(i => i.store === clrFilterStore);
+
+  if (list.length === 0) {
+    listPanel.innerHTML = `<div style="text-align:center; padding:40px; color:#9ca3af; font-size:14px;">目前沒有出清品項</div>`;
+    return;
+  }
+
+  const rows = list.map(item => {
+    const isMyItem = item.store === myName;
+    const statusBadge = item.status === 'sold'
+      ? `<span style="background:#dcfce7; color:#059669; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;">✅ 已出清 → ${item.sold_to || ''}</span>`
+      : item.status === 'carried'
+      ? `<span style="background:#fef3c7; color:#b45309; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;">📦 上期移轉</span>`
+      : `<span style="background:#fce7f3; color:#be185d; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700;">⏳ 未出清</span>`;
+    const tempColor = item.temp === '冷凍' ? '#3b82f6' : item.temp === '冷藏' ? '#06b6d4' : '#f59e0b';
+    const tempBadge = item.temp ? `<span style="background:${tempColor}20; color:${tempColor}; padding:1px 6px; border-radius:6px; font-size:11px; font-weight:700;">${item.temp}</span>` : '';
+    const transferBadge = item.transfer_id ? ` <span style="background:#e0e7ff; color:#4338ca; padding:1px 6px; border-radius:6px; font-size:11px;">${item.transfer_id}</span>` : '';
+
+    let actionHtml = '';
+    if (item.status === 'pending' || item.status === 'carried') {
+      if (isMyItem && item.status !== 'carried') {
+        actionHtml += `<button onclick="clrDeleteItem(${item.id})" style="padding:4px 10px; background:white; color:#ef4444; border:1px solid #ef4444; border-radius:4px; font-size:11px; cursor:pointer; font-family:inherit;">刪除</button> `;
+      }
+      if (isMyItem && item.status === 'carried') {
+        actionHtml += `<button onclick="clrDeleteItem(${item.id})" style="padding:4px 10px; background:white; color:#ef4444; border:1px solid #ef4444; border-radius:4px; font-size:11px; cursor:pointer; font-family:inherit;">刪除</button> `;
+      }
+      // 任何分店都能標記成交（買方標記）
+      actionHtml += `<button onclick="clrMarkSold(${item.id})" style="padding:4px 10px; background:#059669; color:white; border:none; border-radius:4px; font-size:11px; font-weight:700; cursor:pointer; font-family:inherit;">標記成交</button>`;
+    }
+
+    return `
+      <div style="background:white; border:1px solid var(--border); border-radius:8px; padding:12px 16px; margin-bottom:8px; box-shadow:0 1px 3px rgba(0,0,0,0.04);">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+          <div>
+            <span style="font-weight:700; font-size:13px; color:#be185d;">${item.store}</span>
+            <span style="font-weight:700; font-size:13px; margin-left:8px;">${item.product_id ? item.product_id + ' ' : ''}${item.product_name}</span>
+            ${tempBadge} ${statusBadge}${transferBadge}
+          </div>
+          <div style="display:flex; gap:6px; align-items:center;">${actionHtml}</div>
+        </div>
+        <div style="display:flex; gap:16px; margin-top:6px; font-size:12px; color:#6b7280; flex-wrap:wrap;">
+          <span>數量：<b>${item.qty}</b></span>
+          <span>原價：<b>$${Number(item.price).toLocaleString()}</b></span>
+          <span style="color:#dc2626; font-weight:700;">88折：$${Number(item.price_clearance).toLocaleString()}</span>
+          ${item.note ? `<span>備註：${item.note}</span>` : ''}
+          ${item.sold_note ? `<span>成交備註：${item.sold_note}</span>` : ''}
+        </div>
+      </div>`;
+  }).join('');
+
+  listPanel.innerHTML = rows;
+}
+
+// --- Admin 操作 ---
+async function clrCreatePeriod() {
+  const { value } = await Swal.fire({
+    title: '建立新檔期',
+    html: `<div style="text-align:left;">
+      <label style="font-size:13px; font-weight:600;">開始日期</label>
+      <input type="date" id="clrStartDate" class="swal2-input" style="margin-bottom:8px;">
+      <label style="font-size:13px; font-weight:600;">結束日期</label>
+      <input type="date" id="clrEndDate" class="swal2-input">
+    </div>`,
+    showCancelButton: true, confirmButtonText: '建立', cancelButtonText: '取消', confirmButtonColor: '#2563eb',
+    preConfirm: () => {
+      const s = document.getElementById('clrStartDate').value;
+      const e = document.getElementById('clrEndDate').value;
+      if (!s || !e) { Swal.showValidationMessage('請選擇日期'); return false; }
+      if (e < s) { Swal.showValidationMessage('結束日不能早於開始日'); return false; }
+      return { start: s, end: e };
+    }
+  });
+  if (!value) return;
+
+  const label = value.start.replace(/-/g, '/') + '~' + value.end.slice(5).replace(/-/g, '/');
+  const res = await fetch(`${SB_URL}/clearance_periods`, {
+    method: 'POST', headers: { ...SB_HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+    body: JSON.stringify({ label, start_date: value.start, end_date: value.end, status: 'open' })
+  });
+  if (!res.ok) { Swal.fire('建立失敗', await res.text(), 'error'); return; }
+  Swal.fire({ icon: 'success', title: '檔期已建立', text: label, timer: 1500, showConfirmButton: false });
+  renderClearancePage();
+}
+
+async function clrClosePeriod() {
+  const openP = clrPeriods.find(p => p.status === 'open');
+  if (!openP) { Swal.fire('提示', '沒有開放中的檔期', 'info'); return; }
+  const r = await Swal.fire({ title: '關閉填寫？', text: `檔期：${openP.label}\n關閉後分店無法再登記`, icon: 'warning', showCancelButton: true, confirmButtonText: '確定關閉', cancelButtonText: '取消', confirmButtonColor: '#b45309' });
+  if (!r.isConfirmed) return;
+  const res = await fetch(`${SB_URL}/clearance_periods?id=eq.${openP.id}`, {
+    method: 'PATCH', headers: { ...SB_HEADERS, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: 'closed' })
+  });
+  if (!res.ok) { Swal.fire('失敗', await res.text(), 'error'); return; }
+  Swal.fire({ icon: 'success', title: '已關閉填寫', timer: 1500, showConfirmButton: false });
+  renderClearancePage();
+}
+
+async function clrArchivePeriod() {
+  const closedP = clrPeriods.find(p => p.status === 'closed');
+  if (!closedP) { Swal.fire('提示', '沒有已截止的檔期可封存', 'info'); return; }
+  const r = await Swal.fire({ title: '封存檔期？', text: `檔期：${closedP.label}\n封存後不會再顯示`, icon: 'warning', showCancelButton: true, confirmButtonText: '確定封存', cancelButtonText: '取消', confirmButtonColor: '#6b7280' });
+  if (!r.isConfirmed) return;
+  const res = await fetch(`${SB_URL}/clearance_periods?id=eq.${closedP.id}`, {
+    method: 'PATCH', headers: { ...SB_HEADERS, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: 'archived' })
+  });
+  if (!res.ok) { Swal.fire('失敗', await res.text(), 'error'); return; }
+  Swal.fire({ icon: 'success', title: '已封存', timer: 1500, showConfirmButton: false });
+  renderClearancePage();
+}
+
+async function clrCarryOver() {
+  const closedP = clrPeriods.find(p => p.status === 'closed');
+  if (!closedP) { Swal.fire('提示', '沒有已截止的檔期', 'info'); return; }
+  const openP = clrPeriods.find(p => p.status === 'open');
+  if (!openP) { Swal.fire('提示', '請先建立一個新的 open 檔期作為移轉目標', 'warning'); return; }
+
+  await loadClearanceItems(closedP.id);
+  const pendingItems = clrItems.filter(i => i.status === 'pending' || i.status === 'carried');
+  if (pendingItems.length === 0) { Swal.fire('提示', '沒有未出清的品項需要移轉', 'info'); return; }
+
+  const r = await Swal.fire({
+    title: '移轉未出清品項',
+    html: `從 <b>${closedP.label}</b> 移轉 <b>${pendingItems.length}</b> 筆至 <b>${openP.label}</b>`,
+    icon: 'question', showCancelButton: true, confirmButtonText: '確定移轉', cancelButtonText: '取消', confirmButtonColor: '#7c3aed'
+  });
+  if (!r.isConfirmed) return;
+
+  Swal.fire({ title: '移轉中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+  // 在新檔期建立複製品項
+  const newItems = pendingItems.map(i => ({
+    period_id: openP.id, store: i.store, product_id: i.product_id, product_name: i.product_name,
+    temp: i.temp, qty: i.qty, price: i.price, price_branch: i.price_branch,
+    price_clearance: i.price_clearance, note: i.note, status: 'carried', carried_from_period: closedP.id
+  }));
+
+  const insertRes = await fetch(`${SB_URL}/clearance_items`, {
+    method: 'POST', headers: { ...SB_HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+    body: JSON.stringify(newItems)
+  });
+  if (!insertRes.ok) { Swal.fire('移轉失敗', await insertRes.text(), 'error'); return; }
+
+  // 原檔期品項標記 carried
+  const ids = pendingItems.map(i => i.id);
+  await fetch(`${SB_URL}/clearance_items?id=in.(${ids.join(',')})`, {
+    method: 'PATCH', headers: { ...SB_HEADERS, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: 'carried' })
+  });
+
+  Swal.fire({ icon: 'success', title: '移轉完成', text: `${pendingItems.length} 筆已移至 ${openP.label}`, timer: 2000, showConfirmButton: false });
+  renderClearancePage();
+}
+
+async function clrSwitchPeriod(periodId) {
+  clrCurrentPeriod = clrPeriods.find(p => p.id === parseInt(periodId));
+  if (!clrCurrentPeriod) return;
+  await loadClearanceItems(clrCurrentPeriod.id);
+  // 重新渲染 info 和 list
+  renderClearancePage();
+}
+
+// --- 分店操作 ---
+async function clrRegisterItem() {
+  // 先即時檢查檔期是否還在 open
+  try {
+    const chk = await fetch(`${SB_URL}/clearance_periods?id=eq.${clrCurrentPeriod.id}&select=status`, { headers: SB_HEADERS });
+    const chkData = await chk.json();
+    if (!chkData.length || chkData[0].status !== 'open') {
+      Swal.fire('已截止', '此檔期已關閉填寫，無法登記', 'warning');
+      renderClearancePage();
+      return;
+    }
+  } catch(e) {}
+
+  let regItems = [{ code: '', name: '', qty: '', temp: '', price: 0, priceBranch: 0 }];
+
+  const renderRegModal = () => {
+    const wrap = document.getElementById('clrRegItemsWrap');
+    if (!wrap) return;
+    wrap.innerHTML = regItems.map((item, idx) => {
+      const displayVal = item.name ? (item.code ? item.code + ' ' + item.name : item.name) : '';
+      const tempColor = item.temp === '冷凍' ? '#3b82f6' : item.temp === '冷藏' ? '#06b6d4' : '#f59e0b';
+      const tempBadge = item.temp ? `<span style="background:${tempColor}20; color:${tempColor}; padding:2px 7px; border-radius:8px; font-size:11px; font-weight:700;">${item.temp}</span>` : '';
+      const removeBtn = idx > 0 ? `<button onclick="document.dispatchEvent(new CustomEvent('clrRemoveItem',{detail:${idx}}))" style="padding:6px 10px; background:#fff; color:#ef4444; border:1px solid #ef4444; border-radius:6px; cursor:pointer; font-size:13px; flex-shrink:0;">✕</button>` : '';
+      const clrPrice = item.price ? `<span style="color:#dc2626; font-weight:700; font-size:12px;">88折：$${Math.round(item.price * 0.88)}</span>` : '';
+      return `<div style="border:1px solid #e2e8f0; border-radius:8px; padding:12px; margin-bottom:10px; background:#fafafa;">
+        <div style="position:relative; margin-bottom:8px;">
+          <input type="text" placeholder="輸入商品名稱或編號搜尋..." value="${displayVal.replace(/"/g, '&quot;')}"
+            oninput="document.dispatchEvent(new CustomEvent('clrSearch',{detail:{idx:${idx},kw:this.value}}))"
+            onfocus="document.dispatchEvent(new CustomEvent('clrFocus',{detail:${idx}}))"
+            onblur="setTimeout(()=>document.dispatchEvent(new CustomEvent('clrBlur',{detail:${idx}})),200)"
+            style="width:100%; padding:8px 12px; border:1.5px solid #e2e8f0; border-radius:6px; font-size:13px; font-family:inherit; box-sizing:border-box;">
+          <div id="clrDrop-${idx}" style="display:none; position:absolute; top:100%; left:0; right:0; background:white; border:1.5px solid var(--primary); border-radius:6px; max-height:180px; overflow-y:auto; z-index:9999; box-shadow:0 4px 12px rgba(0,0,0,0.12);"></div>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          ${tempBadge}
+          <input type="text" inputmode="numeric" id="clrQty-${idx}" placeholder="數量" value="${item.qty || ''}"
+            oninput="document.dispatchEvent(new CustomEvent('clrQtyChange',{detail:{idx:${idx},val:this.value}}))"
+            style="width:70px; padding:7px 10px; border:1.5px solid #e2e8f0; border-radius:6px; font-size:14px; font-weight:700; font-family:inherit; text-align:center;">
+          <span style="font-size:12px; color:#6b7280;">件</span>
+          ${item.price ? `<span style="font-size:12px; color:#6b7280;">原價：$${item.price}</span>` : ''}
+          ${clrPrice}
+          ${removeBtn}
+        </div>
+        ${item.priceBranch ? `<div style="margin-top:4px; font-size:11px; color:#9ca3af;">分店價：$${item.priceBranch}</div>` : ''}
+      </div>`;
+    }).join('');
+  };
+
+  // 事件代理
+  const handlers = {
+    clrSearch: (e) => {
+      const { idx, kw } = e.detail;
+      regItems[idx].searchKw = kw;
+      if (!kw.trim()) { regItems[idx].code = ''; regItems[idx].name = ''; regItems[idx].temp = ''; regItems[idx].price = 0; regItems[idx].priceBranch = 0; }
+      const drop = document.getElementById('clrDrop-' + idx);
+      if (!drop) return;
+      const k = kw.trim().toLowerCase();
+      if (!k) { drop.style.display = 'none'; return; }
+      const results = PRODUCT_DB.filter(p => p.name.toLowerCase().includes(k) || p.code.toLowerCase().includes(k)).slice(0, 20);
+      if (!results.length) { drop.innerHTML = '<div style="padding:10px 14px; color:#9ca3af; font-size:13px;">找不到商品</div>'; }
+      else {
+        drop.innerHTML = results.map(p => {
+          const tc = p.temp === '冷凍' ? '#3b82f6' : p.temp === '冷藏' ? '#06b6d4' : '#f59e0b';
+          return `<div onclick="document.dispatchEvent(new CustomEvent('clrSelect',{detail:{idx:${idx},code:'${(p.code||'').replace(/'/g,'')}',name:'${(p.name||'').replace(/'/g,'')}',temp:'${(p.temp||'').replace(/'/g,'')}',price:${p.sellPrice||0},priceBranch:${p.branchPrice||0}}}))" style="padding:9px 14px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; font-size:13px; border-bottom:1px solid #f3f4f6;" onmouseover="this.style.background='#fff0f6'" onmouseout="this.style.background=''">
+            <span><b style="color:#6b7280; margin-right:6px;">${p.code}</b>${p.name}</span>
+            <span style="display:flex; gap:6px; align-items:center;">
+              ${p.sellPrice ? `<span style="color:#374151; font-size:12px;">$${p.sellPrice}</span>` : ''}
+              <span style="background:${tc}20; color:${tc}; padding:1px 6px; border-radius:6px; font-size:11px; font-weight:700;">${p.temp||''}</span>
+            </span>
+          </div>`;
+        }).join('');
+      }
+      drop.style.display = 'block';
+    },
+    clrSelect: (e) => {
+      const { idx, code, name, temp, price, priceBranch } = e.detail;
+      regItems[idx] = { ...regItems[idx], code, name, temp, price, priceBranch };
+      renderRegModal();
+      setTimeout(() => { const el = document.getElementById('clrQty-' + idx); if (el) el.focus(); }, 50);
+    },
+    clrFocus: (e) => { const kw = (regItems[e.detail]?.searchKw || '').trim(); if (kw) handlers.clrSearch({ detail: { idx: e.detail, kw } }); },
+    clrBlur: (e) => { const d = document.getElementById('clrDrop-' + e.detail); if (d) d.style.display = 'none'; },
+    clrQtyChange: (e) => { regItems[e.detail.idx].qty = e.detail.val.replace(/[^0-9]/g, ''); },
+    clrRemoveItem: (e) => { regItems.splice(e.detail, 1); renderRegModal(); },
+    clrAddItem: () => { regItems.push({ code: '', name: '', qty: '', temp: '', price: 0, priceBranch: 0 }); renderRegModal(); }
+  };
+  Object.keys(handlers).forEach(k => document.addEventListener(k, handlers[k]));
+
+  const { isConfirmed, value: confirmed } = await Swal.fire({
+    title: '🏷️ 登記出清商品',
+    html: `<div id="clrRegItemsWrap"></div>
+      <button onclick="document.dispatchEvent(new CustomEvent('clrAddItem'))" style="margin-top:8px; padding:6px 14px; background:#fff7ed; color:#b45309; border:1px solid #fde68a; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;">＋ 新增商品</button>
+      <div style="margin-top:12px;"><label style="font-size:13px; font-weight:600; color:#374151;">備註</label>
+      <textarea id="clrRegNote" rows="2" placeholder="選填" style="width:100%; margin-top:4px; padding:8px 10px; border:1px solid #e2e8f0; border-radius:6px; font-size:13px; font-family:inherit; resize:vertical; box-sizing:border-box;"></textarea></div>`,
+    width: 520, showCancelButton: true, confirmButtonText: '送出登記', cancelButtonText: '取消', confirmButtonColor: '#d97706',
+    didOpen: () => renderRegModal(),
+    preConfirm: () => {
+      regItems.forEach((item, idx) => {
+        const qtyEl = document.getElementById('clrQty-' + idx);
+        if (qtyEl) item.qty = qtyEl.value.replace(/[^0-9]/g, '');
+      });
+      const valid = regItems.filter(i => i.name && i.name.trim() && parseInt(i.qty) > 0);
+      if (!valid.length) { Swal.showValidationMessage('請至少填寫一項商品並輸入數量'); return false; }
+      return valid;
+    }
+  });
+
+  // 清理事件
+  Object.keys(handlers).forEach(k => document.removeEventListener(k, handlers[k]));
+
+  if (!isConfirmed) return;
+  const note = (document.getElementById('clrRegNote')?.value || '').trim();
+  const myName = currentStore?.name || '';
+
+  Swal.fire({ title: '登記中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+  const insertData = confirmed.map(i => ({
+    period_id: clrCurrentPeriod.id, store: myName,
+    product_id: i.code || '', product_name: i.name.trim(), temp: i.temp || '',
+    qty: parseInt(i.qty), price: i.price || 0, price_branch: i.priceBranch || 0,
+    price_clearance: Math.round((i.price || 0) * 0.88), note: note, status: 'pending'
+  }));
+
+  const res = await fetch(`${SB_URL}/clearance_items`, {
+    method: 'POST', headers: { ...SB_HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+    body: JSON.stringify(insertData)
+  });
+  if (!res.ok) { Swal.fire('登記失敗', await res.text(), 'error'); return; }
+  Swal.fire({ icon: 'success', title: '登記成功！', text: `${confirmed.length} 項商品`, timer: 1500, showConfirmButton: false });
+  renderClearancePage();
+}
+
+async function clrDeleteItem(itemId) {
+  const r = await Swal.fire({ title: '確定刪除？', icon: 'warning', showCancelButton: true, confirmButtonText: '刪除', cancelButtonText: '取消', confirmButtonColor: '#ef4444' });
+  if (!r.isConfirmed) return;
+  const res = await fetch(`${SB_URL}/clearance_items?id=eq.${itemId}`, { method: 'DELETE', headers: SB_HEADERS });
+  if (!res.ok) { Swal.fire('刪除失敗', await res.text(), 'error'); return; }
+  renderClearancePage();
+}
+
+async function clrMarkSold(itemId) {
+  const item = clrItems.find(i => i.id === itemId);
+  if (!item) return;
+
+  // 競態檢查：確認品項還是 pending 或 carried
+  try {
+    const chk = await fetch(`${SB_URL}/clearance_items?id=eq.${itemId}&select=status`, { headers: SB_HEADERS });
+    const chkData = await chk.json();
+    if (!chkData.length || (chkData[0].status !== 'pending' && chkData[0].status !== 'carried')) {
+      Swal.fire('已被處理', '此品項已被其他人標記成交或刪除', 'warning');
+      renderClearancePage();
+      return;
+    }
+  } catch(e) {}
+
+  const storeOptions = TF_STORES.filter(s => s.name !== '總倉').map(s => `<option value="${s.name}" ${s.name === currentStore?.name ? 'selected' : ''}>${s.name}</option>`).join('');
+
+  const { isConfirmed, value } = await Swal.fire({
+    title: '標記成交',
+    html: `<div style="text-align:left; font-size:13px; margin-bottom:12px;">
+      <div><b>${item.product_id || ''}</b> ${item.product_name}</div>
+      <div style="color:#6b7280; margin-top:4px;">出清店：<b>${item.store}</b>　數量：<b>${item.qty}</b>　88折價：<b style="color:#dc2626;">$${Number(item.price_clearance).toLocaleString()}</b></div>
+    </div>
+    <label style="font-size:13px; font-weight:600;">轉往哪間分店（買方）</label>
+    <select id="clrSoldTo" class="swal2-input" style="margin-bottom:8px;">${storeOptions}</select>
+    <label style="font-size:13px; font-weight:600;">備註（選填）</label>
+    <input id="clrSoldNote" class="swal2-input" placeholder="例：客人LINE訂購">`,
+    showCancelButton: true, confirmButtonText: '確認成交', cancelButtonText: '取消', confirmButtonColor: '#059669',
+    preConfirm: () => {
+      const soldTo = document.getElementById('clrSoldTo').value;
+      if (!soldTo) { Swal.showValidationMessage('請選擇分店'); return false; }
+      return { soldTo, note: (document.getElementById('clrSoldNote').value || '').trim() };
+    }
+  });
+  if (!isConfirmed) return;
+
+  Swal.fire({ title: '處理中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+  // 建立店轉店單（出清店 → 買方分店，用分店價）
+  const tfId = await generateTfId();
+  const fromStore = item.store;
+  const toStore = value.soldTo;
+
+  const orderRes = await fetch(`${SB_URL}/transfer_orders`, {
+    method: 'POST', headers: { ...SB_HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+    body: JSON.stringify({ id: tfId, from_store: fromStore, to_store: toStore, status: 'pending', admin_status: 'pending', temp_note: item.temp || '', note: '88折出清成交' })
+  });
+  if (!orderRes.ok) { Swal.fire('建立店轉店單失敗', await orderRes.text(), 'error'); return; }
+
+  await fetch(`${SB_URL}/transfer_items`, {
+    method: 'POST', headers: { ...SB_HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+    body: JSON.stringify({ transfer_id: tfId, product_code: item.product_id || '', product_name: item.product_name, temp: item.temp || '', qty: item.qty, price: item.price_branch || 0, amount: item.qty * (item.price_branch || 0), note: '88折出清' })
+  });
+
+  // 更新出清品項狀態
+  await fetch(`${SB_URL}/clearance_items?id=eq.${itemId}`, {
+    method: 'PATCH', headers: { ...SB_HEADERS, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ status: 'sold', sold_to: toStore, sold_note: value.note || '', transfer_id: tfId })
+  });
+
+  await loadTransferList();
+  Swal.fire({ icon: 'success', title: '成交！', html: `店轉店單 <b>${tfId}</b><br>${fromStore} → ${toStore}`, confirmButtonColor: '#be185d' });
+  renderClearancePage();
+}
+
+// --- Excel 匯出 ---
+function clrExportExcel() {
+  if (!clrCurrentPeriod) return;
+  const exportItems = clrItems.filter(i => i.status === 'pending' || i.status === 'carried');
+  if (!exportItems.length) { Swal.fire('提示', '沒有未出清的品項可匯出', 'info'); return; }
+
+  const statusLabel = clrCurrentPeriod.status === 'open' ? '（填寫中，尚未截止）' : '';
+  const wsData = [
+    [`88折出清清單 — ${clrCurrentPeriod.label} ${statusLabel}`],
+    [],
+    ['分店', '商品編號', '商品名稱', '溫層', '數量', '原價', '88折出清價', '備註', '來源']
+  ];
+
+  exportItems.forEach(item => {
+    wsData.push([
+      item.store, item.product_id || '', item.product_name, item.temp || '',
+      item.qty, item.price, item.price_clearance,
+      item.note || '', item.status === 'carried' ? '上期移轉' : ''
+    ]);
+  });
+
+  const wb = XLSX.utils.book_new();
+  const ws = XLSX.utils.aoa_to_sheet(wsData);
+  // 設定欄寬
+  ws['!cols'] = [{ wch: 10 }, { wch: 12 }, { wch: 20 }, { wch: 6 }, { wch: 6 }, { wch: 8 }, { wch: 10 }, { wch: 15 }, { wch: 10 }];
+  XLSX.utils.book_append_sheet(wb, ws, '出清清單');
+  XLSX.writeFile(wb, `88折出清_${clrCurrentPeriod.label.replace(/\//g, '')}.xlsx`);
 }
 
 // ============================
