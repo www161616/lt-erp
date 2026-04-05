@@ -8195,7 +8195,8 @@ async function clrMarkSold(itemId) {
     }
   } catch(e) {}
 
-  const storeOptions = TF_STORES.filter(s => s.name !== '總倉').map(s => `<option value="${s.name}" ${s.name === currentStore?.name ? 'selected' : ''}>${s.name}</option>`).join('');
+  const excludeStores = ['總倉', '板橋', '山張', '全民'];
+  const storeOptions = TF_STORES.filter(s => !excludeStores.includes(s.name)).map(s => `<option value="${s.name}" ${s.name === currentStore?.name ? 'selected' : ''}>${s.name}</option>`).join('');
 
   const { isConfirmed, value } = await Swal.fire({
     title: '標記成交',
