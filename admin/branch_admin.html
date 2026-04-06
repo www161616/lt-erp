@@ -2411,6 +2411,7 @@
 
       // ② POST 新品到 Supabase products
       let savedCount = 0;
+      let productWriteError = '';
       if (newItems.length > 0) {
         const payload = newItems.map(item => ({
           id:              item.code,
@@ -2432,14 +2433,14 @@
         });
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
-          Swal.fire('❌ 寫入失敗', err.message || err.details || '請確認 Supabase 連線', 'error');
-          return;
+          productWriteError = err.message || err.details || '寫入失敗';
+        } else {
+          savedCount = newItems.length;
         }
-        savedCount = newItems.length;
-        
+
         // ✨ 紀錄操作：商品同步 ERP
-        await logActivity('商品建檔同步 ERP', 'PRODUCTS', { 
-          count: savedCount, 
+        await logActivity('商品建檔同步 ERP', 'PRODUCTS', {
+          count: savedCount,
           items: newItems.map(i => i.code).join(','),
           skipped: skipped.length
         });
@@ -2487,6 +2488,7 @@
 
       // ④ 結果提示
       let msg = '';
+      if (productWriteError) msg += `⚠️ 商品主檔寫入失敗：${productWriteError}<br>（檔期仍已同步至分店）<br>`;
       if (savedCount)      msg += `✅ 寫入 ERP 商品主檔：<b>${savedCount}</b> 件新品<br>`;
       if (skipped.length)  msg += `⏭️ 編號已存在跳過：<b>${skipped.length}</b> 件<br>`;
       msg += `📤 已同步 <b>${stagingList.length}</b> 件至分店結單填表`;
