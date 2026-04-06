@@ -2526,7 +2526,9 @@
         cost:     ['成本', 'cost'],
         supplier: ['供應商', 'supplier'],
         alert_stock: ['安全庫存'],
-        status:   ['狀態', 'status']
+        status:   ['狀態', 'status'],
+        startDate: ['開團日', '開團日期'],
+        endDate:   ['結單日', '結單日期']
       };
       for (const [field, aliases] of Object.entries(fieldAliases)) {
         const idx = header.findIndex(h => aliases.some(a => h === a));
@@ -2561,7 +2563,9 @@
           cost:         colMap.cost !== undefined ? parseNum(r[colMap.cost]) : 0,
           supplier:     colMap.supplier !== undefined ? String(r[colMap.supplier] || '').trim() : '',
           alert_stock:  colMap.alert_stock !== undefined ? parseNum(r[colMap.alert_stock]) : 0,
-          status:       colMap.status !== undefined ? String(r[colMap.status] || '').trim() || '啟用' : '啟用'
+          status:       colMap.status !== undefined ? String(r[colMap.status] || '').trim() || '啟用' : '啟用',
+          startDate:    colMap.startDate !== undefined ? String(r[colMap.startDate] || '').trim() : '',
+          endDate:      colMap.endDate !== undefined ? String(r[colMap.endDate] || '').trim() : ''
         });
       }
 
@@ -2632,8 +2636,26 @@
       if (errorMsg) {
         Swal.fire('部分失敗', `已寫入 ${savedCount} 筆，錯誤：${errorMsg}`, 'warning');
       } else {
+        // 匯入的商品加入 stagingList（讓員工可以按「寫入 ERP 並發布檔期」同步到分店）
+        const TEMP_CAT_MAP = { '冷凍': '冷凍', '冷藏': '冷藏', '常溫': '常溫' };
+        const startDateVal = document.getElementById('fastStartDate')?.value || '';
+        items.forEach(it => {
+          if (stagingList.some(s => s.code === it.id)) return;
+          const temp = TEMP_CAT_MAP[it.category] || it.category || '常溫';
+          stagingList.push({
+            code: it.id, name: it.name, temp: temp,
+            category: it.category || temp,
+            price: it.price || 0, storePrice: it.price_branch || 0,
+            wholesalePrice: it.price_wholesale || 0, groupPrice: it.price_group || 0,
+            cost: it.cost || 0, supplier: it.supplier || '',
+            startDate: it.startDate || startDateVal,
+            endDate: it.endDate || ''
+          });
+        });
+        renderStagingList();
+
         await logActivity('商品批次匯入', 'PRODUCTS', { count: savedCount, skipped: skippedCount, file: file.name });
-        Swal.fire('匯入完成', `✅ 寫入 <b>${savedCount}</b> 筆新商品<br>⏭️ 跳過 <b>${skippedCount}</b> 筆已存在`, 'success');
+        Swal.fire('匯入完成', `✅ 寫入 <b>${savedCount}</b> 筆新商品<br>⏭️ 跳過 <b>${skippedCount}</b> 筆已存在<br>📋 已加入商品清單 <b>${items.length}</b> 筆，請按「🚀 寫入 ERP 並發布檔期」同步到分店`, 'success');
       }
     }
 
