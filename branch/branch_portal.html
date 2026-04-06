@@ -2102,9 +2102,9 @@
               const item = findItem(csvId);
               if (!item) {
                 // 區分：系統有此商品但開團總表沒有 vs 完全找不到
-                const inProductDB = PRODUCT_DB.some(p => p.code === csvId || csvId.startsWith(p.code) || p.code.startsWith(csvId));
-                if (inProductDB) {
-                  notInCampaign.push({ id: csvId, qty: totalQty, name: csvNames[csvId] || '' });
+                const dbProduct = PRODUCT_DB.find(p => p.code === csvId || csvId.startsWith(p.code) || p.code.startsWith(csvId));
+                if (dbProduct) {
+                  notInCampaign.push({ id: csvId, qty: totalQty, name: csvNames[csvId] || '', sysName: dbProduct.name || '' });
                 } else {
                   missingIds.push({ id: csvId, qty: totalQty, name: csvNames[csvId] || '' });
                 }
@@ -2191,8 +2191,8 @@
             if (notInCampaign.length > 0) {
               rpt += `<br><b style="color:#7c3aed;">⚠️ 開團總表無此品項 ${notInCampaign.length} 筆（系統有商品但本期未開團）：</b>`;
               rpt += `<table style="width:100%; border-collapse:collapse; margin-top:6px; font-size:12px;">
-                <tr style="background:#ede9fe;"><th style="padding:4px 8px; text-align:left; color:#5b21b6;">編號</th><th style="padding:4px 8px; text-align:left; color:#5b21b6;">名稱</th><th style="padding:4px 8px; text-align:center; color:#5b21b6;">數量</th></tr>`;
-              rpt += notInCampaign.map(m => `<tr style="border-bottom:1px solid #ddd8fe;"><td style="padding:3px 8px; font-family:monospace;">${m.id}</td><td style="padding:3px 8px;">${m.name}</td><td style="padding:3px 8px; text-align:center; font-weight:700;">${m.qty}</td></tr>`).join('');
+                <tr style="background:#ede9fe;"><th style="padding:4px 8px; text-align:left; color:#5b21b6;">編號</th><th style="padding:4px 8px; text-align:left; color:#5b21b6;">系統名稱</th><th style="padding:4px 8px; text-align:left; color:#5b21b6;">樂樂名稱</th><th style="padding:4px 8px; text-align:center; color:#5b21b6;">數量</th></tr>`;
+              rpt += notInCampaign.map(m => `<tr style="border-bottom:1px solid #ddd8fe;"><td style="padding:3px 8px; font-family:monospace;">${m.id}</td><td style="padding:3px 8px; color:#374151;">${m.sysName || ''}</td><td style="padding:3px 8px; color:#6b7280; font-size:11px;">${m.name}</td><td style="padding:3px 8px; text-align:center; font-weight:700;">${m.qty}</td></tr>`).join('');
               rpt += `</table>`;
             }
             if (skippedItems.length > 0) {
