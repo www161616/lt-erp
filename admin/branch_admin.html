@@ -4658,29 +4658,48 @@
         }
       } catch {}
 
-      // 陸貨到貨清單：出貨日期+10天已過，且完整商品編號一樣 → 自動改為「貨已到倉」
+      // 陸貨到貨清單：比對商品編號，兩階段自動更新採購進度
+      // 第一階段：到貨清單有此商品 → pending 改為 ordered（已向廠商叫貨）
+      // 第二階段：出貨日期+10天已過 → pending/ordered 改為 arrived（貨已到倉）
       try {
         const arrRes = await fetch(`${SB_URL}/xiaolan_arrivals?select=product_id,ship_date&product_id=not.is.null&ship_date=not.is.null&limit=1000`, { headers: HEADERS });
         const arrivals = arrRes.ok ? await arrRes.json() : [];
         if (arrivals.length > 0) {
           const today = new Date();
           today.setHours(0,0,0,0);
+          const allArrivalCodes = new Set();
           const arrivedCodes = new Set();
+          const latestShipDate = {};  // 記錄每個商品最新出貨日
           arrivals.forEach(a => {
-            if (!a.ship_date || !a.product_id) return;
-            const sd = new Date(a.ship_date.replace(/\//g, '-'));
+            if (!a.product_id) return;
+            const pidStr = String(a.product_id);
+            allArrivalCodes.add(pidStr);
+            if (!a.ship_date) return;
+            const sdRaw = a.ship_date.replace(/\//g, '-');
+            const sd = new Date(sdRaw);
             if (isNaN(sd)) return;
-            sd.setDate(sd.getDate() + 10);
-            if (sd <= today) arrivedCodes.add(String(a.product_id));
+            // 保留最新的出貨日
+            if (!latestShipDate[pidStr] || sdRaw > latestShipDate[pidStr]) latestShipDate[pidStr] = sdRaw;
+            const eta = new Date(sd);
+            eta.setDate(eta.getDate() + 10);
+            if (eta <= today) arrivedCodes.add(pidStr);
           });
-          if (arrivedCodes.size > 0) {
-            mockConsolidatedOrders.forEach(item => {
-              const pid = String(item.productId || item.id);
-              if (arrivedCodes.has(pid) && (item.procStatus === 'pending' || item.procStatus === 'ordered')) {
-                item.procStatus = 'arrived';
-              }
-            });
-          }
+          mockConsolidatedOrders.forEach(item => {
+            const pid = String(item.productId || item.id);
+            // 第一階段：出現在到貨清單 → 已向廠商叫貨 + 自動填入預計到貨日(出貨日+10天)
+            if (allArrivalCodes.has(pid) && item.procStatus === 'pending') {
+              item.procStatus = 'ordered';
+            }
+            if (allArrivalCodes.has(pid) && !item.eta && latestShipDate[pid]) {
+              const etaDate = new Date(latestShipDate[pid]);
+              etaDate.setDate(etaDate.getDate() + 10);
+              item.eta = etaDate.toISOString().split('T')[0];
+            }
+            // 第二階段：出貨日+10天已過 → 貨已到倉
+            if (arrivedCodes.has(pid) && (item.procStatus === 'pending' || item.procStatus === 'ordered')) {
+              item.procStatus = 'arrived';
+            }
+          });
         }
       } catch {}
     }
