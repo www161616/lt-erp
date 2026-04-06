@@ -2079,8 +2079,9 @@
             const pidPrefix = {};
             orderList.forEach(item => {
               const pid = String(item.productId || item.id).trim();
-              pidExact[pid] = item;
-              if (pid.length >= 2) pidPrefix[pid] = item;
+              // 同一個 productId 有多筆時，優先保留非 closed 的（避免重複開團被誤判已結單）
+              if (!pidExact[pid] || pidExact[pid].status === 'closed') pidExact[pid] = item;
+              if (pid.length >= 2 && (!pidPrefix[pid] || pidPrefix[pid].status === 'closed')) pidPrefix[pid] = item;
             });
 
             function findItem(csvId) {
@@ -2095,11 +2096,20 @@
 
             // 3. 填入數量（依模式）
             let matchCount = 0, filledTotalQty = 0, skippedCount = 0;
-            const missingIds = [], matchedDetails = [], skippedItems = [], closedItems = [];
+            const missingIds = [], matchedDetails = [], skippedItems = [], closedItems = [], notInCampaign = [];
 
             for (const [csvId, totalQty] of Object.entries(quantities)) {
               const item = findItem(csvId);
-              if (!item) { missingIds.push({ id: csvId, qty: totalQty, name: csvNames[csvId] || '' }); continue; }
+              if (!item) {
+                // 區分：系統有此商品但開團總表沒有 vs 完全找不到
+                const inProductDB = PRODUCT_DB.some(p => p.code === csvId || csvId.startsWith(p.code) || p.code.startsWith(csvId));
+                if (inProductDB) {
+                  notInCampaign.push({ id: csvId, qty: totalQty, name: csvNames[csvId] || '' });
+                } else {
+                  missingIds.push({ id: csvId, qty: totalQty, name: csvNames[csvId] || '' });
+                }
+                continue;
+              }
 
               const itemId = item.id;
               const itemPid = String(item.productId || item.id).trim();
@@ -2162,7 +2172,8 @@
               const closedQty = closedItems.length; // 每筆已在上方計數
               const skippedQty = skippedItems.length;
               let reasons = [];
-              if (missingQty > 0) reasons.push(`找不到編號 ${missingQty}`);
+              if (missingIds.length > 0) reasons.push(`找不到編號 ${missingIds.length}`);
+              if (notInCampaign.length > 0) reasons.push(`開團總表無此品項 ${notInCampaign.length}`);
               if (noIdQty > 0) reasons.push(`無法解析編號 ${noIdQty}`);
               if (closedItems.length > 0) reasons.push(`已結單 ${closedItems.length}`);
               if (skippedCount > 0) reasons.push(`已跳過 ${skippedCount}`);
@@ -2175,6 +2186,13 @@
               rpt += `<table style="width:100%; border-collapse:collapse; margin-top:6px; font-size:12px;">
                 <tr style="background:#f1f5f9;"><th style="padding:4px 8px; text-align:left; color:#64748b;">商品</th></tr>`;
               rpt += closedItems.map(s => `<tr style="border-bottom:1px solid #e2e8f0;"><td style="padding:3px 8px; color:#94a3b8;">${s}</td></tr>`).join('');
+              rpt += `</table>`;
+            }
+            if (notInCampaign.length > 0) {
+              rpt += `<br><b style="color:#7c3aed;">⚠️ 開團總表無此品項 ${notInCampaign.length} 筆（系統有商品但本期未開團）：</b>`;
+              rpt += `<table style="width:100%; border-collapse:collapse; margin-top:6px; font-size:12px;">
+                <tr style="background:#ede9fe;"><th style="padding:4px 8px; text-align:left; color:#5b21b6;">編號</th><th style="padding:4px 8px; text-align:left; color:#5b21b6;">名稱</th><th style="padding:4px 8px; text-align:center; color:#5b21b6;">數量</th></tr>`;
+              rpt += notInCampaign.map(m => `<tr style="border-bottom:1px solid #ddd8fe;"><td style="padding:3px 8px; font-family:monospace;">${m.id}</td><td style="padding:3px 8px;">${m.name}</td><td style="padding:3px 8px; text-align:center; font-weight:700;">${m.qty}</td></tr>`).join('');
               rpt += `</table>`;
             }
             if (skippedItems.length > 0) {
@@ -2230,7 +2248,7 @@
             const hasError = missingIds.length > 0 || noIdRows.length > 0;
             document.getElementById('importReportContent').innerHTML = rpt;
             document.getElementById('importReportSummary').innerHTML =
-              `📋 匯入報告：成功 ${matchCount} 筆${closedItems.length > 0 ? `，已結單 ${closedItems.length}` : ''}${skippedCount > 0 ? `，跳過 ${skippedCount}` : ''}${missingIds.length > 0 ? `，<span style="color:#dc2626;">${missingIds.length} 筆未匹配</span>` : ''}${noIdRows.length > 0 ? `，<span style="color:#b45309;">${noIdRows.length} 筆無編號</span>` : ''}`;
+              `📋 匯入報告：成功 ${matchCount} 筆${closedItems.length > 0 ? `，已結單 ${closedItems.length}` : ''}${skippedCount > 0 ? `，跳過 ${skippedCount}` : ''}${notInCampaign.length > 0 ? `，<span style="color:#7c3aed;">開團總表無品項 ${notInCampaign.length}</span>` : ''}${missingIds.length > 0 ? `，<span style="color:#dc2626;">${missingIds.length} 筆未匹配</span>` : ''}${noIdRows.length > 0 ? `，<span style="color:#b45309;">${noIdRows.length} 筆無編號</span>` : ''}`;
             document.getElementById('importReportBody').style.display = 'block';
             document.querySelector('.rpt-arrow').textContent = '▾';
             reportDiv.style.display = 'block';
