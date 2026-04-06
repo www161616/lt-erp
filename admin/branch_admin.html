@@ -2576,87 +2576,43 @@
         title: '商品批次匯入',
         html: `檔案：<b>${file.name}</b><br>偵測到 <b>${items.length}</b> 筆商品<br><br>欄位映射：<br>` +
           Object.entries(colMap).map(([f, idx]) => `${f} ← ${header[idx]}`).join('<br>') +
-          '<br><br>已存在的商品編號將<b>跳過</b>不覆蓋',
+          '<br><br>商品將加入清單，按「🚀 寫入 ERP 並發布檔期」才會寫入資料庫<br>清單中已存在的編號將<b>跳過</b>',
         icon: 'question',
         showCancelButton: true,
-        confirmButtonText: '開始匯入',
+        confirmButtonText: '加入清單',
         cancelButtonText: '取消',
         confirmButtonColor: '#047857'
       });
       if (!confirmResult.isConfirmed) return;
 
-      // 查詢已存在的商品 ID（分批查，每批 200 個）
-      Swal.fire({ title: '匯入中...', html: '正在檢查已存在商品...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-      const existingIds = new Set();
-      const CHUNK = 200;
-      for (let i = 0; i < items.length; i += CHUNK) {
-        const chunk = items.slice(i, i + CHUNK);
-        const ids = chunk.map(it => `"${it.id}"`).join(',');
-        try {
-          const res = await fetch(`${SB_URL}/products?id=in.(${ids})&select=id`, { headers: HEADERS });
-          if (res.ok) {
-            const rows = await res.json();
-            rows.forEach(r => existingIds.add(r.id));
-          }
-        } catch(e) {}
-      }
-
-      const newItems = items.filter(it => !existingIds.has(it.id));
-      const skippedCount = items.length - newItems.length;
-
-      if (newItems.length === 0) {
-        Swal.fire('完成', `所有 ${items.length} 筆商品都已存在，無需匯入`, 'info');
-        return;
-      }
-
-      // 批次寫入 Supabase（每批 500 筆）
-      const BATCH = 500;
-      let savedCount = 0;
-      let errorMsg = '';
-      for (let i = 0; i < newItems.length; i += BATCH) {
-        const batch = newItems.slice(i, i + BATCH);
-        Swal.update({ html: `正在寫入... ${i}/${newItems.length}` });
-        try {
-          const res = await fetch(`${SB_URL}/products`, {
-            method: 'POST', headers: HEADERS, body: JSON.stringify(batch)
-          });
-          if (res.ok) {
-            savedCount += batch.length;
-          } else {
-            const err = await res.json().catch(() => ({}));
-            errorMsg = err.message || err.details || '寫入失敗';
-            break;
-          }
-        } catch(e) {
-          errorMsg = e.message;
-          break;
+      // 加入 stagingList（不直接寫入 products，等按「寫入 ERP 並發布檔期」才寫入）
+      const TEMP_CAT_MAP = { '冷凍': '冷凍', '冷藏': '冷藏', '常溫': '常溫' };
+      const startDateVal = document.getElementById('fastStartDate')?.value || '';
+      let addedCount = 0;
+      const skippedItems = [];
+      items.forEach(it => {
+        if (stagingList.some(s => s.code === it.id)) {
+          skippedItems.push(it);
+          return;
         }
-      }
-
-      if (errorMsg) {
-        Swal.fire('部分失敗', `已寫入 ${savedCount} 筆，錯誤：${errorMsg}`, 'warning');
-      } else {
-        // 匯入的商品加入 stagingList（讓員工可以按「寫入 ERP 並發布檔期」同步到分店）
-        const TEMP_CAT_MAP = { '冷凍': '冷凍', '冷藏': '冷藏', '常溫': '常溫' };
-        const startDateVal = document.getElementById('fastStartDate')?.value || '';
-        items.forEach(it => {
-          if (stagingList.some(s => s.code === it.id)) return;
-          const temp = TEMP_CAT_MAP[it.category] || it.category || '常溫';
-          stagingList.push({
-            code: it.id, name: it.name, temp: temp,
-            category: it.category || temp,
-            price: it.price || 0, storePrice: it.price_branch || 0,
-            wholesalePrice: it.price_wholesale || 0, groupPrice: it.price_group || 0,
-            cost: it.cost || 0, supplier: it.supplier || '',
-            startDate: it.startDate || startDateVal,
-            endDate: it.endDate || ''
-          });
+        const temp = TEMP_CAT_MAP[it.category] || it.category || '常溫';
+        stagingList.push({
+          code: it.id, name: it.name, temp: temp,
+          category: it.category || temp,
+          price: it.price || 0, storePrice: it.price_branch || 0,
+          wholesalePrice: it.price_wholesale || 0, groupPrice: it.price_group || 0,
+          cost: it.cost || 0, supplier: it.supplier || '',
+          startDate: it.startDate || startDateVal,
+          endDate: it.endDate || ''
         });
-        renderStagingList();
+        addedCount++;
+      });
+      renderStagingList();
 
-        await logActivity('商品批次匯入', 'PRODUCTS', { count: savedCount, skipped: skippedCount, file: file.name });
-        Swal.fire('匯入完成', `✅ 寫入 <b>${savedCount}</b> 筆新商品<br>⏭️ 跳過 <b>${skippedCount}</b> 筆已存在<br>📋 已加入商品清單 <b>${items.length}</b> 筆，請按「🚀 寫入 ERP 並發布檔期」同步到分店`, 'success');
-      }
+      const skippedDetail = skippedItems.length > 0
+        ? `<br><br><details><summary style="cursor:pointer; color:#b45309;">⏭️ 跳過 ${skippedItems.length} 筆（清單已存在，點擊展開）</summary><div style="text-align:left; font-size:12px; margin-top:8px; max-height:30vh; overflow-y:auto;">${skippedItems.map(it => `${it.id} ${it.name}`).join('<br>')}</div></details>`
+        : '';
+      Swal.fire('匯入完成', `📋 加入清單 <b>${addedCount}</b> 筆${skippedItems.length > 0 ? `<br>⏭️ 跳過 <b>${skippedItems.length}</b> 筆已在清單中` : ''}<br><br>請確認後按「🚀 寫入 ERP 並發布檔期」同步到分店${skippedDetail}`, 'success');
     }
 
 // ============================
