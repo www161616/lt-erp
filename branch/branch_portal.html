@@ -2296,10 +2296,12 @@
 
       const items = [];
       const importSet = new Set(importedIds);
+      const seenPid = new Set();
       Object.entries(orderQtyCache).forEach(([id, val]) => {
         const qty = parseInt(val);
         const pid = pidMap[id] || id;
-        if (qty > 0 && importSet.has(pid)) {
+        if (qty > 0 && importSet.has(pid) && !seenPid.has(pid)) {
+          seenPid.add(pid);
           items.push({ id, productId: pid, name: nameMap[id] || id, qty });
         }
       });
