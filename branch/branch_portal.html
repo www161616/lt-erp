@@ -2047,19 +2047,26 @@
         }
 
         saveQtyCache();
-        importMode = false; // 重設匯入模式，恢復手動修改自動存
-        unlockQtyInputs();
-        renderOrderPage();
-        // 同步清除後的數量到雲端
+
+        // ⚠️ 必須在 renderOrderPage() 之前同步雲端
+        // 否則 renderOrderPage → syncQtyCacheFromCloud 會把 branchOrders 還沒清的數字寫回 cache，
+        // 導致 cache 又被污染、雲端也清不掉、重整後問題重現
         const storeName = currentStore?.name || '未知';
         const saved = JSON.parse(localStorage.getItem('branchOrders') || '{}');
         if (saved[storeName]) {
-          Object.keys(saved[storeName]).forEach(id => {
-            if (!orderQtyCache[id]) delete saved[storeName][id];
+          const cacheIds = new Set(Object.keys(orderQtyCache));
+          Object.keys(saved[storeName]).forEach(k => {
+            if (!cacheIds.has(k)) {
+              delete saved[storeName][k];
+            }
           });
           localStorage.setItem('branchOrders', JSON.stringify(saved));
           cloudSave('branchOrders');
         }
+
+        importMode = false; // 重設匯入模式，恢復手動修改自動存
+        unlockQtyInputs();
+        renderOrderPage();
         document.getElementById('importReport').style.display = 'none';
         const submitBtn = document.getElementById('submitOrderBtn');
         if (submitBtn) submitBtn.style.display = 'none';
