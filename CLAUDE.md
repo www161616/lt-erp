@@ -5,6 +5,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 # 龍潭總倉 ERP 系統
 
 ## 完成功能（2026/04/07）
+
+### 早上：訂貨追蹤、退換貨整合（穩定運作）
 - branch_admin 訂貨追蹤：陸貨到貨清單比對商品編號，兩階段自動更新採購進度
   - 第一階段：商品出現在到貨清單 → pending 改為「已向廠商叫貨」
   - 第二階段：出貨日+10天已過 → 改為「貨已到倉」
@@ -25,15 +27,65 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - 改進度為已解決類後徽章/警示自動消失
   - 進行中定義：progress 為空 / 待處理 / 廠商補寄
 - branch_portal 開團總表 key 不一致 bug 修復（智能查找 fallback）
-- **branchOrderList key 格式統一（治本）**
-  - 加 admin 首頁「🔧 執行資料正規化」手動按鈕
-  - 將 branchOrderList / branchOrders 中的 _尾碼 key 統一為純商品編號
-  - 同 productId 取 endDate 最新的整筆，各店數量取最大值
-  - 守衛旗標 branchOrderNormalized_v1 確保每台裝置只跑一次
-  - 備份原資料下載成 JSON 檔（避免 localStorage 配額爆掉）
-  - 修 ImportGroupBuy.html：orderKey 從 ${productId}_${dateKey} 改為純 productId
-  - 同 productId 重複時保留 endDate 最新檔期，branchOrders 取 max
-  - **執行結果：list 2758→2622 筆、orders 48809→47266 key**
+- branch_portal 結單填表的「清除數量」「訂單彙總」結單日列表從 3 天放寬為 30 天
+
+### 下午：建商品自動清歷史殘留 + 廢棄 menu 移除
+- 移除 branch_admin 廢棄的「📥 匯入開團資料」menu（含 switchTab 分支）
+- syncToERP 加自動清舊數量（影響 極速開團建檔 + Excel 商品批次匯入 兩種建商品入口）
+  - 寫入 branchOrderList 後呼叫 autoCleanBranchOrdersForNewProducts
+  - 掃描各店 branchOrders 是否有新建商品的歷史殘留 (>0)
+  - 有則跳確認彈窗顯示明細，使用者可選「清除（建議）」或「保留」
+  - 保留選項是給「同編號舊檔期還在進行中」的情境用
+  - 清除時把該編號所有 key 包含 _尾碼 的都刪掉
+
+## ⚠️ 今天的重大事故與教訓（2026/04/07）
+
+### 事故經過
+1. 早上發現 branchOrderList key 格式不一致（syncToERP 用純編號、ImportGroupBuy 用 productId_dateKey）
+2. 我設計了「資料正規化按鈕」想治本，把所有 key 統一為純編號，同編號數量取 max
+3. **致命錯誤判斷**：以為「同編號的兩種 key 是同一筆訂單的副本」，所以取 max 合併
+4. **真相**：這兩種 key 其實是「同一商品在不同檔期的獨立訂單」，不應該合併
+5. 正規化跑下去後，141 個今天新建商品出現「舊歷史最大值」污染各店分店訂貨數
+6. 過程中還踩到 localStorage 配額爆掉、第 2 步治本（改 ImportGroupBuy 用純編號）也是錯方向
+7. 最終回滾 ImportGroupBuy.html、移除正規化按鈕、改採「建商品時自動掃描+確認彈窗」治標方案
+
+### 教訓
+- **不要對「歷史資料的語意」自做主張**——同樣的編號可能代表不同含意，必須先問清楚
+- **「治本方案」改寫入端風險極高**，要先在測試環境驗證
+- **localStorage 寫入有 5MB 配額限制**，備份方案要用檔案下載而非寫進 localStorage
+- **跨裝置 localStorage 是各自獨立的**（本地 vs GitHub Pages），測試時要在實際部署環境跑
+- **CLAUDE.md 註記的「已知問題」往往代表是設計妥協而非真 bug**，治本前要先確認背後原因
+
+## 🔧 未來需要改進的地方（2026/04/07 列出）
+
+### 高優先：branchOrders 架構改造
+**現況問題**：
+- `branchOrders[店][商品編號] = 數量` 只有一格，無法區分不同檔期
+- 同編號商品重新開團會繼承上次的數量
+- 員工無法事先知道哪個編號有歷史，必須逐次處理
+- 目前用「建商品時自動清+確認彈窗」治標，但仍有風險（同編號舊檔期還在進行中時會被誤清）
+
+**目標結構**：
+```
+branchOrders[店][商品編號][結單日] = 數量
+```
+
+**需要改的地方**（明天再做）：
+1. ImportGroupBuy 寫入邏輯（雖然 menu 拿掉但檔案還在）
+2. branch_portal 結單填表的讀取/寫入
+3. 開團總表（branch_portal + branch_admin 都要改）
+4. 訂貨追蹤 syncOrderTrackingData
+5. 一次性遷移腳本：把現有 branchOrders 資料按檔期拆開
+6. 各讀取端的 fallback 補丁可以拆掉
+
+### 中優先：店家匯入樂樂前的舊數量自動處理
+- 目前店家自己有「清除數量」按鈕，但要記得按
+- 可考慮：店家打開結單填表時，自動偵測「該商品結單日是新檔期但已有數量」→ 提示
+- 或：「匯入樂樂報表」按鈕加 hint「按下前建議先清除數量」
+
+### 低優先：刪除廢棄程式碼
+- ImportGroupBuy.html 整個檔案（已從 menu 移除，可考慮刪除）
+- syncToERP 第 2594 行已刪除的 console.warn 註解可清
 
 ## DB 變更（2026/04/07）
 - xiaolan_returns 表新增欄位：
