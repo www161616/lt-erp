@@ -387,6 +387,8 @@
               style="padding:7px 16px; background:#be185d; color:white; border:none; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;">查詢</button>
             <button onclick="document.getElementById('orderSearchInput').value='';orderSearchKw='';document.getElementById('orderDateFilter').value='';renderOrderPage(1)"
               style="padding:7px 14px; background:#6b7280; color:white; border:none; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;">清除</button>
+            <button onclick="exportOrderToExcel()"
+              style="padding:7px 14px; background:#059669; color:white; border:none; border-radius:6px; font-size:13px; font-weight:600; cursor:pointer; font-family:inherit;">📊 匯出 Excel</button>
             <span id="orderPaginationTop" style="margin-left:auto; display:flex; align-items:center; gap:6px; flex-wrap:wrap;"></span>
           </div>
 
@@ -1445,17 +1447,28 @@
         });
       });
 
+      // 計算篩選結果的訂購總數量（讀取所有頁的 cache + 當頁 input）
+      let filteredQtySum = 0;
+      orderList.forEach(p => {
+        const cachedVal = parseInt(orderQtyCache[p.id]) || 0;
+        if (cachedVal > 0) filteredQtySum += cachedVal;
+      });
+      // 如果有日期篩選，顯示日期；否則只顯示筆數和總量
+      const dateFilterVal = document.getElementById('orderDateFilter')?.value || '';
+      const dateFilterLabel = dateFilterVal ? ` ｜ 篩選日期 <b>${dateFilterVal}</b>` : '';
+      const qtyLabel = ` ｜ 訂購總數量 <b style="color:#be185d;">${filteredQtySum}</b>`;
+
       // 分頁列（上＋下）
       const btnStyle = (active) => `padding:6px 12px; border:1px solid ${active ? 'var(--primary)' : '#d1d5db'}; background:${active ? 'var(--primary)' : 'white'}; color:${active ? 'white' : '#374151'}; border-radius:4px; cursor:pointer; font-size:13px; font-weight:${active ? '700' : '500'}; font-family:inherit;`;
       let pg = '';
       if (totalPages > 1) {
         pg += `<button onclick="renderOrderPage(1)" style="${btnStyle(false)}" ${orderPageNum===1?'disabled':''}>⏮ 首頁</button>`;
         pg += `<button onclick="renderOrderPage(${orderPageNum-1})" style="${btnStyle(false)}" ${orderPageNum===1?'disabled':''}>◀ 上頁</button>`;
-        pg += `<span style="font-size:13px; color:#6b7280; margin:0 4px;">第 ${orderPageNum} / ${totalPages} 頁（共 ${orderList.length} 筆）</span>`;
+        pg += `<span style="font-size:13px; color:#6b7280; margin:0 4px;">第 ${orderPageNum} / ${totalPages} 頁（共 ${orderList.length} 筆${dateFilterLabel}${qtyLabel}）</span>`;
         pg += `<button onclick="renderOrderPage(${orderPageNum+1})" style="${btnStyle(false)}" ${orderPageNum===totalPages?'disabled':''}>下頁 ▶</button>`;
         pg += `<button onclick="renderOrderPage(${totalPages})" style="${btnStyle(false)}" ${orderPageNum===totalPages?'disabled':''}>末頁 ⏭</button>`;
       } else {
-        pg = `<span style="font-size:13px; color:#6b7280;">共 ${orderList.length} 筆</span>`;
+        pg = `<span style="font-size:13px; color:#6b7280;">共 ${orderList.length} 筆${dateFilterLabel}${qtyLabel}</span>`;
       }
       document.getElementById('orderPaginationTop').innerHTML = pg;
       document.getElementById('orderPagination').innerHTML = pg;
@@ -1905,6 +1918,77 @@
     // ============================
     // 清除所有數量
     // ============================
+    // 匯出當前篩選結果（只匯出有訂購數量 > 0 的）為 Excel
+    function exportOrderToExcel() {
+      const orderList = JSON.parse(localStorage.getItem('branchOrderList') || '[]');
+      // 套用當前篩選條件（與 renderOrderPage 邏輯一致）
+      const today = new Date().toISOString().split('T')[0];
+      const seenPids = {};
+      const sorted = [...orderList].sort((a, b) => (b.endDate || '').localeCompare(a.endDate || ''));
+      let list = sorted.filter(item => {
+        const pid = (item.productId || item.id || '').replace(/_.*$/, '');
+        if (seenPids[pid]) return false;
+        seenPids[pid] = true;
+        return true;
+      });
+
+      // 依關鍵字
+      const kw = (document.getElementById('orderSearchInput')?.value || '').trim().toLowerCase();
+      if (kw) list = list.filter(p => (p.productId || p.id || '').toLowerCase().includes(kw) || (p.name || '').toLowerCase().includes(kw));
+
+      // 依日期
+      const dateVal = document.getElementById('orderDateFilter')?.value || '';
+      const dateType = document.getElementById('orderDateType')?.value || 'endDate';
+      if (dateVal) list = list.filter(p => (p[dateType] || '') === dateVal);
+
+      // 過濾出有訂購數量的
+      const rows = [];
+      let totalQty = 0;
+      list.forEach(p => {
+        const qty = parseInt(orderQtyCache[p.id]) || 0;
+        if (qty > 0) {
+          rows.push({
+            '開團日': p.startDate || '',
+            '結單日': p.endDate || '',
+            '商品編號': p.productId || p.id || '',
+            '商品名稱': p.name || '',
+            '售價': Number(p.price) || 0,
+            '訂購數量': qty
+          });
+          totalQty += qty;
+        }
+      });
+
+      if (rows.length === 0) {
+        Swal.fire('提示', '目前篩選條件下沒有任何有訂購數量的商品', 'info');
+        return;
+      }
+
+      // 加合計列
+      rows.push({
+        '開團日': '',
+        '結單日': '',
+        '商品編號': '',
+        '商品名稱': '合計',
+        '售價': '',
+        '訂購數量': totalQty
+      });
+
+      const ws = XLSX.utils.json_to_sheet(rows);
+      // 設定欄寬
+      ws['!cols'] = [
+        { wch: 12 }, { wch: 12 }, { wch: 12 }, { wch: 35 }, { wch: 8 }, { wch: 10 }
+      ];
+      const wb = XLSX.utils.book_new();
+      const sheetName = '訂購清單';
+      XLSX.utils.book_append_sheet(wb, ws, sheetName);
+
+      const storeName = currentStore?.name || '未知';
+      const dateLabel = dateVal || new Date().toISOString().split('T')[0];
+      const filename = `${storeName}_訂購清單_${dateLabel}.xlsx`;
+      XLSX.writeFile(wb, filename);
+    }
+
     function clearAllQty() {
       // 收集所有結單日（從 orderList）
       const orderList = JSON.parse(localStorage.getItem('branchOrderList') || '[]');
