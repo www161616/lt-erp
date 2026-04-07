@@ -766,9 +766,25 @@
       const rawList   = localStorage.getItem('branchOrderList') || '[]';
       const rawOrders = localStorage.getItem('branchOrders') || '{}';
 
-      // 備份
-      localStorage.setItem('branchOrderList_pre_normalize_backup', rawList);
-      localStorage.setItem('branchOrders_pre_normalize_backup', rawOrders);
+      // 備份：原資料太大會超過 localStorage 配額，改下載成 JSON 檔
+      try {
+        const backupBlob = new Blob([JSON.stringify({
+          backup_at: new Date().toISOString(),
+          branchOrderList: JSON.parse(rawList),
+          branchOrders: JSON.parse(rawOrders)
+        }, null, 2)], { type: 'application/json' });
+        const backupUrl = URL.createObjectURL(backupBlob);
+        const backupLink = document.createElement('a');
+        backupLink.href = backupUrl;
+        backupLink.download = `branchOrder_backup_${new Date().toISOString().replace(/[:.]/g,'-')}.json`;
+        document.body.appendChild(backupLink);
+        backupLink.click();
+        document.body.removeChild(backupLink);
+        setTimeout(() => URL.revokeObjectURL(backupUrl), 1000);
+      } catch (e) {
+        result.message = '備份下載失敗：' + e.message;
+        return result;
+      }
 
       try {
         const list = JSON.parse(rawList);
@@ -846,7 +862,7 @@
           會做以下事情：<br>
           1. 將 <b>branchOrderList</b> 中重複的商品（同 productId 不同 _尾碼）合併為一筆，保留 endDate 最新的<br>
           2. 將 <b>branchOrders</b> 各店的 key 統一為純商品編號，同商品取最大值<br>
-          3. 自動備份原資料到 localStorage（key 結尾加 <code>_pre_normalize_backup</code>）<br>
+          3. 自動下載一份原始資料 JSON 備份到你的電腦（萬一出錯可手動還原）<br>
           4. 同步到雲端 (cloudSave)<br><br>
           <b style="color:#c53030;">⚠️ 影響範圍：所有裝置</b><br>
           確定要執行嗎？
@@ -868,9 +884,7 @@
           html: `<div style="text-align:left; font-size:13px;">
             branchOrderList：<b>${s.beforeListLen}</b> → <b>${s.afterListLen}</b> 筆<br>
             branchOrders 總 key 數：<b>${s.beforeOrdersKeys}</b> → <b>${s.afterOrdersKeys}</b><br><br>
-            原資料已備份在 localStorage：<br>
-            • <code>branchOrderList_pre_normalize_backup</code><br>
-            • <code>branchOrders_pre_normalize_backup</code><br><br>
+            原資料已下載成 JSON 檔到你的電腦（檔名 branchOrder_backup_*.json）<br><br>
             請去測試開團總表 / 結單填表 / 訂貨追蹤是否正常。
           </div>`,
           confirmButtonColor: '#ea580c'
