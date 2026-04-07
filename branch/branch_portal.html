@@ -1774,8 +1774,8 @@
     function showOrderSummary() {
       const orderList = JSON.parse(localStorage.getItem('branchOrderList') || '[]');
       const today = new Date();
-      const threeDaysAgo = new Date(today); threeDaysAgo.setDate(today.getDate() - 3);
-      const cutoff = threeDaysAgo.toISOString().split('T')[0];
+      const cutoffDate = new Date(today); cutoffDate.setDate(today.getDate() - 30);
+      const cutoff = cutoffDate.toISOString().split('T')[0];
       const endDates = [...new Set(orderList.map(p => p.endDate).filter(Boolean))].sort().filter(d => d >= cutoff);
 
       // 選結單日
@@ -1909,8 +1909,8 @@
       // 收集所有結單日（從 orderList）
       const orderList = JSON.parse(localStorage.getItem('branchOrderList') || '[]');
       const today = new Date();
-      const threeDaysAgo = new Date(today); threeDaysAgo.setDate(today.getDate() - 3);
-      const cutoff = threeDaysAgo.toISOString().split('T')[0];
+      const cutoffDate = new Date(today); cutoffDate.setDate(today.getDate() - 30);
+      const cutoff = cutoffDate.toISOString().split('T')[0];
       const endDates = [...new Set(orderList.map(p => p.endDate).filter(Boolean))].sort().filter(d => d >= cutoff);
       const options = { all: '全部清除' };
       endDates.forEach(d => { options[d] = `結單日 ${d}`; });
