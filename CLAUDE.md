@@ -4,6 +4,82 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # 龍潭總倉 ERP 系統
 
+## 完成功能（2026/04/08）
+
+### 結單填表/開團總表強化
+- branch_portal 結單填表加「📊 匯出 Excel」按鈕
+  - 匯出當前篩選結果中有訂購數量 > 0 的商品
+  - 欄位：開團日 / 結單日 / 商品編號 / 商品名稱 / 售價 / 訂購數量
+  - 末列加合計，檔名 `{店名}_訂購清單_{日期}.xlsx`
+- 分頁列「共 N 筆」旁加顯示「篩選日期 X｜訂購總數量 Y」
+- 修 clearAllQty 同步順序 bug：先同步雲端再 renderOrderPage，避免 syncQtyCacheFromCloud 把舊資料寫回 cache
+- 結單填表「清除數量」「訂單彙總」結單日列表從 3 天放寬為 30 天
+
+### 後台批次清除多家店訂購數量（手動操作）
+- 因為 4/1~4/9 各店有歷史殘留干擾，逐一登入 14 家店帳號跑後台 console 腳本：
+  - 中和、文山、林口、永和、經國、古華、南平、環球、松山、忠順、萬華、泰山、四號、湖口
+  - 範圍：4/1~4/9，會自動下載備份 + 預覽 + 確認後執行
+  - 同時清 branchOrders（影響開團總表）和 orderQtyCache（影響結單填表）
+- 額外發現：湖口的 4/5 開團總表 49 vs 結單填表 47 差 2 件
+  - 原因：開團總表的 cleanPid fallback 把過期歷史殘留 (1/9, 1/25, 3/12, 3/13...) 撿到現役檔期
+  - 寫了「鬼影掃描+清除」腳本，掃描所有店所有過期且被撿到的 _尾碼 key
+  - 清除 7 個鬼影 key（13 件）後湖口 4/5 變 47
+
+## ⚠️ 未來可能還會發生的問題（重要）
+
+### 1. 「同編號商品開新檔期繼承舊數量」會持續發生
+**根本原因**：`branchOrders[店][商品編號]` 結構沒有檔期維度。
+
+**何時會發生**：
+- 員工用「極速開團建檔」或「商品批次匯入」建立新商品
+- 該商品編號**過去某次開過團**（或 syncToERP 寫過純編號 key）
+- 分店打開 portal 結單填表，看到舊數字
+
+**現有保護**（04/07 加的）：
+- 建商品時 syncToERP 會自動掃描 branchOrders，發現有歷史殘留會跳確認彈窗
+- 員工可選「清除（建議）」或「保留」
+- 但這只保護「建商品的當下」，員工如果按「保留」就會留下舊數字
+
+**如果沒按清除會怎樣**：
+- 分店看到舊數字 → 自己用「清除數量」按鈕清掉
+- 或請 admin 跑後台清除腳本
+
+### 2. 「鬼影 key」會在開團總表偶爾出現
+**根本原因**：`renderSummaryPage` 用 cleanPid 智能 fallback，會撿到 `_尾碼` 的歷史殘留。
+
+**何時會發生**：
+- 某店在過去送出過某商品 A 的訂單（branchOrders 寫入 `A_dateKey`）
+- 該商品 A 在新檔期又開團（list 有純編號 A）
+- 開團總表用 cleanPid fallback 撿到舊的 `A_dateKey`
+- 結果：新檔期的開團總表會多算到舊訂單
+
+**症狀**：結單填表跟開團總表的數字對不上（差 N 件）
+
+**短期解法**：跑「鬼影掃描+清除」腳本（內含預覽+確認+備份）
+- 我可以包成 branch_admin 一個按鈕，未來不用貼 console
+
+**長期解法**：拿掉 cleanPid fallback，但這要先確保 list 和 branchOrders 的 key 格式絕對一致
+
+### 3. 分店多裝置 cache 不同步
+**問題**：店家用多台裝置登入 portal 時，每台的 `bp_orderQtyCache` 是獨立的。
+- A 裝置清除 → cloudSave branchOrders → B 裝置 cache 還是舊的
+- B 裝置重新整理 → syncQtyCacheFromCloud 從 branchOrders 拉乾淨資料 → 才會同步
+
+**結論**：清除/匯入後要請店家**重新整理頁面**才會生效。
+
+### 4. branchOrders 持續累積，localStorage 配額會爆
+**現況**：branchOrders 已經 47000+ key，存 localStorage 大概 5MB 上限的一半以上
+- 04/07 我寫備份功能時就踩到 QuotaExceededError
+- 未來持續累積會更糟
+
+**建議**：每隔一段時間（例如每月）手動清掉「結單日 < 6 個月前」的歷史 key
+
+### 5. 用 admin 帳號跑後台清除腳本時 cache 不會被清
+- 因為 admin 不是分店，沒有 currentStore = 文山/中和...
+- 腳本內 `orderQtyCache` 是當前登入帳號的 cache，跟其他店無關
+- **必須登入該店帳號才能連 cache 也清**
+- branchOrders（雲端）會被清，但**該店家自己裝置的 cache 還在** → 必須請他們重整
+
 ## 完成功能（2026/04/07）
 
 ### 早上：訂貨追蹤、退換貨整合（穩定運作）
