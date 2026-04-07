@@ -157,7 +157,7 @@
     <div class="menu-item" onclick="switchTab('piaopiao',this)">漂漂館</div>
     <div class="menu-item" onclick="switchTab('procurement',this)">團購採購</div>
     <div class="menu-item" onclick="switchTab('arrivals',this)">到貨清單</div>
-    <div class="menu-item" onclick="switchTab('returns',this)" id="menuReturns">退換貨追蹤</div>
+    <div class="menu-item" onclick="switchTab('returns',this)" id="menuReturns">退換貨追蹤<span id="menuReturnsBadge" style="display:none;background:#dc2626;color:#fff;font-size:10px;padding:1px 6px;border-radius:10px;margin-left:6px;font-weight:700;"></span></div>
     <div style="border-top:1px solid rgba(255,255,255,0.15);margin:8px 12px;"></div>
     <div class="menu-item" onclick="switchTab('sisterBill',this)">姐姐對帳單</div>
   </div>
@@ -2938,6 +2938,45 @@ const RT_PROGRESS_STYLES = {
 
 async function loadReturns() {
   try { returnRows = await sbFetchAll('xiaolan_returns', 'id.desc'); } catch { returnRows = []; }
+  updateReturnsBadge();
+}
+
+// 「進行中」進度：空、待處理、廠商補寄
+const RT_ACTIVE_PROGRESS = ['', '待處理', '廠商補寄'];
+function isActiveReturnRow(r) {
+  return RT_ACTIVE_PROGRESS.includes(r.progress || '');
+}
+
+function updateReturnsBadge() {
+  const badge = document.getElementById('menuReturnsBadge');
+  if (!badge) return;
+  const cnt = returnRows.filter(isActiveReturnRow).length;
+  if (cnt > 0) {
+    badge.textContent = cnt;
+    badge.style.display = 'inline-block';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+// 取得某商品編號的進行中退換貨筆數
+function getActiveReturnCount(productCode) {
+  if (!productCode) return 0;
+  return returnRows.filter(r => r.product_code === productCode && isActiveReturnRow(r)).length;
+}
+
+// 點警示 → 跳到退換貨追蹤分頁並用該商品編號篩選
+function jumpToReturnsByCode(code) {
+  const menuItem = document.getElementById('menuReturns');
+  if (menuItem) menuItem.click();
+  setTimeout(() => {
+    const kw = document.getElementById('rtKeyword');
+    if (kw) {
+      kw.value = code;
+      rtPage = 1;
+      renderReturnGrid();
+    }
+  }, 100);
 }
 
 function getFilteredReturns() {
@@ -2982,7 +3021,10 @@ function renderReturnGrid() {
       <td><input type="date" value="${r.return_date || ''}" data-field="return_date" data-idx="${idx}" onchange="onRtCellChange(this)"></td>
       <td><input value="${r.product_code || ''}" data-field="product_code" data-idx="${idx}" onchange="onRtCellChange(this)"></td>
       <td><input value="${r.product_name || ''}" data-field="product_name" data-idx="${idx}" onchange="onRtCellChange(this)"></td>
-      <td><input value="${(r.content || '').replace(/\r?\n/g,' ')}" data-field="content" data-idx="${idx}" onchange="onRtCellChange(this)" title="${(r.content||'').replace(/"/g,'&quot;')}"></td>
+      <td>
+        <input value="${(r.content || '').replace(/\r?\n/g,' ')}" data-field="content" data-idx="${idx}" onchange="onRtCellChange(this)" title="${(r.content||'').replace(/"/g,'&quot;')}">
+        ${(r.media_urls && r.media_urls.length > 0) ? `<div style="margin-top:3px;font-size:11px;">${r.media_urls.map((u,j) => `<a href="${u}" target="_blank" style="color:#2b6cb0;text-decoration:underline;margin-right:6px;">📎${j+1}</a>`).join('')}</div>` : ''}
+      </td>
       <td><select data-field="progress" data-idx="${idx}" onchange="onRtCellChange(this)" style="background:${pSt.bg};color:${pSt.color};font-size:11px;padding:2px 4px;border-radius:4px;border:none;font-weight:600;">
         ${progressOpts.map(o => `<option value="${o}" ${r.progress===o?'selected':''}>${o}</option>`).join('')}
       </select></td>
@@ -3039,7 +3081,7 @@ function onRtCellChange(input) {
   row[field] = input.value;
   row._dirty = true;
   triggerAutoSaveReturns();
-  if (field === 'progress') renderReturnGrid(); // refresh badge color
+  if (field === 'progress') { renderReturnGrid(); updateReturnsBadge(); } // refresh badge color
 }
 
 function toggleAllReturnCheck(master) {
@@ -3488,13 +3530,16 @@ function renderProcurement() {
     const rowBg = isOrdered ? 'background:#f0fff4;' : `background:${_grpColor};`;
     const rowSpan = purchases.length > 1 ? ` rowspan="${purchases.length}"` : '';
 
+    const _rtCnt = getActiveReturnCount(pid);
+    const _rtBadge = _rtCnt > 0 ? `<div onclick="jumpToReturnsByCode('${pid}')" style="display:inline-block;margin-left:4px;background:#fee2e2;color:#c53030;padding:1px 6px;border-radius:8px;font-size:10px;font-weight:700;cursor:pointer;border:1px solid #fca5a5;" title="點擊查看退換貨">⚠️ 退換貨待處理 ${_rtCnt}</div>` : '';
+
     if (purchases.length <= 1) {
       // 單行：左右各一列
       html += `<tr style="${rowBg}">`;
       html += `<td style="${tdL}text-align:center;color:#a0aec0;font-size:11px;">${i+1}</td>`;
       html += `<td style="${tdL}color:#e11d48;font-weight:600;white-space:nowrap;">${item.endDate || ''}</td>`;
       html += `<td style="${tdL}font-family:monospace;font-size:11px;color:#2b6cb0;">${pid}</td>`;
-      html += `<td style="${tdName}font-weight:500;" title="${esc(item.name || '')}">${esc(item.name || '')}</td>`;
+      html += `<td style="${tdName}font-weight:500;" title="${esc(item.name || '')}">${esc(item.name || '')}${_rtBadge}</td>`;
       html += `<td style="${tdL}text-align:center;"><input type="checkbox" ${isOrdered?'checked':''} onchange="otToggleOrdered('${pid}')"></td>`;
       html += `<td style="${tdL}text-align:center;font-weight:700;color:${(item.orderQty||0)>0?'#c53030':'#047857'};">${item.orderQty != null ? item.orderQty : item.totalQty || 0}</td>`;
       html += `<td style="${tdL}text-align:right;">${item.price ? '$' + Number(item.price).toLocaleString() : ''}</td>`;
@@ -3526,7 +3571,7 @@ function renderProcurement() {
           html += `<td style="${tdL}text-align:center;color:#a0aec0;font-size:11px;" rowspan="${purchases.length}">${i+1}</td>`;
           html += `<td style="${tdL}color:#e11d48;font-weight:600;white-space:nowrap;" rowspan="${purchases.length}">${item.endDate || ''}</td>`;
           html += `<td style="${tdL}font-family:monospace;font-size:11px;color:#2b6cb0;" rowspan="${purchases.length}">${pid}</td>`;
-          html += `<td style="${tdL}font-weight:500;" rowspan="${purchases.length}">${esc(item.name || '')}</td>`;
+          html += `<td style="${tdL}font-weight:500;" rowspan="${purchases.length}">${esc(item.name || '')}${_rtBadge}</td>`;
           html += `<td style="${tdL}text-align:center;" rowspan="${purchases.length}"><input type="checkbox" ${isOrdered?'checked':''} onchange="otToggleOrdered('${pid}')"></td>`;
           html += `<td style="${tdL}text-align:center;font-weight:700;color:${(item.orderQty||0)>0?'#c53030':'#047857'};" rowspan="${purchases.length}">${item.orderQty != null ? item.orderQty : item.totalQty || 0}</td>`;
           html += `<td style="${tdL}text-align:right;" rowspan="${purchases.length}">${item.price ? '$' + Number(item.price).toLocaleString() : ''}</td>`;

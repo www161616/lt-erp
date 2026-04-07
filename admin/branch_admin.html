@@ -131,7 +131,7 @@
     <div class="menu-item" id="menu-gbOrder" style="display:none;" onclick="switchTab('gbOrder', this)">📋 團購叫貨區</div>
     <div class="menu-item" id="menu-ppAssistant" style="display:none;" onclick="switchTab('ppAssistant', this)">🌸 漂漂館區</div>
     <div class="menu-item" id="menu-cnArrivals" onclick="switchTab('cnArrivals', this)">📦 陸貨到貨清單</div>
-    <div class="menu-item" id="menu-cnReturns" onclick="switchTab('cnReturns', this)">🔄 退換貨處理</div>
+    <div class="menu-item" id="menu-cnReturns" onclick="switchTab('cnReturns', this)">🔍 查詢退換貨</div>
 
     <div id="label-warehouse" style="padding: 10px 20px; font-size: 11px; color: var(--text2); margin-top: 10px;">倉儲與物流</div>
     <div class="menu-item" id="menu-warehouseReturn" onclick="switchTab('warehouseReturn', this)">🔄 轉回總倉記錄</div>
@@ -603,7 +603,7 @@
         title.innerText = '當前功能：陸貨到貨清單';
         renderCnArrivals();
       } else if (tabId === 'cnReturns') {
-        title.innerText = '當前功能：退換貨處理';
+        title.innerText = '當前功能：查詢退換貨';
         renderCnReturns();
       } else if (tabId === 'backorder') {
         title.innerText = '當前功能：需求與欠品管理';
@@ -11487,18 +11487,27 @@
   function gbEsc(v) { return (v || '').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
 
   let gbCostMap = {}; // product_id → unit_cost（從陸貨到貨清單取最新）
+  let gbReturnPendingMap = {}; // product_code → 進行中退換貨筆數
+
+  // 「進行中」進度：空、待處理、廠商補寄
+  const RT_ACTIVE = ['', '待處理', '廠商補寄'];
+  function isActiveReturn(progress) {
+    return RT_ACTIVE.includes(progress || '');
+  }
 
   async function renderGBOrder() {
     const container = document.getElementById('mainContainer');
     container.innerHTML = '<div class="panel"><p>載入中...</p></div>';
     // 從 DB 讀取
     try {
-      const [otRes, arrRes] = await Promise.all([
+      const [otRes, arrRes, rtRes] = await Promise.all([
         fetch(`${SB_URL}/xiaolan_order_tracking?order=end_date.desc&limit=1000`, { headers: HEADERS }),
-        fetch(`${SB_URL}/xiaolan_arrivals?product_id=not.is.null&unit_cost=gt.0&order=ship_date.desc,id.desc&limit=1000`, { headers: HEADERS })
+        fetch(`${SB_URL}/xiaolan_arrivals?product_id=not.is.null&unit_cost=gt.0&order=ship_date.desc,id.desc&limit=1000`, { headers: HEADERS }),
+        fetch(`${SB_URL}/xiaolan_returns?select=product_code,progress&limit=1000`, { headers: HEADERS })
       ]);
       gbOrderRows = otRes.ok ? await otRes.json() : [];
       const arrivals = arrRes.ok ? await arrRes.json() : [];
+      const returns = rtRes.ok ? await rtRes.json() : [];
       // 建立 product_id → unit_cost（ship_date 最新的優先，已排序所以第一筆就是最新）
       gbCostMap = {};
       arrivals.forEach(a => {
@@ -11506,7 +11515,14 @@
           gbCostMap[a.product_id] = a.unit_cost;
         }
       });
-    } catch { gbOrderRows = []; gbCostMap = {}; }
+      // 建立 product_code → 進行中退換貨筆數
+      gbReturnPendingMap = {};
+      returns.forEach(r => {
+        if (r.product_code && isActiveReturn(r.progress)) {
+          gbReturnPendingMap[r.product_code] = (gbReturnPendingMap[r.product_code] || 0) + 1;
+        }
+      });
+    } catch { gbOrderRows = []; gbCostMap = {}; gbReturnPendingMap = {}; }
     gbPage = 1;
     renderGBGrid();
   }
@@ -11594,6 +11610,7 @@
           <th style="width:70px;padding:6px;border:1px solid #e2e8f0;background:#edf2f7;">進貨價</th>
           <th style="width:80px;padding:6px;border:1px solid #e2e8f0;background:#edf2f7;">採購進度</th>
           <th style="width:130px;padding:6px;border:1px solid #e2e8f0;background:#edf2f7;">1688連結</th>
+          <th style="width:90px;padding:6px;border:1px solid #e2e8f0;background:#edf2f7;">退換貨</th>
         </tr></thead><tbody>`;
 
     const tdS = 'border:1px solid #e2e8f0;padding:5px 6px;';
@@ -11621,11 +11638,17 @@
       } else {
         html += `<td style="${tdS}text-align:center;"><input type="text" placeholder="貼上1688連結" data-pid="${gbEsc(pid)}" onblur="onGBUrlChange(this)" style="width:100px;font-size:11px;padding:2px 4px;border:1px solid #e2e8f0;border-radius:3px;"></td>`;
       }
+      // 退換貨欄
+      const pendingCnt = gbReturnPendingMap[pid] || 0;
+      const pendingBadge = pendingCnt > 0
+        ? `<div style="margin-top:2px;font-size:10px;color:#c53030;font-weight:700;">⚠️ 待處理 ${pendingCnt}</div>`
+        : '';
+      html += `<td style="${tdS}text-align:center;"><button onclick="openReturnModal('${gbEsc(pid)}', '${gbEsc(r.product_name).replace(/'/g, "\\'")}')"  style="background:#fef3c7;color:#92400e;border:1px solid #fbbf24;padding:3px 8px;border-radius:4px;font-size:11px;cursor:pointer;font-weight:600;">🔄 登記</button>${pendingBadge}</td>`;
       html += `</tr>`;
     });
 
     if (data.length === 0) {
-      html += `<tr><td colspan="9" style="text-align:center;padding:40px;color:#718096;">訂貨追蹤中沒有廠商為「小瀾」的商品</td></tr>`;
+      html += `<tr><td colspan="10" style="text-align:center;padding:40px;color:#718096;">訂貨追蹤中沒有廠商為「小瀾」的商品</td></tr>`;
     }
 
     html += `</tbody></table></div>
@@ -11651,6 +11674,100 @@
       renderGBGrid();
     } catch (err) {
       Swal.fire('儲存失敗', err.message, 'error');
+    }
+  }
+
+  // 退換貨登記彈窗（從團購叫貨區呼叫）
+  async function openReturnModal(productCode, productName) {
+    const result = await Swal.fire({
+      title: '登記退換貨',
+      html: `
+        <div style="text-align:left;font-size:13px;">
+          <div style="background:#f7fafc;padding:8px 12px;border-radius:6px;margin-bottom:12px;">
+            <div><b>商品編號：</b><span style="font-family:monospace;color:#2b6cb0;">${productCode}</span></div>
+            <div><b>商品名稱：</b>${productName}</div>
+          </div>
+          <label style="display:block;margin-bottom:4px;font-weight:600;">數量 <span style="color:#c53030;">*</span></label>
+          <input id="rtmQty" type="number" min="1" placeholder="例如 3" style="width:100%;padding:6px 8px;border:1px solid #cbd5e0;border-radius:4px;margin-bottom:10px;">
+          <label style="display:block;margin-bottom:4px;font-weight:600;">原因 <span style="color:#c53030;">*</span></label>
+          <select id="rtmReason" style="width:100%;padding:6px 8px;border:1px solid #cbd5e0;border-radius:4px;margin-bottom:10px;">
+            <option value="">請選擇</option>
+            <option value="少到">少到</option>
+            <option value="瑕疵">瑕疵</option>
+            <option value="錯品">錯品</option>
+            <option value="其他">其他</option>
+          </select>
+          <label style="display:block;margin-bottom:4px;font-weight:600;">內容描述</label>
+          <textarea id="rtmContent" rows="3" placeholder="可以詳細描述問題..." style="width:100%;padding:6px 8px;border:1px solid #cbd5e0;border-radius:4px;margin-bottom:10px;font-family:inherit;"></textarea>
+          <label style="display:block;margin-bottom:4px;font-weight:600;">備註</label>
+          <input id="rtmNote" type="text" style="width:100%;padding:6px 8px;border:1px solid #cbd5e0;border-radius:4px;margin-bottom:10px;">
+          <label style="display:block;margin-bottom:4px;font-weight:600;">📷 上傳照片/影片（可多選）</label>
+          <input id="rtmFiles" type="file" accept="image/*,video/*" multiple style="width:100%;font-size:12px;">
+          <div style="font-size:11px;color:#718096;margin-top:4px;">支援 jpg/png/mp4 等，單檔上限 50MB</div>
+        </div>
+      `,
+      showCancelButton: true,
+      confirmButtonText: '送出',
+      cancelButtonText: '取消',
+      confirmButtonColor: '#2b6cb0',
+      width: 500,
+      preConfirm: () => {
+        const qty = document.getElementById('rtmQty').value.trim();
+        const reason = document.getElementById('rtmReason').value;
+        const content = document.getElementById('rtmContent').value.trim();
+        const note = document.getElementById('rtmNote').value.trim();
+        const files = document.getElementById('rtmFiles').files;
+        if (!qty || parseInt(qty) <= 0) { Swal.showValidationMessage('請輸入有效數量'); return false; }
+        if (!reason) { Swal.showValidationMessage('請選擇原因'); return false; }
+        return { qty: parseInt(qty), reason, content, note, files };
+      }
+    });
+
+    if (!result.isConfirmed) return;
+
+    // 顯示上傳中
+    Swal.fire({ title: '處理中...', html: '正在上傳檔案與儲存資料', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+    try {
+      const { qty, reason, content, note, files } = result.value;
+      // 1. 上傳檔案到 Supabase Storage
+      const mediaUrls = [];
+      const STORAGE_URL = SB_URL.replace('/rest/v1', '/storage/v1');
+      const PUBLIC_PREFIX = `${STORAGE_URL}/object/public/return-media/`;
+      for (const file of files) {
+        const safeName = file.name.replace(/[^\w.\-]/g, '_');
+        const path = `${productCode || 'unknown'}/${Date.now()}_${safeName}`;
+        const upRes = await fetch(`${STORAGE_URL}/object/return-media/${path}`, {
+          method: 'POST',
+          headers: { ...HEADERS, 'Content-Type': file.type || 'application/octet-stream' },
+          body: file
+        });
+        if (!upRes.ok) throw new Error('上傳檔案失敗：' + (await upRes.text()));
+        mediaUrls.push(PUBLIC_PREFIX + path);
+      }
+      // 2. 寫入 xiaolan_returns
+      const payload = {
+        return_date: new Date().toISOString().slice(0, 10),
+        product_code: productCode,
+        product_name: productName,
+        qty,
+        reason,
+        content: content || `${reason}：${qty}件`,
+        note,
+        progress: '待處理',
+        media_urls: mediaUrls
+      };
+      const res = await fetch(`${SB_URL}/xiaolan_returns`, {
+        method: 'POST',
+        headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) throw new Error(await res.text());
+      Swal.fire({ icon: 'success', title: '已登記退換貨', timer: 1500, showConfirmButton: false });
+      // 重新整理團購叫貨區（更新待處理徽章）
+      renderGBOrder();
+    } catch (e) {
+      Swal.fire('儲存失敗', e.message, 'error');
     }
   }
 
@@ -12953,7 +13070,7 @@
 
     let html = `<div class="panel">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;">
-        <h3 style="margin:0;">退換貨處理</h3>
+        <h3 style="margin:0;">查詢退換貨</h3>
         <div style="display:flex;gap:8px;">
           <button class="btn" style="background:#27ae60;color:#fff;" onclick="addCnReturnRows(3)">+3 行</button>
           ${newLen > 0 ? '<button class="btn" style="background:#2b6cb0;color:#fff;" onclick="saveCnrNewRows()">儲存新增 ('+newLen+')</button>' : ''}
@@ -13012,7 +13129,10 @@
         <td style="border:1px solid #e2e8f0;padding:4px;"><input type="date" value="${r.return_date||''}" data-field="return_date" data-idx="${idx}" onchange="onCnrChange(this)" style="width:100%;border:1px solid #e2e8f0;padding:3px;font-size:12px;border-radius:3px;"></td>
         <td style="border:1px solid #e2e8f0;padding:4px;"><input value="${r.product_code||''}" data-field="product_code" data-idx="${idx}" onchange="onCnrChange(this)" style="width:100%;border:1px solid #e2e8f0;padding:3px;font-size:12px;border-radius:3px;font-family:monospace;"></td>
         <td style="border:1px solid #e2e8f0;padding:4px;"><input value="${(r.product_name||'').replace(/"/g,'&quot;')}" data-field="product_name" data-idx="${idx}" onchange="onCnrChange(this)" style="width:100%;border:1px solid #e2e8f0;padding:3px;font-size:12px;border-radius:3px;"></td>
-        <td style="border:1px solid #e2e8f0;padding:4px;"><input value="${(r.content||'').replace(/\r?\n/g,' ').replace(/"/g,'&quot;')}" data-field="content" data-idx="${idx}" onchange="onCnrChange(this)" style="width:100%;border:1px solid #e2e8f0;padding:3px;font-size:12px;border-radius:3px;" title="${(r.content||'').replace(/"/g,'&quot;')}"></td>
+        <td style="border:1px solid #e2e8f0;padding:4px;">
+          <input value="${(r.content||'').replace(/\r?\n/g,' ').replace(/"/g,'&quot;')}" data-field="content" data-idx="${idx}" onchange="onCnrChange(this)" style="width:100%;border:1px solid #e2e8f0;padding:3px;font-size:12px;border-radius:3px;" title="${(r.content||'').replace(/"/g,'&quot;')}">
+          ${(r.media_urls && r.media_urls.length > 0) ? `<div style="margin-top:3px;font-size:11px;">${r.media_urls.map((u,j) => `<a href="${u}" target="_blank" style="color:#2b6cb0;text-decoration:underline;margin-right:6px;">📎${j+1}</a>`).join('')}</div>` : ''}
+        </td>
         <td style="border:1px solid #e2e8f0;padding:4px;text-align:center;background:#f7fafc;">${progressBadge}</td>
         <td style="border:1px solid #e2e8f0;padding:4px;background:#f7fafc;color:#4a5568;">${r.process_date||''}</td>
         <td style="border:1px solid #e2e8f0;padding:4px;background:#f7fafc;font-size:11px;color:#4a5568;">${r.tracking_number||''}</td>
