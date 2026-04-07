@@ -124,7 +124,6 @@
     <div class="menu-item" id="menu-purchase" onclick="switchTab('purchase', this)">📝 新增採購單</div>
     <div class="menu-item" id="menu-searchPurchase" onclick="switchTab('searchPurchase', this)">🔍 查詢採購單</div>
     <div class="menu-item" id="menu-adminSummary" onclick="switchTab('adminSummary', this)">📊 開團總表</div>
-    <div class="menu-item" id="menu-importGroupBuy" onclick="switchTab('importGroupBuy', this)">📥 匯入開團資料</div>
     <div class="menu-item" id="menu-orders" onclick="switchTab('orders', this)">🛒 訂貨追蹤</div>
 
     <div id="label-cn" style="padding: 10px 20px; font-size: 11px; color: var(--text2); margin-top: 10px;">陸貨專區</div>
@@ -353,12 +352,10 @@
 
       // 系統管理：僅 admin
 
-      // 漂漂館+團購叫貨+匯入開團：僅 admin/assistant，staff 隱藏
+      // 漂漂館+團購叫貨：僅 admin/assistant，staff 隱藏
       const showPP = isAdmin || isAssistant;
       document.getElementById('menu-ppAssistant').style.display = showPP ? '' : 'none';
       document.getElementById('menu-gbOrder').style.display = showPP ? '' : 'none';
-      const importEl = document.getElementById('menu-importGroupBuy');
-      if (importEl) importEl.style.display = showPP ? '' : 'none';
     }
 
     async function checkLoginStatus() {
@@ -584,9 +581,6 @@
       } else if (tabId === 'searchPurchase') {
         title.innerText = '當前功能：查詢內部採購單';
         renderInternalPurchaseSearch();
-      } else if (tabId === 'importGroupBuy') {
-        title.innerText = '當前功能：匯入開團資料';
-        renderImportGroupBuy();
       } else if (tabId === 'adminSummary') {
         title.innerText = '當前功能：開團總表';
         renderAdminSummary();
@@ -2389,6 +2383,77 @@
       renderStagingList();
     }
 
+    // ============================
+    // 共用：建商品時自動清舊數量
+    // 掃描 branchOrders 各店，看新建商品的編號是否有歷史殘留，有則跳確認彈窗
+    // 回傳 Promise<boolean>: true=有清過, false=沒清/取消
+    // ============================
+    async function autoCleanBranchOrdersForNewProducts(productCodes) {
+      if (!productCodes || productCodes.length === 0) return false;
+      const orders = JSON.parse(localStorage.getItem('branchOrders') || '{}');
+      const codeSet = new Set(productCodes.map(String));
+
+      // 掃描有歷史殘留的編號
+      const found = {};  // code → [{store, key, qty}]
+      Object.entries(orders).forEach(([store, m]) => {
+        Object.entries(m || {}).forEach(([k, v]) => {
+          const cleanK = String(k).replace(/_.*$/, '');
+          if (codeSet.has(cleanK) && Number(v) > 0) {
+            if (!found[cleanK]) found[cleanK] = [];
+            found[cleanK].push({ store, key: k, qty: v });
+          }
+        });
+      });
+
+      const dirtyCodes = Object.keys(found);
+      if (dirtyCodes.length === 0) return false;  // 沒有殘留，不用清
+
+      // 組摘要顯示
+      let summary = '';
+      dirtyCodes.slice(0, 8).forEach(code => {
+        const items = found[code];
+        const totalQty = items.reduce((s, i) => s + Number(i.qty || 0), 0);
+        summary += `<div style="margin:4px 0;"><b style="color:#2b6cb0;font-family:monospace;">${code}</b>：${items.length} 店有資料，合計 <b>${totalQty}</b> 件</div>`;
+      });
+      if (dirtyCodes.length > 8) summary += `<div style="margin:4px 0;color:#718096;">…還有 ${dirtyCodes.length - 8} 個編號</div>`;
+
+      const r = await Swal.fire({
+        title: '⚠️ 偵測到歷史殘留數量',
+        html: `<div style="text-align:left;font-size:13px;">
+          以下 <b>${dirtyCodes.length}</b> 個新建商品在分店訂貨表中已有歷史數量：<br><br>
+          ${summary}<br>
+          <div style="background:#fff3cd;padding:10px;border-radius:6px;color:#856404;font-size:12px;">
+            <b>建議清除</b>：因為這些商品是新建/重新開團，店家應該重新填寫，避免誤用舊數量。<br>
+            <b>不清除</b>：保留現有數量（如果舊檔期還在進行中可選此項）。
+          </div>
+        </div>`,
+        icon: 'warning',
+        showCancelButton: true,
+        confirmButtonText: '✅ 清除歷史數量（建議）',
+        cancelButtonText: '❌ 保留',
+        confirmButtonColor: '#dc2626',
+        cancelButtonColor: '#6b7280',
+        width: 540
+      });
+      if (!r.isConfirmed) return false;
+
+      // 執行清除
+      let cleanedKeys = 0;
+      Object.entries(orders).forEach(([store, m]) => {
+        Object.keys(m || {}).forEach(k => {
+          const cleanK = String(k).replace(/_.*$/, '');
+          if (codeSet.has(cleanK)) {
+            delete orders[store][k];
+            cleanedKeys++;
+          }
+        });
+      });
+      localStorage.setItem('branchOrders', JSON.stringify(orders));
+      if (typeof cloudSave === 'function') cloudSave('branchOrders');
+      console.log('[autoClean] 已清', cleanedKeys, '個 key，涉及', dirtyCodes.length, '個編號');
+      return true;
+    }
+
     async function syncToERP() {
       if (stagingList.length === 0) {
         Swal.fire('提醒', '清單內沒有商品', 'warning');
@@ -2470,12 +2535,18 @@
       localStorage.setItem('branchOrderList', JSON.stringify(saved));
       cloudSave('branchOrderList');
 
-      // ④ 結果提示
+      // ④ 自動清掉本次新建商品在分店訂貨表的歷史殘留（會跳確認彈窗）
+      Swal.close();
+      const codes = stagingList.map(it => it.code);
+      const cleaned = await autoCleanBranchOrdersForNewProducts(codes);
+
+      // ⑤ 結果提示
       let msg = '';
       if (productWriteError) msg += `⚠️ 商品主檔寫入失敗：${productWriteError}<br>（檔期仍已同步至分店）<br>`;
       if (savedCount)      msg += `✅ 寫入 ERP 商品主檔：<b>${savedCount}</b> 件新品<br>`;
       if (skipped.length)  msg += `⏭️ 編號已存在跳過：<b>${skipped.length}</b> 件<br>`;
       msg += `📤 已同步 <b>${stagingList.length}</b> 件至分店結單填表`;
+      if (cleaned) msg += `<br>🧹 已清除歷史殘留數量`;
 
       // 匯入後同步訂貨追蹤給分店
       syncOrderTrackingData().then(() => syncProcurementToPortal());
