@@ -660,8 +660,8 @@
         addLog(`📅 處理批次：結單 ${dateKey}（開團 ${openDate}），${items.length} 項商品`, 'info');
 
         for (const item of items) {
-          // 建立商品資料（key 統一用純商品編號，與 syncToERP 一致）
-          const orderKey = item.productId;
+          // 建立商品資料（key 用 商品ID_結單日，避免不同檔期互相污染）
+          const orderKey = `${item.productId}_${dateKey}`;
           const productEntry = {
             id: orderKey,
             productId: item.productId,
@@ -676,28 +676,21 @@
             importedAt: new Date().toISOString(),
           };
 
-          // 檢查是否已存在（同 productId）
+          // 檢查是否已存在（同編號 + 同結單日）
           const existIdx = existingList.findIndex(p => p.id === orderKey);
           if (existIdx >= 0) {
-            // 只在新筆 endDate >= 舊筆 endDate 時才覆蓋（保留最新檔期）
-            const oldEnd = existingList[existIdx].endDate || '';
-            if (closeDateFull >= oldEnd) {
-              existingList[existIdx] = productEntry;
-              addLog(`  ⚠️ 已存在，已更新為較新檔期：${item.productName}`, 'warn');
-            } else {
-              addLog(`  ⏭️ 已存在較新檔期，跳過：${item.productName}`, 'warn');
-            }
+            existingList[existIdx] = productEntry;
+            addLog(`  ⚠️ 已存在，已更新：${item.productName}`, 'warn');
             skippedCount++;
           } else {
             existingList.push(productEntry);
             importedCount++;
           }
 
-          // 儲存各店數量（用純 productId，同店同商品取最大值，與正規化邏輯一致）
+          // 儲存各店數量（用 商品ID_結單日 作為 key 避免不同批次互相污染）
           Object.entries(item.stores).forEach(([storeName, qty]) => {
             if (!existingOrders[storeName]) existingOrders[storeName] = {};
-            const cur = existingOrders[storeName][orderKey] || 0;
-            existingOrders[storeName][orderKey] = Math.max(cur, Number(qty) || 0);
+            existingOrders[storeName][orderKey] = qty;
           });
           // 個人戶已不再匯入（全/山/買 已透過 ALIAS_MAP 合併到全民/山張/買上癮）
 
