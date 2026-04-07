@@ -4,7 +4,67 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # 龍潭總倉 ERP 系統
 
-## 近期完成功能（2026/04/02~04/03）
+## 完成功能（2026/04/07）
+- branch_admin 訂貨追蹤：陸貨到貨清單比對商品編號，兩階段自動更新採購進度
+  - 第一階段：商品出現在到貨清單 → pending 改為「已向廠商叫貨」
+  - 第二階段：出貨日+10天已過 → 改為「貨已到倉」
+  - 自動填入預計到貨日（最新出貨日+10天），不覆蓋手動設定
+  - 只限小瀾的陸貨商品（xiaolan_arrivals 表）
+- supplier_xiaolan 團購採購：依商品名稱「-」前分組，白/淡灰藍交替標色，排序加商品編號次序
+- branch_admin 團購叫貨區整合退換貨登記
+  - 退換貨處理分頁更名為「查詢退換貨」
+  - 每行加「🔄 登記」按鈕，彈窗填數量/原因/內容/備註/照片影片
+  - 上傳檔案到 Supabase Storage（return-media bucket，public）
+  - 寫入 xiaolan_returns（progress=待處理）
+  - 該商品有進行中退換貨時顯示「⚠️ 待處理 N」徽章
+  - 查詢退換貨分頁顯示 📎 照片連結
+- supplier_xiaolan 退換貨提醒
+  - sidebar「退換貨追蹤」加紅點徽章顯示待處理筆數
+  - 團購採購商品名稱旁顯示「⚠️ 退換貨待處理 N」標記，點擊跳轉並篩選
+  - 退換貨追蹤分頁顯示 📎 照片連結
+  - 改進度為已解決類後徽章/警示自動消失
+  - 進行中定義：progress 為空 / 待處理 / 廠商補寄
+- branch_portal 開團總表 key 不一致 bug 修復（智能查找 fallback）
+- **branchOrderList key 格式統一（治本）**
+  - 加 admin 首頁「🔧 執行資料正規化」手動按鈕
+  - 將 branchOrderList / branchOrders 中的 _尾碼 key 統一為純商品編號
+  - 同 productId 取 endDate 最新的整筆，各店數量取最大值
+  - 守衛旗標 branchOrderNormalized_v1 確保每台裝置只跑一次
+  - 備份原資料下載成 JSON 檔（避免 localStorage 配額爆掉）
+  - 修 ImportGroupBuy.html：orderKey 從 ${productId}_${dateKey} 改為純 productId
+  - 同 productId 重複時保留 endDate 最新檔期，branchOrders 取 max
+  - **執行結果：list 2758→2622 筆、orders 48809→47266 key**
+
+## DB 變更（2026/04/07）
+- xiaolan_returns 表新增欄位：
+  - media_urls (jsonb default '[]')
+  - qty (integer)
+  - reason (text)
+- Supabase Storage 新建 bucket：return-media (public, 50MB)
+  - 3 條 RLS Policy：anon/authenticated 可 INSERT/SELECT/DELETE
+
+## 近期完成功能（2026/04/05~04/06）
+- index.html sidebar 待審 badge 加入「部分到貨」狀態，與 PendingReview 頁面數字一致
+- branch_admin 各功能頁移除 height:100% 框住限制，內容改為整頁自然延伸
+- branch_admin 新增/查詢內部採購單移除付款方式欄位（一張單多廠商不合理）
+- branch_portal 店轉店 badge 改為已讀即消，有新轉入單才再亮紅字
+- branch_portal 常用功能（備忘錄/自訂網址/常用語錄）改存 branch_settings DB 表，登入自動遷移舊 localStorage
+- branch_portal 互助交流新增「88折出清」功能（clearance_periods + clearance_items 兩張表）
+  - Admin 檔期管理（建立/關閉/移轉未出清/封存）
+  - 分店登記出清商品（搜尋商品自動帶價格，必須從商品資料庫選取）
+  - 標記成交自動建立店轉店單（用分店價）
+  - www161616 限定回溯功能（已出清可回溯 + 作廢店轉店單）
+  - 匯出 Excel（admin 隨時可匯，分店 closed 後才能）
+  - 競態防護：登記前檢查檔期狀態、成交前檢查品項狀態
+- branch_portal 互助交流「全部」tab 隱藏已滿足的個別品項及全滿足貼文
+- branch_portal 結單填表、需求表、開團總表、到貨狀況、訂貨動態追蹤移除 max-height 限制
+- branch_portal「分店價」全站改稱「成本」
+- branch_portal 結單填表送出時對 productId 去重，修正匯入筆數與送出筆數不一致
+- branch_portal 匯入樂樂報表區分「開團總表無此品項」vs「找不到編號」+ 重複開團商品不再誤判已結單
+- 新建 DB 表：branch_settings（分店常用功能設定）、clearance_periods（出清檔期）、clearance_items（出清品項）
+- 修正 branch_settings RLS：store 角色用 replace(store,'店','') 比對 user_metadata
+
+## 完成功能（2026/04/02~04/03）
 - supplier_xiaolan 匯入訂單加訂單號重複防呆
 - supplier_xiaolan importOfferIds 加 raw:false 防止長訂單號 JS Number 截斷 + 尾碼匹配修復歷史資料
 - supplier_xiaolan siHandleFile 加 raw:false 修復 Excel 匯入截斷
@@ -183,57 +243,58 @@ function openSharedLink(url) {
 - 2025 全部 + 2026 年 1、2 月自動結單
 - 3 月起由 admin 手動控制
 
-## 工作態度與行為準則（強化版）
+## 工作流程
 
-### 動手之前
-- 拿到需求後，不要馬上寫程式
-- 先用自己的話複述「我理解你要做的是⋯⋯」，等我確認才開始
-- 主動做「影響範圍掃描」，逐一回答以下問題（不可跳過）：
-  - 這個改動會碰到哪些頁面、元件、函式？全部列出來
-  - 有沒有 ID、key、class name、localStorage key、欄位名稱在其他地方也用到，改了這裡會不會炸掉那裡？
-  - 現有資料結構會不會因為這個改動而出現不一致？需要 migrate 嗎？
-  - RLS 權限在不同角色（admin / branch / guest）下行為一樣嗎？
-  - 有沒有空值、undefined、null、重複 ID、陣列越界、非同步競態的風險？
-  - 這個做法對使用者來說夠直覺嗎？有沒有更人性化的流程？
-- 如果有任何疑慮，先提出討論，不要自行假設後直接做
+### Phase 1: 理解需求（禁止寫任何程式碼）
+1. 用自己的話複述需求，等我說「對」才進入 Phase 2
+2. 列出「影響範圍清單」：
+   - 這次會改哪些檔案？
+   - 這些檔案裡有哪些函式/區塊會被影響？
+   - 有沒有其他檔案呼叫了這些函式？（用 grep 確認，不要憑記憶）
+3. 列出「風險清單」，每項必須回答 YES/NO：
+   - [ ] 會改 DB schema 或 RPC 嗎？
+   - [ ] 會影響其他頁面（index / branch_admin / branch_portal / supplier_xiaolan）嗎？
+   - [ ] 有沒有欄位名稱需要確認？（有 → 查 docs/supabase/ CSV，禁止猜）
+   - [ ] 現有資料會不會因為這個改動而出錯？
+   - [ ] 有沒有涉及金額計算或庫存增減？
+   - [ ] 不同角色（admin / assistant / branch）看到的行為一樣嗎？
 
-### 動手過程中
-- 每完成一個段落，主動說明「我做了什麼、為什麼這樣做」
-- 修改任何共用元件、工具函式、全域狀態時，必須標注：「⚠️ 這是共用邏輯，以下地方也受影響：[列出清單]」
-- 看到以下情形，立刻停下來告訴我，不要默默繞過：
-  - HTML 裡出現重複的 id 屬性
-  - localStorage key 沒有 `lt_` prefix
-  - 欄位名稱與 `docs/supabase/` CSV 對不上
-  - 某段邏輯在特定角色或資料狀態下會靜默失敗（沒有錯誤提示）
-  - 某個操作沒有 loading 狀態或錯誤回饋，使用者會不知道發生什麼事
-  - 表單送出後沒有防止重複點擊
-  - 刪除 / 轉移 / 核銷等不可逆操作沒有二次確認
-  - **陣列索引錯位**：頁面有篩選/搜尋/排序時，onclick 裡的索引（gi、idx）是否對應篩選後的陣列還是全量陣列？篩選後所有操作按鈕是否還能正常運作？
-  - **A+B 組合操作**：新功能跟現有功能同時使用會不會壞？例如：搜尋後勾選→批次操作、篩選後排序→展開明細、切換 tab 後搜尋框殘留
+### Phase 2: 實作
+- 每完成一個獨立區塊，說明：改了什麼、為什麼這樣改
+- 發現需求有漏洞或更好做法 → 立刻停下來告訴我，不要自己決定
+- 改到會影響其他地方的程式時，主動標注「⚠️ 這裡也需要一起改：...」
 
-### 完成後
-- 列出「我改了哪些地方」（檔案 + 函式 + 影響範圍）
-- 列出「你需要測試的情境」，例如：
-  - 用 admin 登入試試
-  - 用 branch 角色試試，確認看不到不該看的
-  - 空值、0、負數、超長字串的情況
-  - 跨店資料、同筆資料被兩人同時操作
-  - 網路慢 / 斷線時的行為
-- 主動指出這次改動有沒有留下技術債或臨時解法，例如：「這裡我用了 setTimeout 暫時繞過，之後應該改成⋯⋯」
-- 主動問：「這樣符合你的預期嗎？還是有哪裡需要調整？」
-- 沒有得到我的確認之前，不要繼續下一個功能
+### Phase 3: 自我審查（寫完程式碼後，交給我之前）
+逐項檢查，每項寫出結論：
+1. **呼叫端追蹤**：grep 這次改過的函式名、變數名、CSS class，確認所有引用處都一致
+2. **空值防禦**：每個從 DB 讀取的欄位，如果是 null 會怎樣？UI 會壞嗎？計算會 NaN 嗎？
+3. **陣列為空**：列表查詢結果如果是 0 筆，UI 會顯示什麼？會不會報錯？
+4. **重複操作**：使用者連點兩次按鈕會怎樣？會重複建單嗎？
+5. **排序與篩選交互**：篩選後再排序，index 還對嗎？排序後再篩選呢？
+6. **跨店資料隔離**：branch_id 有沒有正確帶入查詢條件？
+7. **localStorage key**：有沒有用 lt_ prefix？
+8. **欄位名稱**：和 docs/supabase/ CSV 比對過了嗎？
 
-### 發現潛在問題時（就算我沒問）
-- 主動說：「🔍 我注意到一個潛在問題：⋯⋯」，並給我選擇：「你想現在一起修，還是先記下來之後處理？」
-- 常見應主動提出的問題類型：
-  - **重複 ID**：同一頁有兩個 `id="modal-confirm"`，JS 只抓到第一個
-  - **命名不一致**：有地方寫 `branch_id`，有地方寫 `branchId`，資料對不上
-  - **靜默失敗**：fetch 失敗後沒有 catch，使用者看不到錯誤，以為成功了
-  - **UX 不人性化**：操作完沒有跳回列表、沒有成功提示、按鈕沒有 disabled 防重複送出
-  - **邊界狀況**：清單為空時沒有空狀態畫面、金額欄位沒有限制只能輸入數字
-  - **權限漏洞**：前端藏了按鈕但 API 沒有驗證角色，直接打 API 還是能操作
-  - **非同步競態**：兩個請求同時送出，後回來的蓋掉先回來的結果
-  - **不可逆操作無防護**：刪除 / 沖銷沒有確認彈窗，誤觸即生效
+### 停下來問我的時機（Stop Triggers）
+遇到以下任一情況，**立刻停下來問我，不要自己假設後繼續**：
+- 需求有兩種以上的合理解讀
+- 發現現有程式碼有 bug（跟這次需求無關的也要說）
+- 需要新增 DB 欄位或 RPC
+- 改動會影響超過 2 個頁面
+- 不確定某個欄位是否存在或型別是什麼
+- 發現 UI 流程在手機上可能有問題
+
+### 完成後交付格式
+1. 改動清單（檔案 + 具體改了什麼）
+2. 測試情境清單（至少包含：正常流程、空值、重複操作、不同角色）
+3. 「我注意到的潛在問題」（就算沒有也要寫「無」）
+4. 問我：「符合預期嗎？確認後我再繼續。」
+
+### 進度記錄與備份
+- 每完成一個獨立功能區塊，主動問我：「這段已完成，要我先 commit 備份嗎？」
+- 我確認後，將以下內容寫入 `docs/changelog/YYYY-MM-DD.md`：
+  - 改了什麼、為什麼改、影響範圍
+  - 測試情境與結果
 
 ### 禁止行為
 - 不確定欄位名時禁止猜測，一律查 `docs/supabase/` CSV

@@ -3,6 +3,7 @@ docs/
 
 # 備份檔、暫存檔
 *_backup*.html
+branchOrder_backup_*.json
 *.xls
 *.xlsx
 *.jpg
