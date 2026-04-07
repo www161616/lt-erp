@@ -3372,7 +3372,7 @@ function getFilteredProcData() {
     (r.name || '').toLowerCase().includes(kw) ||
     (r.productId || '').toLowerCase().includes(kw)
   );
-  data.sort((a, b) => (b.endDate || '').localeCompare(a.endDate || ''));
+  data.sort((a, b) => (b.endDate || '').localeCompare(a.endDate || '') || (a.productId || '').localeCompare(b.productId || ''));
   return data;
 }
 
@@ -3457,6 +3457,19 @@ function renderProcurement() {
   const tdRn = 'border:1px solid #e2e8f0;padding:4px 5px;background:#fafcff;white-space:nowrap;';
   const tdName = 'border:1px solid #e2e8f0;padding:4px 5px;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;';
 
+  // 商品名稱分組：「-」前相同的視為同組，交替底色區分
+  const _grpColors = ['#ffffff', '#edf2f7'];  // 白色 / 淡灰藍 交替
+  const _grpMap = {};
+  let _grpIdx = 0;
+  pageItems.forEach(item => {
+    const name = item.name || '';
+    const groupKey = name.includes('-') ? name.split('-')[0].trim() : name;
+    if (!(groupKey in _grpMap)) {
+      _grpMap[groupKey] = _grpIdx;
+      _grpIdx++;
+    }
+  });
+
   pageItems.forEach((item, pi) => {
     const i = start + pi;
     const pid = item.productId || '';
@@ -3470,7 +3483,9 @@ function renderProcurement() {
     const orderUrl = item.url || gbUrlMap[pid] || OT_ORDER_URLS[pid] || '';
     const orderLink = orderUrl ? `<span class="shared-link" data-url="${orderUrl}" style="color:#e67e22;cursor:pointer;text-decoration:underline;font-size:11px;">下單</span>` : '';
 
-    const rowBg = isOrdered ? 'background:#f0fff4;' : '';
+    const _nameKey = (item.name || '').includes('-') ? (item.name || '').split('-')[0].trim() : (item.name || '');
+    const _grpColor = _grpColors[(_grpMap[_nameKey] || 0) % 2];
+    const rowBg = isOrdered ? 'background:#f0fff4;' : `background:${_grpColor};`;
     const rowSpan = purchases.length > 1 ? ` rowspan="${purchases.length}"` : '';
 
     if (purchases.length <= 1) {
