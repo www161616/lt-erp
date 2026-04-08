@@ -8291,10 +8291,12 @@
       const raw = localStorage.getItem('portalAllRequests');
       if (!raw) { mockInquiries = []; return; }
       const list = JSON.parse(raw);
+      // 去重 key 改為「id + storeId」組合，避免不同分店相同流水號 (REQ105, REQ106...) 互相覆蓋
       const seen = new Set();
       const unique = list.filter(r => {
-        if (seen.has(r.id)) return false;
-        seen.add(r.id);
+        const dedupKey = (r.id || '') + '__' + (r.storeId || '');
+        if (seen.has(dedupKey)) return false;
+        seen.add(dedupKey);
         return true;
       });
       mockInquiries = unique.map(r => {
