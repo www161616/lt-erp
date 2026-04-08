@@ -681,10 +681,12 @@
         reverseButtons: true
       }).then(result => {
         if (result.isConfirmed) {
+          sessionStorage.setItem('mr_view', 'detail');
           loadPage('MonthlyReport.html', '月結明細報表', null);
         } else if (result.dismiss === Swal.DismissReason.cancel) {
           // 彙總改為開同一頁，由頁面內按鈕切換（避免兩份資料源不一致）
-          loadPage('MonthlyReport.html?view=summary', '月結彙總報表', null);
+          sessionStorage.setItem('mr_view', 'summary');
+          loadPage('MonthlyReport.html', '月結彙總報表', null);
         }
       });
     }

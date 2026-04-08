@@ -209,8 +209,18 @@
       const offset = today.getTimezoneOffset() * 60000;
       const localMonth = (new Date(today - offset)).toISOString().substring(0, 7);
       document.getElementById('monthInput').value = localMonth;
-      // 從 URL 參數讀 viewMode（?view=summary 直接進彙總）
+      // 從 sessionStorage 讀 viewMode（由 index 設定）
       try {
+        // 嘗試從 parent 的 sessionStorage 讀（同源 iframe 才能用）
+        const fromSession = (window.parent && window.parent !== window)
+          ? window.parent.sessionStorage.getItem('mr_view')
+          : sessionStorage.getItem('mr_view');
+        if (fromSession === 'summary') {
+          viewMode = 'summary';
+          document.getElementById('reportTitle').innerText = '📊 月結彙總報表';
+          document.getElementById('toggleViewBtn').innerHTML = '📋 切換明細';
+        }
+        // 也支援舊的 URL 參數方式（向後相容）
         const params = new URLSearchParams(location.search);
         if (params.get('view') === 'summary') {
           viewMode = 'summary';
