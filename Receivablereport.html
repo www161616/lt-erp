@@ -480,6 +480,9 @@
         const o = orderData[0];
         const gTotal = Number(o.grand_total || o.total || o.total_amount || 0);
         const tAmount = Number(o.tax_amount || o.tax || 0);
+        const subtotal = Number(o.subtotal || 0);
+        const shipping = Number(o.shipping_fee || o.shipping || 0);
+        const deduction = Number(o.deduction || 0);
 
         inner.innerHTML = `
           <div class="detail-header">
@@ -511,9 +514,12 @@
               `}).join('')}
             </tbody>
           </table>
-          <div style="text-align:right; font-size:16px; border-top:2px solid var(--border); padding-top:16px;">
-            <div style="font-size:14px; color:var(--text2); margin-bottom:8px;">稅額：$${tAmount.toLocaleString()}</div>
-            <div style="font-weight:900; color:var(--danger); font-size:24px; font-family:monospace;">含稅總計：$${gTotal.toLocaleString()}</div>
+          <div style="text-align:right; font-size:14px; border-top:2px solid var(--border); padding-top:16px;">
+            <div style="color:var(--text2); margin-bottom:4px;">未稅小計：<span style="font-family:monospace;">$${subtotal.toLocaleString()}</span></div>
+            <div style="color:var(--text2); margin-bottom:4px;">稅額：<span style="font-family:monospace;">$${tAmount.toLocaleString()}</span></div>
+            ${shipping > 0 ? `<div style="color:#0e7490; margin-bottom:4px;">運費：<span style="font-family:monospace;">+$${shipping.toLocaleString()}</span></div>` : ''}
+            ${deduction > 0 ? `<div style="color:#c00; margin-bottom:4px;">扣款：<span style="font-family:monospace;">-$${deduction.toLocaleString()}</span></div>` : ''}
+            <div style="font-weight:900; color:var(--danger); font-size:24px; font-family:monospace; margin-top:10px;">含稅總計：$${gTotal.toLocaleString()}</div>
           </div>
         `;
       } catch (error) {
