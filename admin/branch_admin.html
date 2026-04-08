@@ -13061,23 +13061,38 @@
       const name = live ? live.product_name : (r.product_name || '');
       const price = live ? live.selling_price : (r.selling_price || '');
       const cost = live ? live.unit_cost : (r.unit_cost || '');
+      const qty = live ? live.qty : (r.qty || '');
+      const category = live ? live.category : (r.category || '');
+      // 進貨價 > 售價時標紅
+      const costNum = Number(cost) || 0;
+      const priceNum = Number(price) || 0;
+      const costStyle = (costNum > 0 && priceNum > 0 && costNum > priceNum) ? 'color:#c53030;font-weight:700;' : '';
       return `<tr>
-      <td>${i+1}</td><td>${r.arrived?'✅':''}</td><td>${r.tracking_number||''}</td>
-      <td>${r.product_id||''}</td><td>${name}</td>
-      <td style="text-align:right;">${price}</td><td style="text-align:right;">${cost}</td>
+      <td style="text-align:center;">${i+1}</td>
+      <td style="text-align:center;">${r.arrived?'✅':''}</td>
+      <td>${r.tracking_number||''}</td>
+      <td>${r.product_id||''}</td>
+      <td>${name}</td>
+      <td style="text-align:right;">${price}</td>
+      <td style="text-align:center;">${qty}</td>
+      <td style="text-align:right;${costStyle}">${cost}</td>
+      <td>${r.ship_date||''}</td>
+      <td>${r.ship_order||''}</td>
+      <td>${r.ship_to||''}</td>
+      <td style="text-align:center;">${category}</td>
     </tr>`;
     }).join('');
 
     const w = window.open('','_blank');
     if (!w) return Swal.fire('提示','請允許彈出視窗','warning');
     w.document.write(`<!DOCTYPE html><html><head><meta charset="UTF-8"><title>陸貨到貨清單</title>
-      <style>body{font-family:'Noto Sans TC',sans-serif;padding:10px;font-size:12pt;margin:0;}
+      <style>body{font-family:'Noto Sans TC',sans-serif;padding:10px;font-size:11pt;margin:0;}
       h2{text-align:center;margin:0 0 4px;font-size:18px;}
-      table{width:100%;border-collapse:collapse;} th,td{border:1px solid #999;padding:4px 6px;text-align:left;white-space:nowrap;font-size:12pt;}
-      th{background:#f0f0f0;}
+      table{width:100%;border-collapse:collapse;} th,td{border:1px solid #999;padding:3px 5px;text-align:left;white-space:nowrap;font-size:10pt;}
+      th{background:#f0f0f0;text-align:center;}
       .no-print{position:fixed;top:10px;right:10px;z-index:9999;display:flex;gap:8px;}
       .no-print button{padding:8px 18px;font-size:14px;border:none;border-radius:6px;cursor:pointer;font-weight:700;}
-      @page{margin:3mm;} @media print{.no-print{display:none;}}</style>
+      @page{margin:3mm;size:landscape;} @media print{.no-print{display:none;}}</style>
     </head><body>
       <div class="no-print">
         <button onclick="window.print()" style="background:#2b6cb0;color:white;">🖨️ 列印</button>
@@ -13085,7 +13100,11 @@
       </div>
       <h2>陸貨到貨清單</h2>
       <p style="text-align:right;font-size:11px;">列印日期：${new Date().toLocaleDateString('zh-TW')}　共 ${printData.length} 筆</p>
-      <table><thead><tr><th>#</th><th>到貨</th><th>快遞單號</th><th>商品編號</th><th>商品名稱</th><th>售價</th><th>進貨價</th></tr></thead>
+      <table><thead><tr>
+        <th>#</th><th>到貨</th><th>快遞單號</th><th>商品編號</th><th>商品名稱</th>
+        <th>售價</th><th>進貨數</th><th>進貨價</th>
+        <th>出貨日期</th><th>訂單號</th><th>寄至</th><th>用途</th>
+      </tr></thead>
       <tbody>${rows}</tbody></table>
     </body></html>`);
     w.document.close();
