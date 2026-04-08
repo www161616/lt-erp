@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>龍潭進銷存系統 - 客戶月結報表</title>
   <script src="libs/sweetalert2.min.js"></script>
+  <script src="libs/xlsx.full.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
   
   <style>
@@ -428,41 +429,100 @@
     if (!reportData) { Swal.fire('提示', '請先產生報表', 'warning'); return; }
 
     const sorted = [...reportData.orders].sort((a, b) => a.date.localeCompare(b.date));
+    const headers = ['單號','日期','品名','數量','單位','單價','小計','未稅小計','稅額','運費','扣款','含稅總額','收款狀態','備註'];
 
-    let csv = '\uFEFF';
-    csv += `客戶月結對帳單 - ${reportData.customer.name}\n`;
-    csv += `查詢期間,${reportData.dateRange.from} ~ ${reportData.dateRange.to}\n\n`;
-    csv += '單號,日期,品名,數量,單位,單價,小計,未稅小計,稅額,運費,扣款,含稅總額,收款狀態,備註\n';
+    // 標題列 + 表頭
+    const aoa = [];
+    aoa.push([`客戶月結對帳單 - ${reportData.customer.name}`]);
+    aoa.push([`查詢期間 ${reportData.dateRange.from} ~ ${reportData.dateRange.to}`]);
+    aoa.push([]);
+    aoa.push(headers);
 
     sorted.forEach(o => {
       if (o.items.length > 0) {
         o.items.forEach((item, idx) => {
           if (idx === 0) {
-            csv += `"${o.orderId}","${o.date}","${item.productName}","${item.qty}","${item.unit}","${item.unitPrice.toLocaleString()}","${item.subtotal.toLocaleString()}","${o.subtotal.toLocaleString()}","${o.taxAmount.toLocaleString()}","${o.shipping.toLocaleString()}","${o.deduction.toLocaleString()}","${o.grandTotal.toLocaleString()}","${o.paymentStatus}","${(o.note || '').replace(/"/g, '""')}"\n`;
+            aoa.push([
+              o.orderId, o.date, item.productName, item.qty, item.unit,
+              item.unitPrice, item.subtotal,
+              o.subtotal, o.taxAmount, o.shipping, o.deduction, o.grandTotal,
+              o.paymentStatus, o.note || ''
+            ]);
           } else {
-            csv += `"","","${item.productName}","${item.qty}","${item.unit}","${item.unitPrice.toLocaleString()}","${item.subtotal.toLocaleString()}","","","","","","",""\n`;
+            aoa.push(['', '', item.productName, item.qty, item.unit, item.unitPrice, item.subtotal, '', '', '', '', '', '', '']);
           }
         });
       } else {
-        csv += `"${o.orderId}","${o.date}","","","","","","${o.subtotal.toLocaleString()}","${o.taxAmount.toLocaleString()}","${o.shipping.toLocaleString()}","${o.deduction.toLocaleString()}","${o.grandTotal.toLocaleString()}","${o.paymentStatus}","${(o.note || '').replace(/"/g, '""')}"\n`;
+        aoa.push([
+          o.orderId, o.date, '', '', '', '', '',
+          o.subtotal, o.taxAmount, o.shipping, o.deduction, o.grandTotal,
+          o.paymentStatus, o.note || ''
+        ]);
       }
     });
 
-    csv += '\n';
-    csv += `"","","","","","","","","","","合計","${reportData.summary.totalSales.toLocaleString()}","",""\n`;
-    csv += `"","","","","","","","","","","已收","${reportData.summary.totalPaid.toLocaleString()}","",""\n`;
-    csv += `"","","","","","","","","","","未收","${reportData.summary.totalUnpaid.toLocaleString()}","",""\n`;
-    csv += `"","","","","","","","","","","共 ${sorted.length} 筆","","",""\n`;
+    // 合計列
+    aoa.push([]);
+    aoa.push(['','','','','','','','','','','合計', reportData.summary.totalSales, '', '']);
+    aoa.push(['','','','','','','','','','','已收', reportData.summary.totalPaid, '', '']);
+    aoa.push(['','','','','','','','','','','未收', reportData.summary.totalUnpaid, '', '']);
+    aoa.push(['','','','','','','','','','',`共 ${sorted.length} 筆`,'','','']);
 
-    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `月結對帳單_${reportData.customer.name}_${reportData.dateRange.from}_${reportData.dateRange.to}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+    // 動態算品名最大寬度（中文字算 2 個寬度）
+    let maxNameLen = 8; // 至少 8
+    sorted.forEach(o => {
+      o.items.forEach(item => {
+        const name = String(item.productName || '');
+        // 中文字 ×2，其他 ×1
+        const len = [...name].reduce((s, ch) => s + (/[\u4e00-\u9fa5]/.test(ch) ? 2 : 1), 0);
+        if (len > maxNameLen) maxNameLen = len;
+      });
+    });
+    if (maxNameLen > 60) maxNameLen = 60; // 上限避免太誇張
+
+    // 設定欄寬
+    ws['!cols'] = [
+      { wch: 18 }, // 單號
+      { wch: 12 }, // 日期
+      { wch: maxNameLen + 2 }, // 品名（依內容自動）
+      { wch: 8 },  // 數量
+      { wch: 8 },  // 單位
+      { wch: 10 }, // 單價
+      { wch: 12 }, // 小計
+      { wch: 12 }, // 未稅小計
+      { wch: 10 }, // 稅額
+      { wch: 10 }, // 運費
+      { wch: 10 }, // 扣款
+      { wch: 14 }, // 含稅總額
+      { wch: 12 }, // 收款狀態
+      { wch: 30 }  // 備註
+    ];
+
+    // 把單號欄（A 欄）強制設為文字格式，避免 Excel 變科學記號
+    // 從第 5 列（index 4）開始才是資料
+    for (let r = 4; r < aoa.length; r++) {
+      const cellRef = XLSX.utils.encode_cell({ r, c: 0 });
+      const cell = ws[cellRef];
+      if (cell && cell.v != null && cell.v !== '') {
+        cell.t = 's'; // string type
+        cell.v = String(cell.v);
+        cell.z = '@'; // 文字格式
+      }
+    }
+
+    // 第 1 列大標題：合併儲存格
+    ws['!merges'] = [
+      { s: { r: 0, c: 0 }, e: { r: 0, c: 13 } },
+      { s: { r: 1, c: 0 }, e: { r: 1, c: 13 } }
+    ];
+
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, '對帳單');
+
+    const filename = `月結對帳單_${reportData.customer.name}_${reportData.dateRange.from}_${reportData.dateRange.to}.xlsx`;
+    XLSX.writeFile(wb, filename);
   }
 
   // ========== 6. 列印專業報表 ==========

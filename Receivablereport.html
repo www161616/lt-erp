@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>龍潭進銷存系統 - 應收帳款報表</title>
   <script src="libs/sweetalert2.min.js"></script>
+  <script src="libs/xlsx.full.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700;900&display=swap" rel="stylesheet">
   <style>
     /* ========== 石板灰護眼主題 ========== */
@@ -581,38 +582,69 @@
       const dateFrom = document.getElementById('dateFrom').value;
       const dateTo = document.getElementById('dateTo').value;
 
-      let csv = '\uFEFF';
-      csv += '丸十水產股份有限公司\n';
-      csv += '應收帳款彙總表\n';
-      csv += `單據日期：${dateFrom} ~ ${dateTo}\n\n`;
-      csv += '請款客戶,單據日期,來源單號,金額,稅額,應收金額,已收金額,未收金額\n';
+      const headers = ['請款客戶','單據日期','來源單號','金額','稅額','應收金額','已收金額','未收金額'];
+      const aoa = [];
+      aoa.push(['丸十水產股份有限公司']);
+      aoa.push(['應收帳款彙總表']);
+      aoa.push([`單據日期：${dateFrom} ~ ${dateTo}`]);
+      aoa.push([]);
+      aoa.push(headers);
+
+      // 動態算來源單號最大寬度（單號通常是英數字，1 字 = 1 寬）
+      let maxOrderIdLen = 12;
 
       groupedData.forEach(g => {
         // 客戶標題行
-        csv += `"${g.customerName}","","","","","","","${g.sumUnpaid.toLocaleString()}"\n`;
-
-        // 明細行（日期由舊到新，buildGroupedData 已按 asc 排序）
+        aoa.push([g.customerName, '', '', '', '', '', '', g.sumUnpaid]);
+        // 明細行
         g.orders.forEach(r => {
-          csv += `"","${r.date}","銷貨 ${r.orderId}","${r.subtotal.toLocaleString()}","${r.taxAmount.toLocaleString()}","${r.total.toLocaleString()}","${r.paid.toLocaleString()}","${r.unpaid.toLocaleString()}"\n`;
+          const sourceId = `銷貨 ${r.orderId}`;
+          if (sourceId.length > maxOrderIdLen) maxOrderIdLen = sourceId.length;
+          aoa.push(['', r.date, sourceId, r.subtotal, r.taxAmount, r.total, r.paid, r.unpaid]);
         });
-
         // 合計行
-        csv += `"","","合計：","${g.sumSubtotal.toLocaleString()}","${g.sumTax.toLocaleString()}","${g.sumTotal.toLocaleString()}","${g.sumPaid.toLocaleString()}","${g.sumUnpaid.toLocaleString()}"\n`;
+        aoa.push(['', '', '合計：', g.sumSubtotal, g.sumTax, g.sumTotal, g.sumPaid, g.sumUnpaid]);
       });
 
-      csv += '\n';
-      csv += `"全部合計（${groupedData.length} 家客戶，${currentData.length} 筆）","","","${currentSummary.total.toLocaleString()}","","${currentSummary.total.toLocaleString()}","${currentSummary.paid.toLocaleString()}","${currentSummary.unpaid.toLocaleString()}"\n`;
+      aoa.push([]);
+      aoa.push([`全部合計（${groupedData.length} 家客戶，${currentData.length} 筆）`, '', '', currentSummary.total, '', currentSummary.total, currentSummary.paid, currentSummary.unpaid]);
 
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.setAttribute('href', url);
-      link.setAttribute('download', `應收帳款彙總表_${dateFrom}_${dateTo}.csv`);
-      link.style.display = 'none';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      URL.revokeObjectURL(url);
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+      // 設定欄寬
+      ws['!cols'] = [
+        { wch: 24 }, // 請款客戶
+        { wch: 12 }, // 單據日期
+        { wch: maxOrderIdLen + 2 }, // 來源單號（依內容自動）
+        { wch: 12 }, // 金額
+        { wch: 10 }, // 稅額
+        { wch: 12 }, // 應收金額
+        { wch: 12 }, // 已收金額
+        { wch: 12 }  // 未收金額
+      ];
+
+      // 把來源單號欄（C 欄，index 2）強制設為文字格式，避免長數字變科學記號
+      // 從第 6 列（index 5）開始才是資料
+      for (let r = 5; r < aoa.length; r++) {
+        const cellRef = XLSX.utils.encode_cell({ r, c: 2 });
+        const cell = ws[cellRef];
+        if (cell && cell.v != null && cell.v !== '') {
+          cell.t = 's';
+          cell.v = String(cell.v);
+          cell.z = '@';
+        }
+      }
+
+      // 第 1~3 列大標題：合併儲存格
+      ws['!merges'] = [
+        { s: { r: 0, c: 0 }, e: { r: 0, c: 7 } },
+        { s: { r: 1, c: 0 }, e: { r: 1, c: 7 } },
+        { s: { r: 2, c: 0 }, e: { r: 2, c: 7 } }
+      ];
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, '應收帳款');
+      XLSX.writeFile(wb, `應收帳款彙總表_${dateFrom}_${dateTo}.xlsx`);
 
       btn.disabled = false;
       btn.innerText = '📥 匯出 Excel';

@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>龍潭進銷存系統 - 簡易月結報表</title>
   <script src="libs/sweetalert2.min.js"></script>
+  <script src="libs/xlsx.full.min.js"></script>
   <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@400;500;700&display=swap" rel="stylesheet">
   
   <style>
@@ -160,8 +161,8 @@
   </div>
 
   <div class="header-box">
-    <h2>📋 月結明細報表</h2>
-    <button class="btn" onclick="window.location.href='DetailedReport.html'" style="background:#0e7490;color:#fff;">📊 切換彙總</button>
+    <h2 id="reportTitle">📋 月結明細報表</h2>
+    <button id="toggleViewBtn" class="btn" onclick="toggleViewMode()" style="background:#0e7490;color:#fff;">📊 切換彙總</button>
     <input type="month" id="monthInput">
     <button class="btn btn-query" onclick="fetchData()">🔍 產生報表</button>
     <button id="exportBtn" class="btn btn-export" onclick="exportToExcel()" disabled>📥 匯出 Excel</button>
@@ -185,6 +186,21 @@
     };
 
     let currentData = null;
+    let viewMode = 'detail'; // 'detail' = 逐筆明細 / 'summary' = 分類彙總
+
+    function toggleViewMode() {
+      viewMode = viewMode === 'detail' ? 'summary' : 'detail';
+      const titleEl = document.getElementById('reportTitle');
+      const btnEl = document.getElementById('toggleViewBtn');
+      if (viewMode === 'detail') {
+        titleEl.innerText = '📋 月結明細報表';
+        btnEl.innerHTML = '📊 切換彙總';
+      } else {
+        titleEl.innerText = '📊 月結彙總報表';
+        btnEl.innerHTML = '📋 切換明細';
+      }
+      if (currentData) renderReport(currentData);
+    }
     let currentMonth = '';
     
     window.onload = function() {
@@ -193,6 +209,15 @@
       const offset = today.getTimezoneOffset() * 60000;
       const localMonth = (new Date(today - offset)).toISOString().substring(0, 7);
       document.getElementById('monthInput').value = localMonth;
+      // 從 URL 參數讀 viewMode（?view=summary 直接進彙總）
+      try {
+        const params = new URLSearchParams(location.search);
+        if (params.get('view') === 'summary') {
+          viewMode = 'summary';
+          document.getElementById('reportTitle').innerText = '📊 月結彙總報表';
+          document.getElementById('toggleViewBtn').innerHTML = '📋 切換明細';
+        }
+      } catch(e) {}
     };
 
     // ========== 2. 獲取資料 (GET) ==========
@@ -237,6 +262,8 @@
 
         // 整理資料並計算總額
         let totalSales = 0, totalPurchase = 0, totalExpense = 0, totalMeal = 0;
+        let totalSalesPaid = 0, totalSalesUnpaid = 0;
+        let totalPurchasePaid = 0, totalPurchaseUnpaid = 0;
 
         const salesList = rawSales.map(s => {
           // 自動抓取可能是 grand_total 或 total_amount 的欄位
@@ -246,7 +273,9 @@
           let paid = 0, unpaid = amt;
           let color = 'red';
           if(s.payment_status === '已收款') { paid = amt; unpaid = 0; color = 'green'; }
-          
+          totalSalesPaid += paid;
+          totalSalesUnpaid += unpaid;
+
           return {
             customerName: s.customer_name || '未知',
             date: s.order_date,
@@ -264,11 +293,19 @@
           // 自動抓取可能是 total_amount 或 grand_total 的欄位
           const amt = Number(p.total_amount || p.grand_total || p.total || 0);
           totalPurchase += amt;
+          // 已付/未付（依 payment_status 簡易判斷）
+          let paid = 0, unpaid = amt;
+          if (p.payment_status === '已付款') { paid = amt; unpaid = 0; }
+          totalPurchasePaid += paid;
+          totalPurchaseUnpaid += unpaid;
           return {
-            supplierName: p.supplier_id || '未知供應商',
+            supplierName: p.supplier_name || p.supplier_id || '未知供應商',
             date: p.order_date,
             orderId: p.id,
             amount: amt,
+            paidAmount: paid,
+            unpaidAmount: unpaid,
+            paymentStatus: p.payment_status || '',
             note: p.note || ''
           };
         });
@@ -301,7 +338,11 @@
 
         currentData = {
           success: true,
-          totals: { sales: totalSales, purchase: totalPurchase, expense: totalExpense, meals: totalMeal },
+          totals: {
+            sales: totalSales, purchase: totalPurchase, expense: totalExpense, meals: totalMeal,
+            salesPaid: totalSalesPaid, salesUnpaid: totalSalesUnpaid,
+            purchasePaid: totalPurchasePaid, purchaseUnpaid: totalPurchaseUnpaid
+          },
           salesList, purchaseList, expenseList, mealList
         };
 
@@ -330,11 +371,21 @@
           <div class="card-title"><span>💰 銷貨收入</span><span>(1)</span></div>
           <div class="card-value">$${data.totals.sales.toLocaleString()}</div>
           <div class="card-count">本月共成立 ${data.salesList.length} 筆訂單</div>
+          <div style="margin-top:6px; font-size:11px;">
+            已收: <span style="color:var(--sales); font-weight:700;">$${(data.totals.salesPaid||0).toLocaleString()}</span>
+            <span style="color:var(--text2); margin:0 4px;">|</span>
+            未收: <span style="color:var(--danger); font-weight:700;">$${(data.totals.salesUnpaid||0).toLocaleString()}</span>
+          </div>
         </div>
         <div class="card card-purchase">
           <div class="card-title"><span>📦 進貨成本</span><span>(2)</span></div>
           <div class="card-value">$${data.totals.purchase.toLocaleString()}</div>
           <div class="card-count">本月共紀錄 ${data.purchaseList.length} 筆進貨</div>
+          <div style="margin-top:6px; font-size:11px;">
+            已付: <span style="color:var(--sales); font-weight:700;">$${(data.totals.purchasePaid||0).toLocaleString()}</span>
+            <span style="color:var(--text2); margin:0 4px;">|</span>
+            未付: <span style="color:var(--danger); font-weight:700;">$${(data.totals.purchaseUnpaid||0).toLocaleString()}</span>
+          </div>
         </div>
         <div class="card card-expense">
           <div class="card-title"><span>💸 雜項費用</span><span>(3)</span></div>
@@ -360,66 +411,166 @@
         </div>
       `;
       
-      // 3. 銷貨明細
+      // 3. 銷貨：依 viewMode 切換
       html += '<div class="section">';
-      html += '<div class="section-header"><div class="section-title" style="color:var(--sales);">💰 銷貨收入明細</div></div>';
-      html += '<table><thead><tr>';
-      html += '<th width="15%">客戶名稱</th><th width="12%">日期</th><th width="15%">單號</th>';
-      html += '<th width="15%" class="text-right">總金額</th>';
-      html += '<th width="10%" class="text-right">已收</th>';
-      html += '<th width="10%" class="text-right">未收</th>';
-      html += '<th width="23%">收款狀態 / 備註</th>';
-      html += '</tr></thead><tbody>';
+      html += `<div class="section-header"><div class="section-title" style="color:var(--sales);">💰 銷貨收入${viewMode==='detail'?'明細':'彙總（依客戶）'}</div></div>`;
 
-      if (data.salesList.length === 0) {
-        html += '<tr><td colspan="7" style="text-align:center; color:var(--text2); padding:20px;">本月無銷貨紀錄</td></tr>';
+      if (viewMode === 'detail') {
+        html += '<table><thead><tr>';
+        html += '<th width="15%">客戶名稱</th><th width="12%">日期</th><th width="15%">單號</th>';
+        html += '<th width="15%" class="text-right">總金額</th>';
+        html += '<th width="10%" class="text-right">已收</th>';
+        html += '<th width="10%" class="text-right">未收</th>';
+        html += '<th width="23%">收款狀態 / 備註</th>';
+        html += '</tr></thead><tbody>';
+
+        if (data.salesList.length === 0) {
+          html += '<tr><td colspan="7" style="text-align:center; color:var(--text2); padding:20px;">本月無銷貨紀錄</td></tr>';
+        } else {
+          data.salesList.forEach(s => {
+            let statusStyle = s.statusColor === 'green' ? 'color:var(--sales); font-weight:700;' : 'color:var(--danger); font-weight:700;';
+            html += `<tr>
+              <td>${s.customerName}</td>
+              <td>${s.date}</td>
+              <td><code style="background:var(--bg); padding:2px 4px; border-radius:4px;">${s.orderId}</code></td>
+              <td class="text-right" style="font-weight:700;">$${s.amount.toLocaleString()}</td>
+              <td class="text-right" style="color:var(--sales);">$${s.paidAmount.toLocaleString()}</td>
+              <td class="text-right" style="color:var(--danger);">$${s.unpaidAmount.toLocaleString()}</td>
+              <td style="font-size:12px; ${statusStyle}">${s.note}</td>
+            </tr>`;
+          });
+          html += `<tr class="total-row">
+            <td colspan="3">銷貨總計</td>
+            <td class="text-right" style="color:var(--sales); font-size:16px;">$${data.totals.sales.toLocaleString()}</td>
+            <td class="text-right" style="color:var(--sales);">$${(data.totals.salesPaid||0).toLocaleString()}</td>
+            <td class="text-right" style="color:var(--danger);">$${(data.totals.salesUnpaid||0).toLocaleString()}</td>
+            <td></td>
+          </tr>`;
+        }
+        html += '</tbody></table>';
       } else {
+        // 彙總模式：依客戶分組
+        const byCustomer = {};
         data.salesList.forEach(s => {
-          let statusStyle = s.statusColor === 'green' ? 'color:var(--sales); font-weight:700;' : 'color:var(--danger); font-weight:700;';
-          html += `<tr>
-            <td>${s.customerName}</td>
-            <td>${s.date}</td>
-            <td><code style="background:var(--bg); padding:2px 4px; border-radius:4px;">${s.orderId}</code></td>
-            <td class="text-right" style="font-weight:700;">$${s.amount.toLocaleString()}</td>
-            <td class="text-right" style="color:var(--sales);">$${s.paidAmount.toLocaleString()}</td>
-            <td class="text-right" style="color:var(--danger);">$${s.unpaidAmount.toLocaleString()}</td>
-            <td style="font-size:12px; ${statusStyle}">${s.note}</td>
-          </tr>`;
+          const k = s.customerName || '未知';
+          if (!byCustomer[k]) byCustomer[k] = { name: k, count: 0, total: 0, paid: 0, unpaid: 0 };
+          byCustomer[k].count++;
+          byCustomer[k].total += s.amount;
+          byCustomer[k].paid += s.paidAmount;
+          byCustomer[k].unpaid += s.unpaidAmount;
         });
-        html += `<tr class="total-row">
-          <td colspan="3">銷貨總計</td>
-          <td class="text-right" style="color:var(--sales); font-size:16px;">$${data.totals.sales.toLocaleString()}</td>
-          <td colspan="3"></td>
-        </tr>`;
-      }
-      html += '</tbody></table></div>';
+        const customerArr = Object.values(byCustomer).sort((a,b) => b.total - a.total);
 
-      // 4. 進貨明細
+        html += '<table><thead><tr>';
+        html += '<th width="35%">客戶名稱</th><th width="10%" class="text-right">筆數</th>';
+        html += '<th width="20%" class="text-right">總金額</th>';
+        html += '<th width="17%" class="text-right">已收</th>';
+        html += '<th width="18%" class="text-right">未收</th>';
+        html += '</tr></thead><tbody>';
+
+        if (customerArr.length === 0) {
+          html += '<tr><td colspan="5" style="text-align:center; color:var(--text2); padding:20px;">本月無銷貨紀錄</td></tr>';
+        } else {
+          customerArr.forEach(c => {
+            html += `<tr>
+              <td style="font-weight:600;">${c.name}</td>
+              <td class="text-right">${c.count}</td>
+              <td class="text-right" style="font-weight:700;">$${c.total.toLocaleString()}</td>
+              <td class="text-right" style="color:var(--sales);">$${c.paid.toLocaleString()}</td>
+              <td class="text-right" style="color:${c.unpaid>0?'var(--danger)':'var(--text2)'};">$${c.unpaid.toLocaleString()}</td>
+            </tr>`;
+          });
+          html += `<tr class="total-row">
+            <td>總計</td>
+            <td class="text-right">${data.salesList.length}</td>
+            <td class="text-right" style="color:var(--sales); font-size:16px;">$${data.totals.sales.toLocaleString()}</td>
+            <td class="text-right" style="color:var(--sales);">$${(data.totals.salesPaid||0).toLocaleString()}</td>
+            <td class="text-right" style="color:var(--danger);">$${(data.totals.salesUnpaid||0).toLocaleString()}</td>
+          </tr>`;
+        }
+        html += '</tbody></table>';
+      }
+      html += '</div>';
+
+      // 4. 進貨：依 viewMode 切換
       html += '<div class="section">';
-      html += '<div class="section-header"><div class="section-title" style="color:var(--purchase);">📦 進貨成本明細</div></div>';
-      html += '<table><thead><tr>';
-      html += '<th width="25%">供應商</th><th width="15%">日期</th><th width="20%">單號</th><th width="15%" class="text-right">金額</th><th width="25%">備註</th>';
-      html += '</tr></thead><tbody>';
+      html += `<div class="section-header"><div class="section-title" style="color:var(--purchase);">📦 進貨成本${viewMode==='detail'?'明細':'彙總（依供應商）'}</div></div>`;
 
-      if (data.purchaseList.length === 0) {
-        html += '<tr><td colspan="5" style="text-align:center; color:var(--text2); padding:20px;">本月無進貨紀錄</td></tr>';
-      } else {
-        data.purchaseList.forEach(p => {
-          html += `<tr>
-            <td>${p.supplierName}</td>
-            <td>${p.date}</td>
-            <td><code style="background:var(--bg); padding:2px 4px; border-radius:4px;">${p.orderId}</code></td>
-            <td class="text-right" style="font-weight:700;">$${p.amount.toLocaleString()}</td>
-            <td style="font-size:12px;">${p.note}</td>
+      if (viewMode === 'detail') {
+        html += '<table><thead><tr>';
+        html += '<th width="20%">供應商</th><th width="12%">日期</th><th width="18%">單號</th>';
+        html += '<th width="13%" class="text-right">金額</th>';
+        html += '<th width="11%" class="text-right">已付</th>';
+        html += '<th width="11%" class="text-right">未付</th>';
+        html += '<th width="15%">備註</th>';
+        html += '</tr></thead><tbody>';
+
+        if (data.purchaseList.length === 0) {
+          html += '<tr><td colspan="7" style="text-align:center; color:var(--text2); padding:20px;">本月無進貨紀錄</td></tr>';
+        } else {
+          data.purchaseList.forEach(p => {
+            html += `<tr>
+              <td>${p.supplierName}</td>
+              <td>${p.date}</td>
+              <td><code style="background:var(--bg); padding:2px 4px; border-radius:4px;">${p.orderId}</code></td>
+              <td class="text-right" style="font-weight:700;">$${p.amount.toLocaleString()}</td>
+              <td class="text-right" style="color:var(--sales);">$${(p.paidAmount||0).toLocaleString()}</td>
+              <td class="text-right" style="color:var(--danger);">$${(p.unpaidAmount||0).toLocaleString()}</td>
+              <td style="font-size:12px;">${p.note}</td>
+            </tr>`;
+          });
+          html += `<tr class="total-row">
+            <td colspan="3">進貨總計</td>
+            <td class="text-right" style="color:var(--purchase); font-size:16px;">$${data.totals.purchase.toLocaleString()}</td>
+            <td class="text-right" style="color:var(--sales);">$${(data.totals.purchasePaid||0).toLocaleString()}</td>
+            <td class="text-right" style="color:var(--danger);">$${(data.totals.purchaseUnpaid||0).toLocaleString()}</td>
+            <td></td>
           </tr>`;
+        }
+        html += '</tbody></table>';
+      } else {
+        // 彙總模式：依供應商分組
+        const bySupplier = {};
+        data.purchaseList.forEach(p => {
+          const k = p.supplierName || '未知';
+          if (!bySupplier[k]) bySupplier[k] = { name: k, count: 0, total: 0, paid: 0, unpaid: 0 };
+          bySupplier[k].count++;
+          bySupplier[k].total += p.amount;
+          bySupplier[k].paid += (p.paidAmount || 0);
+          bySupplier[k].unpaid += (p.unpaidAmount || 0);
         });
-        html += `<tr class="total-row">
-          <td colspan="3">進貨總計</td>
-          <td class="text-right" style="color:var(--purchase); font-size:16px;">$${data.totals.purchase.toLocaleString()}</td>
-          <td></td>
-        </tr>`;
+        const supplierArr = Object.values(bySupplier).sort((a,b) => b.total - a.total);
+
+        html += '<table><thead><tr>';
+        html += '<th width="35%">供應商</th><th width="10%" class="text-right">筆數</th>';
+        html += '<th width="20%" class="text-right">總金額</th>';
+        html += '<th width="17%" class="text-right">已付</th>';
+        html += '<th width="18%" class="text-right">未付</th>';
+        html += '</tr></thead><tbody>';
+
+        if (supplierArr.length === 0) {
+          html += '<tr><td colspan="5" style="text-align:center; color:var(--text2); padding:20px;">本月無進貨紀錄</td></tr>';
+        } else {
+          supplierArr.forEach(s => {
+            html += `<tr>
+              <td style="font-weight:600;">${s.name}</td>
+              <td class="text-right">${s.count}</td>
+              <td class="text-right" style="font-weight:700;">$${s.total.toLocaleString()}</td>
+              <td class="text-right" style="color:var(--sales);">$${s.paid.toLocaleString()}</td>
+              <td class="text-right" style="color:${s.unpaid>0?'var(--danger)':'var(--text2)'};">$${s.unpaid.toLocaleString()}</td>
+            </tr>`;
+          });
+          html += `<tr class="total-row">
+            <td>總計</td>
+            <td class="text-right">${data.purchaseList.length}</td>
+            <td class="text-right" style="color:var(--purchase); font-size:16px;">$${data.totals.purchase.toLocaleString()}</td>
+            <td class="text-right" style="color:var(--sales);">$${(data.totals.purchasePaid||0).toLocaleString()}</td>
+            <td class="text-right" style="color:var(--danger);">$${(data.totals.purchaseUnpaid||0).toLocaleString()}</td>
+          </tr>`;
+        }
+        html += '</tbody></table>';
       }
-      html += '</tbody></table></div>';
+      html += '</div>';
 
       // 5. 費用明細
       html += '<div class="section">';
@@ -449,32 +600,73 @@
       }
       html += '</tbody></table></div>';
       
-      // 6. 員工餐費明細
+      // 6. 員工餐費：依 viewMode 切換
       html += '<div class="section">';
-      html += '<div class="section-header"><div class="section-title" style="color:var(--meal);">🍱 員工餐費明細</div></div>';
-      html += '<table><thead><tr>';
-      html += '<th width="20%">日期</th><th width="15%" style="text-align:center;">人數</th><th width="20%" class="text-right">金額</th><th width="20%">付款方式</th><th width="25%">備註</th>';
-      html += '</tr></thead><tbody>';
-      
-      if (data.mealList.length === 0) {
-        html += '<tr><td colspan="5" style="text-align:center; color:var(--text2); padding:20px;">本月無餐費紀錄</td></tr>';
-      } else {
-        data.mealList.forEach(m => {
-          html += `<tr>
-            <td>${m.date}</td>
-            <td style="text-align:center;">${m.headcount} 人</td>
-            <td class="text-right" style="font-weight:700; color:var(--meal);">$${m.amount.toLocaleString()}</td>
-            <td style="font-size:12px;">${m.paymentMethod}</td>
-            <td style="font-size:12px; color:var(--text2);">${m.note}</td>
+      html += `<div class="section-header"><div class="section-title" style="color:var(--meal);">🍱 員工餐費${viewMode==='detail'?'明細':'彙總（依付款方式）'}</div></div>`;
+
+      if (viewMode === 'detail') {
+        html += '<table><thead><tr>';
+        html += '<th width="20%">日期</th><th width="15%" style="text-align:center;">人數</th><th width="20%" class="text-right">金額</th><th width="20%">付款方式</th><th width="25%">備註</th>';
+        html += '</tr></thead><tbody>';
+
+        if (data.mealList.length === 0) {
+          html += '<tr><td colspan="5" style="text-align:center; color:var(--text2); padding:20px;">本月無餐費紀錄</td></tr>';
+        } else {
+          data.mealList.forEach(m => {
+            html += `<tr>
+              <td>${m.date}</td>
+              <td style="text-align:center;">${m.headcount} 人</td>
+              <td class="text-right" style="font-weight:700; color:var(--meal);">$${m.amount.toLocaleString()}</td>
+              <td style="font-size:12px;">${m.paymentMethod}</td>
+              <td style="font-size:12px; color:var(--text2);">${m.note}</td>
+            </tr>`;
+          });
+          html += `<tr class="total-row">
+            <td colspan="2">餐費總計</td>
+            <td class="text-right" style="color:var(--meal); font-size:16px;">$${data.totals.meals.toLocaleString()}</td>
+            <td colspan="2"></td>
           </tr>`;
+        }
+        html += '</tbody></table>';
+      } else {
+        // 彙總：依付款方式分組
+        const byMethod = {};
+        let totalHead = 0;
+        data.mealList.forEach(m => {
+          const k = m.paymentMethod || '未指定';
+          if (!byMethod[k]) byMethod[k] = { method: k, count: 0, headcount: 0, amount: 0 };
+          byMethod[k].count++;
+          byMethod[k].headcount += Number(m.headcount || 0);
+          byMethod[k].amount += Number(m.amount || 0);
+          totalHead += Number(m.headcount || 0);
         });
-        html += `<tr class="total-row">
-          <td colspan="2">餐費總計</td>
-          <td class="text-right" style="color:var(--meal); font-size:16px;">$${data.totals.meals.toLocaleString()}</td>
-          <td colspan="2"></td>
-        </tr>`;
+        const methodArr = Object.values(byMethod).sort((a,b) => b.amount - a.amount);
+
+        html += '<table><thead><tr>';
+        html += '<th width="35%">付款方式</th><th width="15%" class="text-right">筆數</th><th width="20%" class="text-right">總人次</th><th width="30%" class="text-right">總金額</th>';
+        html += '</tr></thead><tbody>';
+
+        if (methodArr.length === 0) {
+          html += '<tr><td colspan="4" style="text-align:center; color:var(--text2); padding:20px;">本月無餐費紀錄</td></tr>';
+        } else {
+          methodArr.forEach(m => {
+            html += `<tr>
+              <td style="font-weight:600;">${m.method}</td>
+              <td class="text-right">${m.count}</td>
+              <td class="text-right">${m.headcount} 人</td>
+              <td class="text-right" style="font-weight:700; color:var(--meal);">$${m.amount.toLocaleString()}</td>
+            </tr>`;
+          });
+          html += `<tr class="total-row">
+            <td>總計</td>
+            <td class="text-right">${data.mealList.length}</td>
+            <td class="text-right">${totalHead} 人</td>
+            <td class="text-right" style="color:var(--meal); font-size:16px;">$${data.totals.meals.toLocaleString()}</td>
+          </tr>`;
+        }
+        html += '</tbody></table>';
       }
-      html += '</tbody></table></div>';
+      html += '</div>';
       
       area.innerHTML = html;
     }
@@ -520,52 +712,156 @@
       window.open(URL.createObjectURL(blob), '_blank');
     }
 
-    // ========== 4. 匯出 Excel (CSV) ==========
+    // ========== 4. 匯出 Excel (xlsx，依 viewMode 切換內容) ==========
     function exportToExcel() {
       if (!currentData) return;
-      
+
       const btn = document.getElementById('exportBtn');
       btn.disabled = true;
       btn.innerText = '⏳ 匯出中...';
-      
-      let csv = '\uFEFF'; // BOM 解決中文亂碼
-      csv += `龍潭進銷存 - 簡易月結報表 (${currentMonth})\n\n`;
-      
+
+      const month = document.getElementById('monthInput').value || currentMonth || '';
+      const isDetail = viewMode === 'detail';
       const profit = currentData.totals.sales - currentData.totals.purchase - currentData.totals.expense - currentData.totals.meals;
-      csv += `本月粗估淨利 (損益),$${profit}\n\n`;
-      
-      // 銷貨
-      csv += '【(1) 銷貨收入明細】\n客戶名稱,訂單日期,單號,金額,已收,未收,收款狀態與備註\n';
-      [...currentData.salesList].sort((a, b) => (a.date || '').localeCompare(b.date || '')).forEach(s => {
-        csv += `"${s.customerName}","${s.date}","${s.orderId}",${s.amount},${s.paidAmount},${s.unpaidAmount},"${s.note}"\n`;
+
+      const aoa = [];
+      aoa.push([`龍潭進銷存 - 月結${isDetail?'明細':'彙總'}報表 (${month})`]);
+      aoa.push([]);
+      aoa.push(['銷貨收入', currentData.totals.sales, '進貨成本', currentData.totals.purchase, '雜項費用', currentData.totals.expense, '員工餐費', currentData.totals.meals]);
+      aoa.push(['本月粗估淨利', profit]);
+      aoa.push([]);
+
+      // 用來記錄哪幾列的「單號」欄需要強制文字（避免科學記號）
+      const orderIdCells = []; // {row, col}
+
+      // ===== 銷貨 =====
+      if (isDetail) {
+        aoa.push(['【(1) 銷貨收入明細】']);
+        aoa.push(['客戶名稱','訂單日期','單號','金額','已收','未收','收款狀態與備註']);
+        const sorted = [...currentData.salesList].sort((a,b) => (a.date||'').localeCompare(b.date||''));
+        sorted.forEach(s => {
+          aoa.push([s.customerName, s.date, s.orderId, s.amount, s.paidAmount, s.unpaidAmount, s.note]);
+          orderIdCells.push({ row: aoa.length - 1, col: 2 });
+        });
+        aoa.push(['','','小計', currentData.totals.sales, currentData.totals.salesPaid||0, currentData.totals.salesUnpaid||0, '']);
+      } else {
+        aoa.push(['【(1) 銷貨收入彙總（依客戶）】']);
+        aoa.push(['客戶名稱','筆數','總金額','已收','未收']);
+        const byCustomer = {};
+        currentData.salesList.forEach(s => {
+          const k = s.customerName || '未知';
+          if (!byCustomer[k]) byCustomer[k] = { name: k, count: 0, total: 0, paid: 0, unpaid: 0 };
+          byCustomer[k].count++;
+          byCustomer[k].total += s.amount;
+          byCustomer[k].paid += s.paidAmount;
+          byCustomer[k].unpaid += s.unpaidAmount;
+        });
+        Object.values(byCustomer).sort((a,b)=>b.total-a.total).forEach(c => {
+          aoa.push([c.name, c.count, c.total, c.paid, c.unpaid]);
+        });
+        aoa.push(['總計', currentData.salesList.length, currentData.totals.sales, currentData.totals.salesPaid||0, currentData.totals.salesUnpaid||0]);
+      }
+      aoa.push([]);
+
+      // ===== 進貨 =====
+      if (isDetail) {
+        aoa.push(['【(2) 進貨成本明細】']);
+        aoa.push(['供應商','進貨日期','單號','金額','已付','未付','備註']);
+        const sorted = [...currentData.purchaseList].sort((a,b) => (a.date||'').localeCompare(b.date||''));
+        sorted.forEach(p => {
+          aoa.push([p.supplierName, p.date, p.orderId, p.amount, p.paidAmount||0, p.unpaidAmount||0, p.note]);
+          orderIdCells.push({ row: aoa.length - 1, col: 2 });
+        });
+        aoa.push(['','','小計', currentData.totals.purchase, currentData.totals.purchasePaid||0, currentData.totals.purchaseUnpaid||0, '']);
+      } else {
+        aoa.push(['【(2) 進貨成本彙總（依供應商）】']);
+        aoa.push(['供應商','筆數','總金額','已付','未付']);
+        const bySupplier = {};
+        currentData.purchaseList.forEach(p => {
+          const k = p.supplierName || '未知';
+          if (!bySupplier[k]) bySupplier[k] = { name: k, count: 0, total: 0, paid: 0, unpaid: 0 };
+          bySupplier[k].count++;
+          bySupplier[k].total += p.amount;
+          bySupplier[k].paid += (p.paidAmount||0);
+          bySupplier[k].unpaid += (p.unpaidAmount||0);
+        });
+        Object.values(bySupplier).sort((a,b)=>b.total-a.total).forEach(s => {
+          aoa.push([s.name, s.count, s.total, s.paid, s.unpaid]);
+        });
+        aoa.push(['總計', currentData.purchaseList.length, currentData.totals.purchase, currentData.totals.purchasePaid||0, currentData.totals.purchaseUnpaid||0]);
+      }
+      aoa.push([]);
+
+      // ===== 費用（兩個視圖都逐筆）=====
+      aoa.push(['【(3) 費用支出明細】']);
+      aoa.push(['日期','類別','項目','對象','金額','付款方式']);
+      [...currentData.expenseList].sort((a,b) => (a.date||'').localeCompare(b.date||'')).forEach(e => {
+        aoa.push([e.date, e.category, e.item, e.payee, e.amount, e.paymentMethod]);
       });
-      csv += `,,,小計：,${currentData.totals.sales},,\n\n`;
-      
-      // 進貨
-      csv += '【(2) 進貨成本明細】\n供應商,進貨日期,單號,金額,備註\n';
-      [...currentData.purchaseList].sort((a, b) => (a.date || '').localeCompare(b.date || '')).forEach(p => csv += `"${p.supplierName}","${p.date}","${p.orderId}",${p.amount},"${p.note}"\n`);
-      csv += `,,,小計：,${currentData.totals.purchase}\n\n`;
-      
-      // 費用
-      csv += '【(3) 費用支出明細】\n日期,類別,項目,對象,金額,付款方式\n';
-      [...currentData.expenseList].sort((a, b) => (a.date || '').localeCompare(b.date || '')).forEach(e => csv += `"${e.date}","${e.category}","${e.item}","${e.payee}",${e.amount},"${e.paymentMethod}"\n`);
-      csv += `,,,,小計：,${currentData.totals.expense}\n\n`;
-      
-      // 餐費
-      csv += '【(4) 員工餐費明細】\n日期,人數,金額,付款方式,備註\n';
-      [...currentData.mealList].sort((a, b) => (a.date || '').localeCompare(b.date || '')).forEach(m => csv += `"${m.date}",${m.headcount},${m.amount},"${m.paymentMethod}","${m.note}"\n`);
-      csv += `,,小計：,${currentData.totals.meals},\n`;
-      
-      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.setAttribute('href', url);
-      link.setAttribute('download', `月結報表_${currentMonth}.csv`);
-      link.style.display = 'none';
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      
+      aoa.push(['','','','小計', currentData.totals.expense, '']);
+      aoa.push([]);
+
+      // ===== 餐費 =====
+      if (isDetail) {
+        aoa.push(['【(4) 員工餐費明細】']);
+        aoa.push(['日期','人數','金額','付款方式','備註']);
+        [...currentData.mealList].sort((a,b) => (a.date||'').localeCompare(b.date||'')).forEach(m => {
+          aoa.push([m.date, m.headcount, m.amount, m.paymentMethod, m.note]);
+        });
+        aoa.push(['','小計', currentData.totals.meals, '', '']);
+      } else {
+        aoa.push(['【(4) 員工餐費彙總（依付款方式）】']);
+        aoa.push(['付款方式','筆數','總人次','總金額']);
+        const byMethod = {};
+        let totalHead = 0;
+        currentData.mealList.forEach(m => {
+          const k = m.paymentMethod || '未指定';
+          if (!byMethod[k]) byMethod[k] = { method: k, count: 0, headcount: 0, amount: 0 };
+          byMethod[k].count++;
+          byMethod[k].headcount += Number(m.headcount||0);
+          byMethod[k].amount += Number(m.amount||0);
+          totalHead += Number(m.headcount||0);
+        });
+        Object.values(byMethod).sort((a,b)=>b.amount-a.amount).forEach(m => {
+          aoa.push([m.method, m.count, m.headcount, m.amount]);
+        });
+        aoa.push(['總計', currentData.mealList.length, totalHead, currentData.totals.meals]);
+      }
+
+      const ws = XLSX.utils.aoa_to_sheet(aoa);
+
+      // 動態欄寬（取最寬值）
+      const maxCols = aoa.reduce((m, row) => Math.max(m, row.length), 0);
+      const colWidths = [];
+      for (let c = 0; c < maxCols; c++) {
+        let maxW = 8;
+        for (let r = 0; r < aoa.length; r++) {
+          const v = aoa[r][c];
+          if (v == null) continue;
+          const s = String(v);
+          const len = [...s].reduce((sum, ch) => sum + (/[\u4e00-\u9fa5]/.test(ch) ? 2 : 1), 0);
+          if (len > maxW) maxW = len;
+        }
+        if (maxW > 50) maxW = 50;
+        colWidths.push({ wch: maxW + 2 });
+      }
+      ws['!cols'] = colWidths;
+
+      // 把單號欄強制設為文字格式
+      orderIdCells.forEach(({row, col}) => {
+        const ref = XLSX.utils.encode_cell({ r: row, c: col });
+        const cell = ws[ref];
+        if (cell && cell.v != null && cell.v !== '') {
+          cell.t = 's';
+          cell.v = String(cell.v);
+          cell.z = '@';
+        }
+      });
+
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, isDetail ? '明細' : '彙總');
+      XLSX.writeFile(wb, `月結${isDetail?'明細':'彙總'}報表_${month}.xlsx`);
+
       btn.disabled = false;
       btn.innerText = '📥 匯出 Excel';
     }
