@@ -2768,26 +2768,13 @@
         pickingArrivals = mockArrivals;
       }
 
-      // 從已建立的揀貨單（mockSavedWaves）回算每個商品的已分發量
-      // 初次呼叫時 mockSavedWaves 尚未宣告，跳過回算
-      try { if (!mockSavedWaves) return; } catch(e) { return; }
+      // 不從歷史波次回算 pickedQty / pickingHistory
+      // 理由：同編號商品會在不同檔期重複開團，歷史扣除會讓新檔期顯示 0
+      // 改成「完全乾淨的開始」，每次新建揀貨單都用當前 alloc 直接帶入
+      // 重複建立的風險靠 UI 提示處理（如果商品已被加過大表會顯示「✔ 已加入」）
       pickingArrivals.forEach(arrival => {
         arrival.pickedQty = 0;
         arrival.pickingHistory = [];
-        mockSavedWaves.forEach(wave => {
-          const matchRow = wave.matrix.find(r => r.id === arrival.id);
-          if (!matchRow) return;
-          const qty = matchRow.actualSum || 0;
-          arrival.pickedQty += qty;
-          const snapshot = {};
-          pickingStoreNames.forEach(b => {
-            const bd = matchRow.branchData && matchRow.branchData[b];
-            snapshot[b] = bd ? (bd.actual ?? bd.expected ?? 0) : 0;
-          });
-          arrival.pickingHistory.push({
-            waveId: wave.id, date: wave.date, qty: qty, branchData: snapshot
-          });
-        });
       });
     }
     initPickingData();
@@ -2913,6 +2900,10 @@
                   <input type="text" id="pickSearchKw" placeholder="商編或品項 (Enter搜尋)" onkeypress="if(event.key==='Enter') searchArrivals()" style="flex: 1; padding: 6px; border: 1px solid var(--border); border-radius: 4px;">
                   <button class="btn" style="background:#718096; padding: 6px 10px;" onclick="searchArrivals()">🔍</button>
                 </div>
+                <label style="display:flex; align-items:center; gap:5px; margin-top:6px; font-size:12px; color:#718096; cursor:pointer;">
+                  <input type="checkbox" id="pickShowCompleted" onchange="searchArrivals()" style="cursor:pointer;">
+                  顯示已完成分發的商品
+                </label>
               </div>
 
               <div id="pickSearchResults" style="flex: 1; overflow-y: auto; border: 1px solid #e2e8f0; background: white; border-radius: 4px; padding: 5px;">
@@ -3031,19 +3022,22 @@
         return;
       }
 
-      // 過濾掉剩餘 0 且無欠品的商品
-      matches = matches.filter(m => {
-        const remainQty = m.purchasedQty - m.pickedQty;
-        if (remainQty > 0) return true;
-        const hasShortage = pickingStoreNames.some(b => {
-          const distributed = (m.pickingHistory || []).reduce((s, h) => s + (h.branchData[b] || 0), 0);
-          return (m.alloc[b] || 0) - distributed > 0;
+      // 過濾掉剩餘 0 且無欠品的商品（除非勾選「顯示已完成分發」）
+      const showCompleted = document.getElementById('pickShowCompleted')?.checked || false;
+      if (!showCompleted) {
+        matches = matches.filter(m => {
+          const remainQty = m.purchasedQty - m.pickedQty;
+          if (remainQty > 0) return true;
+          const hasShortage = pickingStoreNames.some(b => {
+            const distributed = (m.pickingHistory || []).reduce((s, h) => s + (h.branchData[b] || 0), 0);
+            return (m.alloc[b] || 0) - distributed > 0;
+          });
+          return hasShortage;
         });
-        return hasShortage;
-      });
+      }
 
       if (matches.length === 0) {
-        resContainer.innerHTML = `<div style="color: var(--text2); font-size: 13px; text-align: center; padding: 20px;">查無符合商品（已完成分發的不顯示）</div>`;
+        resContainer.innerHTML = `<div style="color: var(--text2); font-size: 13px; text-align: center; padding: 20px;">查無符合商品${showCompleted ? '' : '（已完成分發的不顯示，可勾選「顯示已完成分發」查看）'}</div>`;
         return;
       }
 
