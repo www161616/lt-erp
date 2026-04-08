@@ -1150,9 +1150,54 @@
           rows.forEach(r => {
             if (r.value !== null) localStorage.setItem(r.key, JSON.stringify(r.value));
           });
+          // 記錄最後同步時間
+          window._lastCloudLoadAt = Date.now();
+          hideStaleHint();
         }
       } catch(e) { console.error('cloudLoadAll error:', e); }
     }
+
+    // 「資料可能過時」浮動提示
+    // 規則：頁面停留超過 30 分鐘未從雲端同步 → 顯示提示按鈕
+    function showStaleHint() {
+      if (document.getElementById('staleHint')) return;
+      const div = document.createElement('div');
+      div.id = 'staleHint';
+      div.style.cssText = 'position:fixed;bottom:20px;right:20px;z-index:9999;background:#fef3c7;border:2px solid #f59e0b;border-radius:10px;padding:14px 18px;box-shadow:0 4px 12px rgba(0,0,0,0.15);font-family:inherit;max-width:280px;cursor:pointer;animation:pulse-slow 2s infinite;';
+      div.innerHTML = `
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="font-size:24px;">🔄</div>
+          <div style="flex:1;">
+            <div style="font-weight:700;color:#92400e;font-size:14px;margin-bottom:2px;">資料可能已更新</div>
+            <div style="font-size:11px;color:#b45309;line-height:1.4;">您已停留超過 30 分鐘<br>點擊重新載入最新資料</div>
+          </div>
+        </div>
+      `;
+      div.onclick = async () => {
+        div.innerHTML = '<div style="text-align:center;color:#92400e;font-weight:700;">⏳ 載入中...</div>';
+        await cloudLoadAll();
+        location.reload();
+      };
+      document.body.appendChild(div);
+      // 加 pulse 動畫
+      if (!document.getElementById('staleHintStyle')) {
+        const s = document.createElement('style');
+        s.id = 'staleHintStyle';
+        s.textContent = '@keyframes pulse-slow { 0%,100%{opacity:1;} 50%{opacity:0.7;} }';
+        document.head.appendChild(s);
+      }
+    }
+    function hideStaleHint() {
+      const el = document.getElementById('staleHint');
+      if (el) el.remove();
+    }
+    // 每 1 分鐘檢查一次：若距離最後同步 > 30 分鐘 → 顯示提示
+    setInterval(() => {
+      const last = window._lastCloudLoadAt || 0;
+      if (last && (Date.now() - last) > 30 * 60 * 1000) {
+        showStaleHint();
+      }
+    }, 60 * 1000);
 
     // 登入後初始化各店自己的資料
     async function initStoreData() {
