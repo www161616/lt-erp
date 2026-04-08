@@ -289,10 +289,13 @@
           const taxAmount = Number(o.tax_amount || 0);
           let paid = paymentsMap[o.id] || 0;
           if (paid === 0 && (o.payment_status === '已收款' || o.payment_status === '已結清')) paid = grandTotal;
-          const unpaid = Math.max(0, grandTotal - paid);
+          // 退貨單 grand_total 為負數，未收金額也應為負，才能正確扣減總計
+          // 不再用 Math.max(0,...)，否則退貨會被吃掉
+          const unpaid = grandTotal - paid;
 
           let finalStatus = '未收款';
-          if (unpaid === 0 && grandTotal > 0) finalStatus = '已收款';
+          if (grandTotal < 0) finalStatus = '退貨';
+          else if (unpaid === 0 && grandTotal > 0) finalStatus = '已收款';
           else if (paid > 0 && unpaid > 0) finalStatus = '部分收款';
 
           sumTotal += grandTotal;
@@ -314,7 +317,15 @@
         });
 
         // 前端篩選付款狀態
-        const filtered = (status === '全部') ? formattedData : formattedData.filter(r => r.status === status);
+        // 退貨單視為應收的減項，未收款 / 部分收款 篩選時都應包含退貨
+        let filtered;
+        if (status === '全部') {
+          filtered = formattedData;
+        } else if (status === '未收款' || status === '部分收款') {
+          filtered = formattedData.filter(r => r.status === status || r.status === '退貨');
+        } else {
+          filtered = formattedData.filter(r => r.status === status);
+        }
 
         // 重新計算
         let fTotal = 0, fPaid = 0, fUnpaid = 0;
