@@ -12969,12 +12969,18 @@
         const isChecked = cnaCheckedOrders.has(r.ship_order||'');
         html += `<td${rs} style="text-align:center;border:1px solid #e2e8f0;padding:5px;vertical-align:top;"><input type="checkbox" class="cna-ck" data-order="${orderVal}" data-group-size="${groupSize}" ${isChecked?'checked':''} onchange="cnaToggle(this)"></td>`;
       }
+      // 商品名稱：admin 可編輯，其他人唯讀顯示
+      const isAdminUser = currentUser?.role === 'admin';
+      const nameCellHtml = isAdminUser
+        ? `<input type="text" value="${(liveName||'').replace(/"/g,'&quot;')}" data-arrival-id="${r.id}" onchange="onCnaNameChange(this)" style="width:100%;border:1px solid transparent;padding:3px 5px;font-size:12px;border-radius:3px;background:transparent;font-family:inherit;" onfocus="this.style.border='1px solid #4a6fa5';this.style.background='#fff';" onblur="this.style.border='1px solid transparent';this.style.background='transparent';">`
+        : `<span style="font-size:12px;">${liveName||''}</span>`;
+
       html += `
         <td style="text-align:center;border:1px solid #e2e8f0;padding:5px;color:#a0aec0;">${start+pi+1}</td>
         <td style="text-align:center;border:1px solid #e2e8f0;padding:5px;">${arrived}</td>
         <td style="border:1px solid #e2e8f0;padding:5px;font-size:11px;">${r.tracking_number||''}</td>
         <td style="border:1px solid #e2e8f0;padding:5px;font-family:monospace;">${r.product_id||''}</td>
-        <td style="border:1px solid #e2e8f0;padding:3px;"><input type="text" value="${(liveName||'').replace(/"/g,'&quot;')}" data-arrival-id="${r.id}" onchange="onCnaNameChange(this)" style="width:100%;border:1px solid transparent;padding:3px 5px;font-size:12px;border-radius:3px;background:transparent;font-family:inherit;" onfocus="this.style.border='1px solid #4a6fa5';this.style.background='#fff';" onblur="this.style.border='1px solid transparent';this.style.background='transparent';"></td>
+        <td style="border:1px solid #e2e8f0;padding:${isAdminUser?'3px':'5px'};">${nameCellHtml}</td>
         <td style="text-align:right;border:1px solid #e2e8f0;padding:5px;${lossSt}">${livePrice||''}</td>
         <td style="text-align:center;border:1px solid #e2e8f0;padding:5px;">${liveQty||''}</td>
         <td style="text-align:right;border:1px solid #e2e8f0;padding:5px;${lossSt}">${liveCost||''}</td>
