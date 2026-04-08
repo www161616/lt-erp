@@ -12950,7 +12950,8 @@
 
       // 從所有訂單即時帶出資料
       const live = cnaGetLive(r.tracking_number);
-      const liveName = live ? live.product_name : (r.product_name || '');
+      // 商品名稱：r.product_name 優先（admin 可手動改名），fallback 才用 live
+      const liveName = (r.product_name && r.product_name.trim()) ? r.product_name : (live ? live.product_name : '');
       const liveQty = live ? live.qty : (r.qty || '');
       const liveCost = live ? live.unit_cost : (r.unit_cost || '');
       const livePrice = live ? live.selling_price : (r.selling_price || '');
@@ -12973,7 +12974,7 @@
         <td style="text-align:center;border:1px solid #e2e8f0;padding:5px;">${arrived}</td>
         <td style="border:1px solid #e2e8f0;padding:5px;font-size:11px;">${r.tracking_number||''}</td>
         <td style="border:1px solid #e2e8f0;padding:5px;font-family:monospace;">${r.product_id||''}</td>
-        <td style="border:1px solid #e2e8f0;padding:5px;">${liveName}</td>
+        <td style="border:1px solid #e2e8f0;padding:3px;"><input type="text" value="${(liveName||'').replace(/"/g,'&quot;')}" data-arrival-id="${r.id}" onchange="onCnaNameChange(this)" style="width:100%;border:1px solid transparent;padding:3px 5px;font-size:12px;border-radius:3px;background:transparent;font-family:inherit;" onfocus="this.style.border='1px solid #4a6fa5';this.style.background='#fff';" onblur="this.style.border='1px solid transparent';this.style.background='transparent';"></td>
         <td style="text-align:right;border:1px solid #e2e8f0;padding:5px;${lossSt}">${livePrice||''}</td>
         <td style="text-align:center;border:1px solid #e2e8f0;padding:5px;">${liveQty||''}</td>
         <td style="text-align:right;border:1px solid #e2e8f0;padding:5px;${lossSt}">${liveCost||''}</td>
@@ -13019,6 +13020,31 @@
     renderCnArrivalGrid();
   }
 
+  // 修改商品名稱 → PATCH 到 xiaolan_arrivals
+  async function onCnaNameChange(input) {
+    const id = input.dataset.arrivalId;
+    if (!id) return;
+    const newName = input.value.trim();
+    const orig = input.style.background;
+    input.style.background = '#fef3c7';
+    try {
+      const res = await fetch(`${SB_URL}/xiaolan_arrivals?id=eq.${id}`, {
+        method: 'PATCH',
+        headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=minimal' },
+        body: JSON.stringify({ product_name: newName })
+      });
+      if (!res.ok) throw new Error(await res.text());
+      // 同步更新本地資料
+      const row = cnArrivalRows.find(r => String(r.id) === String(id));
+      if (row) row.product_name = newName;
+      input.style.background = '#d1fae5';
+      setTimeout(() => { input.style.background = orig; }, 800);
+    } catch (e) {
+      input.style.background = '#fee2e2';
+      Swal.fire('儲存失敗', e.message, 'error');
+    }
+  }
+
   function cnaToggle(cb) {
     const order = cb.dataset.order;
     if (cb.checked) cnaCheckedOrders.add(order);
@@ -13058,7 +13084,7 @@
 
     let rows = printData.map((r,i) => {
       const live = cnaGetLive(r.tracking_number);
-      const name = live ? live.product_name : (r.product_name || '');
+      const name = (r.product_name && r.product_name.trim()) ? r.product_name : (live ? live.product_name : '');
       const price = live ? live.selling_price : (r.selling_price || '');
       const cost = live ? live.unit_cost : (r.unit_cost || '');
       const qty = live ? live.qty : (r.qty || '');
@@ -13077,8 +13103,6 @@
       <td style="text-align:center;">${qty}</td>
       <td style="text-align:right;${costStyle}">${cost}</td>
       <td>${r.ship_date||''}</td>
-      <td>${r.ship_order||''}</td>
-      <td>${r.ship_to||''}</td>
       <td style="text-align:center;">${category}</td>
     </tr>`;
     }).join('');
@@ -13103,7 +13127,7 @@
       <table><thead><tr>
         <th>#</th><th>到貨</th><th>快遞單號</th><th>商品編號</th><th>商品名稱</th>
         <th>售價</th><th>進貨數</th><th>進貨價</th>
-        <th>出貨日期</th><th>訂單號</th><th>寄至</th><th>用途</th>
+        <th>出貨日期</th><th>用途</th>
       </tr></thead>
       <tbody>${rows}</tbody></table>
     </body></html>`);

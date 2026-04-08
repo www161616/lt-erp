@@ -2435,13 +2435,17 @@ function renderArrivalGrid() {
     const liveSellingPrice = live ? live.selling_price : (r.selling_price || 0);
 
     const offerLink = liveOfferId ? `<span class="shared-link" data-url="https://detail.1688.com/offer/${liveOfferId}.html" style="color:var(--accent);font-size:11px;cursor:pointer;text-decoration:underline;">前往</span>` : '';
+    // 「(原：xxx)」灰字提示：當 original_name 與 product_name 不同時顯示，代表 admin 改過名稱
+    const origNameHint = (r.original_name && r.original_name !== r.product_name)
+      ? `<div style="font-size:10px;color:#a0aec0;margin-top:2px;line-height:1.2;" title="原始名稱：${(r.original_name||'').replace(/"/g,'&quot;')}">原：${r.original_name}</div>`
+      : '';
     return `<tr data-idx="${idx}">
       <td style="text-align:center;"><input type="checkbox" class="a-check" data-idx="${idx}"></td>
       <td class="row-num">${i + 1}</td>
       <td style="text-align:center;">${offerLink}</td>
       <td class="${arrivedClass}" style="text-align:center;"><input type="checkbox" ${r.arrived ? 'checked' : ''} data-field="arrived" data-idx="${idx}" onchange="onACellChange(this)"></td>
       <td><input value="${r.tracking_number || ''}" data-field="tracking_number" data-idx="${idx}" onchange="onACellChange(this);tryAutoMatch(this)"></td>
-      <td>${buildArrivalLinkedSelect(liveProductName, liveProductId, idx, r.tracking_number)}</td>
+      <td>${buildArrivalLinkedSelect(liveProductName, liveProductId, idx, r.tracking_number)}${origNameHint}</td>
       <td style="padding:4px 6px;font-size:12px;">${liveProductId}</td>
       <td><input type="number" value="${liveSellingPrice || ''}" data-field="selling_price" data-idx="${idx}" onchange="onACellChange(this)"></td>
       <td><input type="number" value="${liveQty || ''}" data-field="qty" data-idx="${idx}" onchange="onACellChange(this)"></td>
@@ -2761,7 +2765,13 @@ async function saveArrivals(isAuto) {
   let saved = 0, updated = 0;
   try {
     if (allNewRows.length > 0) {
-      const clean = allNewRows.map(r => { const { _dirty, _tnSeq, ...rest } = r; if (rest.ship_date === '') rest.ship_date = null; return rest; });
+      const clean = allNewRows.map(r => {
+        const { _dirty, _tnSeq, ...rest } = r;
+        if (rest.ship_date === '') rest.ship_date = null;
+        // 第一次寫入時，把 product_name 也存入 original_name 作為原始名稱
+        if (!rest.original_name && rest.product_name) rest.original_name = rest.product_name;
+        return rest;
+      });
       const res = await fetch(`${SB_URL}/xiaolan_arrivals`, { method: 'POST', headers: JSON_H, body: JSON.stringify(clean) });
       if (!res.ok) throw new Error(await res.text());
       saved = allNewRows.length;
