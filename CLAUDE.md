@@ -4,6 +4,95 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # 龍潭總倉 ERP 系統
 
+## 完成功能（2026/04/09）
+
+### 月結報表合併（明細與彙總同一頁）
+- DetailedReport.html 的 RPC `web_get_detailed_monthly_data` 已不存在，整個彙總壞掉
+- 把彙總功能整合進 MonthlyReport.html，加 viewMode 變數（detail / summary）
+- 同一頁兩種視圖共用同一份 fetchData 結果 → 永遠一致
+- 銷貨彙總依客戶分組、進貨彙總依供應商分組、餐費彙總依付款方式分組
+- 雜項費用兩個視圖都保持逐筆
+- 卡片顯示已收/未收 與 已付/未付（依 payment_status 二元判斷）
+- exportToExcel 改用 XLSX library 寫 .xlsx，依 viewMode 切換內容
+- index.html chooseMonthlyReport 兩個選項都載入 MonthlyReport.html
+- DetailedReport.html 檔案保留但已不再被連結
+
+### 應收帳款報表強化
+- 修正：退貨單 (RT) 沒扣到加總的 bug
+  - 原本 `unpaid = Math.max(0, grand_total - paid)` 把負數截成 0
+  - 改為 `unpaid = grandTotal - paid`，新增 `'退貨'` 狀態
+  - 篩選器選未收款 / 部分收款時自動包含退貨
+- 加運費 (shipping) 和扣款 (deduction) 兩個欄位
+  - 從 sales_orders 抓 shipping_fee / deduction
+  - 表頭從 9 欄擴充為 11 欄
+  - 畫面、列印、Excel 匯出三邊同步加新欄位
+
+### Excel 匯出 xlsx 升級（解決科學記號）
+- CustomerMonthlyReport / Receivablereport / MonthlyReport 三份報表
+- CSV → xlsx，單號欄強制文字格式 (`cell.t='s'` + `cell.z='@'`) 避免長數字變科學記號
+- 動態算品名/單號欄寬（中文 ×2、英數 ×1）
+- 大標題合併儲存格
+
+### branch_admin.html 修正與功能
+- 陸貨到貨清單列印加全部欄位 + 橫式列印
+- 列印拿掉訂單號、寄至兩欄
+- 商品名稱欄改為 admin 可編輯（input + onchange PATCH product_name）
+- liveName 邏輯改為 r.product_name 優先（讓改名後不會被 cnaGetLive 蓋回去）
+- xiaolan_arrivals 加 `original_name` 欄位保留原始名稱
+- supplier_xiaolan saveArrivals 寫入時自動同步 product_name → original_name
+- supplier_xiaolan 到貨清單顯示「原：xxx」灰字（當被改名時）
+- 「需求與欠品管理」去重 key 加上 storeId
+  - 修正不同分店相同流水號（REQ105 等）互相覆蓋的 bug
+
+### 後台批次刪除分店
+- 淡水、板橋兩家分店已倒店，徹底從 ERP 刪除
+- 後台 console 腳本清除 5 個地方：
+  - branchOrders / importedStoreNames / branchTypeMap / branchDataList / branchOrdersLocked
+- 自動下載備份 JSON 到下載資料夾
+
+### portal 加「資料可能過時」浮動提示
+- 店家整天不關 portal 分頁，本機 cache 不會自動更新
+- cloudLoadAll 成功後記錄 `window._lastCloudLoadAt`
+- setInterval 每 1 分鐘檢查，停留 > 30 分鐘 → 右下角顯示黃色浮動提示
+- 點擊 → cloudLoadAll + reload 整頁
+
+### 揀貨單修正
+- 不再從歷史波次回算 pickedQty / pickingHistory
+- 同編號商品在不同檔期重複開團是常態，舊歷史會把新檔期需求扣到 0
+- 改為「乾淨的開始」，每次新建揀貨單用當前 alloc 完整帶入
+- 加「顯示已完成分發的商品」checkbox（預設不勾）
+
+### 結單填表功能
+- 加「📊 匯出 Excel」按鈕，匯出有訂購數量 > 0 的商品
+- 分頁列「共 N 筆」加顯示「篩選日期 X｜訂購總數量 Y」
+- clearAllQty 同步順序 bug 修復：先同步雲端再 renderOrderPage
+  - 否則 syncQtyCacheFromCloud 會把舊資料寫回 cache
+- 結單日列表從 3 天放寬為 30 天
+
+### 泰山店 EZTOOL 舊單匯入
+- 之前漏匯入泰山的 EZTOOL 舊單，sales_orders 表沒有 2026 年 1~3 月的紀錄
+- 用 console 腳本上傳 `泰山.xls` 解析 + INSERT
+- 結果：訂單 105 張、明細 1682 筆、總金額 $872,027.5、日期 2026-01-02 ~ 2026-03-13
+- customer_id = C00030（包子媽-泰山店）
+- 注意點：
+  - sales_orders 有 RLS Policy，必須 admin role 才能寫入
+  - 表頭不在 Row 0（前面有雜訊列），要自動偵測表頭位置
+  - product_id / product_name 要 trim() 去尾端空格
+  - 用「id 重複檢查」避免覆蓋現有單
+- ⚠️ **未來如有其他店要補匯入**，可參考這次的腳本（保留在 git history `0166a13` 之後的對話）
+
+## DB 狀態紀錄（2026/04/09）
+- xiaolan_arrivals 加欄位 `original_name TEXT`
+- sales_orders 中泰山 (C00030) 多 105 張 EZTOOL 舊單，總金額 $872,027.5
+
+## ⚠️ 還在運作但要小心的點
+
+1. **branchOrders 配額問題**：47000+ key，接近 localStorage 5MB 上限
+2. **同編號商品開新檔期繼承舊數量**：04/07 加的自動清除按鈕仍是治標
+3. **多裝置 cache 不同步**：04/09 加了「資料可能過時」浮動提示協助
+4. **sales_orders RLS**：分店帳號（store role）無 INSERT 權限，所有寫入要 admin/assistant 身份
+5. **「DetailedReport.html」已停用**：未來不要連結這個檔案，全部走 MonthlyReport.html
+
 ## 完成功能（2026/04/08）
 
 ### 結單填表/開團總表強化
