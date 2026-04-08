@@ -635,6 +635,7 @@
 
     // ===== Navigation =====
     function loadPage(url, title, element) {
+      if (!url) { console.warn('loadPage: url 為空，已忽略'); return false; }
       document.querySelectorAll('.nav-item').forEach(nav => nav.classList.remove('active'));
       let targetNav = document.querySelector(`.nav-item[data-url="${url}"]`);
       if(targetNav) targetNav.classList.add('active');
@@ -663,6 +664,8 @@
       item.addEventListener('click', function() {
         const url = this.getAttribute('data-url');
         const title = this.getAttribute('data-title');
+        // 沒有 data-url 的（例如月結報表用 onclick 自定處理）跳過
+        if (!url) return;
         loadPage(url, title, this);
       });
     });
