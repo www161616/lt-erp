@@ -1277,7 +1277,7 @@
       const div = document.getElementById('ipProdList');
       if (!list.length) { div.innerHTML = '<div style="padding:30px; text-align:center; color:#aaa;">無資料</div>'; return; }
       const cartIds = ipCart.map(c => c.id);
-      let html = '<table style="width:100%; border-collapse:collapse;"><thead><tr style="background:var(--accent-light);"><th style="padding:8px 12px; text-align:left; font-size:12px; color:var(--accent);">品名</th><th style="padding:8px 12px; text-align:right; font-size:12px; color:var(--accent); width:80px;">成本</th></tr></thead><tbody>';
+      let html = '<table style="width:100%; border-collapse:collapse;"><thead style="position:sticky; top:0; z-index:1;"><tr style="background:var(--accent-light);"><th style="padding:8px 12px; text-align:left; font-size:12px; color:var(--accent); background:var(--accent-light);">品名</th><th style="padding:8px 12px; text-align:right; font-size:12px; color:var(--accent); width:80px; background:var(--accent-light);">成本</th></tr></thead><tbody>';
       list.forEach(p => {
         const sel = cartIds.includes(p.id) ? 'background:var(--accent-light);' : '';
         html += `<tr onclick="ipAddToCart('${p.id}')" style="cursor:pointer; border-bottom:1px solid #eee; ${sel}" onmouseover="this.style.background='#f5f5f5'" onmouseout="this.style.background='${sel ? 'var(--accent-light)' : ''}'">
@@ -1309,19 +1309,19 @@
         ipCalcTotal(); ipFilterProducts(); return;
       }
       let html = `<table style="width:100%; border-collapse:collapse;">
-        <thead><tr style="background:#718096; color:#fff;">
-          <th style="padding:8px; text-align:center; width:30px;">#</th>
-          <th style="padding:8px; text-align:left;">品名</th>
-          <th style="padding:8px; text-align:center; width:100px;">供應商</th>
-          <th style="padding:8px; text-align:center; width:60px;">單位</th>
-          <th style="padding:8px; text-align:center; width:70px;">數量</th>
-          <th style="padding:8px; text-align:center; width:80px;">成本</th>
-          <th style="padding:8px; text-align:center; width:70px;">售價</th>
-          <th style="padding:8px; text-align:center; width:70px;">分店價</th>
-          <th style="padding:8px; text-align:right; width:65px;">利潤</th>
-          <th style="padding:8px; text-align:right; width:80px;">利潤小計</th>
-          <th style="padding:8px; text-align:right; width:80px;">小計</th>
-          <th style="padding:8px; width:30px;"></th>
+        <thead style="position:sticky; top:0; z-index:1;"><tr style="background:#718096; color:#fff;">
+          <th style="padding:8px; text-align:center; width:30px; background:#718096;">#</th>
+          <th style="padding:8px; text-align:left; background:#718096;">品名</th>
+          <th style="padding:8px; text-align:center; width:100px; background:#718096;">供應商</th>
+          <th style="padding:8px; text-align:center; width:60px; background:#718096;">單位</th>
+          <th style="padding:8px; text-align:center; width:70px; background:#718096;">數量</th>
+          <th style="padding:8px; text-align:center; width:80px; background:#718096;">成本</th>
+          <th style="padding:8px; text-align:center; width:70px; background:#718096;">售價</th>
+          <th style="padding:8px; text-align:center; width:70px; background:#718096;">分店價</th>
+          <th style="padding:8px; text-align:right; width:65px; background:#718096;">利潤</th>
+          <th style="padding:8px; text-align:right; width:80px; background:#718096;">利潤小計</th>
+          <th style="padding:8px; text-align:right; width:80px; background:#718096;">小計</th>
+          <th style="padding:8px; width:30px; background:#718096;"></th>
         </tr></thead><tbody>`;
       ipCart.forEach((it, i) => {
         const sub = it.qty * it.cost;
