@@ -1121,15 +1121,38 @@
       if (items.length === 0) return Swal.fire('提醒', '該結單日沒有商品', 'info');
 
       // 從 branchOrders 加總各店數量
+      // branchOrders key 可能是純編號 (160203140) 或帶尾碼 (160203140_4/15)
+      // 用 cleanPid 匹配，但限定「尾碼=該結單日」或「無尾碼」，避免撿到其他檔期
       const branchOrders = JSON.parse(localStorage.getItem('branchOrders') || '{}');
+      function _normDK(s) {
+        if (!s) return '';
+        const m = String(s).trim().match(/^\d{4}-(\d{1,2})-(\d{1,2})/);
+        if (m) return parseInt(m[1],10) + '/' + parseInt(m[2],10);
+        const m2 = String(s).trim().match(/^(\d{1,2})[\/\-](\d{1,2})/);
+        if (m2) return parseInt(m2[1],10) + '/' + parseInt(m2[2],10);
+        return String(s).trim();
+      }
+      const targetDK = _normDK(endDate);  // 例：'4/15'
       const qtyMap = {};
       items.forEach(item => {
-        const pid = item.id;
+        const cleanPid = String(item.id).replace(/_.*$/, '');
         let total = 0;
         Object.values(branchOrders).forEach(storeData => {
-          total += Number(storeData[pid] || 0);
+          // 1. 完整 id 直接命中
+          if (storeData[item.id] != null) { total += Number(storeData[item.id] || 0); return; }
+          // 2. 掃同 cleanPid 的 key，只取結單日匹配或無尾碼的
+          Object.entries(storeData).forEach(([k, v]) => {
+            const str = String(k);
+            const idx = str.indexOf('_');
+            const kClean = idx >= 0 ? str.substring(0, idx) : str;
+            if (kClean !== cleanPid) return;
+            const kSuffix = idx >= 0 ? _normDK(str.substring(idx + 1)) : '';
+            if (kSuffix === targetDK || kSuffix === '') {
+              total += Number(v || 0);
+            }
+          });
         });
-        qtyMap[pid] = total;
+        qtyMap[item.id] = total;
       });
 
       const label = endDate.replace(/^\d{4}-/, '').replace('-', '/');
@@ -1144,9 +1167,10 @@
       });
       if (!confirm.isConfirmed) return;
 
-      // 從 products 表補查 cost/supplier/price/price_branch
+      // 從 products 表補查 cost/supplier/price/price_branch（用純編號查）
       Swal.fire({ title: '查詢商品資料中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
-      const ids = items.map(i => `"${i.id}"`).join(',');
+      const cleanIds = [...new Set(items.map(i => String(i.id).replace(/_.*$/, '')))];
+      const ids = cleanIds.map(id => `"${id}"`).join(',');
       let productMap = {};
       try {
         const res = await fetch(`${SB_URL}/products?id=in.(${ids})&select=id,cost,price,price_branch,supplier,unit`, { headers: HEADERS });
@@ -1158,12 +1182,12 @@
 
       let added = 0, merged = 0, notFound = 0;
       items.forEach(item => {
-        const pid = item.id;
-        const prod = productMap[pid];
-        const qty = qtyMap[pid] || 0;
+        const cleanPid = String(item.id).replace(/_.*$/, '');
+        const prod = productMap[cleanPid];
+        const qty = qtyMap[item.id] || 0;
 
-        // 檢查 ipCart 是否已有同編號 → 合併數量
-        const existing = ipCart.find(c => c.id === pid);
+        // 檢查 ipCart 是否已有同純編號 → 合併數量
+        const existing = ipCart.find(c => c.id === cleanPid);
         if (existing) {
           existing.qty += qty;
           merged++;
@@ -1174,7 +1198,7 @@
           notFound++;
           // 用 branchOrderList 的基本資料帶入，cost/supplier 未知
           ipCart.push({
-            id: pid, name: item.name, unit: '個',
+            id: cleanPid, name: item.name, unit: '個',
             supplier: '', cost: 0,
             price: Number(item.price) || 0,
             price_branch: Number(item.storePrice) || 0,
@@ -1185,7 +1209,7 @@
         }
 
         ipCart.push({
-          id: pid, name: item.name, unit: prod.unit || '個',
+          id: cleanPid, name: item.name, unit: prod.unit || '個',
           supplier: prod.supplier || '',
           cost: Number(prod.cost) || 0,
           price: Number(prod.price) || 0,
