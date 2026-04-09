@@ -1870,10 +1870,10 @@
             <input type="text" list="ipSupplierList2" value="${it.supplier || ''}" placeholder="填入廠商" data-detail-id="${it.detailId}" onchange="ipUpdateItemSupplier(this)" style="width:110px; padding:4px 6px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px; font-family:inherit;">
           </td>
           <td style="padding:8px; text-align:center;">${it.qty} ${it.unit}</td>
-          <td style="padding:8px; text-align:right;">$${it.cost.toLocaleString()}</td>
-          <td style="padding:8px; text-align:right;">$${it.price.toLocaleString()}</td>
-          <td style="padding:8px; text-align:right;">$${it.price_branch.toLocaleString()}</td>
-          <td style="padding:8px; text-align:right; font-weight:bold;">$${lt.toLocaleString()}</td>
+          <td style="padding:8px; text-align:right;"><input type="number" value="${it.cost}" style="width:70px; text-align:right; padding:4px; border:1px solid var(--accent); border-radius:4px; font-weight:700; color:var(--accent); background:#fff9f0; font-size:12px;" onchange="ipCurrentDetail.items[${i}].cost=Number(this.value); ipRefreshDetailRow(${i})"></td>
+          <td style="padding:8px; text-align:right;"><input type="number" value="${it.price}" style="width:70px; text-align:right; padding:4px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px;" onchange="ipCurrentDetail.items[${i}].price=Number(this.value)"></td>
+          <td style="padding:8px; text-align:right;"><input type="number" value="${it.price_branch}" style="width:70px; text-align:right; padding:4px; border:1px solid #e2e8f0; border-radius:4px; font-size:12px;" onchange="ipCurrentDetail.items[${i}].price_branch=Number(this.value); ipRefreshDetailRow(${i})"></td>
+          <td style="padding:8px; text-align:right; font-weight:bold;" id="ipDetailSub-${i}">$${lt.toLocaleString()}</td>
         </tr>`;
       });
 
@@ -1916,7 +1916,7 @@
           <div style="padding:15px; background:#fff; border-top:1px solid #ddd;">
             <div style="display:flex; justify-content:flex-end; align-items:center; gap:20px; margin-bottom:15px; font-size:14px;">
               <span style="font-size:16px;">總計:</span>
-              <span style="font-size:24px; font-weight:bold; color:var(--accent);">$${o.grandTotal.toLocaleString()}</span>
+              <span id="ipDetailGrandTotal" style="font-size:24px; font-weight:bold; color:var(--accent);">$${o.grandTotal.toLocaleString()}</span>
             </div>
             <div style="display:flex; gap:10px; justify-content:flex-end; flex-wrap:wrap;">
               <button onclick="ipPrintOrder()" style="padding:8px 16px; background:#718096; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">🖨️ 列印</button>
@@ -2126,6 +2126,20 @@
       } catch (err) {
         Swal.fire('錯誤', '刪除失敗: ' + err.message, 'error');
       }
+    }
+
+    function ipRefreshDetailRow(idx) {
+      if (!ipCurrentDetail || !ipCurrentDetail.items[idx]) return;
+      const it = ipCurrentDetail.items[idx];
+      const lt = it.qty * it.cost;
+      it.subtotal = lt;
+      const subEl = document.getElementById('ipDetailSub-' + idx);
+      if (subEl) subEl.textContent = '$' + lt.toLocaleString();
+      // 重算總計
+      const total = ipCurrentDetail.items.reduce((s, item) => s + item.qty * item.cost, 0);
+      ipCurrentDetail.grandTotal = total;
+      const totalEl = document.getElementById('ipDetailGrandTotal');
+      if (totalEl) totalEl.textContent = '$' + total.toLocaleString();
     }
 
     async function ipBackfillPrices() {
