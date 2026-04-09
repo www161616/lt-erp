@@ -1318,6 +1318,8 @@
           <th style="padding:8px; text-align:center; width:80px;">成本</th>
           <th style="padding:8px; text-align:center; width:70px;">售價</th>
           <th style="padding:8px; text-align:center; width:70px;">分店價</th>
+          <th style="padding:8px; text-align:right; width:65px;">利潤</th>
+          <th style="padding:8px; text-align:right; width:80px;">利潤小計</th>
           <th style="padding:8px; text-align:right; width:80px;">小計</th>
           <th style="padding:8px; width:30px;"></th>
         </tr></thead><tbody>`;
@@ -1332,6 +1334,8 @@
           <td style="padding:8px; text-align:center;"><input type="number" id="ipCost-${i}" value="${it.cost}" style="width:65px; text-align:right; padding:4px; border:1px solid var(--accent); border-radius:4px; font-weight:700; color:var(--accent); background:#fff9f0;" onchange="ipCart[${i}].cost=Number(this.value);ipCalcTotal()" onkeydown="ipEnterNext(event,'ipCost',${i})"></td>
           <td style="padding:8px; text-align:center;"><input type="number" value="${it.price}" style="width:60px; text-align:right; padding:4px; border:1px solid var(--border); border-radius:4px;" onchange="ipCart[${i}].price=Number(this.value);ipRenderCart()"></td>
           <td style="padding:8px; text-align:center;"><input type="number" value="${it.price_branch}" style="width:60px; text-align:right; padding:4px; border:1px solid var(--border); border-radius:4px;" onchange="ipCart[${i}].price_branch=Number(this.value);ipRenderCart()"></td>
+          <td style="padding:8px; text-align:right; color:${(it.price_branch - it.cost) >= 0 ? '#047857' : '#c53030'}; font-weight:600;">$${(it.price_branch - it.cost).toLocaleString()}</td>
+          <td style="padding:8px; text-align:right; color:${(it.price_branch - it.cost) >= 0 ? '#047857' : '#c53030'}; font-weight:700;">$${((it.price_branch - it.cost) * it.qty).toLocaleString()}</td>
           <td style="padding:8px; text-align:right; font-weight:700;">$${sub.toLocaleString()}</td>
           <td style="padding:8px; text-align:center;"><button onclick="ipCart.splice(${i},1);ipRenderCart()" style="background:none; border:none; color:#c53030; cursor:pointer; font-size:16px;">×</button></td>
         </tr>`;
@@ -1440,6 +1444,8 @@
           <td style="text-align:right;">$${it.cost.toLocaleString()}</td>
           <td style="text-align:right;">$${it.price.toLocaleString()}</td>
           <td style="text-align:right;">$${it.price_branch.toLocaleString()}</td>
+          <td style="text-align:right;">$${(it.price_branch - it.cost).toLocaleString()}</td>
+          <td style="text-align:right;">$${((it.price_branch - it.cost) * it.qty).toLocaleString()}</td>
           <td style="text-align:right;">$${lt.toLocaleString()}</td>
         </tr>`;
       }).join('');
@@ -1465,12 +1471,12 @@
   <table>
     <thead><tr>
       <th>項次</th><th>商品編號</th><th>商品名稱</th><th>數量</th>
-      <th>成本</th><th>售價</th><th>分店價</th><th>小計</th>
+      <th>成本</th><th>售價</th><th>分店價</th><th>利潤</th><th>利潤小計</th><th>小計</th>
     </tr></thead>
     <tbody>${rows}</tbody>
     <tfoot>
       <tr class="total-row">
-        <td colspan="7" style="text-align:right;"><b>總計</b></td>
+        <td colspan="9" style="text-align:right;"><b>總計</b></td>
         <td style="text-align:right;"><b>$${grandTotal.toLocaleString()}</b></td>
       </tr>
     </tfoot>
