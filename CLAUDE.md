@@ -4,20 +4,36 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # 龍潭總倉 ERP 系統
 
-## 進行中（2026/04/09）
+## 完成功能（2026/04/09 晚）
 
-### 新增採購單改版（還原點 b78db5d）
-- **目標**：右側上方加「結單日下拉 + 帶入按鈕」，選結單日後確認累加該日商品到採購清單
-- **左側商品目錄保留**（手動追加散品）
+### 新增採購單改版（還原點 b78db5d，完成 d51211e）
+- 右側上方加「結單日下拉 + 帶入按鈕」
+  - 從 branchOrderList 抓不重複 endDate 填入下拉（新到舊）
+  - 選結單日 → 確認彈窗 → 累加該日商品到 ipCart
+  - 數量從 branchOrders 加總各店（cleanPid + 結單日匹配，同鬼影修復邏輯）
+  - 成本/供應商/售價/分店價從 products 表即時查
+  - 同商品重複帶入自動合併數量
+- 左側商品目錄保留（手動追加散品）
 - **拿掉批發價/團購價**（新增 + 查詢 + 列印 + Excel 全部拿掉）
-  - 理由：批發/團購是賣給客戶的價格，放採購單不對位；poGenSubmit 本來就寫死 0
+  - 理由：批發/團購是賣給客戶的價格，放採購單不對位
   - DB 舊資料不刪，只是前端不顯示
-- **數量來源**：branchOrders 加總各店訂購量
-- **結單日帶入行為**：累加（不清掉已有的），同商品重複帶入合併數量
-- **改動檔案**：只動 admin/branch_admin.html
-- **還原指令**：`git checkout b78db5d -- admin/branch_admin.html`
+- 加**利潤欄**（分店價-成本）和**利潤小計欄**（利潤×數量），負數紅色
+- 左右兩側表頭固定（sticky header）
+- 列印移除簽名欄（採購人員/主管/會計）
+- 修正 ipPrintNewOrder 讀已不存在的 ipSuppSelectNew 報錯
 
-## 完成功能（2026/04/09）
+### 查詢採購單強化
+- 明細的成本/售價/分店價改為可編輯 input（原本是唯讀文字）
+- onchange 即時更新 ipCurrentDetail.items + 小計 + 總計
+- 加「💾 儲存修改」按鈕 → PATCH internal_purchase_details + internal_purchases 主表總計
+- 「💰 補寫商品價格」按鈕現在能正確寫入使用者修改過的值到 products 表
+
+### 揀貨單修正數量面板強化
+- 品名下方從 1 個金額 input 改為**成本 + 分店價**兩欄
+- onchange 即時 PATCH products 表（cost / price_branch）
+- 成功時右下角 toast 提示「✅ 已更新 XXX 成本 → $YYY」2 秒消失
+- 失敗時 SweetAlert 錯誤提示
+- 已開立的揀貨單維持唯讀
 
 ### 開團總表「鬼影 key」根治（commit feabdec）
 - **症狀**：開團總表 vs 結單填表數字對不上（湖口 4/5 多算 2 件那種）
