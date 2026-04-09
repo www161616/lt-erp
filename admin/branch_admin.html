@@ -4106,9 +4106,15 @@
                 <span>${row.name}</span>
                 ${!wave.converted ? `<button title="移除此品項" style="background:none; border:none; cursor:pointer; font-size:14px; color:#c53030; padding:2px; opacity:0.6; line-height:1;" onclick="removeProductFromWave('${wave.id}',${ri})" onmouseover="this.style.opacity=1" onmouseout="this.style.opacity=0.6">✕</button>` : ''}
               </div>
-              <div style="margin-top:4px; display:flex; align-items:center; gap:4px;">
-                <span style="font-size:10px; color:#718096; font-weight:normal;">$</span>
-                ${!wave.converted ? `<input type="number" min="0" value="${row.storePrice || row.price || 0}" style="width:60px; padding:2px 4px; font-size:12px; border:1px solid #dde3ec; border-radius:3px; text-align:right; font-family:inherit;" onchange="updateWaveItemPrice('${wave.id}',${ri},this.value)">` : `<span style="font-size:12px; color:#2b6cb0; font-weight:bold;">${row.storePrice || row.price || 0}</span>`}
+              <div style="margin-top:4px; display:flex; flex-direction:column; gap:3px; font-size:11px;">
+                <div style="display:flex; align-items:center; gap:3px;">
+                  <span style="color:#718096; font-weight:normal; min-width:36px;">成本</span>
+                  ${!wave.converted ? `<input type="number" min="0" value="${row.cost || 0}" style="width:60px; padding:2px 4px; font-size:12px; border:1px solid var(--accent); border-radius:3px; text-align:right; font-family:inherit; background:#fff9f0; color:var(--accent); font-weight:700;" onchange="updateWaveItemCostPrice('${wave.id}',${ri},'cost',this.value)">` : `<span style="font-size:12px; color:var(--accent); font-weight:bold;">$${row.cost || 0}</span>`}
+                </div>
+                <div style="display:flex; align-items:center; gap:3px;">
+                  <span style="color:#718096; font-weight:normal; min-width:36px;">分店價</span>
+                  ${!wave.converted ? `<input type="number" min="0" value="${row.storePrice || row.price || 0}" style="width:60px; padding:2px 4px; font-size:12px; border:1px solid #dde3ec; border-radius:3px; text-align:right; font-family:inherit;" onchange="updateWaveItemCostPrice('${wave.id}',${ri},'storePrice',this.value)">` : `<span style="font-size:12px; color:#2b6cb0; font-weight:bold;">$${row.storePrice || row.price || 0}</span>`}
+                </div>
               </div>
             </td>
             <td style="padding:2px 4px; border:1px solid #e2e8f0; font-size:10px; color:#718096; white-space:nowrap;">應發</td>
@@ -4153,15 +4159,35 @@
         </div>`;
     }
 
-    // 修正面板：更新單價
-    function updateWaveItemPrice(waveId, rowIndex, newValue) {
+    // 修正面板：更新成本/分店價，即時寫回 products 表
+    async function updateWaveItemCostPrice(waveId, rowIndex, field, newValue) {
       const wave = mockSavedWaves.find(w => w.id === waveId);
       if (!wave || wave.converted) return;
       const row = wave.matrix[rowIndex];
       if (!row) return;
-      row.storePrice = parseFloat(newValue) || 0;
-      row.price = row.storePrice;
+      const val = parseFloat(newValue) || 0;
+      if (field === 'cost') {
+        row.cost = val;
+      } else {
+        row.storePrice = val;
+        row.price = val;
+      }
       saveMockSavedWaves();
+
+      // 即時 PATCH products 表
+      const pid = (row.productId || row.id || '').replace(/_.*$/, '');
+      if (!pid) return;
+      const payload = {};
+      if (field === 'cost') payload.cost = val;
+      else payload.price_branch = val;
+      try {
+        const res = await fetch(`${SB_URL}/products?id=eq.${encodeURIComponent(pid)}`, {
+          method: 'PATCH',
+          headers: { ...HEADERS, 'Prefer': 'return=minimal' },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) console.warn('products PATCH 失敗:', pid, await res.text());
+      } catch(e) { console.warn('products PATCH error:', pid, e); }
     }
 
     // 修正面板：更新實際數量
