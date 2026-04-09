@@ -10780,10 +10780,10 @@
         confirmButtonText: '✏️ 修改回覆', confirmButtonColor: '#2b6cb0',
         cancelButtonText: '關閉', width: '480px'
       }).then(res => {
-        if (res.isConfirmed) replyInquiry(id);
+        if (res.isConfirmed) replyInquiry(uid);
       });
     } else {
-      replyInquiry(id);
+      replyInquiry(uid);
     }
   }
 

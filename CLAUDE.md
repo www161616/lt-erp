@@ -6,6 +6,33 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## 完成功能（2026/04/09）
 
+### 開團總表「鬼影 key」根治（commit feabdec）
+- **症狀**：開團總表 vs 結單填表數字對不上（湖口 4/5 多算 2 件那種）
+- **根因**：[branch_portal.html:2716](branch/branch_portal.html#L2716) `_lookupQty` 的 fallback
+  - 第 2 步用 cleanPid（砍 `_尾碼`）查 → 不管尾碼是哪個檔期，撿到就用
+  - 舊檔期 `編號_3/12` 會被新檔期 `編號_4/15` 撿走
+  - 加上「取最大值」的索引邏輯，污染更嚴重
+- **修法**：fallback 改為雙層索引 `[cleanPid][dateKey] = qty`
+  - dateKey 由 `_normDateKey` 把 `2026-04-15` / `4/15` 都正規化為 `M/D`
+  - fallback 必須結單日匹配才採用，不匹配回 0
+  - 純編號 key（無尾碼，syncToERP 寫的）視為「當前檔期」，作為次選
+- **影響範圍**：只改 branch_portal renderSummaryPage 一個函式，+32/-9 行
+- **不需遷移**：對現有 47000+ key 立即生效；branch_admin、index、Supabase 都不動
+- **未來不會再發生**：架構上鬼影 key 已絕跡
+
+### 需求與欠品管理跨店相同流水號查找互撞修復（commit 057d123）
+- **症狀**：點林口的 REQ105 跑出湖口的 REQ105
+- **根因**：mockInquiries 用 `.find(i => i.id === id)` 比對純流水號
+  - 不同店有相同流水號（REQ105 林口、REQ105 湖口同時存在）
+  - .find 只回第一筆 → 點哪家都跑出第一筆
+  - 04/09 早上修了「去重」的 dedupKey 加 storeId，但「查找端」沒一起改
+- **修法**：mockInquiries 每筆加 `_uid = id + '__' + storeId` 內部唯一識別
+  - 所有 onclick 傳 `_uid`，所有 find/findIndex/filter 用 `_uid` 比對（10 處）
+  - 寫回 portalAllRequests 加 `r.storeId === inq.storeId` 雙條件，避免跨店誤改
+- **改動**：admin/branch_admin.html，+33/-28 行
+- **影響範圍**：只動 admin 端，branch_portal 沒讀 _uid，分店端不受影響
+- **未來注意**：新增讀 mockInquiries 的程式碼一律用 `_uid`，不要用 `id`
+
 ### 月結報表合併（明細與彙總同一頁）
 - DetailedReport.html 的 RPC `web_get_detailed_monthly_data` 已不存在，整個彙總壞掉
 - 把彙總功能整合進 MonthlyReport.html，加 viewMode 變數（detail / summary）
@@ -92,6 +119,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 3. **多裝置 cache 不同步**：04/09 加了「資料可能過時」浮動提示協助
 4. **sales_orders RLS**：分店帳號（store role）無 INSERT 權限，所有寫入要 admin/assistant 身份
 5. **「DetailedReport.html」已停用**：未來不要連結這個檔案，全部走 MonthlyReport.html
+6. **鬼影 key 已根治**（04/09 commit feabdec）：開團總表 fallback 強制比對結單日，未來不會再有舊檔期被新檔期撿走的問題
+7. **mockInquiries 必須用 `_uid` 不能用 `id`**（04/09 commit 057d123）：跨店有相同流水號（REQ105 林口/湖口），未來新增讀寫點要記得用 `_uid = id + '__' + storeId`
 
 ## 完成功能（2026/04/08）
 
