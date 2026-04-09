@@ -3757,7 +3757,8 @@
           const val = bd ? (bd.actual ?? bd) : 0;
           return `<td style="text-align:center;${val > 0 ? 'font-weight:bold;' : 'color:#ccc;'}">${val}</td>`;
         }).join('');
-        return `<tr><td style="white-space:nowrap;">${r.name}</td>${cells}<td style="text-align:center;font-weight:bold;">${r.expectedSum}</td><td style="text-align:center;font-weight:bold;">${r.actualSum}</td></tr>`;
+        const edLabel = r.endDate ? `<span style="font-size:10px; color:#666;">${r.endDate}</span> ` : '';
+        return `<tr><td style="white-space:nowrap;">${edLabel}${r.name}</td>${cells}<td style="text-align:center;font-weight:bold;">${r.expectedSum}</td><td style="text-align:center;font-weight:bold;">${r.actualSum}</td></tr>`;
       }).join('');
 
       const win = window.open('', '_blank', 'width=900,height=600');
@@ -3773,7 +3774,7 @@
           @media print { button { display: none; } }
         </style></head><body>
         <div class="title">揀貨分發表</div>
-        <div class="sub">單號：${waveId}　建立時間：${wave.date}　品項數：${wave.matrix.length}${(() => { const eds = [...new Set(wave.matrix.map(r => r.endDate).filter(Boolean))]; return eds.length > 0 ? '　結單日：' + eds.join('、') : ''; })()}</div>
+        <div class="sub">單號：${waveId}　建立時間：${wave.date}　品項數：${wave.matrix.length}</div>
         <button onclick="window.print()" style="margin-bottom:6px;padding:4px 14px;background:#2b6cb0;color:white;border:none;border-radius:4px;cursor:pointer;font-size:12px;">列印</button>
         <table>
           <thead><tr><th style="text-align:left;">品名</th>${headers}<th>合計</th></tr></thead>
