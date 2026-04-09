@@ -967,7 +967,7 @@
       // 如果是從需求建立的，還原需求狀態
       if (pendingDemandInqIds.length > 0) {
         pendingDemandInqIds.forEach(function(did) {
-          var dInq = mockInquiries.find(function(i) { return i.id === did; });
+          var dInq = mockInquiries.find(function(i) { return i._uid === did; });
           if (dInq) {
             dInq.status = 'pending';
             dInq.reply = '';
@@ -3430,7 +3430,7 @@
           var dnow = new Date();
           var dts = dnow.getFullYear() + '/' + String(dnow.getMonth()+1).padStart(2,'0') + '/' + String(dnow.getDate()).padStart(2,'0') + ' ' + String(dnow.getHours()).padStart(2,'0') + ':' + String(dnow.getMinutes()).padStart(2,'0');
           pendingDemandInqIds.forEach(function(did) {
-            var dInq = mockInquiries.find(function(i) { return i.id === did; });
+            var dInq = mockInquiries.find(function(i) { return i._uid === did; });
             if (dInq) {
               dInq.status = 'replied';
               dInq.reply = '已建立補發揀貨單';
@@ -6012,7 +6012,7 @@
 
       // 追加商品 → 建立補發；詢問到貨 → 無補發按鈕
       const buildBtn = isAddon && inq.qty > 0
-        ? ' <button class="btn" style="padding:3px 7px; font-size:11px; background:#b7791f;" onclick="event.stopPropagation();buildDemandSupply(\'' + inq.id + '\')">➕補發</button>'
+        ? ' <button class="btn" style="padding:3px 7px; font-size:11px; background:#b7791f;" onclick="event.stopPropagation();buildDemandSupply(\'' + inq._uid + '\')">➕補發</button>'
         : '';
 
       // 商品名稱 + 回覆內容
@@ -6022,8 +6022,8 @@
         if (inq.newEta) nameHtml += '<div style="font-size:11px; color:#2b6cb0; line-height:1.3;">📅 預計到貨：' + inq.newEta + '</div>';
       }
 
-      return '<tr style="background:' + rowBg + '; cursor:pointer; border-bottom:1px solid #e2e8f0;" onclick="openInquiryDetail(\'' + inq.id + '\')">' +
-        '<td style="padding:5px 4px; text-align:center; width:28px;" onclick="event.stopPropagation();"><input type="checkbox" class="db-check" value="' + inq.id + '" onchange="updateDBSelectCount()" style="width:15px; height:15px; cursor:pointer;"></td>' +
+      return '<tr style="background:' + rowBg + '; cursor:pointer; border-bottom:1px solid #e2e8f0;" onclick="openInquiryDetail(\'' + inq._uid + '\')">' +
+        '<td style="padding:5px 4px; text-align:center; width:28px;" onclick="event.stopPropagation();"><input type="checkbox" class="db-check" value="' + inq._uid + '" onchange="updateDBSelectCount()" style="width:15px; height:15px; cursor:pointer;"></td>' +
         '<td style="padding:5px 6px; color:#718096; white-space:nowrap; font-size:11px;">' + inq.createdAt + '</td>' +
         '<td style="padding:5px 4px; text-align:center; font-size:11px; font-weight:bold; color:#2d3748;">' + inq.storeId + '</td>' +
         '<td style="padding:5px 4px; text-align:center; white-space:nowrap;">' + catBadge + '</td>' +
@@ -6034,13 +6034,13 @@
         '<td style="padding:5px 4px; text-align:center;">' + statusBadge + '</td>' +
         '<td style="padding:5px 4px; text-align:center;">' +
           (inq.completed
-            ? '<button class="btn" style="padding:2px 6px; font-size:10px; background:#718096;" onclick="event.stopPropagation();toggleDemandComplete(\'' + inq.id + '\')">↩ 取消完成</button>'
-            : '<button class="btn" style="padding:2px 6px; font-size:10px; background:#047857;" onclick="event.stopPropagation();toggleDemandComplete(\'' + inq.id + '\')">✅ 完成</button>') +
+            ? '<button class="btn" style="padding:2px 6px; font-size:10px; background:#718096;" onclick="event.stopPropagation();toggleDemandComplete(\'' + inq._uid + '\')">↩ 取消完成</button>'
+            : '<button class="btn" style="padding:2px 6px; font-size:10px; background:#047857;" onclick="event.stopPropagation();toggleDemandComplete(\'' + inq._uid + '\')">✅ 完成</button>') +
         '</td>' +
         '<td style="padding:5px 4px; text-align:center; white-space:nowrap;">' +
-          (isPending ? '<button class="btn" style="padding:3px 7px; font-size:11px; background:#2b6cb0;" onclick="event.stopPropagation();replyInquiry(\'' + inq.id + '\')">回覆</button>' : '<button class="btn" style="padding:3px 7px; font-size:11px; background:#718096;" onclick="event.stopPropagation();openInquiryDetail(\'' + inq.id + '\')">檢視</button>') +
+          (isPending ? '<button class="btn" style="padding:3px 7px; font-size:11px; background:#2b6cb0;" onclick="event.stopPropagation();replyInquiry(\'' + inq._uid + '\')">回覆</button>' : '<button class="btn" style="padding:3px 7px; font-size:11px; background:#718096;" onclick="event.stopPropagation();openInquiryDetail(\'' + inq._uid + '\')">檢視</button>') +
           buildBtn +
-          ' <button class="btn" style="padding:3px 7px; font-size:11px; background:#c53030;" onclick="event.stopPropagation();deleteDemandItem(\'' + inq.id + '\')">刪除</button>' +
+          ' <button class="btn" style="padding:3px 7px; font-size:11px; background:#c53030;" onclick="event.stopPropagation();deleteDemandItem(\'' + inq._uid + '\')">刪除</button>' +
         '</td></tr>';
     }).join('');
 
@@ -6284,13 +6284,13 @@
     renderDemandBackorderStation();
   }
 
-  function toggleDemandComplete(id) {
-    var inq = mockInquiries.find(function(i) { return i.id === id; });
+  function toggleDemandComplete(uid) {
+    var inq = mockInquiries.find(function(i) { return i._uid === uid; });
     if (!inq) return;
     inq.completed = !inq.completed;
-    // 同步到 portalAllRequests
+    // 同步到 portalAllRequests（用 id + storeId 雙條件比對，避免改錯店）
     var allReq = JSON.parse(localStorage.getItem('portalAllRequests') || '[]');
-    var req = allReq.find(function(r) { return r.id === id; });
+    var req = allReq.find(function(r) { return r.id === inq.id && (r.storeId || '') === inq.storeId; });
     if (req) {
       req.completed = inq.completed;
       if (inq.completed) req.status = 'done';
@@ -6302,8 +6302,8 @@
   }
 
   function getCheckedDemandItems() {
-    var ids = Array.from(document.querySelectorAll('.db-check:checked')).map(function(c) { return c.value; });
-    return mockInquiries.filter(function(inq) { return ids.indexOf(inq.id) >= 0; });
+    var uids = Array.from(document.querySelectorAll('.db-check:checked')).map(function(c) { return c.value; });
+    return mockInquiries.filter(function(inq) { return uids.indexOf(inq._uid) >= 0; });
   }
 
   function exportDemandExcel() {
@@ -6355,31 +6355,34 @@
     win.document.close();
   }
 
-  function deleteDemandItem(id) {
+  function deleteDemandItem(uid) {
+    const target = mockInquiries.find(i => i._uid === uid);
+    if (!target) return;
     Swal.fire({
       title: '刪除需求紀錄', html: '確定要刪除此筆紀錄？', icon: 'warning',
       showCancelButton: true, confirmButtonText: '確定刪除', cancelButtonText: '取消', confirmButtonColor: '#c53030'
     }).then(res => {
       if (!res.isConfirmed) return;
-      // 從共用 key 刪除
+      // 從共用 key 刪除（用 id + storeId 雙條件，避免刪錯店）
       try {
         const raw = localStorage.getItem('portalAllRequests');
         if (raw) {
-          const list = JSON.parse(raw).filter(r => r.id !== id);
+          const list = JSON.parse(raw).filter(r => !(r.id === target.id && (r.storeId || '') === target.storeId));
           localStorage.setItem('portalAllRequests', JSON.stringify(list));
           cloudSave('portalAllRequests');
         }
       } catch(e) {}
-      const idx = mockInquiries.findIndex(i => i.id === id);
+      const idx = mockInquiries.findIndex(i => i._uid === uid);
       if (idx !== -1) mockInquiries.splice(idx, 1);
       refreshDemandBackorderTable();
     });
   }
 
   // 從店家需求建立補發 → 跳轉分貨站並預填該店需求數量
-  function buildDemandSupply(inqId) {
-    const inq = mockInquiries.find(i => i.id === inqId);
+  function buildDemandSupply(inqUid) {
+    const inq = mockInquiries.find(i => i._uid === inqUid);
     if (!inq) return;
+    const inqId = inq._uid;  // 後續 pendingDemandInqIds 用 _uid
 
     Swal.fire({
       title: '建立補發揀貨單',
@@ -8297,6 +8300,7 @@
         const createdDate = r.createdAt ? new Date(r.createdAt) : new Date();
         return {
           id: r.id,
+          _uid: (r.id || '') + '__' + (r.storeId || ''),  // 唯一識別：避免不同店相同流水號（REQ105）查找互撞
           storeId: r.storeId || '',
           category: r.category || '追加商品',
           productId: r.code || '',
@@ -8429,7 +8433,8 @@
       const raw = localStorage.getItem('portalAllRequests');
       if (!raw) return;
       const list = JSON.parse(raw);
-      const target = list.find(r => r.id === inq.id);
+      // 用 id + storeId 雙條件比對，避免不同店相同流水號 (REQ105) 寫到錯店
+      const target = list.find(r => r.id === inq.id && (r.storeId || '') === inq.storeId);
       if (target) {
         target.status = 'done';
         target.reply = inq.reply || '';
@@ -10730,7 +10735,7 @@
         ? `<span style="display:inline-block; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:bold; background:#fef2f2; color:#c53030; border:1px solid #fecaca;">⚡ 待回覆</span>`
         : `<span style="display:inline-block; padding:3px 9px; border-radius:12px; font-size:11px; font-weight:bold; background:#f0f7ff; color:#2b6cb0; border:1px solid #bbf7d0;">✓ 已回覆</span>`;
       return `
-        <tr style="background:${rowBg}; cursor:pointer;" onclick="openInquiryDetail('${inq.id}')" title="點擊查看詳情${isPending ? ' / 回覆' : ''}">
+        <tr style="background:${rowBg}; cursor:pointer;" onclick="openInquiryDetail('${inq._uid}')" title="點擊查看詳情${isPending ? ' / 回覆' : ''}">
           <td style="padding:10px 12px; color:#718096; white-space:nowrap; font-size:12px;">${inq.createdAt}</td>
           <td style="padding:10px 12px;"><span style="background:#2b6cb0; color:white; border-radius:3px; padding:2px 7px; font-size:12px; font-weight:bold;">${inq.storeId}</span></td>
           <td style="padding:10px 12px; text-align:center;">${catBadge}</td>
@@ -10739,7 +10744,7 @@
           <td style="padding:10px 12px; text-align:center; font-size:12px; font-weight:bold; color:${eta!=='—'?'#047857':'#718096'};">${eta}</td>
           <td style="padding:10px 12px; text-align:center;">${statusBadge}</td>
           <td style="padding:10px 12px; text-align:center;">
-            <button onclick="event.stopPropagation(); replyInquiry('${inq.id}')"
+            <button onclick="event.stopPropagation(); replyInquiry('${inq._uid}')"
               style="padding:5px 12px; background:${isPending?'#2b6cb0':'#f1f5f9'}; color:${isPending?'white':'#718096'}; border:${isPending?'none':'1px solid #e2e8f0'}; border-radius:4px; font-size:12px; font-weight:bold; cursor:pointer; font-family:inherit;">
               ${isPending ? '回覆' : '修改'}
             </button>
@@ -10748,8 +10753,8 @@
     }).join('');
   }
 
-  function openInquiryDetail(id) {
-    const inq = mockInquiries.find(i => i.id === id);
+  function openInquiryDetail(uid) {
+    const inq = mockInquiries.find(i => i._uid === uid);
     if (!inq) return;
     const order = mockConsolidatedOrders.find(o => o.id === inq.productId);
     const procStatusMap = { pending:'待採購叫貨', ordered:'已叫貨', arrived:'已到倉', out_of_stock:'廠商斷貨' };
@@ -10850,8 +10855,8 @@
     manageQuickReplies();
   }
 
-  function replyInquiry(id) {
-    const inq = mockInquiries.find(i => i.id === id);
+  function replyInquiry(uid) {
+    const inq = mockInquiries.find(i => i._uid === uid);
     if (!inq) return;
     const order = mockConsolidatedOrders.find(o => o.id === inq.productId);
     const procStatusMap = { pending:'待採購叫貨', ordered:'已叫貨', arrived:'已到倉', out_of_stock:'廠商斷貨' };
