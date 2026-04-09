@@ -3773,7 +3773,7 @@
           @media print { button { display: none; } }
         </style></head><body>
         <div class="title">揀貨分發表</div>
-        <div class="sub">單號：${waveId}　建立時間：${wave.date}　品項數：${wave.matrix.length}</div>
+        <div class="sub">單號：${waveId}　建立時間：${wave.date}　品項數：${wave.matrix.length}${(() => { const eds = [...new Set(wave.matrix.map(r => r.endDate).filter(Boolean))]; return eds.length > 0 ? '　結單日：' + eds.join('、') : ''; })()}</div>
         <button onclick="window.print()" style="margin-bottom:6px;padding:4px 14px;background:#2b6cb0;color:white;border:none;border-radius:4px;cursor:pointer;font-size:12px;">列印</button>
         <table>
           <thead><tr><th style="text-align:left;">品名</th>${headers}<th>合計</th></tr></thead>
