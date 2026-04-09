@@ -3750,6 +3750,14 @@
         });
       });
 
+      // 從 branchOrderList 建立 productId → endDate 查找表（補舊揀貨單沒帶 endDate 的情況）
+      const _bolList = JSON.parse(localStorage.getItem('branchOrderList') || '[]');
+      const _endDateMap = {};
+      _bolList.forEach(item => {
+        const pid = (item.productId || item.id || '').replace(/_.*$/, '');
+        if (item.endDate && !_endDateMap[pid]) _endDateMap[pid] = item.endDate.replace(/-/g, '/');
+      });
+
       const headers = visibleNames.map(n => `<th>${n}</th>`).join('');
       const rows = wave.matrix.map(r => {
         const cells = visibleNames.map(b => {
@@ -3757,7 +3765,9 @@
           const val = bd ? (bd.actual ?? bd) : 0;
           return `<td style="text-align:center;${val > 0 ? 'font-weight:bold;' : 'color:#ccc;'}">${val}</td>`;
         }).join('');
-        const edLabel = r.endDate ? `<span style="font-size:10px; color:#666;">${r.endDate}</span> ` : '';
+        const pid = (r.productId || r.id || '').replace(/_.*$/, '');
+        const ed = r.endDate || _endDateMap[pid] || '';
+        const edLabel = ed ? `<span style="font-size:10px; color:#666;">${ed}</span> ` : '';
         return `<tr><td style="white-space:nowrap;">${edLabel}${r.name}</td>${cells}<td style="text-align:center;font-weight:bold;">${r.expectedSum}</td><td style="text-align:center;font-weight:bold;">${r.actualSum}</td></tr>`;
       }).join('');
 
