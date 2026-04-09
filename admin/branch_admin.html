@@ -1923,6 +1923,7 @@
               <button onclick="ipExportDetail()" style="padding:8px 16px; background:#276749; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">📊 Excel</button>
               ${canSubmit ? `<button onclick="ipChangeStatus('${o.orderId}','待審核')" style="padding:8px 16px; background:#b7791f; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">📤 送出審核</button>` : ''}
               ${canDelete ? `<button onclick="ipDeleteOrder('${o.orderId}')" style="padding:8px 16px; background:#c53030; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">🗑️ 刪除</button>` : ''}
+              <button onclick="ipSaveDetailChanges()" style="padding:8px 16px; background:#2b6cb0; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">💾 儲存修改</button>
               <button onclick="ipBackfillPrices()" style="padding:8px 16px; background:#0e7490; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:bold;">💰 補寫商品價格</button>
             </div>
           </div>
@@ -2140,6 +2141,60 @@
       ipCurrentDetail.grandTotal = total;
       const totalEl = document.getElementById('ipDetailGrandTotal');
       if (totalEl) totalEl.textContent = '$' + total.toLocaleString();
+    }
+
+    async function ipSaveDetailChanges() {
+      if (!ipCurrentDetail || !ipCurrentDetail.items || ipCurrentDetail.items.length === 0) {
+        Swal.fire('無資料', '請先開啟一張採購單明細', 'info');
+        return;
+      }
+      const result = await Swal.fire({
+        title: '儲存修改？',
+        html: `將把 <b>${ipCurrentDetail.items.length}</b> 筆明細的成本、售價、分店價存回採購單`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: '💾 儲存',
+        cancelButtonText: '取消',
+        confirmButtonColor: '#2b6cb0'
+      });
+      if (!result.isConfirmed) return;
+
+      Swal.fire({ title: '儲存中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+      let updated = 0, failed = 0;
+      for (const it of ipCurrentDetail.items) {
+        try {
+          const res = await fetch(`${SB_URL}/internal_purchase_details?id=eq.${encodeURIComponent(it.detailId)}`, {
+            method: 'PATCH',
+            headers: { ...HEADERS, 'Prefer': 'return=minimal' },
+            body: JSON.stringify({
+              cost: Number(it.cost) || 0,
+              price: Number(it.price) || 0,
+              price_branch: Number(it.price_branch) || 0,
+              subtotal: Number(it.qty) * Number(it.cost) || 0
+            })
+          });
+          if (res.ok) updated++;
+          else failed++;
+        } catch(e) { failed++; console.warn('儲存明細失敗:', it.detailId, e); }
+      }
+      // 更新主表總計
+      try {
+        await fetch(`${SB_URL}/internal_purchases?id=eq.${encodeURIComponent(ipCurrentDetail.orderId)}`, {
+          method: 'PATCH',
+          headers: { ...HEADERS, 'Prefer': 'return=minimal' },
+          body: JSON.stringify({
+            subtotal: ipCurrentDetail.grandTotal,
+            grand_total: ipCurrentDetail.grandTotal
+          })
+        });
+      } catch(e) { console.warn('更新主表總計失敗:', e); }
+
+      Swal.fire({
+        icon: failed > 0 ? 'warning' : 'success',
+        title: '儲存完成',
+        text: `成功 ${updated} 筆${failed > 0 ? `，失敗 ${failed} 筆` : ''}`,
+        timer: 2000, showConfirmButton: true
+      });
     }
 
     async function ipBackfillPrices() {
