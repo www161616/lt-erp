@@ -1703,8 +1703,6 @@
             cost: Number(d.cost || 0),
             price: Number(d.price || 0),
             price_branch: Number(d.price_branch || 0),
-            price_wholesale: Number(d.price_wholesale || 0),
-            price_group: Number(d.price_group || 0),
             subtotal: Number(d.subtotal || 0),
             supplier: d.supplier || '',
             detailId: d.id,
@@ -1735,8 +1733,6 @@
           <td style="padding:8px; text-align:right;">$${it.cost.toLocaleString()}</td>
           <td style="padding:8px; text-align:right;">$${it.price.toLocaleString()}</td>
           <td style="padding:8px; text-align:right;">$${it.price_branch.toLocaleString()}</td>
-          <td style="padding:8px; text-align:right;">$${it.price_wholesale.toLocaleString()}</td>
-          <td style="padding:8px; text-align:right;">$${it.price_group.toLocaleString()}</td>
           <td style="padding:8px; text-align:right; font-weight:bold;">$${lt.toLocaleString()}</td>
         </tr>`;
       });
@@ -1772,8 +1768,6 @@
                 <th style="padding:8px; text-align:right; font-size:12px; color:var(--accent);">成本</th>
                 <th style="padding:8px; text-align:right; font-size:12px; color:var(--accent);">售價</th>
                 <th style="padding:8px; text-align:right; font-size:12px; color:var(--accent);">分店價</th>
-                <th style="padding:8px; text-align:right; font-size:12px; color:var(--accent);">批發價</th>
-                <th style="padding:8px; text-align:right; font-size:12px; color:var(--accent);">團購價</th>
                 <th style="padding:8px; text-align:right; font-size:12px; color:var(--accent);">小計</th>
               </tr></thead>
               <tbody>${itemRows}</tbody>
@@ -1880,8 +1874,6 @@
           <td style="text-align:right;">$${it.cost.toLocaleString()}</td>
           <td style="text-align:right;">$${(it.price||0).toLocaleString()}</td>
           <td style="text-align:right;">$${(it.price_branch||0).toLocaleString()}</td>
-          <td style="text-align:right;">$${(it.price_wholesale||0).toLocaleString()}</td>
-          <td style="text-align:right;">$${(it.price_group||0).toLocaleString()}</td>
           <td style="text-align:right;">$${lt.toLocaleString()}</td>
         </tr>`;
       }).join('');
@@ -1908,12 +1900,12 @@
   <table>
     <thead><tr>
       <th>項次</th><th>商品編號</th><th>商品名稱</th><th>廠商</th><th>數量</th>
-      <th>成本</th><th>售價</th><th>分店價</th><th>批發價</th><th>團購價</th><th>小計</th>
+      <th>成本</th><th>售價</th><th>分店價</th><th>小計</th>
     </tr></thead>
     <tbody>${rows}</tbody>
     <tfoot>
       <tr class="total-row">
-        <td colspan="10" style="text-align:right;"><b>總計</b></td>
+        <td colspan="8" style="text-align:right;"><b>總計</b></td>
         <td style="text-align:right;"><b>$${o.grandTotal.toLocaleString()}</b></td>
       </tr>
     </tfoot>
@@ -1933,12 +1925,12 @@
     function ipExportDetail() {
       if (!ipCurrentDetail) return;
       const o = ipCurrentDetail;
-      let csv = '\uFEFF項次,商品編號,品名,廠商,數量,單位,單價成本,售價,分店價,批發價,團購價,小計\n';
+      let csv = '\uFEFF項次,商品編號,品名,廠商,數量,單位,單價成本,售價,分店價,小計\n';
       o.items.forEach((it, i) => {
         const lt = it.qty * it.cost;
-        csv += `${i+1},="${ String(it.productId).replace(/"/g,'""') }","${(it.productName||'').replace(/"/g,'""')}","${(it.supplier||'').replace(/"/g,'""')}",${it.qty},"${it.unit||'個'}",${it.cost},${it.price||0},${it.price_branch||0},${it.price_wholesale||0},${it.price_group||0},${lt}\n`;
+        csv += `${i+1},="${ String(it.productId).replace(/"/g,'""') }","${(it.productName||'').replace(/"/g,'""')}","${(it.supplier||'').replace(/"/g,'""')}",${it.qty},"${it.unit||'個'}",${it.cost},${it.price||0},${it.price_branch||0},${lt}\n`;
       });
-      csv += `,,,,,,,,,,,\n,,,,,,,,,,,總計,${o.grandTotal}\n`;
+      csv += `,,,,,,,,,,\n,,,,,,,,,,總計,${o.grandTotal}\n`;
       ipDownloadCSV(csv, `內部採購單_${o.orderId}_${o.date}`);
     }
 
