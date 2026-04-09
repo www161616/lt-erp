@@ -2698,18 +2698,34 @@ function renderSummaryPage() {
     return true;
   });
 
-  // 為各店建立 cleaned pid → qty 的查找表，避免 key 格式不一致導致查不到
-  // (例如結單填表存 "160203140_4/15"，但開團總表的 item.id 可能是 "160203140")
+  // endDate 正規化為 M/D 格式（去前導 0 + 去年份）
+  // 例：'2026-04-15' → '4/15'，'4/15' → '4/15'，'04/05' → '4/5'
+  function _normDateKey(s) {
+    if (!s) return '';
+    const str = String(s).trim();
+    const m = str.match(/^\d{4}-(\d{1,2})-(\d{1,2})/);
+    if (m) return parseInt(m[1], 10) + '/' + parseInt(m[2], 10);
+    const m2 = str.match(/^(\d{1,2})[\/\-](\d{1,2})/);
+    if (m2) return parseInt(m2[1], 10) + '/' + parseInt(m2[2], 10);
+    return str;
+  }
+
+  // 為各店建立 cleanPid → { dateKey: qty } 雙層索引
+  // 解決鬼影 key 問題：fallback 時必須結單日匹配，避免舊檔期被新檔期撿走
+  // dateKey === '' 代表純編號 key（無尾碼，syncToERP 寫的，視為「當前檔期」）
   const _branchOrdersByCleanPid = {};
   storeNames.forEach(n => {
     _branchOrdersByCleanPid[n] = {};
     const orders = branchOrders[n] || {};
     Object.entries(orders).forEach(([k, v]) => {
-      const cleanKey = String(k).replace(/_.*$/, '');
-      // 取最大值（避免多個 key 對同一個 cleaned pid 時被覆蓋為 0）
-      if (!_branchOrdersByCleanPid[n][cleanKey] || v > _branchOrdersByCleanPid[n][cleanKey]) {
-        _branchOrdersByCleanPid[n][cleanKey] = v;
-      }
+      const str = String(k);
+      const idx = str.indexOf('_');
+      const cleanKey = idx >= 0 ? str.substring(0, idx) : str;
+      const suffix = idx >= 0 ? _normDateKey(str.substring(idx + 1)) : '';
+      if (!_branchOrdersByCleanPid[n][cleanKey]) _branchOrdersByCleanPid[n][cleanKey] = {};
+      // 同 cleanPid + 同 dateKey 取最大（防多 key 重複，但不再跨日期合併）
+      const cur = _branchOrdersByCleanPid[n][cleanKey][suffix] || 0;
+      if (v > cur) _branchOrdersByCleanPid[n][cleanKey][suffix] = v;
     });
   });
 
@@ -2717,9 +2733,16 @@ function renderSummaryPage() {
     const orders = branchOrders[storeName] || {};
     // 1. 優先用完整 id 直接對應（最快也最準）
     if (orders[item.id] != null) return orders[item.id] || 0;
-    // 2. fallback：用 cleaned pid 查
+    // 2. fallback：cleanPid 命中，但**結單日必須匹配**才採用（鬼影防護）
     const pid = (item.productId || item.id || '').replace(/_.*$/, '');
-    return (_branchOrdersByCleanPid[storeName] && _branchOrdersByCleanPid[storeName][pid]) || 0;
+    const itemDateKey = _normDateKey(item.endDate);
+    const buckets = (_branchOrdersByCleanPid[storeName] || {})[pid];
+    if (!buckets) return 0;
+    // 優先：相同結單日的 _尾碼 key
+    if (buckets[itemDateKey] != null) return buckets[itemDateKey] || 0;
+    // 次選：純編號 key（無尾碼，syncToERP 寫的，視為當前檔期）
+    if (buckets[''] != null) return buckets[''] || 0;
+    return 0;
   }
 
   const sourceData = publishedList.length > 0
