@@ -1426,8 +1426,7 @@
 
     function ipPrintNewOrder() {
       if (!ipCart.length) return Swal.fire('提示', '清單是空的', 'warning');
-      const suppSel = document.getElementById('ipSuppSelectNew');
-      const suppName = suppSel.selectedIndex > 0 ? suppSel.options[suppSel.selectedIndex].text : '未指定';
+      const suppName = (ipCart.find(it => it.supplier)?.supplier || '').trim() || '未指定';
       const orderDate = document.getElementById('ipOrderDate').value;
       const note = document.getElementById('ipNote').value || '';
 
