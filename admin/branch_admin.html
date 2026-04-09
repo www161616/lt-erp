@@ -10277,6 +10277,7 @@
             </tbody>
           </table>
         </div>
+        <div id="asPaginationBottom" style="display:flex; align-items:center; gap:6px; margin-top:8px; flex-wrap:wrap; padding:0 12px 8px;"></div>
       </div>`;
 
     asPageNum = 1;
@@ -10372,18 +10373,21 @@
 
     // 分頁列
     const pgBox = document.getElementById('asPagination');
+    const pgBoxBottom = document.getElementById('asPaginationBottom');
     if (!pgBox) return;
-    if (totalPages <= 1) { pgBox.innerHTML = ''; return; }
+    if (totalPages <= 1) { pgBox.innerHTML = ''; if (pgBoxBottom) pgBoxBottom.innerHTML = ''; return; }
     const bs = (a) => `padding:4px 10px; border:1px solid ${a ? '#047857' : '#dde3ec'}; background:${a ? '#047857' : 'white'}; color:${a ? 'white' : '#374151'}; border-radius:4px; cursor:pointer; font-size:12px; font-weight:${a ? '700' : '500'}; font-family:inherit;`;
-    pgBox.innerHTML = `
+    const pgHtml = (jumpId) => `
       <button onclick="filterAdminSummary(false,1)" style="${bs(false)}" ${asPageNum===1?'disabled':''}>⏮ 首頁</button>
       <button onclick="filterAdminSummary(false,${asPageNum-1})" style="${bs(false)}" ${asPageNum===1?'disabled':''}>◀ 上頁</button>
       <span style="font-size:12px; color:#718096;">第 ${asPageNum} / ${totalPages} 頁（共 ${data.length} 筆）</span>
       <button onclick="filterAdminSummary(false,${asPageNum+1})" style="${bs(false)}" ${asPageNum===totalPages?'disabled':''}>下頁 ▶</button>
       <button onclick="filterAdminSummary(false,${totalPages})" style="${bs(false)}" ${asPageNum===totalPages?'disabled':''}>末頁 ⏭</button>
-      <span style="margin-left:6px; font-size:12px;">到第 <input id="asJumpPage" type="number" min="1" max="${totalPages}" value="${asPageNum}" style="width:48px; padding:3px; text-align:center; border:1px solid #dde3ec; border-radius:4px; font-size:12px;"> 頁</span>
-      <button onclick="filterAdminSummary(false, parseInt(document.getElementById('asJumpPage').value)||1)" style="${bs(false)}">跳轉</button>
+      <span style="margin-left:6px; font-size:12px;">到第 <input id="${jumpId}" type="number" min="1" max="${totalPages}" value="${asPageNum}" style="width:48px; padding:3px; text-align:center; border:1px solid #dde3ec; border-radius:4px; font-size:12px;"> 頁</span>
+      <button onclick="filterAdminSummary(false, parseInt(document.getElementById('${jumpId}').value)||1)" style="${bs(false)}">跳轉</button>
     `;
+    pgBox.innerHTML = pgHtml('asJumpPage');
+    if (pgBoxBottom) pgBoxBottom.innerHTML = pgHtml('asJumpPageBottom');
   }
 
   // ===== 開團總表：勾選 / 批次 / 單筆 =====
