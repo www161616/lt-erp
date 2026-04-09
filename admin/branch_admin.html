@@ -1053,6 +1053,12 @@
             <div style="padding:12px 20px; background:var(--surface2); border-bottom:1px solid var(--border); display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
               <label style="font-size:12px; color:var(--text2); font-weight:600;">採購日期</label>
               <input type="date" id="ipOrderDate" value="${today}" style="padding:6px 10px; border:1px solid var(--border); border-radius:4px; width:150px;">
+              <span style="color:var(--border);">│</span>
+              <label style="font-size:12px; color:var(--text2); font-weight:600;">結單日</label>
+              <select id="ipEndDateSelect" style="padding:6px 10px; border:1px solid var(--border); border-radius:4px; font-size:13px; min-width:140px;">
+                <option value="">-- 選擇結單日 --</option>
+              </select>
+              <button onclick="ipImportByEndDate()" style="padding:6px 14px; background:#047857; color:#fff; border:none; border-radius:6px; cursor:pointer; font-weight:bold; font-size:13px;">📥 帶入該日商品</button>
               <span style="font-size:12px; color:var(--text2);">※ 供應商請在每個品項旁填寫</span>
             </div>
 
@@ -1085,8 +1091,118 @@
       `;
 
       ipLoadProducts();
+      ipLoadEndDates();
       // 如果 ipCart 已有資料（從開團總表帶入），渲染購物車
       if (ipCart.length > 0) setTimeout(() => ipRenderCart(), 100);
+    }
+
+    // 從 branchOrderList 讀取不重複結單日，填入下拉選單
+    function ipLoadEndDates() {
+      const sel = document.getElementById('ipEndDateSelect');
+      if (!sel) return;
+      const list = JSON.parse(localStorage.getItem('branchOrderList') || '[]');
+      const dates = [...new Set(list.map(item => item.endDate).filter(Boolean))].sort();
+      // 新到舊排列
+      dates.reverse();
+      dates.forEach(d => {
+        const label = d.replace(/^\d{4}-/, '').replace('-', '/');  // 2026-04-15 → 04/15
+        sel.innerHTML += `<option value="${d}">${label}</option>`;
+      });
+    }
+
+    // 選結單日帶入商品到採購清單（累加模式）
+    async function ipImportByEndDate() {
+      const sel = document.getElementById('ipEndDateSelect');
+      const endDate = sel?.value;
+      if (!endDate) return Swal.fire('提醒', '請先選擇結單日', 'warning');
+
+      const list = JSON.parse(localStorage.getItem('branchOrderList') || '[]');
+      const items = list.filter(item => item.endDate === endDate);
+      if (items.length === 0) return Swal.fire('提醒', '該結單日沒有商品', 'info');
+
+      // 從 branchOrders 加總各店數量
+      const branchOrders = JSON.parse(localStorage.getItem('branchOrders') || '{}');
+      const qtyMap = {};
+      items.forEach(item => {
+        const pid = item.id;
+        let total = 0;
+        Object.values(branchOrders).forEach(storeData => {
+          total += Number(storeData[pid] || 0);
+        });
+        qtyMap[pid] = total;
+      });
+
+      const label = endDate.replace(/^\d{4}-/, '').replace('-', '/');
+      const confirm = await Swal.fire({
+        title: `帶入結單日 ${label} 的商品`,
+        html: `共 <b>${items.length}</b> 筆商品，是否加入採購清單？`,
+        icon: 'question',
+        showCancelButton: true,
+        confirmButtonText: '📥 加入',
+        cancelButtonText: '取消',
+        confirmButtonColor: '#047857'
+      });
+      if (!confirm.isConfirmed) return;
+
+      // 從 products 表補查 cost/supplier/price/price_branch
+      Swal.fire({ title: '查詢商品資料中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+      const ids = items.map(i => `"${i.id}"`).join(',');
+      let productMap = {};
+      try {
+        const res = await fetch(`${SB_URL}/products?id=in.(${ids})&select=id,cost,price,price_branch,supplier,unit`, { headers: HEADERS });
+        if (res.ok) {
+          const rows = await res.json();
+          rows.forEach(r => { productMap[r.id] = r; });
+        }
+      } catch(e) { console.warn('ipImportByEndDate: products 查詢失敗', e); }
+
+      let added = 0, merged = 0, notFound = 0;
+      items.forEach(item => {
+        const pid = item.id;
+        const prod = productMap[pid];
+        const qty = qtyMap[pid] || 0;
+
+        // 檢查 ipCart 是否已有同編號 → 合併數量
+        const existing = ipCart.find(c => c.id === pid);
+        if (existing) {
+          existing.qty += qty;
+          merged++;
+          return;
+        }
+
+        if (!prod) {
+          notFound++;
+          // 用 branchOrderList 的基本資料帶入，cost/supplier 未知
+          ipCart.push({
+            id: pid, name: item.name, unit: '個',
+            supplier: '', cost: 0,
+            price: Number(item.price) || 0,
+            price_branch: Number(item.storePrice) || 0,
+            qty: qty
+          });
+          added++;
+          return;
+        }
+
+        ipCart.push({
+          id: pid, name: item.name, unit: prod.unit || '個',
+          supplier: prod.supplier || '',
+          cost: Number(prod.cost) || 0,
+          price: Number(prod.price) || 0,
+          price_branch: Number(prod.price_branch) || 0,
+          qty: qty
+        });
+        added++;
+      });
+
+      ipRenderCart();
+      Swal.fire({
+        title: '帶入完成',
+        html: `✅ 新增 <b>${added}</b> 筆${merged > 0 ? `，合併 <b>${merged}</b> 筆` : ''}${notFound > 0 ? `<br>⚠️ <b>${notFound}</b> 筆在商品資料庫找不到（成本/供應商需手動填）` : ''}`,
+        icon: 'success',
+        timer: 3000,
+        showConfirmButton: true
+      });
     }
 
     function ipFilterSuppNew() {
