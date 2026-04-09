@@ -4,6 +4,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # 龍潭總倉 ERP 系統
 
+## 進行中（2026/04/09）
+
+### 新增採購單改版（還原點 b78db5d）
+- **目標**：右側上方加「結單日下拉 + 帶入按鈕」，選結單日後確認累加該日商品到採購清單
+- **左側商品目錄保留**（手動追加散品）
+- **拿掉批發價/團購價**（新增 + 查詢 + 列印 + Excel 全部拿掉）
+  - 理由：批發/團購是賣給客戶的價格，放採購單不對位；poGenSubmit 本來就寫死 0
+  - DB 舊資料不刪，只是前端不顯示
+- **數量來源**：branchOrders 加總各店訂購量
+- **結單日帶入行為**：累加（不清掉已有的），同商品重複帶入合併數量
+- **改動檔案**：只動 admin/branch_admin.html
+- **還原指令**：`git checkout b78db5d -- admin/branch_admin.html`
+
 ## 完成功能（2026/04/09）
 
 ### 開團總表「鬼影 key」根治（commit feabdec）
