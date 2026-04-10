@@ -1144,6 +1144,8 @@
 
     async function cloudLoadAll() {
       try {
+        // portal 不需要的大 key，主動清掉騰空間
+        ['lt_savedWaves','lt_backorderMeta','supplier_xiaolan_orders','branchOrderList_pre_normalize_backup'].forEach(k => localStorage.removeItem(k));
         const resp = await fetch(`${SB_URL}/shared_kv?key=in.("branchOrderList","branchOrders","branchDataList","branchTypeMap","portalAllRequests","portalMutualAidBoard","portalTrackingData","portalBulletin","portalSalesOrders","branchOrdersLocked","shortageNegotiations")`, { headers: SB_HEADERS });
         if (resp.ok) {
           const rows = await resp.json();
