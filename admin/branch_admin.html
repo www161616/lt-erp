@@ -8611,9 +8611,11 @@
       });
     });
     // 更新每家分店的庫存
+    // storeName 正規化：「包子媽-忠順店」→「忠順」，確保跟 branch_portal 的 key 一致
+    const normalizeStore = (s) => s.replace(/^包子媽-/, '').replace(/店$/, '');
     Object.entries(storeMap).forEach(([store, items]) => {
       if (!items.length) return;
-      const key = 'branch_inventory_' + store;
+      const key = 'branch_inventory_' + normalizeStore(store);
       let inv = [];
       try { inv = JSON.parse(localStorage.getItem(key) || '[]'); } catch(e) {}
       const invMap = {};
