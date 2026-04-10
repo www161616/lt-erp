@@ -496,7 +496,7 @@
           </div>
           <div class="order-card-body">
             <div class="order-card-info">
-              供應商：<b>${o.supplier_name || '未填'}</b> ｜ 經手人：<b>${o.handler || ''}</b>
+              ${o.end_date ? '結單日：<b>' + o.end_date.replace(/^\d{4}-/, '').replace('-', '/') + '</b>' : '供應商：<b>' + (o.supplier_name || '未填') + '</b>'} ｜ 經手人：<b>${o.handler || ''}</b>
             </div>
             <div class="order-card-amount">$${amount.toLocaleString()}</div>
           </div>
