@@ -4728,21 +4728,36 @@
 
         if (successCount === 0) throw new Error('所有分店開立均失敗，請檢查客戶資料對接。');
 
-        // 2b. 把所有有差異的品項寫入 backorders 表（補足未開過修正面板的缺口）
+        // 2b. 欠品計算：branchOrders 訂購數量 vs 銷貨單實際開出數量
         const boPayload = [];
-        wave.matrix.forEach(row => {
-          if (!row.branchData) return;
-          const pid = (row.productId || row.id).replace(/_.*$/, '');
-          Object.entries(row.branchData).forEach(([bName, data]) => {
-            const expected = data.expected || 0;
-            const actual   = data.actual ?? expected;
-            const diff     = actual - expected;
-            if (diff === 0) return;
-            const cached = correctionCache[waveId] && correctionCache[waveId][pid] && correctionCache[waveId][pid][bName];
-            const action  = cached ? (cached.action || 'pending') : (diff > 0 ? 'oversell' : 'pending');
+        const branchOrdersSnap = JSON.parse(localStorage.getItem('branchOrders') || '{}');
+        Object.entries(branchBundles).forEach(([branch, items]) => {
+          // 只處理成功開立的分店
+          const soExists = mockSalesOrders.find(o => o.storeName === branch && o.waveId === waveId);
+          if (!soExists) return;
+          const storeOrders = branchOrdersSnap[branch] || {};
+          items.forEach(it => {
+            const pid = it.product_id.replace(/_.*$/, '');
+            const soldQty = it.qty; // 銷貨單實際開出的數量
+            // 用跟開團總表同樣的查法：branchOrders[store][item.id]
+            // item.id 來自 wave.matrix 的 row，找對應的 branchOrderList id
+            const matrixRow = wave.matrix.find(r => (r.productId || r.id).replace(/_.*$/, '') === pid);
+            const itemId = matrixRow ? (matrixRow.productId || matrixRow.id) : pid;
+            // fallback: 如果 itemId 帶日期（pid_2026-04-15），也試 pid_M/D 格式
+            let orderedQty = storeOrders[itemId] || storeOrders[pid] || 0;
+            if (orderedQty === 0 && itemId.includes('_')) {
+              const datePart = itemId.split('_')[1] || '';
+              if (datePart.includes('-')) {
+                const shortDate = parseInt(datePart.split('-')[1]) + '/' + parseInt(datePart.split('-')[2]);
+                orderedQty = storeOrders[pid + '_' + shortDate] || 0;
+              }
+            }
+            const diff = soldQty - orderedQty;
+            if (diff === 0 || orderedQty === 0) return;
+            const action = diff > 0 ? 'oversell' : 'pending';
             boPayload.push({
-              wave_id: waveId, product_id: pid, product_name: row.name,
-              store: bName, expected_qty: expected, actual_qty: actual, action: action
+              wave_id: waveId, product_id: pid, product_name: it.product_name,
+              store: branch, expected_qty: orderedQty, actual_qty: soldQty, action: action
             });
           });
         });
