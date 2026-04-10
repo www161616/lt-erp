@@ -1328,8 +1328,6 @@
           <th style="padding:8px; text-align:center; width:80px; background:#2d3748; color:#fff;">成本</th>
           <th style="padding:8px; text-align:center; width:70px; background:#2d3748; color:#fff;">售價</th>
           <th style="padding:8px; text-align:center; width:70px; background:#2d3748; color:#fff;">分店價</th>
-          <th style="padding:8px; text-align:right; width:65px; background:#2d3748; color:#fff;">利潤</th>
-          <th style="padding:8px; text-align:right; width:80px; background:#2d3748; color:#fff;">利潤小計</th>
           <th style="padding:8px; text-align:right; width:80px; background:#2d3748; color:#fff;">小計</th>
           <th style="padding:8px; width:30px; background:#2d3748; color:#fff;"></th>
         </tr></thead><tbody>`;
@@ -1344,8 +1342,6 @@
           <td style="padding:8px; text-align:center;"><input type="number" id="ipCost-${i}" value="${it.cost}" style="width:65px; text-align:right; padding:4px; border:1px solid var(--accent); border-radius:4px; font-weight:700; color:var(--accent); background:#fff9f0;" onchange="ipCart[${i}].cost=Number(this.value);ipCalcTotal()" onkeydown="ipEnterNext(event,'ipCost',${i})"></td>
           <td style="padding:8px; text-align:center;"><input type="number" id="ipPrice-${i}" value="${it.price}" style="width:60px; text-align:right; padding:4px; border:1px solid var(--border); border-radius:4px;" onchange="ipCart[${i}].price=Number(this.value);ipRenderCart()" onkeydown="ipEnterNext(event,'ipPrice',${i})"></td>
           <td style="padding:8px; text-align:center;"><input type="number" id="ipBranch-${i}" value="${it.price_branch}" style="width:60px; text-align:right; padding:4px; border:1px solid var(--border); border-radius:4px;" onchange="ipCart[${i}].price_branch=Number(this.value);ipRenderCart()" onkeydown="ipEnterNext(event,'ipBranch',${i})"></td>
-          <td style="padding:8px; text-align:right; color:${(it.price_branch - it.cost) >= 0 ? '#047857' : '#c53030'}; font-weight:600;">$${(it.price_branch - it.cost).toLocaleString()}</td>
-          <td style="padding:8px; text-align:right; color:${(it.price_branch - it.cost) >= 0 ? '#047857' : '#c53030'}; font-weight:700;">$${((it.price_branch - it.cost) * it.qty).toLocaleString()}</td>
           <td style="padding:8px; text-align:right; font-weight:700;">$${sub.toLocaleString()}</td>
           <td style="padding:8px; text-align:center;"><button onclick="ipCart.splice(${i},1);ipRenderCart()" style="background:none; border:none; color:#c53030; cursor:pointer; font-size:16px;">×</button></td>
         </tr>`;
