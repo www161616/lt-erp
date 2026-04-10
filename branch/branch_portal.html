@@ -8778,9 +8778,10 @@ function parseLeleCsv(csvText) {
   // 找表頭
   const header = parseCsvLine(lines[0]);
   const nameIdx = header.findIndex(h => h === '名稱' || h === '商品名稱');
-  const styleIdx = header.findIndex(h => h === '款式' || h === '規格');
-  const qtyIdx = header.findIndex(h => h === '數量' || h === '銷售數量');
-  const amountIdx = header.findIndex(h => h === '金額');
+  const styleIdx = header.findIndex(h => h === '款式' || h === '規格' || h === '商品款式');
+  const qtyIdx = header.findIndex(h => h === '數量' || h === '銷售數量' || h === '商品數量');
+  const amountIdx = header.findIndex(h => h === '金額' || h === '商品單價');
+  const productNameCol = header.findIndex(h => h === '商品品號');
   if (qtyIdx < 0) return [];
 
   const codeMap = {};
@@ -8790,10 +8791,13 @@ function parseLeleCsv(csvText) {
     const qty = parseInt(cols[qtyIdx]) || 0;
     if (qty <= 0) continue;
 
-    // 從名稱和款式欄搜尋 #(\d{9,})# pattern
+    // 從商品品號欄、名稱欄、款式欄搜尋商品編號
     let code = '';
+    const productNameVal = productNameCol >= 0 ? (cols[productNameCol] || '').trim() : '';
     const nameVal = nameIdx >= 0 ? (cols[nameIdx] || '') : '';
     const styleVal = styleIdx >= 0 ? (cols[styleIdx] || '') : '';
+    // 優先用商品品號欄（如 g55263_sc_32142049）
+    // 再從名稱和款式找 #(\d{9,})# pattern
     const nameMatch = nameVal.match(/#(\d{9,})#/);
     const styleMatch = styleVal.match(/#(\d{9,})#/);
     if (nameMatch) code = nameMatch[1];
@@ -8802,7 +8806,8 @@ function parseLeleCsv(csvText) {
     if (code) {
       if (!codeMap[code]) codeMap[code] = { qty: 0, amount: 0 };
       codeMap[code].qty += qty;
-      codeMap[code].amount += (amountIdx >= 0 ? parseFloat(cols[amountIdx]) : 0) || 0;
+      const unitPrice = (amountIdx >= 0 ? parseFloat(cols[amountIdx]) : 0) || 0;
+      codeMap[code].amount += unitPrice * qty;
     }
   }
 
