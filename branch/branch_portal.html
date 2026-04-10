@@ -8806,9 +8806,9 @@ function parseLeleCsv(csvText) {
     const nameVal = nameIdx >= 0 ? (cols[nameIdx] || '') : '';
     const styleVal = styleIdx >= 0 ? (cols[styleIdx] || '') : '';
     // 優先用商品品號欄（如 g55263_sc_32142049）
-    // 再從名稱和款式找 #(\d{9,})# pattern
-    const nameMatch = nameVal.match(/#(\d{9,})#/);
-    const styleMatch = styleVal.match(/#(\d{9,})#/);
+    // 再從名稱和款式找 #編號# pattern（支援英數混合如 D05100201）
+    const nameMatch = nameVal.match(/#([A-Za-z0-9]{6,})#/);
+    const styleMatch = styleVal.match(/#([A-Za-z0-9]{6,})#/);
     if (nameMatch) code = nameMatch[1];
     else if (styleMatch) code = styleMatch[1];
 
