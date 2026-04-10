@@ -4646,10 +4646,11 @@
               headers: HEADERS,
               body: JSON.stringify({ p_order_data: orderData })
             });
+            let soId = '';
             if (res.ok) {
               const soData = await res.json();
               const soRaw = Array.isArray(soData) ? soData[0] : soData;
-              const soId = typeof soRaw === 'string' ? soRaw : (soRaw?.order_id || soRaw?.id || '');
+              soId = typeof soRaw === 'string' ? soRaw : (soRaw?.order_id || soRaw?.id || '');
               console.log('[generateSalesOrder] branch:', branch, 'soData:', soData, '→ soId:', soId);
             } else {
               const errBody = await res.text();
