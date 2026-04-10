@@ -593,7 +593,7 @@
         renderInternalPurchaseSearch();
       } else if (tabId === 'adminSummary') {
         title.innerText = '當前功能：開團總表';
-        renderAdminSummary();
+        cloudLoadAll().then(() => renderAdminSummary()).catch(() => renderAdminSummary());
       } else if (tabId === 'orders') {
         title.innerText = '當前功能：訂貨追蹤';
         renderOrdersAndProcurement();
@@ -2976,7 +2976,8 @@
         arrival.pickedQty = 0;
         arrival.pickingHistory = [];
         const hasDateSuffix = arrival.id.includes('_');
-        mockSavedWaves.filter(w => w.status === 'completed').forEach(w => {
+        const _waves = JSON.parse(localStorage.getItem('lt_savedWaves') || '[]');
+        _waves.filter(w => w.status === 'completed').forEach(w => {
           const row = hasDateSuffix
             ? w.matrix.find(r => r.id === arrival.id)
             : w.matrix.find(r => r.id === arrival.id && r.endDate && arrival.endDate && r.endDate === arrival.endDate);

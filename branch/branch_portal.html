@@ -1088,6 +1088,7 @@
     };
 
     let currentStore = null;
+    let _pendingBranchOrdersSave = Promise.resolve(); // 追蹤 branchOrders cloudSave 是否完成
 
     // ============================
     // 分店資料隔離：localStorage key 加上店名前綴
@@ -1119,7 +1120,9 @@
         const storeName = currentStore.name;
         const localData = JSON.parse(raw);
         const myData = localData[storeName] || {};
-        fetch(`${SB_URL}/shared_kv?key=eq.branchOrders&select=value`, { headers: SB_HEADERS })
+        // 回傳 Promise 並追蹤，讓 cloudLoadAll 可以等它完成再拉資料
+        // 避免 race condition：切頁時 cloudLoadAll 拉到舊資料覆蓋 localStorage
+        const savePromise = fetch(`${SB_URL}/shared_kv?key=eq.branchOrders&select=value`, { headers: SB_HEADERS })
           .then(r => r.ok ? r.json() : [])
           .then(rows => {
             let cloud = (rows[0] && rows[0].value) ? (typeof rows[0].value === 'string' ? JSON.parse(rows[0].value) : rows[0].value) : {};
@@ -1131,6 +1134,7 @@
             });
           })
           .catch(e => console.error('cloudSave branchOrders error:', e));
+        _pendingBranchOrdersSave = savePromise;
         return;
       }
 
@@ -1142,6 +1146,8 @@
     }
 
     async function cloudLoadAll() {
+      // 等待 branchOrders 的 cloudSave 完成，避免拉到舊資料覆蓋 localStorage
+      try { await _pendingBranchOrdersSave; } catch(e) { /* cloudSave 失敗不擋 load */ }
       try {
         // portal 不需要的大 key，主動清掉騰空間
         ['lt_savedWaves','lt_backorderMeta','supplier_xiaolan_orders','branchOrderList_pre_normalize_backup'].forEach(k => localStorage.removeItem(k));
