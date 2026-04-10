@@ -108,6 +108,7 @@
     <span class="bulk-count" id="bulkCount">已選取 0 個商品</span>
     <span id="bulkNormalBtns">
       <button class="btn" onclick="enterEditMode()"><i class="fas fa-edit"></i> 批次編輯</button>
+      <button class="btn" style="background:#047857;" onclick="bulkEnable()"><i class="fas fa-check"></i> 批次啟用</button>
       <button class="btn btn-warning" onclick="bulkDisable()"><i class="fas fa-ban"></i> 批次停用</button>
       <button class="btn btn-danger" onclick="bulkDelete()"><i class="fas fa-trash"></i> 批次刪除</button>
       <button class="btn btn-outline" onclick="clearSelection()"><i class="fas fa-times"></i> 取消選取</button>
@@ -395,7 +396,33 @@
     updateBulkBar();
   }
 
-  // ========== 6. 批次停用 ==========
+  // ========== 6a. 批次啟用 ==========
+  async function bulkEnable() {
+    const ids = [...selectedIds];
+    if (ids.length === 0) return;
+    const confirmed = await Swal.fire({
+      title: `批次啟用 ${ids.length} 個商品？`,
+      icon: 'question', showCancelButton: true,
+      confirmButtonColor: '#047857', confirmButtonText: '確定啟用', cancelButtonText: '取消'
+    });
+    if (!confirmed.isConfirmed) return;
+    try {
+      const idList = ids.map(id => `"${id}"`).join(',');
+      const res = await fetch(`${SB_URL}/products?id=in.(${idList})`, {
+        method: 'PATCH',
+        headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'return=representation' },
+        body: JSON.stringify({ status: '啟用' })
+      });
+      if (!res.ok) throw new Error('啟用失敗');
+      ids.forEach(id => { const p = allProducts.find(x => x.id === id); if (p) p.status = '啟用'; });
+      selectedIds.clear();
+      filterTable();
+      updateBulkBar();
+      Swal.fire({ icon: 'success', title: '完成', text: `已啟用 ${ids.length} 個商品`, timer: 1500, showConfirmButton: false });
+    } catch (err) { Swal.fire('錯誤', err.message, 'error'); }
+  }
+
+  // ========== 6b. 批次停用 ==========
   async function bulkDisable() {
     const ids = [...selectedIds];
     if (ids.length === 0) return;
