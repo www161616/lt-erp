@@ -9076,10 +9076,12 @@ async function importFromSalesOrders() {
   if (!fromDate) return;
 
   const allSO = JSON.parse(localStorage.getItem('portalSalesOrders') || '[]');
-  const myOrders = allSO.filter(o =>
-    o.storeName === currentStore?.name &&
-    o.createdAt && o.createdAt.replace(/\//g, '-').substring(0, 10) >= fromDate
-  );
+  const myName = currentStore?.name || '';
+  const myOrders = allSO.filter(o => {
+    if (o.orderType === 'return') return false;
+    const nameMatch = o.storeName === myName || o.storeName === '包子媽-' + myName + '店';
+    return nameMatch && o.createdAt && o.createdAt.replace(/\//g, '-').substring(0, 10) >= fromDate;
+  });
 
   if (myOrders.length === 0) {
     Swal.fire('無資料', `${fromDate} 之後沒有進貨單`, 'info');
