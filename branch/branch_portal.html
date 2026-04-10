@@ -2208,9 +2208,9 @@
               if (qty <= 0) return;
 
               let productId = null;
-              const matchB = nameB.match(/#(\d+)#/);
+              const matchB = nameB.match(/#([A-Za-z0-9]+)#/);
               if (matchB) { productId = matchB[1]; }
-              else { const matchC = styleC.match(/#(\d+)#/); if (matchC) productId = matchC[1]; }
+              else { const matchC = styleC.match(/#([A-Za-z0-9]+)#/); if (matchC) productId = matchC[1]; }
 
               if (productId) {
                 productId = productId.trim();
@@ -2218,7 +2218,7 @@
                 quantities[productId] += qty;
                 // 商品名稱：優先用款式【...】，再用名稱欄清洗（去掉emoji、價格、結單日、編號等）
                 const shortName = (styleC.match(/【(.+?)】/) || [])[1];
-                const cleanName = nameB.replace(/[⬜🔲✅☑️❤️💰⏰🔥⭐️📢🎉🆕]/g, '').replace(/#\d+#/g, '').replace(/💰\d+/g, '').replace(/⏰.+?結單/g, '').trim();
+                const cleanName = nameB.replace(/[⬜🔲✅☑️❤️💰⏰🔥⭐️📢🎉🆕]/g, '').replace(/#[A-Za-z0-9]+#/g, '').replace(/💰\d+/g, '').replace(/⏰.+?結單/g, '').trim();
                 if (!csvNames[productId]) csvNames[productId] = shortName || cleanName || nameB.slice(0, 30);
               } else {
                 // 名稱和款式都沒有 #編號#
