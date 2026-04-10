@@ -1537,7 +1537,7 @@
 
         // 寫入明細
         const details = ipCart.map((it, i) => ({
-          id: `${orderId}-${i + 1}`,
+          id: `${orderId}-${String(i + 1).padStart(3, '0')}`,
           order_id: orderId,
           product_id: it.id,
           product_name: it.name,
@@ -1833,6 +1833,12 @@
         if (!orderData.length) throw new Error('找不到此單據');
         const order = orderData[0];
         const detailData = detailRes.ok ? await detailRes.json() : [];
+        // 按明細序號數字排序（修正 id 文字排序導致 -10 排在 -2 前面的問題）
+        detailData.sort((a, b) => {
+          const numA = parseInt((a.id || '').split('-').pop(), 10) || 0;
+          const numB = parseInt((b.id || '').split('-').pop(), 10) || 0;
+          return numA - numB;
+        });
 
         ipCurrentDetail = {
           orderId: order.id,
