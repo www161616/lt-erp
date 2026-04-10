@@ -4651,6 +4651,11 @@
               const soRaw = Array.isArray(soData) ? soData[0] : soData;
               const soId = typeof soRaw === 'string' ? soRaw : (soRaw?.order_id || soRaw?.id || '');
               console.log('[generateSalesOrder] branch:', branch, 'soData:', soData, '→ soId:', soId);
+            } else {
+              const errBody = await res.text();
+              console.error('[generateSalesOrder] FAIL branch:', branch, 'status:', res.status, 'custId:', cust.id, 'custName:', cust.name, 'body:', errBody);
+            }
+            if (res.ok) {
               if (!soId) { successCount++; continue; }
               const issuedTime = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
               // createdAt 用配送日（跟 order_date 一致），時間用當下
