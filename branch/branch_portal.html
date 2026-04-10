@@ -9057,11 +9057,11 @@ async function importFromSalesOrders() {
   const { value: fromDate } = await Swal.fire({
     title: '補匯進貨單庫存',
     html: `<div style="text-align:left; font-size:13px; margin-bottom:8px; color:#64748b;">
-      將把指定日期之後的進貨單數量加入庫存<br>
-      <span style="color:#c53030;">⚠️ 請確認期初庫存是此日期之前的盤點數量</span>
+      將把指定日期的進貨單數量加入庫存<br>
+      <span style="color:#c53030;">⚠️ 同一天重複按會重複加庫存</span>
     </div>
-    <label style="font-size:12px; font-weight:700; color:#64748b;">起始日期（含）</label>
-    <input type="date" id="importFromDate" value="2026-03-15"
+    <label style="font-size:12px; font-weight:700; color:#64748b;">選擇日期</label>
+    <input type="date" id="importFromDate" value="${new Date().toISOString().split('T')[0]}"
       style="width:100%; padding:8px; border:1px solid #e2e8f0; border-radius:6px; font-size:14px; margin-top:4px;">`,
     showCancelButton: true,
     confirmButtonText: '確認匯入',
@@ -9080,7 +9080,7 @@ async function importFromSalesOrders() {
   const myOrders = allSO.filter(o => {
     if (o.orderType === 'return') return false;
     const nameMatch = o.storeName === myName || o.storeName === '包子媽-' + myName + '店';
-    return nameMatch && o.createdAt && o.createdAt.replace(/\//g, '-').substring(0, 10) >= fromDate;
+    return nameMatch && o.createdAt && o.createdAt.replace(/\//g, '-').substring(0, 10) === fromDate;
   });
 
   if (myOrders.length === 0) {
