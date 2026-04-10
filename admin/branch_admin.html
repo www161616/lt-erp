@@ -6085,7 +6085,7 @@
           }]
         });
         syncSalesOrdersToPortal();
-        autoUpdateBranchInventory([mockSalesOrders[mockSalesOrders.length - 1]]);
+        autoUpdateBranchInventory([mockSalesOrders.find(o => o.id === soId)].filter(Boolean));
       } else {
         const orderData = {
           order_id: null,
@@ -6123,7 +6123,7 @@
             items: [{ productId, name: productName || productId, expectedQty: shortageQty, qty: shortageQty, unitPrice, returnQty: 0, returnStatus: 'none', returnReason: '', returnDate: '', damaged: false, note: '補發' }]
           });
           syncSalesOrdersToPortal();
-          autoUpdateBranchInventory([mockSalesOrders[mockSalesOrders.length - 1]]);
+          autoUpdateBranchInventory([mockSalesOrders.find(o => o.id === soId)].filter(Boolean));
         }
       }
 
@@ -8512,7 +8512,6 @@
       const key = 'branch_inventory_' + store;
       let inv = [];
       try { inv = JSON.parse(localStorage.getItem(key) || '[]'); } catch(e) {}
-      // 如果 localStorage 沒有，嘗試從雲端拉
       const invMap = {};
       inv.forEach((item, idx) => { if (item.code) invMap[item.code] = idx; });
       const now = new Date().toLocaleString('zh-TW', { hour12: false }).replace(/\//g, '-');
