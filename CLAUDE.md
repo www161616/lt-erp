@@ -4,6 +4,76 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # 龍潭總倉 ERP 系統
 
+## 完成功能（2026/04/10）
+
+### 開團總表 CSV 歷史資料匯入（1~3 月）
+- 從 Google Sheets 匯出的 CSV（店家填表-已確定數量無法更動）匯入 branchOrders
+- 1 月 1039 筆、2 月 595 筆、3 月 854 筆，共 2488 筆配對成功
+- key 格式：用 branchOrderList 的 `item.id`（pid_結單日）作為 branchOrders key
+- 涵蓋 20 家店：19 分店 + 全民、山張、買上癮
+- 3 月有部分商品 branchOrderList id 為純編號（syncToERP 建的），需特殊處理
+
+### 開團總表下方分頁列
+- 表格底部加第二組分頁列（首頁/上頁/下頁/末頁/跳轉）
+
+### localStorage QuotaExceeded 自動清理
+- branch_admin 和 branch_portal 的 cloudLoadAll 加 try-catch 防護
+- QuotaExceeded 時自動清除不需要的快取（portalSalesOrders、portalTrackingData、supplier_xiaolan_orders 等）
+- saveMockSavedWaves 也加同樣防護
+- ⚠️ **lt_savedWaves 不可清除**（揀貨歷史），已從清理名單移除
+
+### 新增採購單改進
+- 表頭改深灰底+白字（修正被主題色覆蓋導致看不到）
+- 利潤/利潤小計欄位移除（數量非正確值）
+- 成本/售價/分店價支援 Enter 跳下一格
+- 售價/分店價 onchange 改用 ipCalcTotal（避免 ipRenderCart 重繪失焦）
+- 「待審核」狀態也可刪除
+
+### 採購單加結單日欄位
+- DB：internal_purchases 新增 `end_date TEXT`
+- 存單時寫入結單日（從下拉取值）
+- 查詢採購單左側列表、右側詳情標題改顯示結單日
+- PendingReview.html 待審卡片也改顯示結單日
+- 舊單無 end_date 時 fallback 顯示供應商名
+
+### 銷貨單開立後自動更新分店庫存
+- 新增 `autoUpdateBranchInventory` 函式
+- 揀貨分發開立銷貨單後自動加庫存（branch_inventory_店名）
+- 補發揀貨單開立後也自動加庫存
+- 退貨單（orderType='return'）不加庫存
+- 用 soId 明確查找（不依賴 array 最後一筆）
+
+### 所有進貨單搜尋修正（branch_portal）
+- 搜尋按鈕和 Enter 改呼叫 loadHistoryFromDB（原本呼叫 renderHistoryPage 不會重新查詢）
+- 搜尋範圍擴充：單號 + 備註 + 商品名稱（查 sales_details）
+
+### 今日銷貨 CSV 解析修正（branch_portal）
+- 支援樂樂新版 ERP 匯出格式（「商品數量」「商品款式」「商品單價」欄位名）
+- 金額改為單價×數量
+
+### generateSalesOrder soId 作用域修正
+- `const soId` 在第一個 if(res.ok) 區塊宣告，第二個 if 區塊存取不到
+- 改為外層 `let soId = ''`
+
+### 揀貨歷史查詢單號可點擊
+- 單號加 onclick 打開修正面板查看內容
+
+### products 表商品編號修正
+- `3405230025` → `340523025`（升級防藍光折疊老花眼鏡-黑色150度）
+- `3405230026` → `340523026`（200度）
+- `3405230027` → `340523027`（250度）
+- 原因：branchOrderList 用 9 位編號，products 表多打一個 0 變 10 位
+
+## DB 變更（2026/04/10）
+- internal_purchases 新增欄位 `end_date TEXT`
+- products 表修正 3 筆商品編號（3405230025→340523025 等）
+
+## ⚠️ 還在運作但要小心的點（更新 04/10）
+
+1. **localStorage 配額問題**：branchOrders 從 562KB 膨脹到 1278KB（匯入 1~3 月資料），加上其他 key 總量接近 10MB
+2. **lt_savedWaves 不可自動清除**：揀貨歷史存在 shared_kv + localStorage，如果 localStorage 被清掉後 mockSavedWaves 初始化為 []，任何存檔操作會把空陣列 cloudSave 回去覆蓋雲端
+3. **branch_inventory_ key 沒有 lt_ prefix**：這是既有格式，branch_portal 讀的是 `branch_inventory_` + store，不可改
+
 ## 完成功能（2026/04/09 晚）
 
 ### 新增採購單改版（還原點 b78db5d，完成 d51211e）
