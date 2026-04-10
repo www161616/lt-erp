@@ -1124,7 +1124,12 @@
             let cloud = (rows[0] && rows[0].value) ? (typeof rows[0].value === 'string' ? JSON.parse(rows[0].value) : rows[0].value) : {};
             cloud[storeName] = myData;
             // 同步更新本地（含其他店的最新資料）
-            localStorage.setItem('branchOrders', JSON.stringify(cloud));
+            try { localStorage.setItem('branchOrders', JSON.stringify(cloud)); }
+            catch(qe) {
+              ['supplier_xiaolan_orders','branchOrderList_pre_normalize_backup','lt_backorderMeta'].forEach(k => localStorage.removeItem(k));
+              Object.keys(localStorage).forEach(k => { if (/^branch_inventory_/.test(k) || /^portal_seen_/.test(k) || /_bunRecords$/.test(k) || /_ledger$/.test(k)) localStorage.removeItem(k); });
+              try { localStorage.setItem('branchOrders', JSON.stringify(cloud)); } catch(e2) { console.warn('cloudSave branchOrders: localStorage 空間不足'); }
+            }
             return fetch(`${SB_URL}/shared_kv`, {
               method: 'POST',
               headers: { ...SB_HEADERS, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
