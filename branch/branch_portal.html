@@ -1358,7 +1358,15 @@
     let orderSearchKw = '';
     let orderDirty = false;
     let orderQtyCache = JSON.parse(localStorage.getItem('bp_orderQtyCache') || '{}');
-    function saveQtyCache() { localStorage.setItem('bp_orderQtyCache', JSON.stringify(orderQtyCache)); }
+    function saveQtyCache() {
+      try { localStorage.setItem('bp_orderQtyCache', JSON.stringify(orderQtyCache)); }
+      catch(e) {
+        ['supplier_xiaolan_orders','branchOrderList_pre_normalize_backup','lt_backorderMeta'].forEach(k => localStorage.removeItem(k));
+        Object.keys(localStorage).forEach(k => { if (/^branch_inventory_/.test(k) || /^portal_seen_/.test(k) || /_bunRecords$/.test(k) || /_ledger$/.test(k)) localStorage.removeItem(k); });
+        try { localStorage.setItem('bp_orderQtyCache', JSON.stringify(orderQtyCache)); }
+        catch(e2) { console.warn('localStorage 空間不足，無法儲存 bp_orderQtyCache'); }
+      }
+    }
 
     // 從雲端 branchOrders 同步自己店的數量到 orderQtyCache（解決跨裝置看不到）
     function syncQtyCacheFromCloud() {
