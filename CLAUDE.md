@@ -55,8 +55,24 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `const soId` 在第一個 if(res.ok) 區塊宣告，第二個 if 區塊存取不到
 - 改為外層 `let soId = ''`
 
-### 揀貨歷史查詢單號可點擊
-- 單號加 onclick 打開修正面板查看內容
+### 揀貨歷史查詢單號可點擊（唯讀查看）
+- 單號加 onclick 開啟 `viewPickingWaveDetail`（唯讀，只顯示品名+各店數量）
+- **不可用 `openCorrectionPanel`**，因為它會寫 correctionCache，打開就變「已修正」狀態
+
+### 欠品計算改以銷貨單為主
+- **舊邏輯**：揀貨大表 expected vs actual → backorders（修正面板填的數字）
+- **新邏輯**：branchOrders 訂購數量 vs 銷貨單實際開出數量 → backorders
+- 只處理成功開立的分店，失敗的不記欠品
+- 查找 branchOrders 順序：完整 id → 純 pid → 日期格式正規化 fallback（`2026-04-15` → `4/15`）
+- `orderedQty === 0` 跳過（散品不記欠品）
+- 修正面板仍可改數量（改的是銷貨單要開幾個），但欠品以銷貨單為主
+
+### 揀貨站回算已分數量（pickedQty）
+- 從已完成的歷史波次回算 pickedQty（之前刻意歸零，現在恢復）
+- **帶日期後綴的 id**（如 `pid_4/15`）→ 完整 id 比對，不會跨檔期互撞
+- **純編號 id** → 必須 endDate 雙方都有且相同才回算
+- **舊資料無 endDate 的不回算**（寧可少扣不多扣，避免顯示負數）
+- ⚠️ 純編號商品重複開團是常態，絕對不能用 cleanPid 回算歷史
 
 ### products 表商品編號修正
 - `3405230025` → `340523025`（升級防藍光折疊老花眼鏡-黑色150度）
@@ -71,7 +87,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## ⚠️ 還在運作但要小心的點（更新 04/10）
 
 1. **localStorage 配額問題**：branchOrders 從 562KB 膨脹到 1278KB（匯入 1~3 月資料），加上其他 key 總量接近 10MB
-2. **lt_savedWaves 不可自動清除**：揀貨歷史存在 shared_kv + localStorage，如果 localStorage 被清掉後 mockSavedWaves 初始化為 []，任何存檔操作會把空陣列 cloudSave 回去覆蓋雲端
+2. **lt_savedWaves 不可自動清除**：揀貨歷史存在 shared_kv + localStorage，如果 localStorage 被清掉後 mockSavedWaves 初始化為 []，任何存檔操作會把空陣列 cloudSave 回去覆蓋雲端（04/10 發生過，花 $10 修復）
+3. **branch_inventory_ key 沒有 lt_ prefix**：這是既有格式，branch_portal 讀的是 `branch_inventory_` + store，不可改
+4. **openCorrectionPanel 會寫 correctionCache**：打開就會在 cache 建立空物件，導致狀態變「已修正」。查看用 `viewPickingWaveDetail`
+5. **products 表外鍵約束**：`inventory.product_id` 有外鍵指向 `products.id`，銷貨單 RPC 扣庫存時如果商品不在 products 表會整張單失敗（409 Conflict）
+6. **商品編號長度不一致**：同一商品在 branchOrderList 和 products 表可能編號不同（如 9 位 vs 10 位），建商品時要確認編號一致
+7. **揀貨站 pickedQty 回算規則**：純編號商品必須 endDate 雙方都有才回算，舊資料不回算。絕對不能用 cleanPid 回算（會跨檔期互撞）
 3. **branch_inventory_ key 沒有 lt_ prefix**：這是既有格式，branch_portal 讀的是 `branch_inventory_` + store，不可改
 
 ## 完成功能（2026/04/09 晚）
