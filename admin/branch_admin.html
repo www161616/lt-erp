@@ -1888,7 +1888,7 @@
       let displayNote = o.note || '無';
 
       const canSubmit = o.status === '草稿';
-      const canDelete = o.status === '草稿' || o.status === '駁回';
+      const canDelete = o.status === '草稿' || o.status === '駁回' || o.status === '待審核';
 
       panel.innerHTML = `
         <div style="display:flex; flex-direction:column; height:100%;">
