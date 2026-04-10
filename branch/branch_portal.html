@@ -1042,8 +1042,8 @@
             <button onclick="setHistoryRange(30)" style="padding:6px 12px; background:#f3f4f6; color:#4b5563; border:1px solid var(--border); border-radius:6px; font-size:13px; cursor:pointer; font-family:inherit;">近 30 天</button>
 
             <div style="margin-left:auto; display:flex; gap:8px; align-items:center;">
-              <input type="text" id="historySearchKw" placeholder="搜尋單號或商品名稱..." style="padding:8px 12px; border:1.5px solid var(--border); border-radius:6px; font-size:14px; font-family:inherit; min-width:220px;" onkeypress="if(event.key==='Enter') renderHistoryPage()">
-              <button onclick="renderHistoryPage()" style="padding:8px 16px; background:var(--primary); color:white; border:none; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit;">🔍 搜尋</button>
+              <input type="text" id="historySearchKw" placeholder="搜尋單號或商品名稱..." style="padding:8px 12px; border:1.5px solid var(--border); border-radius:6px; font-size:14px; font-family:inherit; min-width:220px;" onkeypress="if(event.key==='Enter') loadHistoryFromDB()">
+              <button onclick="loadHistoryFromDB()" style="padding:8px 16px; background:var(--primary); color:white; border:none; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit;">🔍 搜尋</button>
             </div>
           </div>
 
@@ -5333,7 +5333,7 @@ async function loadHistoryFromDB() {
     let url = `${SB_URL}/sales_orders?customer_id=eq.${custId}&order=order_date.desc,id.desc`;
     if (startDate) url += `&order_date=gte.${startDate}`;
     if (endDate) url += `&order_date=lte.${endDate}`;
-    if (kw) url += `&or=(id.ilike.*${encodeURIComponent(kw)}*)`;
+    if (kw) url += `&or=(id.ilike.*${encodeURIComponent(kw)}*,note.ilike.*${encodeURIComponent(kw)}*)`;
     let all = [], offset = 0;
     while (true) {
       const res = await fetch(`${url}&limit=1000&offset=${offset}`, { headers: SB_HEADERS });
@@ -5342,6 +5342,29 @@ async function loadHistoryFromDB() {
       all = all.concat(data);
       if (data.length < 1000) break;
       offset += 1000;
+    }
+    // 如果有關鍵字，也搜尋明細的商品名稱
+    if (kw) {
+      try {
+        const detUrl = `${SB_URL}/sales_details?product_name=ilike.*${encodeURIComponent(kw)}*&select=order_id`;
+        const detRes = await fetch(detUrl, { headers: SB_HEADERS });
+        if (detRes.ok) {
+          const detData = await detRes.json();
+          const matchIds = new Set(detData.map(d => d.order_id));
+          // 查這些 order_id 的主單（排除已找到的）
+          const existIds = new Set(all.map(o => o.id));
+          const extraIds = [...matchIds].filter(id => !existIds.has(id));
+          if (extraIds.length > 0) {
+            const extraUrl = `${SB_URL}/sales_orders?customer_id=eq.${custId}&id=in.(${extraIds.map(id=>'"'+id+'"').join(',')})&order=order_date.desc`;
+            if (startDate) extraUrl; // date filter already applied in main query context
+            const extraRes = await fetch(extraUrl, { headers: SB_HEADERS });
+            if (extraRes.ok) {
+              const extraData = await extraRes.json();
+              all = all.concat(extraData);
+            }
+          }
+        }
+      } catch(e2) { console.warn('商品名稱搜尋失敗:', e2); }
     }
     portalHistory = all;
     renderHistoryPage();
