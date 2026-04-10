@@ -4018,7 +4018,7 @@
             : `<button class="btn" style="background:#b7791f; padding:5px 10px; font-size:12px;" onclick="openCorrectionPanel('${wave.id}')">✏️ 修正數量</button>`;
 
         return `<tr style="border-bottom:1px solid #e2e8f0; ${wave.status==='completed'?'background:#eef1f5;':''}">
-          <td style="padding:10px 12px; color:#718096; font-size:13px; white-space:nowrap;">${wave.date}${wave.delivery_date ? `<div style="font-size:12px; color:#2b6cb0; margin-top:3px; font-weight:700;">📅 配送：${wave.delivery_date}</div>` : ''}</td>
+          <td style="padding:10px 12px; color:#718096; font-size:13px; white-space:nowrap;">${wave.date}${wave.delivery_date ? `<div style="font-size:12px; color:#2b6cb0; margin-top:3px; font-weight:700; cursor:pointer;" onclick="editWaveDeliveryDate('${wave.id}')" title="點擊修改配送日">📅 配送：${wave.delivery_date}</div>` : `<div style="font-size:12px; color:#c53030; margin-top:3px; cursor:pointer;" onclick="editWaveDeliveryDate('${wave.id}')" title="點擊設定配送日">📅 未設定</div>`}</td>
           <td style="padding:10px 12px; font-family:monospace; color:#2b6cb0; font-weight:bold; font-size:13px;">
             <span style="cursor:pointer; text-decoration:underline;" onclick="viewPickingWaveDetail('${wave.id}')">${wave.id}</span><br>${statusBadge}
           </td>
@@ -4027,6 +4027,26 @@
           <td style="padding:10px 12px; text-align:center;">${salesCell}</td>
         </tr>`;
       }).join('');
+    }
+
+    // === 修改揀貨單配送日 ===
+    async function editWaveDeliveryDate(waveId) {
+      const wave = mockSavedWaves.find(w => w.id === waveId);
+      if (!wave) return;
+      const { value: newDate } = await Swal.fire({
+        title: '修改配送日',
+        input: 'date',
+        inputValue: wave.delivery_date || '',
+        showCancelButton: true,
+        confirmButtonText: '確認',
+        cancelButtonText: '取消'
+      });
+      if (!newDate) return;
+      wave.delivery_date = newDate;
+      saveMockSavedWaves();
+      syncWaveToSupabase(wave);
+      refreshHistoryTable();
+      Swal.fire({ icon: 'success', title: '配送日已更新為 ' + newDate, timer: 1500, showConfirmButton: false });
     }
 
     // === 唯讀查看揀貨單內容 ===
