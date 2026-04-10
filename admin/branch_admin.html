@@ -197,7 +197,17 @@
         if (resp.ok) {
           const rows = await resp.json();
           rows.forEach(r => {
-            if (r.value !== null) localStorage.setItem(r.key, JSON.stringify(r.value));
+            if (r.value !== null) {
+              try { localStorage.setItem(r.key, JSON.stringify(r.value)); }
+              catch(qe) {
+                // QuotaExceeded：清掉本頁不需要的快取後重試
+                const junk = ['portalSalesOrders','portalTrackingData','supplier_xiaolan_orders','branchOrderList_pre_normalize_backup'];
+                junk.forEach(k => localStorage.removeItem(k));
+                Object.keys(localStorage).forEach(k => { if (/^branch_inventory_/.test(k)) localStorage.removeItem(k); });
+                try { localStorage.setItem(r.key, JSON.stringify(r.value)); }
+                catch(e2) { console.warn('localStorage 空間不足，無法寫入:', r.key); }
+              }
+            }
           });
         }
       } catch(e) { console.error('cloudLoadAll error:', e); }
@@ -1309,19 +1319,19 @@
         ipCalcTotal(); ipFilterProducts(); return;
       }
       let html = `<table style="width:100%; border-collapse:collapse;">
-        <thead style="position:sticky; top:0; z-index:1;"><tr style="background:#718096; color:#fff;">
-          <th style="padding:8px; text-align:center; width:30px; background:#718096;">#</th>
-          <th style="padding:8px; text-align:left; background:#718096;">品名</th>
-          <th style="padding:8px; text-align:center; width:100px; background:#718096;">供應商</th>
-          <th style="padding:8px; text-align:center; width:60px; background:#718096;">單位</th>
-          <th style="padding:8px; text-align:center; width:70px; background:#718096;">數量</th>
-          <th style="padding:8px; text-align:center; width:80px; background:#718096;">成本</th>
-          <th style="padding:8px; text-align:center; width:70px; background:#718096;">售價</th>
-          <th style="padding:8px; text-align:center; width:70px; background:#718096;">分店價</th>
-          <th style="padding:8px; text-align:right; width:65px; background:#718096;">利潤</th>
-          <th style="padding:8px; text-align:right; width:80px; background:#718096;">利潤小計</th>
-          <th style="padding:8px; text-align:right; width:80px; background:#718096;">小計</th>
-          <th style="padding:8px; width:30px; background:#718096;"></th>
+        <thead style="position:sticky; top:0; z-index:1;"><tr style="background:#2d3748 !important; color:#fff !important;">
+          <th style="padding:8px; text-align:center; width:30px; background:#2d3748; color:#fff;">#</th>
+          <th style="padding:8px; text-align:left; background:#2d3748; color:#fff;">品名</th>
+          <th style="padding:8px; text-align:center; width:100px; background:#2d3748; color:#fff;">供應商</th>
+          <th style="padding:8px; text-align:center; width:60px; background:#2d3748; color:#fff;">單位</th>
+          <th style="padding:8px; text-align:center; width:70px; background:#2d3748; color:#fff;">數量</th>
+          <th style="padding:8px; text-align:center; width:80px; background:#2d3748; color:#fff;">成本</th>
+          <th style="padding:8px; text-align:center; width:70px; background:#2d3748; color:#fff;">售價</th>
+          <th style="padding:8px; text-align:center; width:70px; background:#2d3748; color:#fff;">分店價</th>
+          <th style="padding:8px; text-align:right; width:65px; background:#2d3748; color:#fff;">利潤</th>
+          <th style="padding:8px; text-align:right; width:80px; background:#2d3748; color:#fff;">利潤小計</th>
+          <th style="padding:8px; text-align:right; width:80px; background:#2d3748; color:#fff;">小計</th>
+          <th style="padding:8px; width:30px; background:#2d3748; color:#fff;"></th>
         </tr></thead><tbody>`;
       ipCart.forEach((it, i) => {
         const sub = it.qty * it.cost;
@@ -3046,7 +3056,13 @@
     }
     let mockSavedWaves = JSON.parse(localStorage.getItem('lt_savedWaves') || '[]'); // 歷史紀錄
     function saveMockSavedWaves() {
-      localStorage.setItem('lt_savedWaves', JSON.stringify(mockSavedWaves));
+      try { localStorage.setItem('lt_savedWaves', JSON.stringify(mockSavedWaves)); }
+      catch(qe) {
+        ['portalSalesOrders','portalTrackingData','supplier_xiaolan_orders','branchOrderList_pre_normalize_backup'].forEach(k => localStorage.removeItem(k));
+        Object.keys(localStorage).forEach(k => { if (/^branch_inventory_/.test(k)) localStorage.removeItem(k); });
+        try { localStorage.setItem('lt_savedWaves', JSON.stringify(mockSavedWaves)); }
+        catch(e2) { console.warn('localStorage 空間不足，無法儲存揀貨單'); }
+      }
       cloudSave('lt_savedWaves');
     }
     // mockBackorderMeta：欠品追蹤頁暫用（問題⑤下一階段遷移至 Supabase backorders）

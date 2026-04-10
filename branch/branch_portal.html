@@ -1148,7 +1148,16 @@
         if (resp.ok) {
           const rows = await resp.json();
           rows.forEach(r => {
-            if (r.value !== null) localStorage.setItem(r.key, JSON.stringify(r.value));
+            if (r.value !== null) {
+              try { localStorage.setItem(r.key, JSON.stringify(r.value)); }
+              catch(qe) {
+                const junk = ['supplier_xiaolan_orders','branchOrderList_pre_normalize_backup'];
+                junk.forEach(k => localStorage.removeItem(k));
+                Object.keys(localStorage).forEach(k => { if (/^branch_inventory_/.test(k)) localStorage.removeItem(k); });
+                try { localStorage.setItem(r.key, JSON.stringify(r.value)); }
+                catch(e2) { console.warn('localStorage 空間不足，無法寫入:', r.key); }
+              }
+            }
           });
           // 記錄最後同步時間
           window._lastCloudLoadAt = Date.now();
