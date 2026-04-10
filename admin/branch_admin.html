@@ -4737,6 +4737,10 @@
         syncWaveToSupabase(wave);
         syncSalesOrdersToPortal();
 
+        // 自動更新分店庫存（把本次開立的銷貨單商品加入各分店庫存）
+        const newOrders = Object.keys(branchBundles).map(branch => mockSalesOrders.find(o => o.storeName === branch && o.waveId === waveId)).filter(Boolean);
+        autoUpdateBranchInventory(newOrders);
+
         // ✨ 紀錄操作：暫存銷貨單
         await logActivity('暫存銷貨單', waveId, {
           total_branches: Object.keys(branchBundles).length,
@@ -6081,6 +6085,7 @@
           }]
         });
         syncSalesOrdersToPortal();
+        autoUpdateBranchInventory([mockSalesOrders[mockSalesOrders.length - 1]]);
       } else {
         const orderData = {
           order_id: null,
@@ -6118,6 +6123,7 @@
             items: [{ productId, name: productName || productId, expectedQty: shortageQty, qty: shortageQty, unitPrice, returnQty: 0, returnStatus: 'none', returnReason: '', returnDate: '', damaged: false, note: '補發' }]
           });
           syncSalesOrdersToPortal();
+          autoUpdateBranchInventory([mockSalesOrders[mockSalesOrders.length - 1]]);
         }
       }
 
@@ -8484,6 +8490,44 @@
     mockSalesOrders = unique;
     localStorage.setItem('portalSalesOrders', JSON.stringify(unique));
     cloudSave('portalSalesOrders');
+  }
+
+  // 銷貨單開立後自動更新分店庫存
+  function autoUpdateBranchInventory(orders) {
+    if (!orders || !orders.length) return;
+    // 按分店分組
+    const storeMap = {};
+    orders.forEach(o => {
+      if (!o.storeName || o.orderType === 'return') return;
+      if (!storeMap[o.storeName]) storeMap[o.storeName] = [];
+      (o.items || []).forEach(item => {
+        const code = (item.productId || '').replace(/_.*$/, '').trim();
+        const qty = parseInt(item.qty) || 0;
+        if (code && qty > 0) storeMap[o.storeName].push({ code, name: item.name || '', qty });
+      });
+    });
+    // 更新每家分店的庫存
+    Object.entries(storeMap).forEach(([store, items]) => {
+      if (!items.length) return;
+      const key = 'branch_inventory_' + store;
+      let inv = [];
+      try { inv = JSON.parse(localStorage.getItem(key) || '[]'); } catch(e) {}
+      // 如果 localStorage 沒有，嘗試從雲端拉
+      const invMap = {};
+      inv.forEach((item, idx) => { if (item.code) invMap[item.code] = idx; });
+      const now = new Date().toLocaleString('zh-TW', { hour12: false }).replace(/\//g, '-');
+      items.forEach(it => {
+        if (invMap[it.code] !== undefined) {
+          inv[invMap[it.code]].qty = (inv[invMap[it.code]].qty || 0) + it.qty;
+          inv[invMap[it.code]].lastUpdated = now;
+        } else {
+          inv.push({ code: it.code, name: it.name, qty: it.qty, lastUpdated: now });
+          invMap[it.code] = inv.length - 1;
+        }
+      });
+      try { localStorage.setItem(key, JSON.stringify(inv)); } catch(e) {}
+      cloudSave(key);
+    });
   }
 
   function syncSalesOrdersFromPortal() {
