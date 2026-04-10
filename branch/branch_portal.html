@@ -8845,6 +8845,24 @@ function handleLeleCsvUpload(input) {
   reader.readAsText(file, 'utf-8');
 }
 
+async function editCsvItemCode(idx) {
+  const item = _parsedCsvItems[idx];
+  if (!item) return;
+  const { value: newCode } = await Swal.fire({
+    title: '修改品號',
+    input: 'text',
+    inputValue: item.code,
+    inputLabel: '請輸入正確的商品編號',
+    showCancelButton: true,
+    confirmButtonText: '確認',
+    cancelButtonText: '取消',
+    inputValidator: v => { if (!v || !v.trim()) return '請輸入商品編號'; }
+  });
+  if (!newCode) return;
+  _parsedCsvItems[idx].code = newCode.trim();
+  renderCsvPreview();
+}
+
 async function quickAddInventory(code) {
   // 從商品資料庫查名稱
   let name = '';
@@ -8901,8 +8919,9 @@ function renderCsvPreview() {
     const rowBg = noMatch ? 'background:#fef2f2;' : negative ? 'background:#fffbeb;' : '';
     totalQty += item.qty;
 
+    const idx = _parsedCsvItems.indexOf(item);
     html += `<tr style="border-bottom:1px solid var(--surface2); ${rowBg}">
-      <td style="padding:8px 10px; font-family:monospace;">${item.code}</td>
+      <td style="padding:8px 10px; font-family:monospace;">${item.code}${noMatch ? ` <button onclick="editCsvItemCode(${idx})" style="padding:1px 6px; font-size:10px; background:#b7791f; color:#fff; border:none; border-radius:3px; cursor:pointer;">✏️</button>` : ''}</td>
       <td style="padding:8px 10px;">${match ? match.name : `<span style="color:#c53030; font-weight:600;">⚠ 庫存無此商品</span> <button onclick="quickAddInventory('${item.code}')" style="padding:2px 8px; font-size:11px; background:#2b6cb0; color:#fff; border:none; border-radius:4px; cursor:pointer; margin-left:4px;">＋新增</button>`}</td>
       <td style="padding:8px 10px; text-align:right; font-weight:700;">${item.qty}</td>
       <td style="padding:8px 10px; text-align:right; color:${noMatch ? '#c53030' : 'var(--text)'};">${currentQty !== null ? currentQty : '—'}</td>
