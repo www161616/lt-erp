@@ -4011,13 +4011,43 @@
         return `<tr style="border-bottom:1px solid #e2e8f0; ${wave.status==='completed'?'background:#eef1f5;':''}">
           <td style="padding:10px 12px; color:#718096; font-size:13px; white-space:nowrap;">${wave.date}${wave.delivery_date ? `<div style="font-size:12px; color:#2b6cb0; margin-top:3px; font-weight:700;">📅 配送：${wave.delivery_date}</div>` : ''}</td>
           <td style="padding:10px 12px; font-family:monospace; color:#2b6cb0; font-weight:bold; font-size:13px;">
-            <span style="cursor:pointer; text-decoration:underline;" onclick="openCorrectionPanel('${wave.id}')">${wave.id}</span><br>${statusBadge}
+            <span style="cursor:pointer; text-decoration:underline;" onclick="viewPickingWaveDetail('${wave.id}')">${wave.id}</span><br>${statusBadge}
           </td>
           <td style="padding:8px 12px;">${summaryHtml}</td>
           <td style="padding:10px 12px; text-align:center;">${corrBtn}</td>
           <td style="padding:10px 12px; text-align:center;">${salesCell}</td>
         </tr>`;
       }).join('');
+    }
+
+    // === 唯讀查看揀貨單內容 ===
+    function viewPickingWaveDetail(waveId) {
+      const wave = mockSavedWaves.find(w => w.id === waveId);
+      if (!wave) return;
+      const visibleStores = pickingStoreNames.filter(name =>
+        wave.matrix.some(r => { const bd = r.branchData && r.branchData[name]; return bd && ((bd.expected || 0) > 0 || (bd.actual ?? 0) > 0); })
+      );
+      const storeHeaders = visibleStores.map(n => `<th style="padding:6px 8px; text-align:center; border:1px solid #e2e8f0; font-size:12px; white-space:nowrap;">${n}</th>`).join('');
+      let rows = '';
+      wave.matrix.forEach(row => {
+        const cells = visibleStores.map(s => {
+          const bd = row.branchData && row.branchData[s];
+          const exp = bd ? (bd.expected || 0) : 0;
+          const act = bd ? (bd.actual ?? exp) : 0;
+          const diff = act - exp;
+          const color = diff > 0 ? '#7c3aed' : diff < 0 ? '#c53030' : '#333';
+          const bg = diff > 0 ? '#f5f3ff' : diff < 0 ? '#fef2f2' : '';
+          return `<td style="text-align:center; padding:4px; border:1px solid #e2e8f0; font-size:12px; font-weight:${diff!==0?'bold':'normal'}; color:${color}; background:${bg};">${act}${diff!==0?' <span style=\"font-size:10px;\">('+( diff>0?'+':'')+diff+')</span>':''}</td>`;
+        }).join('');
+        rows += `<tr><td style="padding:6px 8px; border:1px solid #e2e8f0; font-size:12px; white-space:nowrap;">${row.name}</td>${cells}</tr>`;
+      });
+      Swal.fire({
+        html: `<div style="text-align:left;"><h3 style="margin:0 0 8px;">${wave.id} <span style="font-size:13px; color:#718096;">${wave.delivery_date || ''}</span></h3>
+          <div style="max-height:70vh; overflow:auto;">
+          <table style="border-collapse:collapse; width:100%;"><thead><tr><th style="padding:6px 8px; text-align:left; border:1px solid #e2e8f0; font-size:12px;">品名</th>${storeHeaders}</tr></thead><tbody>${rows}</tbody></table>
+          </div></div>`,
+        width: '95vw', showConfirmButton: false, showCloseButton: true
+      });
     }
 
     // === 修正數量面板（大視窗彈出） ===
