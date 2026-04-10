@@ -4011,7 +4011,7 @@
         return `<tr style="border-bottom:1px solid #e2e8f0; ${wave.status==='completed'?'background:#eef1f5;':''}">
           <td style="padding:10px 12px; color:#718096; font-size:13px; white-space:nowrap;">${wave.date}${wave.delivery_date ? `<div style="font-size:12px; color:#2b6cb0; margin-top:3px; font-weight:700;">📅 配送：${wave.delivery_date}</div>` : ''}</td>
           <td style="padding:10px 12px; font-family:monospace; color:#2b6cb0; font-weight:bold; font-size:13px;">
-            ${wave.id}<br>${statusBadge}
+            <span style="cursor:pointer; text-decoration:underline;" onclick="openCorrectionPanel('${wave.id}')">${wave.id}</span><br>${statusBadge}
           </td>
           <td style="padding:8px 12px;">${summaryHtml}</td>
           <td style="padding:10px 12px; text-align:center;">${corrBtn}</td>
