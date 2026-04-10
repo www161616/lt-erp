@@ -1114,6 +1114,7 @@
       if (raw === null) return;
 
       // branchOrders 特殊處理：先拉雲端最新，合併自己店的資料再上傳，避免覆蓋其他店
+      // 不把整份寫回 localStorage（太大會爆），只上傳雲端
       if (key === 'branchOrders' && currentStore?.name) {
         const storeName = currentStore.name;
         const localData = JSON.parse(raw);
@@ -1123,13 +1124,6 @@
           .then(rows => {
             let cloud = (rows[0] && rows[0].value) ? (typeof rows[0].value === 'string' ? JSON.parse(rows[0].value) : rows[0].value) : {};
             cloud[storeName] = myData;
-            // 同步更新本地（含其他店的最新資料）
-            try { localStorage.setItem('branchOrders', JSON.stringify(cloud)); }
-            catch(qe) {
-              ['supplier_xiaolan_orders','branchOrderList_pre_normalize_backup','lt_backorderMeta'].forEach(k => localStorage.removeItem(k));
-              Object.keys(localStorage).forEach(k => { if (/^branch_inventory_/.test(k) || /^portal_seen_/.test(k) || /_bunRecords$/.test(k) || /_ledger$/.test(k)) localStorage.removeItem(k); });
-              try { localStorage.setItem('branchOrders', JSON.stringify(cloud)); } catch(e2) { console.warn('cloudSave branchOrders: localStorage 空間不足'); }
-            }
             return fetch(`${SB_URL}/shared_kv`, {
               method: 'POST',
               headers: { ...SB_HEADERS, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
