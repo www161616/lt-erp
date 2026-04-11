@@ -422,7 +422,7 @@
             <select id="summaryDateType" onchange="sumCurrentPage=1; renderSummaryPage()" style="padding:6px 8px; border:1.5px solid var(--border); border-radius:6px; font-size:12px; font-family:inherit;">
               <option value="">全部日期</option>
               <option value="startDate">開團日</option>
-              <option value="endDate">結單日</option>
+              <option value="endDate" selected>結單日</option>
             </select>
             <input type="date" id="summaryDateFilter" onchange="sumCurrentPage=1; renderSummaryPage()" style="padding:6px 8px; border:1.5px solid var(--border); border-radius:6px; font-size:12px; font-family:inherit;">
             <div style="width:1px; height:24px; background:var(--border); margin:0 2px;"></div>
@@ -2213,6 +2213,8 @@
       if (!confirmRes.isConfirmed) return;
 
       // 3. 執行清除：只清該結單日商品，跳過 admin 鎖定的
+      // 加強：對每個目標商品，用 cleanPid 清掉 branchOrders / cache 裡所有同編號的 key
+      // 避免 1/25 等舊檔期殘留（key 格式 `編號_日期`）在匯入後被 fallback 撿到
       const storeName = currentStore?.name || '未知';
       const targets = orderList.filter(p => p.endDate === chosenDate);
       const locked = JSON.parse(localStorage.getItem('branchOrdersLocked') || '{}');
@@ -2223,9 +2225,21 @@
       let cleared = 0, skipped = 0;
       targets.forEach(p => {
         if (storeLocked[p.id]) { skipped++; return; }
-        if (orderQtyCache[p.id] != null) delete orderQtyCache[p.id];
-        if (bo[storeName][p.id] != null) { delete bo[storeName][p.id]; cleared++; }
-        // 同步 UI
+        const cleanPid = String(p.productId || p.id || '').replace(/_.*$/, '');
+        // 收集所有同編號的 key（p.id 本身 + 任何 `編號_尾碼`）
+        const keysToClean = new Set([p.id]);
+        Object.keys(bo[storeName]).forEach(k => {
+          if (k === cleanPid || k.startsWith(cleanPid + '_')) keysToClean.add(k);
+        });
+        Object.keys(orderQtyCache).forEach(k => {
+          if (k === cleanPid || k.startsWith(cleanPid + '_')) keysToClean.add(k);
+        });
+        keysToClean.forEach(k => {
+          if (storeLocked[k]) return; // admin 鎖定的不清
+          if (orderQtyCache[k] != null) delete orderQtyCache[k];
+          if (bo[storeName][k] != null) { delete bo[storeName][k]; cleared++; }
+        });
+        // 同步 UI（只清當前頁上跟 targets 對得到的 input）
         const input = document.querySelector(`.qty-input[data-id="${p.id}"]`);
         if (input && !input.disabled) input.value = '';
       });
@@ -2378,7 +2392,7 @@
 
               matchCount++;
               filledTotalQty += totalQty;
-              matchedDetails.push({ csvId, itemPid, csvName: csvNames[csvId] || '', sysName: item.name || '', qty: finalQty, fuzzy: csvId !== itemPid });
+              matchedDetails.push({ csvId, itemId, itemPid, csvName: csvNames[csvId] || '', sysName: item.name || '', qty: finalQty, fuzzy: csvId !== itemPid });
             }
             saveQtyCache();
 
@@ -2481,7 +2495,9 @@
 
             if (matchCount > 0) {
               importMode = true;
-              importedIds = matchedDetails.map(m => m.csvId);
+              // 改存 item.id（branchOrderList 裡的實際 id，可能是純編號或 `編號_日期`）
+              // 這樣 submitOrder 可以精準只送這次匯入的商品，避免撈到舊檔期殘留
+              importedIds = matchedDetails.map(m => m.itemId);
               const submitBtn = document.getElementById('submitOrderBtn');
               if (submitBtn) submitBtn.style.display = '';
             }
@@ -2542,21 +2558,20 @@
       });
       saveQtyCache();
 
-      // 只收集這次匯入的商品
+      // 精準送出：只處理這次匯入的 item.id（importedIds）
+      // 從 cache 讀當前數量（店家匯入後可能又手動改過），不撈整個 cache 避免撿到殘留
       const orderList = JSON.parse(localStorage.getItem('branchOrderList') || '[]');
-      const nameMap = {}, pidMap = {};
-      orderList.forEach(p => { nameMap[p.id] = p.name; pidMap[p.id] = p.productId || p.id; });
+      const itemById = {};
+      orderList.forEach(p => { itemById[p.id] = p; });
 
       const items = [];
-      const importSet = new Set(importedIds);
-      const seenPid = new Set();
-      Object.entries(orderQtyCache).forEach(([id, val]) => {
-        const qty = parseInt(val);
-        const pid = pidMap[id] || id;
-        if (qty > 0 && importSet.has(pid) && !seenPid.has(pid)) {
-          seenPid.add(pid);
-          items.push({ id, productId: pid, name: nameMap[id] || id, qty });
-        }
+      importedIds.forEach(id => {
+        const qty = parseInt(orderQtyCache[id]) || 0;
+        if (qty <= 0) return;
+        const item = itemById[id];
+        const name = item?.name || id;
+        const pid = String(item?.productId || item?.id || id).trim();
+        items.push({ id, productId: pid, name, qty });
       });
 
       if (items.length === 0) {
@@ -2752,10 +2767,10 @@
 const MOCK_SUMMARY_DATA = [];
 
 function initSummaryPage() {
-  // 預設不帶日期，顯示全部資料
+  // 預設依結單日篩選（日期留空表示不限定具體日期，但類型固定為結單日）
   const dtEl = document.getElementById('summaryDateType');
   const dfEl = document.getElementById('summaryDateFilter');
-  if (dtEl) dtEl.value = '';
+  if (dtEl) dtEl.value = 'endDate';
   if (dfEl) dfEl.value = '';
   renderSummaryPage();
 }
