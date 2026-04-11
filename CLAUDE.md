@@ -4,6 +4,59 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # 龍潭總倉 ERP 系統
 
+## 完成功能（2026/04/11）
+
+### branchOrders 雲端覆蓋根治：改用 RPC merge_branch_order 原子合併
+- **症狀**：店家結單填表送出後，結單填表 input 顯示有數字，但 portal 開團總表和 admin 開團總表都看不到
+- **根因**：admin cloudSave 是整份 POST 到 shared_kv，會把 admin 頁面載入時的舊 snapshot 覆蓋雲端
+  - 店家送出 → 雲端 OK
+  - admin 做任何操作（改數字、清除、批次結單）→ cloudSave → 整份蓋掉雲端 → 店家的新資料瞬間消失
+  - 早期沒爆是因為店家集中早上送出，admin 還沒上線；4/8 剛好集中在中午 → 中招 4 家店
+- **修法**：新增 Supabase RPC `merge_branch_order(p_store text, p_data jsonb)` 做原子 jsonb merge
+  ```sql
+  INSERT INTO shared_kv (key, value, updated_at)
+  VALUES ('branchOrders', jsonb_build_object(p_store, p_data), now())
+  ON CONFLICT (key) DO UPDATE
+    SET value = COALESCE(shared_kv.value, '{}'::jsonb) || jsonb_build_object(p_store, EXCLUDED.value->p_store),
+        updated_at = now();
+  ```
+- Portal cloudSave branchOrders 改用 RPC + 回傳 Promise
+- Portal submitOrder 改 async 並 await cloudSave，確保雲端寫完才彈成功（避免關 tab 中斷 fetch）
+- Admin cloudSave 支援 `onlyStore` 單店推送；多店推送先從雲端 GET merge 再推
+- Admin 切到開團總表改為 `cloudLoadAll().then(renderAdminSummary)` 拿最新資料
+
+### 匯入樂樂前先選結單日並清空殘值
+- 按「📥 匯入樂樂報表」流程改為：
+  1. 選結單日（下拉從 branchOrderList 抓今天 ± 7 天）
+  2. 提示「將清空該結單日殘留數字（admin 鎖定的保留）」確認
+  3. 執行清除 cache + branchOrders 該店該日 key + UI + cloudSave
+  4. 確認開始匯入 → 觸發檔案選擇
+  5. 解析後直接覆蓋（已清空），admin 鎖定的永遠跳過
+- 拿掉舊的 skip/add/overwrite 彈窗（清空後不需要）
+- **順便解決長期 bug**：重複開同編號商品會帶入舊檔期數量 — 清空該結單日後就是乾淨的
+
+### 防店家忘了按送出資料
+- 匯入完成彈窗按鈕改「🚀 確認送出」直接呼叫 submitOrder；「先檢查數量」才停留
+- `switchPage()` 離開結單填表前偵測 `importMode=true` 時跳警告
+- `beforeunload` 關 tab/重整時跳瀏覽器原生警告
+- 之前 4/8 資料跑掉的事故根本原因：4 家店匯入後都忘了按「🚀 送出資料」，cache 有所以結單填表看得到，但 branchOrders 沒寫 → 雲端沒上傳 → admin 看不到
+
+### portal cloudLoadAll 加 pending save 等待
+- `_pendingBranchOrdersSave` 追蹤 cloudSave 是否完成
+- `cloudLoadAll` 開頭 `await _pendingBranchOrdersSave`，避免切頁時 load 搶先拉到舊資料覆蓋剛存的 localStorage
+
+## DB 變更（2026/04/11）
+- 新增 Supabase RPC `merge_branch_order(p_store text, p_data jsonb)`
+  - SECURITY DEFINER
+  - GRANT EXECUTE 給 anon, authenticated
+  - 用 jsonb `||` 運算子做原子 merge，只更新指定 key
+  - shared_kv.key 是 PRIMARY KEY，ON CONFLICT (key) 可直接用
+
+## ⚠️ 還在運作但要小心的點（更新 04/11）
+
+1. **admin 多店 cloudSave 仍有小 race window**：admin 已載入的店，如果該店家之後又送出新資料，admin 下次 cloudSave（多店模式）會用 admin 本機的該店版本覆蓋雲端。頻率低暫不處理。未來可優化為「對每家店 key-level merge」或「只推 dirty store」
+2. **admin 編輯單格的 cloudSave**：10714 的 `editSummaryQty` 仍呼叫 `cloudSave('branchOrders')` 不傳 onlyStore，走多店 merge 路徑。可優化為 `cloudSave('branchOrders', storeName)` 只推單店，效能更好
+
 ## 完成功能（2026/04/10）
 
 ### 開團總表 CSV 歷史資料匯入（1~3 月）
