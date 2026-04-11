@@ -181,21 +181,62 @@
     // ============================
     // 雲端同步工具 (shared_kv)
     // ============================
-    function cloudSave(key) {
+    // admin cloudSave branchOrders 支援指定「只推這家店」
+    // 用法：cloudSave('branchOrders', '泰山') 只更新泰山，不動其他店
+    //      cloudSave('branchOrders') 維持原行為（推所有店），但會先拉雲端 merge 再推，避免洗掉店家剛送出的新資料
+    async function cloudSave(key, onlyStore) {
       const raw = localStorage.getItem(key);
       if (raw === null) return;
 
-      // branchOrders 特殊處理：用 RPC merge_branch_order 逐店原子合併
-      // 不能再整份 POST，否則會把店家剛送出的新資料用 admin 載入時的舊版本蓋掉
       if (key === 'branchOrders') {
         const localData = JSON.parse(raw);
-        const stores = Object.keys(localData);
-        const promises = stores.map(storeName => fetch(`${SB_URL}/rpc/merge_branch_order`, {
-          method: 'POST',
-          headers: { ...HEADERS, 'Content-Type': 'application/json' },
-          body: JSON.stringify({ p_store: storeName, p_data: localData[storeName] || {} })
-        }).then(r => { if (!r.ok) return r.text().then(t => { throw new Error('RPC failed: ' + t); }); }));
-        return Promise.all(promises).catch(e => console.error('cloudSave branchOrders RPC error:', e));
+
+        // 1. 只推單店：直接 RPC 合併
+        if (onlyStore) {
+          return fetch(`${SB_URL}/rpc/merge_branch_order`, {
+            method: 'POST',
+            headers: { ...HEADERS, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ p_store: onlyStore, p_data: localData[onlyStore] || {} })
+          }).then(r => { if (!r.ok) return r.text().then(t => { throw new Error('RPC failed: ' + t); }); })
+            .catch(e => console.error('cloudSave branchOrders RPC error:', e));
+        }
+
+        // 2. 推多店：先從雲端拉最新，對每家店做「雲端 + 本機差異」的合併再推
+        // 避免 admin 用載入時的舊 snapshot 把雲端新資料（店家剛送出的）覆蓋掉
+        try {
+          const cloudRes = await fetch(`${SB_URL}/shared_kv?key=eq.branchOrders&select=value`, { headers: HEADERS });
+          const rows = cloudRes.ok ? await cloudRes.json() : [];
+          const cloud = (rows[0] && rows[0].value) ? (typeof rows[0].value === 'string' ? JSON.parse(rows[0].value) : rows[0].value) : {};
+
+          // 合併規則：以雲端為基礎，本機有的 key 才覆蓋
+          // 本機「刪掉的 key」仍會在合併後的結果裡消失（批次刪除需要）
+          const merged = {};
+          const allStores = new Set([...Object.keys(cloud), ...Object.keys(localData)]);
+          allStores.forEach(s => {
+            if (localData[s] == null) {
+              // 本機沒這家 → 保留雲端
+              merged[s] = cloud[s] || {};
+            } else {
+              // 本機有這家 → 直接用本機版本（因為本機剛改過）
+              merged[s] = localData[s];
+            }
+          });
+
+          // 把合併結果寫回本機，讓後續讀取一致
+          localStorage.setItem('branchOrders', JSON.stringify(merged));
+
+          // 對所有店並發推 RPC
+          const stores = Object.keys(merged);
+          const promises = stores.map(storeName => fetch(`${SB_URL}/rpc/merge_branch_order`, {
+            method: 'POST',
+            headers: { ...HEADERS, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ p_store: storeName, p_data: merged[storeName] || {} })
+          }).then(r => { if (!r.ok) return r.text().then(t => { throw new Error('RPC failed: ' + t); }); }));
+          return Promise.all(promises).catch(e => console.error('cloudSave branchOrders RPC error:', e));
+        } catch(e) {
+          console.error('cloudSave branchOrders merge error:', e);
+        }
+        return;
       }
 
       fetch(`${SB_URL}/shared_kv`, {

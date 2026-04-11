@@ -2486,14 +2486,25 @@
               if (submitBtn) submitBtn.style.display = '';
             }
 
-            Swal.fire({
-              title: matchCount > 0 ? '匯入完成' : '匯入失敗',
-              html: matchCount > 0
-                ? `成功 ${matchCount} 筆${skippedCount > 0 ? `，跳過 ${skippedCount} 筆` : ''}${missingIds.length > 0 ? `，${missingIds.length} 筆未匹配` : ''}<br><span style="color:#059669; font-size:13px; font-weight:bold;">請確認數量後按「🚀 送出資料」</span>`
-                : '沒有匹配到任何商品',
-              icon: matchCount > 0 ? (missingIds.length > 0 ? 'warning' : 'success') : 'error',
-              confirmButtonColor: '#be185d'
-            });
+            if (matchCount > 0) {
+              Swal.fire({
+                title: '匯入完成',
+                html: `成功 ${matchCount} 筆${skippedCount > 0 ? `，跳過 ${skippedCount} 筆` : ''}${missingIds.length > 0 ? `，${missingIds.length} 筆未匹配` : ''}<br><span style="color:#059669; font-size:13px; font-weight:bold;">請確認數量後點「🚀 確認送出」，龍潭總倉才會收到</span>`,
+                icon: missingIds.length > 0 ? 'warning' : 'success',
+                showCancelButton: true,
+                confirmButtonText: '🚀 確認送出',
+                cancelButtonText: '✏️ 先檢查數量',
+                confirmButtonColor: '#059669',
+                cancelButtonColor: '#6b7280'
+              }).then(r => {
+                if (r.isConfirmed) {
+                  submitOrder();
+                }
+                // 若選「先檢查數量」則停留，店家檢查完再手動按「🚀 送出資料」
+              });
+            } else {
+              Swal.fire({ title: '匯入失敗', html: '沒有匹配到任何商品', icon: 'error', confirmButtonColor: '#be185d' });
+            }
           } catch (err) {
             Swal.fire('匯入失敗', '檔案格式不符或讀取錯誤：' + err.message, 'error');
           }
@@ -2633,6 +2644,15 @@
       });
     }
 
+    // 關 tab / 重整時，如果有待送出的匯入，跳瀏覽器原生警告
+    window.addEventListener('beforeunload', function(e) {
+      if (importMode) {
+        e.preventDefault();
+        e.returnValue = '你還沒按送出資料！匯入的數量還沒傳到總倉。';
+        return e.returnValue;
+      }
+    });
+
     // ============================
     // 頁面切換
     // ============================
@@ -2657,6 +2677,26 @@
     };
 
     function switchPage(pageId, menuEl) {
+      // 擋：結單填表有待送出的匯入（importMode=true）時警告
+      const currentPage = document.querySelector('.page.active')?.id;
+      if (currentPage === 'pageOrder' && importMode && pageId !== 'pageOrder') {
+        Swal.fire({
+          title: '⚠️ 你還沒按送出資料！',
+          html: '<span style="color:#dc2626; font-weight:700;">匯入的數量還沒送出，龍潭總倉收不到。</span><br>離開後數字會保留，但必須回來按「🚀 送出資料」才會傳到總倉。',
+          icon: 'warning',
+          showCancelButton: true,
+          confirmButtonText: '🚀 立刻送出',
+          cancelButtonText: '留下檢查',
+          confirmButtonColor: '#059669',
+          cancelButtonColor: '#6b7280',
+          reverseButtons: true
+        }).then(r => {
+          if (r.isConfirmed) submitOrder();
+          // 取消 → 留在結單填表
+        });
+        return;
+      }
+
       // 離開結單填表前，先存當前輸入的數量
       document.querySelectorAll('.qty-input').forEach(input => {
         if (input.value) orderQtyCache[input.dataset.id] = input.value;
