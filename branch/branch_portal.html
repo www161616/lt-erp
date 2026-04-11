@@ -336,7 +336,7 @@
             </div>
             <div id="importExcelWrap" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
               <input type="file" id="excelUpload" accept=".xlsx,.xls,.csv" style="display:none;" onchange="handleExcelUpload(event)">
-              <button onclick="document.getElementById('excelUpload').click()"
+              <button onclick="startExcelImport()"
                 style="background:var(--primary); color:white; border:none; padding:10px 20px; border-radius:6px; font-size:14px; font-weight:700; cursor:pointer; font-family:inherit;">
                 📥 匯入樂樂報表
               </button>
@@ -2165,25 +2165,101 @@
     // ============================
     let isQtyLocked = false; // 已停用，保留變數避免報錯
 
-    function handleExcelUpload(event) {
-      const file = event.target.files[0];
-      if (!file) { document.getElementById('excelUpload').value = ''; return; }
+    // 新流程：匯入前先選結單日 → 清除該日殘留 → 觸發選檔
+    // 解決「重複開同編號商品會帶入舊檔期數量」的長期 bug
+    async function startExcelImport() {
+      const orderList = JSON.parse(localStorage.getItem('branchOrderList') || '[]');
+      // 結單日下拉範圍：今天 ± 7 天
+      const today = new Date();
+      const d7before = new Date(today); d7before.setDate(today.getDate() - 7);
+      const d7after  = new Date(today); d7after.setDate(today.getDate() + 7);
+      const toStr = d => d.toISOString().split('T')[0];
+      const lo = toStr(d7before), hi = toStr(d7after);
+      const endDates = [...new Set(orderList.map(p => p.endDate).filter(Boolean))]
+        .filter(d => d >= lo && d <= hi)
+        .sort();
+      if (endDates.length === 0) {
+        Swal.fire('提醒', '近 7 天內沒有可選的結單日', 'info');
+        return;
+      }
+      const options = {};
+      endDates.forEach(d => { options[d] = `結單日 ${d}`; });
 
-      // 先選匯入模式
-      Swal.fire({
-        title: '匯入模式',
-        html: '已有數量的商品要怎麼處理？',
-        input: 'radio',
-        inputOptions: { skip: '跳過（保留原數量）', add: '累加（原數量 + 匯入數量）', overwrite: '覆蓋（用匯入數量取代）' },
-        inputValue: 'skip',
+      // 1. 選結單日
+      const dateRes = await Swal.fire({
+        title: '選擇要匯入的結單日',
+        input: 'select',
+        inputOptions: options,
+        inputPlaceholder: '請選擇…',
+        showCancelButton: true,
+        confirmButtonText: '下一步',
+        cancelButtonText: '取消',
+        confirmButtonColor: '#be185d',
+        inputValidator: v => !v ? '請選擇一個結單日' : null
+      });
+      if (!dateRes.isConfirmed) return;
+      const chosenDate = dateRes.value;
+
+      // 2. 提示「將清空殘值」
+      const confirmRes = await Swal.fire({
+        title: `即將清空 ${chosenDate} 的殘留數字`,
+        html: '為避免舊檔期殘留數字，匯入前會先清空該結單日的數量（admin 填寫的數量會保留）',
+        icon: 'info',
+        showCancelButton: true,
+        confirmButtonText: '確定清除',
+        cancelButtonText: '取消',
+        confirmButtonColor: '#be185d'
+      });
+      if (!confirmRes.isConfirmed) return;
+
+      // 3. 執行清除：只清該結單日商品，跳過 admin 鎖定的
+      const storeName = currentStore?.name || '未知';
+      const targets = orderList.filter(p => p.endDate === chosenDate);
+      const locked = JSON.parse(localStorage.getItem('branchOrdersLocked') || '{}');
+      const storeLocked = locked[storeName] || {};
+      const bo = JSON.parse(localStorage.getItem('branchOrders') || '{}');
+      if (!bo[storeName]) bo[storeName] = {};
+
+      let cleared = 0, skipped = 0;
+      targets.forEach(p => {
+        if (storeLocked[p.id]) { skipped++; return; }
+        if (orderQtyCache[p.id] != null) delete orderQtyCache[p.id];
+        if (bo[storeName][p.id] != null) { delete bo[storeName][p.id]; cleared++; }
+        // 同步 UI
+        const input = document.querySelector(`.qty-input[data-id="${p.id}"]`);
+        if (input && !input.disabled) input.value = '';
+      });
+      saveQtyCache();
+      localStorage.setItem('branchOrders', JSON.stringify(bo));
+
+      // 立刻 cloudSave（用 RPC，原子合併只動這家店）
+      Swal.fire({ title: '清除中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+      try { await cloudSave('branchOrders'); } catch(e) { console.error('clear cloudSave failed:', e); }
+
+      // 4. 確認開始匯入
+      const goRes = await Swal.fire({
+        title: '清除完成',
+        html: `已清除 ${cleared} 筆${skipped > 0 ? `，保留 ${skipped} 筆 admin 填寫` : ''}<br>是否開始匯入樂樂報表？`,
+        icon: 'success',
         showCancelButton: true,
         confirmButtonText: '開始匯入',
         cancelButtonText: '取消',
         confirmButtonColor: '#be185d'
-      }).then(modeResult => {
-        if (!modeResult.isConfirmed) { document.getElementById('excelUpload').value = ''; return; }
-        const mode = modeResult.value; // skip / add / overwrite
+      });
+      if (!goRes.isConfirmed) return;
 
+      // 5. 觸發檔案選擇（帶上選好的結單日，讓 handleExcelUpload 過濾）
+      window._importTargetEndDate = chosenDate;
+      document.getElementById('excelUpload').click();
+    }
+
+    function handleExcelUpload(event) {
+      const file = event.target.files[0];
+      if (!file) { document.getElementById('excelUpload').value = ''; return; }
+
+      // 已由 startExcelImport 先選結單日+清空殘值，這裡直接解析檔案
+      const targetEndDate = window._importTargetEndDate || null;
+      (async () => {
         Swal.fire({ title: '解析中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
         const reader = new FileReader();
         reader.onload = function(e) {
@@ -2247,7 +2323,9 @@
               return null;
             }
 
-            // 3. 填入數量（依模式）
+            // 3. 填入數量（新流程：已先清空該結單日殘值，直接覆蓋；admin 鎖定的跳過）
+            const _locked = JSON.parse(localStorage.getItem('branchOrdersLocked') || '{}');
+            const _storeLocked = _locked[currentStore?.name || ''] || {};
             let matchCount = 0, filledTotalQty = 0, skippedCount = 0;
             const missingIds = [], matchedDetails = [], skippedItems = [], closedItems = [], notInCampaign = [];
 
@@ -2278,22 +2356,15 @@
                 closedItems.push(`${csvNames[csvId] || csvId}（數量 ${totalQty}）`);
                 continue;
               }
-
-              const existing = parseInt(orderQtyCache[itemId]) || 0;
-
-              // 計算最終數量
-              let finalQty;
-              if (existing > 0 && mode === 'skip') {
+              // admin 鎖定的數量永遠保留，不覆蓋
+              if (_storeLocked[itemId]) {
                 skippedCount++;
-                skippedItems.push(`${csvNames[csvId] || csvId}（原 ${existing}，匯入 ${totalQty}）`);
-                matchCount++;
+                skippedItems.push(`${csvNames[csvId] || csvId}（admin 鎖定，匯入 ${totalQty} 已跳過）`);
                 continue;
-              } else if (mode === 'add') {
-                finalQty = existing + totalQty;
-              } else {
-                finalQty = totalQty; // overwrite 或 existing 為 0
               }
 
+              // 已先清空該結單日的殘值，直接覆蓋
+              const finalQty = totalQty;
               orderQtyCache[itemId] = finalQty;
 
               // 嘗試直接填 input（當前分頁）
@@ -2316,8 +2387,7 @@
 
             // 5. 持久報告
             const diff = csvTotalQty - filledTotalQty;
-            const modeLabel = { skip: '跳過', add: '累加', overwrite: '覆蓋' }[mode];
-            let rpt = `<b>模式：${modeLabel}</b>　｜　CSV 總數量：<b>${csvTotalQty}</b>　｜　`;
+            let rpt = `<b>結單日：${targetEndDate || '—'}</b>　｜　CSV 總數量：<b>${csvTotalQty}</b>　｜　`;
             rpt += `<b style="color:#059669;">成功填入：${filledTotalQty}</b>（${matchCount} 筆商品）`;
             if (diff > 0) {
               const missingQty = missingIds.reduce((s, m) => s + m.qty, 0);
@@ -2428,9 +2498,10 @@
             Swal.fire('匯入失敗', '檔案格式不符或讀取錯誤：' + err.message, 'error');
           }
           document.getElementById('excelUpload').value = '';
+          window._importTargetEndDate = null;
         };
         reader.readAsArrayBuffer(file);
-      });
+      })();
     }
 
     // ============================
