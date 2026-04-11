@@ -1114,28 +1114,21 @@
       const raw = localStorage.getItem(key);
       if (raw === null) return;
 
-      // branchOrders 特殊處理：先拉雲端最新，合併自己店的資料再上傳，避免覆蓋其他店
-      // 不把整份寫回 localStorage（太大會爆），只上傳雲端
+      // branchOrders 特殊處理：用 RPC merge_branch_order 原子合併，
+      // 不會被其他店或 admin 整份覆蓋。回傳 Promise 讓 submitOrder 能 await。
       if (key === 'branchOrders' && currentStore?.name) {
         const storeName = currentStore.name;
         const localData = JSON.parse(raw);
         const myData = localData[storeName] || {};
-        // 回傳 Promise 並追蹤，讓 cloudLoadAll 可以等它完成再拉資料
-        // 避免 race condition：切頁時 cloudLoadAll 拉到舊資料覆蓋 localStorage
-        const savePromise = fetch(`${SB_URL}/shared_kv?key=eq.branchOrders&select=value`, { headers: SB_HEADERS })
-          .then(r => r.ok ? r.json() : [])
-          .then(rows => {
-            let cloud = (rows[0] && rows[0].value) ? (typeof rows[0].value === 'string' ? JSON.parse(rows[0].value) : rows[0].value) : {};
-            cloud[storeName] = myData;
-            return fetch(`${SB_URL}/shared_kv`, {
-              method: 'POST',
-              headers: { ...SB_HEADERS, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
-              body: JSON.stringify({ key: 'branchOrders', value: cloud, updated_at: new Date().toISOString() })
-            });
-          })
-          .catch(e => console.error('cloudSave branchOrders error:', e));
+        const savePromise = fetch(`${SB_URL}/rpc/merge_branch_order`, {
+          method: 'POST',
+          headers: { ...SB_HEADERS, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ p_store: storeName, p_data: myData })
+        }).then(r => {
+          if (!r.ok) return r.text().then(t => { throw new Error('RPC failed: ' + t); });
+        }).catch(e => console.error('cloudSave branchOrders RPC error:', e));
         _pendingBranchOrdersSave = savePromise;
-        return;
+        return savePromise;
       }
 
       fetch(`${SB_URL}/shared_kv`, {
@@ -2531,16 +2524,26 @@
         confirmButtonColor: '#be185d',
         cancelButtonColor: '#6b7280',
         width: '560px',
-      }).then(result => {
+      }).then(async result => {
         if (result.isConfirmed) {
           const saved = JSON.parse(localStorage.getItem('branchOrders') || '{}');
           if (!saved[storeName]) saved[storeName] = {};
           items.forEach(item => { saved[storeName][item.id] = item.qty; });
           localStorage.setItem('branchOrders', JSON.stringify(saved));
-          cloudSave('branchOrders');
 
           items.forEach(item => { orderQtyCache[item.id] = String(item.qty); });
           saveQtyCache();
+
+          // 顯示「送出中」並 await cloudSave，確保雲端寫入完成才彈成功
+          // 否則使用者立刻關 tab 或切頁，fetch 會被中斷導致雲端沒收到
+          Swal.fire({ title: '送出中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+          let cloudOk = true;
+          try {
+            await cloudSave('branchOrders');
+          } catch(e) {
+            cloudOk = false;
+            console.error('submitOrder cloudSave failed:', e);
+          }
 
           orderDirty = false;
           importMode = false;
@@ -2548,9 +2551,11 @@
           const submitBtn = document.getElementById('submitOrderBtn');
           if (submitBtn) submitBtn.style.display = 'none';
           Swal.fire({
-            icon: 'success',
-            title: '已送出！',
-            html: `共 <b>${items.length}</b> 項商品已送出，龍潭總倉已收到`,
+            icon: cloudOk ? 'success' : 'warning',
+            title: cloudOk ? '已送出！' : '已存到本機，但雲端同步失敗',
+            html: cloudOk
+              ? `共 <b>${items.length}</b> 項商品已送出，龍潭總倉已收到`
+              : `共 <b>${items.length}</b> 項已存到本機，但雲端同步失敗，請檢查網路後重新按「送出」`,
             confirmButtonColor: '#be185d'
           });
         }

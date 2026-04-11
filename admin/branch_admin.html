@@ -184,6 +184,20 @@
     function cloudSave(key) {
       const raw = localStorage.getItem(key);
       if (raw === null) return;
+
+      // branchOrders 特殊處理：用 RPC merge_branch_order 逐店原子合併
+      // 不能再整份 POST，否則會把店家剛送出的新資料用 admin 載入時的舊版本蓋掉
+      if (key === 'branchOrders') {
+        const localData = JSON.parse(raw);
+        const stores = Object.keys(localData);
+        const promises = stores.map(storeName => fetch(`${SB_URL}/rpc/merge_branch_order`, {
+          method: 'POST',
+          headers: { ...HEADERS, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ p_store: storeName, p_data: localData[storeName] || {} })
+        }).then(r => { if (!r.ok) return r.text().then(t => { throw new Error('RPC failed: ' + t); }); }));
+        return Promise.all(promises).catch(e => console.error('cloudSave branchOrders RPC error:', e));
+      }
+
       fetch(`${SB_URL}/shared_kv`, {
         method: 'POST',
         headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
