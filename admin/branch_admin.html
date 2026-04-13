@@ -3306,7 +3306,7 @@
           if (remainQty > 0) return true;
           const hasShortage = pickingStoreNames.some(b => {
             const distributed = (m.pickingHistory || []).reduce((s, h) => s + ((h.branchData && h.branchData[b]) || 0), 0);
-            return (m.alloc[b] || 0) - distributed > 0;
+            return ((m.alloc && m.alloc[b]) || 0) - distributed > 0;
           });
           return hasShortage;
         });
@@ -3324,7 +3324,7 @@
         // 欠品店家清單（只列有欠的店名）
         const shortageStores = pickingStoreNames.filter(b => {
           const distributed = (m.pickingHistory || []).reduce((s, h) => s + ((h.branchData && h.branchData[b]) || 0), 0);
-          return (m.alloc[b] || 0) - distributed > 0;
+          return ((m.alloc && m.alloc[b]) || 0) - distributed > 0;
         });
         const shortageRow = shortageStores.length > 0
           ? `<div style="margin-top:4px; padding-top:4px; border-top:1px dashed #e2e8f0; font-size:11px; color:#718096;">
@@ -3373,7 +3373,7 @@
 
       // 計算各店歷次已分總量，本次只帶入「尚欠」數量
       pickingStoreNames.forEach(bName => {
-        const totalAlloc = item.alloc[bName] || 0;
+        const totalAlloc = (item.alloc && item.alloc[bName]) || 0;
         const alreadyDistributed = (item.pickingHistory || []).reduce((s, h) => s + ((h.branchData && h.branchData[bName]) || 0), 0);
         const remaining = Math.max(0, totalAlloc - alreadyDistributed);
         branchData[bName] = { expected: remaining, actual: remaining };
