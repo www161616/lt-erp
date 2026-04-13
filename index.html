@@ -566,29 +566,33 @@
 
     // Check existing session on page load
     async function checkSession() {
-      const { data: { session } } = await sbClient.auth.getSession();
-      if (session) {
-        const meta = session.user.user_metadata || {};
-        if (meta.role === 'admin' || meta.role === 'accountant') {
-          sessionStorage.setItem('sb_auth_token', session.access_token);
-          sessionStorage.setItem('sb_auth_user', JSON.stringify(meta));
-          HEADERS['Authorization'] = `Bearer ${session.access_token}`;
-          document.getElementById('loginOverlay').style.display = 'none';
-          initAfterLogin();
-          return;
+      try {
+        const { data: { session } } = await sbClient.auth.getSession();
+        if (session) {
+          const meta = session.user.user_metadata || {};
+          if (meta.role === 'admin' || meta.role === 'accountant') {
+            sessionStorage.setItem('sb_auth_token', session.access_token);
+            sessionStorage.setItem('sb_auth_user', JSON.stringify(meta));
+            HEADERS['Authorization'] = `Bearer ${session.access_token}`;
+            document.getElementById('loginOverlay').style.display = 'none';
+            initAfterLogin();
+            return;
+          }
         }
-      }
+      } catch(e) { console.warn('checkSession error:', e); }
       // No valid session, show login
       document.getElementById('loginOverlay').style.display = 'flex';
     }
 
     // Refresh token periodically (every 10 min)
     setInterval(async () => {
-      const { data: { session } } = await sbClient.auth.getSession();
-      if (session) {
-        sessionStorage.setItem('sb_auth_token', session.access_token);
-        HEADERS['Authorization'] = `Bearer ${session.access_token}`;
-      }
+      try {
+        const { data: { session } } = await sbClient.auth.getSession();
+        if (session) {
+          sessionStorage.setItem('sb_auth_token', session.access_token);
+          HEADERS['Authorization'] = `Bearer ${session.access_token}`;
+        }
+      } catch(e) { console.warn('token refresh error:', e); }
     }, 600000);
 
     async function initAfterLogin() {

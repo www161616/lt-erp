@@ -428,11 +428,13 @@
       if (saved) {
         currentUser = JSON.parse(saved);
         // 恢復 auth token
-        const { data: { session } } = await sbClient.auth.getSession();
-        if (session) {
-          HEADERS['Authorization'] = `Bearer ${session.access_token}`;
-          sessionStorage.setItem('sb_auth_token', session.access_token);
-        }
+        try {
+          const { data: { session } } = await sbClient.auth.getSession();
+          if (session) {
+            HEADERS['Authorization'] = `Bearer ${session.access_token}`;
+            sessionStorage.setItem('sb_auth_token', session.access_token);
+          }
+        } catch(e) { console.warn('getSession error:', e); }
         document.getElementById('loginOverlay').style.display = 'none';
         document.getElementById('currentUserLabel').innerText = `👤 ${currentUser.full_name || currentUser.username}`;
         applyRolePermissions();
@@ -543,11 +545,13 @@
 
     // Token 自動刷新
     setInterval(async () => {
-      const { data: { session } } = await sbClient.auth.getSession();
-      if (session) {
-        HEADERS['Authorization'] = `Bearer ${session.access_token}`;
-        sessionStorage.setItem('sb_auth_token', session.access_token);
-      }
+      try {
+        const { data: { session } } = await sbClient.auth.getSession();
+        if (session) {
+          HEADERS['Authorization'] = `Bearer ${session.access_token}`;
+          sessionStorage.setItem('sb_auth_token', session.access_token);
+        }
+      } catch(e) { console.warn('token refresh error:', e); }
     }, 600000);
 
     function handleLogout() {

@@ -1611,8 +1611,10 @@
 
     // Token 自動刷新（每 10 分鐘）
     setInterval(async () => {
-      const { data: { session } } = await sbClient.auth.getSession();
-      if (session) SB_HEADERS['Authorization'] = `Bearer ${session.access_token}`;
+      try {
+        const { data: { session } } = await sbClient.auth.getSession();
+        if (session) SB_HEADERS['Authorization'] = `Bearer ${session.access_token}`;
+      } catch(e) { console.warn('token refresh error:', e); }
     }, 600000);
 
     // 通知徽章自動刷新（每 60 秒從雲端同步後更新）
