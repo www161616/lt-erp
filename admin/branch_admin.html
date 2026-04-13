@@ -170,7 +170,7 @@
     const SB_URL = 'https://asugjynpocwygggttxyo.supabase.co/rest/v1';
     const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFzdWdqeW5wb2N3eWdnZ3R0eHlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNzU3MjksImV4cCI6MjA4ODk1MTcyOX0.LzcRQAl80rZxKKD8NIYWGvylfwCbs1ek5LtKpmZodBc';
     const SB_BASE = 'https://asugjynpocwygggttxyo.supabase.co';
-    const sbClient = supabase.createClient(SB_BASE, SB_KEY);
+    const sbClient = supabase.createClient(SB_BASE, SB_KEY, { auth: { lock: async (name, acquireTimeout, fn) => await fn() } });
     let HEADERS = {
       'apikey': SB_KEY,
       'Authorization': `Bearer ${SB_KEY}`,
