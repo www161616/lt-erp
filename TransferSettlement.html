@@ -119,9 +119,13 @@
 <script>
   const SB_URL = 'https://asugjynpocwygggttxyo.supabase.co/rest/v1';
   const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFzdWdqeW5wb2N3eWdnZ3R0eHlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNzU3MjksImV4cCI6MjA4ODk1MTcyOX0.LzcRQAl80rZxKKD8NIYWGvylfwCbs1ek5LtKpmZodBc';
-  const AUTH_TOKEN = sessionStorage.getItem('sb_auth_token') || SB_KEY;
-  const HEADERS = { 'apikey': SB_KEY, 'Authorization': `Bearer ${AUTH_TOKEN}` };
-  const HEADERS_JSON = { ...HEADERS, 'Content-Type': 'application/json' };
+  function getAuthToken() {
+    return sessionStorage.getItem('sb_auth_token')
+      || (parent !== window && parent.sessionStorage.getItem('sb_auth_token'))
+      || SB_KEY;
+  }
+  function getHeaders() { return { 'apikey': SB_KEY, 'Authorization': `Bearer ${getAuthToken()}` }; }
+  function getHeadersJSON() { return { ...getHeaders(), 'Content-Type': 'application/json' }; }
 
   function fmt(n) { return 'NT$ ' + Number(n || 0).toLocaleString(); }
 
@@ -139,7 +143,7 @@
     try {
       const res = await fetch(`${SB_URL}/rpc/get_settlement_detail`, {
         method: 'POST',
-        headers: HEADERS_JSON,
+        headers: getHeadersJSON(),
         body: JSON.stringify({ p_month: month })
       });
       const data = res.ok ? await res.json() : [];
@@ -203,7 +207,7 @@
     try {
       const res = await fetch(`${SB_URL}/rpc/generate_transfer_settlement`, {
         method: 'POST',
-        headers: HEADERS_JSON,
+        headers: getHeadersJSON(),
         body: JSON.stringify({ p_month: month })
       });
       if (!res.ok) throw new Error(await res.text());
@@ -225,7 +229,7 @@
     try {
       const res = await fetch(`${SB_URL}/rpc/get_store_transfers`, {
         method: 'POST',
-        headers: HEADERS_JSON,
+        headers: getHeadersJSON(),
         body: JSON.stringify({ p_month: month, p_store: store })
       });
       const transfers = res.ok ? await res.json() : [];
