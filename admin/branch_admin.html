@@ -3305,7 +3305,7 @@
           const remainQty = m.purchasedQty - m.pickedQty;
           if (remainQty > 0) return true;
           const hasShortage = pickingStoreNames.some(b => {
-            const distributed = (m.pickingHistory || []).reduce((s, h) => s + (h.branchData[b] || 0), 0);
+            const distributed = (m.pickingHistory || []).reduce((s, h) => s + ((h.branchData && h.branchData[b]) || 0), 0);
             return (m.alloc[b] || 0) - distributed > 0;
           });
           return hasShortage;
@@ -3323,7 +3323,7 @@
 
         // 欠品店家清單（只列有欠的店名）
         const shortageStores = pickingStoreNames.filter(b => {
-          const distributed = (m.pickingHistory || []).reduce((s, h) => s + (h.branchData[b] || 0), 0);
+          const distributed = (m.pickingHistory || []).reduce((s, h) => s + ((h.branchData && h.branchData[b]) || 0), 0);
           return (m.alloc[b] || 0) - distributed > 0;
         });
         const shortageRow = shortageStores.length > 0
@@ -3374,7 +3374,7 @@
       // 計算各店歷次已分總量，本次只帶入「尚欠」數量
       pickingStoreNames.forEach(bName => {
         const totalAlloc = item.alloc[bName] || 0;
-        const alreadyDistributed = (item.pickingHistory || []).reduce((s, h) => s + (h.branchData[bName] || 0), 0);
+        const alreadyDistributed = (item.pickingHistory || []).reduce((s, h) => s + ((h.branchData && h.branchData[bName]) || 0), 0);
         const remaining = Math.max(0, totalAlloc - alreadyDistributed);
         branchData[bName] = { expected: remaining, actual: remaining };
         expectedSum += remaining;
@@ -3443,7 +3443,7 @@
 
         const histTotalByBranch = {};
         pickingStoreNames.forEach(b => {
-          histTotalByBranch[b] = (arrival && arrival.pickingHistory || []).reduce((s, h) => s + (h.branchData[b] || 0), 0);
+          histTotalByBranch[b] = ((arrival && arrival.pickingHistory) || []).reduce((s, h) => s + ((h.branchData && h.branchData[b]) || 0), 0);
         });
         const histTotal = Object.values(histTotalByBranch).reduce((s, v) => s + v, 0);
         const histLine = histTotal > 0
@@ -3895,11 +3895,11 @@
       }
       const totalPicked = item.pickingHistory.reduce((s, h) => s + h.qty, 0);
       const branchTotals = {};
-      pickingStoreNames.forEach(b => { branchTotals[b] = item.pickingHistory.reduce((s, h) => s + (h.branchData[b] || 0), 0); });
+      pickingStoreNames.forEach(b => { branchTotals[b] = item.pickingHistory.reduce((s, h) => s + ((h.branchData && h.branchData[b]) || 0), 0); });
       const branchHeaders = pickingStoreNames.map(b => `<th style="padding:8px; border:1px solid #e2e8f0; text-align:center; min-width:52px;">${b}</th>`).join('');
       const branchFooters = pickingStoreNames.map(b => `<td style="padding:8px; border:1px solid #e2e8f0; text-align:center; color:#2b6cb0; font-weight:bold;">${branchTotals[b]}</td>`).join('');
       const rows = item.pickingHistory.map(h => {
-        const cells = pickingStoreNames.map(b => `<td style="padding:8px; border:1px solid #e2e8f0; text-align:center;">${h.branchData[b] || 0}</td>`).join('');
+        const cells = pickingStoreNames.map(b => `<td style="padding:8px; border:1px solid #e2e8f0; text-align:center;">${(h.branchData && h.branchData[b]) || 0}</td>`).join('');
         return `<tr>
           <td style="padding:8px; border:1px solid #e2e8f0; color:#718096; font-size:12px; white-space:nowrap;">${h.date}</td>
           <td style="padding:8px; border:1px solid #e2e8f0; color:#2b6cb0; font-family:monospace; font-size:12px;">${h.waveId}</td>

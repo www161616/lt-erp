@@ -120,9 +120,19 @@
   const SB_URL = 'https://asugjynpocwygggttxyo.supabase.co/rest/v1';
   const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFzdWdqeW5wb2N3eWdnZ3R0eHlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNzU3MjksImV4cCI6MjA4ODk1MTcyOX0.LzcRQAl80rZxKKD8NIYWGvylfwCbs1ek5LtKpmZodBc';
   function getAuthToken() {
-    return sessionStorage.getItem('sb_auth_token')
-      || (parent !== window && parent.sessionStorage.getItem('sb_auth_token'))
-      || SB_KEY;
+    // 1. 自己的 sessionStorage
+    const t1 = sessionStorage.getItem('sb_auth_token');
+    if (t1) return t1;
+    // 2. 父頁面 sessionStorage（iframe 同源）
+    try { const t2 = parent.sessionStorage.getItem('sb_auth_token'); if (t2) return t2; } catch(e) {}
+    // 3. 父頁面的 getHeaders 函式（index.html 定義的）
+    try { const ph = parent.getHeaders && parent.getHeaders(); if (ph) { const m = ph['Authorization']?.replace('Bearer ', ''); if (m && m !== SB_KEY) return m; } } catch(e) {}
+    // 4. localStorage（Supabase client 可能存在這）
+    try {
+      const keys = Object.keys(localStorage);
+      for (const k of keys) { if (k.includes('auth-token') || k.includes('sb-')) { const v = localStorage.getItem(k); try { const j = JSON.parse(v); if (j?.access_token) return j.access_token; } catch(e2) {} } }
+    } catch(e) {}
+    return SB_KEY;
   }
   function getHeaders() { return { 'apikey': SB_KEY, 'Authorization': `Bearer ${getAuthToken()}` }; }
   function getHeadersJSON() { return { ...getHeaders(), 'Content-Type': 'application/json' }; }
