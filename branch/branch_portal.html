@@ -8688,12 +8688,13 @@ function clrExportExcel() {
   const wsData = [
     [`88折出清清單 — ${clrCurrentPeriod.label} ${statusLabel}`],
     [],
-    ['分店', '商品編號', '商品名稱', '溫層', '數量', '原價', '88折出清價', '備註', '來源']
+    ['登記時間', '分店', '商品編號', '商品名稱', '溫層', '數量', '原價', '88折出清價', '備註', '來源']
   ];
 
   exportItems.forEach(item => {
+    const t = item.created_at ? new Date(item.created_at).toLocaleString('zh-TW', {hour12:false}) : '';
     wsData.push([
-      item.store, item.product_id || '', item.product_name, item.temp || '',
+      t, item.store, item.product_id || '', item.product_name, item.temp || '',
       item.qty, item.price, item.price_clearance,
       item.note || '', item.status === 'carried' ? '上期移轉' : ''
     ]);
@@ -8702,7 +8703,7 @@ function clrExportExcel() {
   const wb = XLSX.utils.book_new();
   const ws = XLSX.utils.aoa_to_sheet(wsData);
   // 設定欄寬
-  ws['!cols'] = [{ wch: 10 }, { wch: 12 }, { wch: 20 }, { wch: 6 }, { wch: 6 }, { wch: 8 }, { wch: 10 }, { wch: 15 }, { wch: 10 }];
+  ws['!cols'] = [{ wch: 18 }, { wch: 10 }, { wch: 12 }, { wch: 20 }, { wch: 6 }, { wch: 6 }, { wch: 8 }, { wch: 10 }, { wch: 15 }, { wch: 10 }];
   XLSX.utils.book_append_sheet(wb, ws, '出清清單');
   XLSX.writeFile(wb, `88折出清_${clrCurrentPeriod.label.replace(/\//g, '')}.xlsx`);
 }
