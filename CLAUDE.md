@@ -45,6 +45,32 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `_pendingBranchOrdersSave` 追蹤 cloudSave 是否完成
 - `cloudLoadAll` 開頭 `await _pendingBranchOrdersSave`，避免切頁時 load 搶先拉到舊資料覆蓋剛存的 localStorage
 
+## 完成功能（2026/04/14）
+
+### admin cloudSave dirty tracking（根治歷史資料被洗掉）
+- **4/14 事故**：萬華 2994→577 筆、經國 4538→2419 筆，1~3 月歷史資料消失
+- **根因**：員工 admin 頁面長時間不關閉，本機 branchOrders 是舊版本。員工在開團總表改了某家店的數字，觸發 cloudSave，把本機 21 家店全推上雲端 → 萬華和經國的完整資料被員工本機的不完整版本覆蓋
+- **修法**：`_dirtyBranchStores = new Set()` 追蹤 admin 改過哪些店
+  - `cloudSave('branchOrders')` 只推 dirty set 裡的店，沒碰的完全不動
+  - dirty set 為空時 cloudSave 直接 return，不推任何東西
+  - 6 個呼叫點（editSummaryQty / clearBranchOrderQty / batchDeleteSummaryItems / finalizeShortageNegotiation / autoCleanBranchOrders / 一次性遷移）全部加上 `_dirtyBranchStores.add(storeName)`
+- **效果**：員工改了泰山的數字 → 只推泰山 → 萬華經國的雲端資料完全不受影響
+
+### submitOrder 精準送出 + 清空加強清同編號殘留
+- **submitOrder bug**：`seenPid` 去重時，如果 orderQtyCache 裡有同 productId 的兩個 key（`D05100201` 和 `D05100201_1/25`），先遇到的舊殘留會佔住 pid → 新匯入的被跳過 → branchOrders 寫了舊值
+- **修法 A（清空加強）**：`startExcelImport` 清空時用 cleanPid 清掉 branchOrders / cache 裡所有同編號的 key（包含 `_1/25` 等舊檔期殘留），跳過 admin 鎖定的
+- **修法 B（精準送出）**：`importedIds` 改存 item.id（不是 csvId），`submitOrder` 直接遍歷 importedIds 讀 cache，不再從整個 cache 撈 → 不會撿到舊殘留
+- `matchedDetails` 新增 `itemId` 欄位
+
+### 萬華經國 1~3 月歷史資料還原
+- 從 Google Sheets CSV 重新解析萬華（index 17）和經國（index 20）的 1~3 月資料
+- 用 RPC 合併（只加不覆蓋）寫回雲端，4 月資料完整保留
+- 萬華：577 → 1124 筆；經國：2419 → 3720 筆
+- 備份檔：`restore_wanhua_jingguo.json`
+
+### 開團總表搜尋預設改為「結單日」
+- HTML option 加 `selected`，`initSummaryPage` 預設值改 `'endDate'`
+
 ## DB 變更（2026/04/11）
 - 新增 Supabase RPC `merge_branch_order(p_store text, p_data jsonb)`
   - SECURITY DEFINER
@@ -52,10 +78,19 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
   - 用 jsonb `||` 運算子做原子 merge，只更新指定 key
   - shared_kv.key 是 PRIMARY KEY，ON CONFLICT (key) 可直接用
 
-## ⚠️ 還在運作但要小心的點（更新 04/11）
+## ⚠️ 還在運作但要小心的點（更新 04/14）
 
-1. **admin 多店 cloudSave 仍有小 race window**：admin 已載入的店，如果該店家之後又送出新資料，admin 下次 cloudSave（多店模式）會用 admin 本機的該店版本覆蓋雲端。頻率低暫不處理。未來可優化為「對每家店 key-level merge」或「只推 dirty store」
-2. **admin 編輯單格的 cloudSave**：10714 的 `editSummaryQty` 仍呼叫 `cloudSave('branchOrders')` 不傳 onlyStore，走多店 merge 路徑。可優化為 `cloudSave('branchOrders', storeName)` 只推單店，效能更好
+1. **branchOrders 結構限制**：`branchOrders[店][商品編號] = 數量`，沒有「結單日」維度。同編號商品重複開團時，新舊檔期共用同一格。目前靠「匯入前清空該結單日殘值」治標
+2. **21 家店塞在同一個 shared_kv jsonb**：branchOrders 超過 1MB，每次 cloudLoadAll 都要拉整份。未來可改為每店獨立 key（`branchOrders_泰山` 等）
+3. **員工 admin 頁面不關閉的風險**：已用 dirty tracking 解決「推送覆蓋」問題。但員工本機看到的開團總表數字可能是過時的（需要切頁或重整才會 cloudLoadAll）
+4. **清空步驟會清同 cleanPid 的所有 key**：包括其他結單日的歷史 key。如果同編號在多個 open 檔期同時進行（罕見），舊檔期數量會被清掉
+5. **portal 匯入樂樂的 `#編號#` regex 不容許空格**：如 `#360407262 #`（編號後有空格）會解析失敗，該筆會被丟進「無法解析」。目前不修改 regex
+
+## Git 備份還原點
+
+- `stable-20260411-branchorders-fixed`：04/11 RPC + 精準送出 + 清空加強完成
+- `stable-20260414-before-admin-fix`：04/14 修 admin dirty tracking 前的狀態
+- 本機備份檔：`branch_portal_backup_4addbb7.html`、`branch_admin_backup_4addbb7.html`、`branch_portal_backup_20260414.html`、`branch_admin_backup_20260414.html`
 
 ## 完成功能（2026/04/10）
 
