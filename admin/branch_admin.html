@@ -181,62 +181,30 @@
     // ============================
     // 雲端同步工具 (shared_kv)
     // ============================
-    // admin cloudSave branchOrders 支援指定「只推這家店」
-    // 用法：cloudSave('branchOrders', '泰山') 只更新泰山，不動其他店
-    //      cloudSave('branchOrders') 維持原行為（推所有店），但會先拉雲端 merge 再推，避免洗掉店家剛送出的新資料
-    async function cloudSave(key, onlyStore) {
+    // admin 追蹤「哪些店被 admin 改過」，cloudSave 只推這些店，不碰其他店
+    // 避免 admin 本機的不完整資料覆蓋雲端的完整資料
+    const _dirtyBranchStores = new Set();
+
+    function cloudSave(key) {
       const raw = localStorage.getItem(key);
       if (raw === null) return;
 
       if (key === 'branchOrders') {
+        // 只推 admin 有改過的店，沒碰的完全不動
+        if (_dirtyBranchStores.size === 0) return;
         const localData = JSON.parse(raw);
-
-        // 1. 只推單店：直接 RPC 合併
-        if (onlyStore) {
+        const storesToPush = [..._dirtyBranchStores];
+        _dirtyBranchStores.clear();
+        const promises = storesToPush.map(storeName => {
+          const storeData = localData[storeName];
+          if (storeData == null) return Promise.resolve();
           return fetch(`${SB_URL}/rpc/merge_branch_order`, {
             method: 'POST',
             headers: { ...HEADERS, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ p_store: onlyStore, p_data: localData[onlyStore] || {} })
-          }).then(r => { if (!r.ok) return r.text().then(t => { throw new Error('RPC failed: ' + t); }); })
-            .catch(e => console.error('cloudSave branchOrders RPC error:', e));
-        }
-
-        // 2. 推多店：先從雲端拉最新，對每家店做「雲端 + 本機差異」的合併再推
-        // 避免 admin 用載入時的舊 snapshot 把雲端新資料（店家剛送出的）覆蓋掉
-        try {
-          const cloudRes = await fetch(`${SB_URL}/shared_kv?key=eq.branchOrders&select=value`, { headers: HEADERS });
-          const rows = cloudRes.ok ? await cloudRes.json() : [];
-          const cloud = (rows[0] && rows[0].value) ? (typeof rows[0].value === 'string' ? JSON.parse(rows[0].value) : rows[0].value) : {};
-
-          // 合併規則：以雲端為基礎，本機有的 key 才覆蓋
-          // 本機「刪掉的 key」仍會在合併後的結果裡消失（批次刪除需要）
-          const merged = {};
-          const allStores = new Set([...Object.keys(cloud), ...Object.keys(localData)]);
-          allStores.forEach(s => {
-            if (localData[s] == null) {
-              // 本機沒這家 → 保留雲端
-              merged[s] = cloud[s] || {};
-            } else {
-              // 本機有這家 → 直接用本機版本（因為本機剛改過）
-              merged[s] = localData[s];
-            }
-          });
-
-          // 把合併結果寫回本機，讓後續讀取一致
-          localStorage.setItem('branchOrders', JSON.stringify(merged));
-
-          // 對所有店並發推 RPC
-          const stores = Object.keys(merged);
-          const promises = stores.map(storeName => fetch(`${SB_URL}/rpc/merge_branch_order`, {
-            method: 'POST',
-            headers: { ...HEADERS, 'Content-Type': 'application/json' },
-            body: JSON.stringify({ p_store: storeName, p_data: merged[storeName] || {} })
-          }).then(r => { if (!r.ok) return r.text().then(t => { throw new Error('RPC failed: ' + t); }); }));
-          return Promise.all(promises).catch(e => console.error('cloudSave branchOrders RPC error:', e));
-        } catch(e) {
-          console.error('cloudSave branchOrders merge error:', e);
-        }
-        return;
+            body: JSON.stringify({ p_store: storeName, p_data: storeData })
+          }).then(r => { if (!r.ok) return r.text().then(t => { throw new Error('RPC failed: ' + t); }); });
+        });
+        return Promise.all(promises).catch(e => console.error('cloudSave branchOrders RPC error:', e));
       }
 
       fetch(`${SB_URL}/shared_kv`, {
@@ -290,6 +258,7 @@
             if (bo[name]) { delete bo[name]; changed = true; }
           });
           if (changed) {
+            Object.values(MIGRATE_MAP).forEach(n => _dirtyBranchStores.add(n));
             localStorage.setItem('branchOrders', JSON.stringify(bo));
             cloudSave('branchOrders');
             // 更新 importedStoreNames：移除簡稱和個人戶
@@ -2704,6 +2673,7 @@
           const cleanK = String(k).replace(/_.*$/, '');
           if (codeSet.has(cleanK)) {
             delete orders[store][k];
+            _dirtyBranchStores.add(store);
             cleanedKeys++;
           }
         });
@@ -5774,6 +5744,7 @@
 
       nego.storeDetails.forEach(s => {
         if (!branchOrders[s.storeName]) branchOrders[s.storeName] = {};
+        _dirtyBranchStores.add(s.storeName);
 
         const choice = s.choice || 'keep'; // 未回覆視為維持
         if (choice === 'keep') {
@@ -10649,6 +10620,7 @@
       targets.forEach(pid => {
         if (saved[storeName][pid] !== undefined) {
           delete saved[storeName][pid];
+          _dirtyBranchStores.add(storeName);
           clearCount++;
         }
       });
@@ -10723,6 +10695,7 @@
       checked.forEach(id => {
         if (branchOrdersData[store] && branchOrdersData[store][id] !== undefined) {
           delete branchOrdersData[store][id];
+          _dirtyBranchStores.add(store);
         }
       });
     });
@@ -10756,6 +10729,7 @@
       if (!branchOrders[storeName]) branchOrders[storeName] = {};
       branchOrders[storeName][itemId] = newQty;
       localStorage.setItem('branchOrders', JSON.stringify(branchOrders));
+      _dirtyBranchStores.add(storeName);
       cloudSave('branchOrders');
       // 寫入鎖定標記
       var locked = JSON.parse(localStorage.getItem('branchOrdersLocked') || '{}');
