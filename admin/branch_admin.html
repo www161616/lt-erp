@@ -224,7 +224,7 @@
               try { localStorage.setItem(r.key, JSON.stringify(r.value)); }
               catch(qe) {
                 // QuotaExceeded：清掉本頁不需要的快取後重試
-                const junk = ['portalSalesOrders','portalTrackingData','supplier_xiaolan_orders','branchOrderList_pre_normalize_backup','bp_orderQtyCache'];
+                const junk = ['portalTrackingData','supplier_xiaolan_orders','branchOrderList_pre_normalize_backup','bp_orderQtyCache'];
                 junk.forEach(k => localStorage.removeItem(k));
                 Object.keys(localStorage).forEach(k => { if (/^branch_inventory_/.test(k) || /^portal_seen_/.test(k) || /_bunRecords$/.test(k) || /_ledger$/.test(k)) localStorage.removeItem(k); });
                 try { localStorage.setItem(r.key, JSON.stringify(r.value)); }
@@ -3104,7 +3104,7 @@
     function saveMockSavedWaves() {
       try { localStorage.setItem('lt_savedWaves', JSON.stringify(mockSavedWaves)); }
       catch(qe) {
-        ['portalSalesOrders','portalTrackingData','supplier_xiaolan_orders','branchOrderList_pre_normalize_backup'].forEach(k => localStorage.removeItem(k));
+        ['portalTrackingData','supplier_xiaolan_orders','branchOrderList_pre_normalize_backup'].forEach(k => localStorage.removeItem(k));
         Object.keys(localStorage).forEach(k => { if (/^branch_inventory_/.test(k)) localStorage.removeItem(k); });
         try { localStorage.setItem('lt_savedWaves', JSON.stringify(mockSavedWaves)); }
         catch(e2) { console.warn('localStorage 空間不足，無法儲存揀貨單'); }
@@ -12119,6 +12119,7 @@
           <th style="width:70px;padding:6px;border:1px solid #e2e8f0;background:#edf2f7;">售價</th>
           <th style="width:70px;padding:6px;border:1px solid #e2e8f0;background:#edf2f7;">進貨價</th>
           <th style="width:80px;padding:6px;border:1px solid #e2e8f0;background:#edf2f7;">採購進度</th>
+          <th style="width:140px;padding:6px;border:1px solid #e2e8f0;background:#edf2f7;">1688訂單號</th>
           <th style="width:130px;padding:6px;border:1px solid #e2e8f0;background:#edf2f7;">1688連結</th>
           <th style="width:90px;padding:6px;border:1px solid #e2e8f0;background:#edf2f7;">退換貨</th>
         </tr></thead><tbody>`;
@@ -12143,6 +12144,8 @@
       const gbUC = gbCostMap[pid] || 0;
       html += `<td style="${tdS}text-align:center;color:#2b6cb0;font-weight:600;">${gbUC ? '$' + Number(gbUC).toFixed(1) : ''}</td>`;
       html += `<td style="${tdS}text-align:center;"><span style="color:${procColor[ordered]||'#718096'};font-weight:600;font-size:11px;">${procLabel[ordered]||'⏳ 待處理'}</span></td>`;
+      const orderNum1688 = r.order_number_1688 || '';
+      html += `<td style="${tdS}text-align:center;"><input type="text" value="${gbEsc(orderNum1688)}" data-pid="${gbEsc(pid)}" placeholder="填入1688訂單號" onblur="onGB1688OrderChange(this)" style="width:120px;font-size:11px;padding:2px 4px;border:1px solid #e2e8f0;border-radius:3px;font-family:monospace;${orderNum1688?'background:#f0fdf4;':''}"></td>`;
       if (r.url) {
         html += `<td style="${tdS}text-align:center;"><span class="shared-link" data-url="${gbEsc(r.url)}" style="color:#2b6cb0;cursor:pointer;text-decoration:underline;font-size:11px;">前往</span> <span onclick="this.nextElementSibling.style.display='inline';this.style.display='none';" style="cursor:pointer;font-size:10px;color:#a0aec0;" title="編輯">✏️</span><input type="text" value="${gbEsc(r.url)}" data-pid="${gbEsc(pid)}" onblur="onGBUrlChange(this)" style="display:none;width:100px;font-size:11px;padding:2px 4px;border:1px solid #e2e8f0;border-radius:3px;"></td>`;
       } else {
@@ -12158,7 +12161,7 @@
     });
 
     if (data.length === 0) {
-      html += `<tr><td colspan="10" style="text-align:center;padding:40px;color:#718096;">訂貨追蹤中沒有廠商為「小瀾」的商品</td></tr>`;
+      html += `<tr><td colspan="11" style="text-align:center;padding:40px;color:#718096;">訂貨追蹤中沒有廠商為「小瀾」的商品</td></tr>`;
     }
 
     html += `</tbody></table></div>
@@ -12182,6 +12185,25 @@
       var row = gbOrderRows.find(function(r) { return r.product_id === pid; });
       if (row) row.url = url;
       renderGBGrid();
+    } catch (err) {
+      Swal.fire('儲存失敗', err.message, 'error');
+    }
+  }
+
+  async function onGB1688OrderChange(input) {
+    var pid = input.dataset.pid;
+    if (!pid) return;
+    var val = input.value.trim();
+    try {
+      var res = await fetch(SB_URL + '/xiaolan_order_tracking?product_id=eq.' + encodeURIComponent(pid), {
+        method: 'PATCH',
+        headers: Object.assign({}, HEADERS, { 'Content-Type': 'application/json' }),
+        body: JSON.stringify({ order_number_1688: val, updated_at: new Date().toISOString() })
+      });
+      if (!res.ok) throw new Error(await res.text());
+      var row = gbOrderRows.find(function(r) { return r.product_id === pid; });
+      if (row) row.order_number_1688 = val;
+      input.style.background = val ? '#f0fdf4' : '';
     } catch (err) {
       Swal.fire('儲存失敗', err.message, 'error');
     }
