@@ -9310,11 +9310,12 @@
       return;
     }
 
-    // 依揀貨單分組
+    // 依揀貨單分組；無 wave_id 的按日期分組（避免全部擠成一張卡片）
     const waveGroups = {};
     data.forEach(o => {
-      if (!waveGroups[o.waveId]) waveGroups[o.waveId] = { orders: [], date: o.createdAt };
-      waveGroups[o.waveId].orders.push(o);
+      const groupKey = o.waveId || ('DATE_' + (o.createdAt || '').slice(0, 10));
+      if (!waveGroups[groupKey]) waveGroups[groupKey] = { orders: [], date: o.createdAt };
+      waveGroups[groupKey].orders.push(o);
     });
 
     const sLabel = { pending:'📋 暫存待確認', confirmed:'✔ 已確認到貨', issued:'✅ 已開立', disputed:'⚠️ 退貨處理中', closed:'📁 已結案' };
@@ -9374,9 +9375,9 @@
         <div style="background:white; border:1px solid ${cardBorder}; border-left:4px solid ${cardBorder}; border-radius:10px; margin-bottom:12px; overflow:hidden;">
           <div style="padding:12px 16px; background:${cardHeaderBg}; border-bottom:1px solid ${cardBorder}; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; cursor:pointer;" onclick="this.parentElement.querySelector('.wave-detail').style.display = this.parentElement.querySelector('.wave-detail').style.display==='none'?'block':'none'">
             <div style="display:flex; align-items:center; gap:12px;">
-              <span style="font-family:monospace; font-weight:bold; color:#2b6cb0; font-size:14px;">${waveId === 'MANUAL' ? '手動開單' : waveId}</span>
+              <span style="font-family:monospace; font-weight:bold; color:#2b6cb0; font-size:14px;">${waveId === 'MANUAL' ? '手動開單' : waveId.startsWith('DATE_') ? '📅 ' + waveId.slice(5) : waveId}</span>
               <span style="font-size:12px; color:#718096;">${group.date.slice(0, 10)}</span>
-              <span style="font-size:12px; color:#718096; font-weight:bold;">${group.orders.length} 間分店</span>
+              <span style="font-size:12px; color:#718096; font-weight:bold;">${group.orders.length} 筆</span>
             </div>
             <div style="display:flex; align-items:center; gap:12px;">
               <span style="font-size:12px;">${statusSummary.join(' / ')}</span>

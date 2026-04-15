@@ -5295,13 +5295,13 @@ function confirmReceived(orderId) {
     if (!result.isConfirmed) return;
     const order = portalOrders.find(o => o.id === orderId);
     if (!order) return;
-    // PATCH DB
-    const patchRes = await fetch(SB_URL + '/sales_orders?id=eq.' + orderId, {
-      method: 'PATCH',
+    // 用 RPC 確認收貨（SECURITY DEFINER 繞過 RLS）
+    const rpcRes = await fetch(SB_URL + '/rpc/confirm_store_received', {
+      method: 'POST',
       headers: { ...SB_HEADERS, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ portal_status: 'confirmed', store_confirmed_at: new Date().toISOString() })
+      body: JSON.stringify({ p_order_id: orderId })
     });
-    if (!patchRes.ok) { Swal.fire('失敗', '更新失敗，請重試', 'error'); return; }
+    if (!rpcRes.ok) { Swal.fire('失敗', '更新失敗，請重試', 'error'); return; }
     const now = new Date();
     const ts = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
     order.status = 'confirmed';
@@ -5396,13 +5396,13 @@ function revokeConfirm(orderId) {
     confirmButtonColor: '#b7791f'
   }).then(async function(result) {
     if (!result.isConfirmed) return;
-    // PATCH DB
-    var patchRes = await fetch(SB_URL + '/sales_orders?id=eq.' + orderId, {
-      method: 'PATCH',
+    // 用 RPC 撤銷確認（SECURITY DEFINER 繞過 RLS）
+    var rpcRes = await fetch(SB_URL + '/rpc/revoke_store_confirmed', {
+      method: 'POST',
       headers: { ...SB_HEADERS, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ portal_status: 'pending', store_confirmed_at: null })
+      body: JSON.stringify({ p_order_id: orderId })
     });
-    if (!patchRes.ok) { Swal.fire('失敗', '更新失敗，請重試', 'error'); return; }
+    if (!rpcRes.ok) { Swal.fire('失敗', '更新失敗，請重試', 'error'); return; }
     var order = portalOrders.find(function(o) { return o.id === orderId; });
     if (order) { order.status = 'pending'; order.storeConfirmedAt = null; }
     Swal.fire({ icon: 'success', title: '已撤銷確認', timer: 1500, showConfirmButton: false });
