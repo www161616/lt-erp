@@ -5273,10 +5273,10 @@ function openReturnReport(orderId, itemIdx, type) {
       if (!reason) { Swal.showValidationMessage('請填寫原因說明'); return false; }
       return { qty, reason, type };
     }
-  }).then(result => {
+  }).then(async result => {
     if (result.isConfirmed) {
-      submitReturnReport(orderId, itemIdx, result.value);
-      Swal.fire({ title: '已送出！', text: '您的回報已送至總倉處理', icon: 'success', confirmButtonColor: '#be185d' });
+      await submitReturnReport(orderId, itemIdx, result.value);
+      await Swal.fire({ title: '已送出！', text: '您的回報已送至總倉處理', icon: 'success', confirmButtonColor: '#be185d' });
       showBillingDetail(orderId);
     }
   });
