@@ -8651,7 +8651,7 @@
           finalAmount: Number(o.grand_total) || 0,
           note: o.note || '',
           orderType: o.order_type || 'normal',
-          items: null // 明細在需要時載入
+          items: [] // 明細在需要時載入
         };
       });
       // 合併：DB 資料為基底，session 中 push 的保留
