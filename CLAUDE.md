@@ -40,25 +40,46 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - **修法**：syncToERP 建商品後，用 cleanPid 清除 branchOrders 裡同編號的所有歷史殘留
 - admin 鎖定的數量跳過不清
 
-## 發現的問題（2026/04/15，待處理）
+## 已修復問題（2026/04/15）
 
-### portal 退貨回報 RLS 問題（高優先）
-- **問題**：store 角色沒有 sales_details 和 sales_orders 的 UPDATE 權限
-- `submitReturnReport` PATCH sales_details → 被 RLS 擋 → 回傳 200 但更新 0 行 → 本地顯示「已回報」但 DB 沒寫入 → 重整後回到原狀
-- **正確做法**：建 RPC `submit_return_report` 用 SECURITY DEFINER 繞過 RLS
-- **同時要做**：PATCH `sales_orders.portal_status = 'disputed'`，讓 admin 能在列表看到退貨通知
+### portal 寫入端 RLS 問題（已修）
+- **事故原因**：`11c428c` 把銷貨單從 shared_kv 搬到 DB，只改了讀取端沒改寫入端。store 角色沒有 sales_orders / sales_details 的 UPDATE 權限，所有 PATCH 靜默失敗（回傳 200 但更新 0 行）
+- **影響範圍**：confirmReceived（確認收貨）、revokeConfirm（撤銷確認）、submitReturnReport（退貨回報）全部壞掉
+- **修法**：建 3 個 RPC（SECURITY DEFINER）取代直接 PATCH
+  - `submit_return_report(p_detail_id, p_order_id, p_return_qty, p_return_reason, p_report_type)` — 同時更新 sales_details + sales_orders.portal_status='disputed'
+  - `confirm_store_received(p_order_id)` — 確認收貨
+  - `revoke_store_confirmed(p_order_id)` — 撤銷確認
+- **教訓**：搬家型改動必須同時改讀取端和寫入端，必須用 store 帳號測試
+
+### admin 銷貨單明細空白（已修）
+- **問題**：`loadMockSalesOrdersFromDB` 設 `items: []`，`showSalesOrderDetail` 沒有從 DB 載入
+- **修法**：`showSalesOrderDetail` 改 async，items 為空時從 sales_details 載入（含退貨欄位）
+
+### admin 銷貨單混入 index.html 客戶（已修）
+- **問題**：`loadMockSalesOrdersFromDB` 沒有篩選條件，撈了整張 sales_orders 表，index.html 的客戶（樂鎂、恩蕾、央廚等）混入分店銷貨單管理
+- **修法**：加 `customer_name=like.*包子媽*` 篩選
+
+### admin 銷貨單商品數量顯示 0（已修）
+- **問題**：列表用 `o.items.length` 顯示商品數，但 items 永遠是空陣列
+- **修法**：載入時批量查 sales_details 筆數存到 `o.itemCount`，列表用 `itemCount` 顯示
+
+### admin 無 wave_id 銷貨單擠成一組（已修）
+- **問題**：沒有 wave_id 的銷貨單全部歸到同一組，顯示為超大卡片（239 間分店）
+- **修法**：無 wave_id 的按日期分組，文字「間分店」改「筆」
+
+### portal 退貨標籤統一顯示「退」（已修）
+- **問題**：不管 reportType 是 shortage/damaged/missing/return，都顯示「退」
+- **修法**：依 reportType 顯示 少/損/缺/退
+
+### 歷史退貨資料 portal_status 補正（已手動修）
+- 14 筆歷史退貨資料中，10 筆的 portal_status 沒更新成 disputed（舊版 PATCH 時代的資料）
+- 已處理完的（received/rejected）3 筆不動，requested 的 5 筆已手動 PATCH 為 disputed
+
+## 待處理問題（2026/04/15）
 
 ### portal_status disputed 狀態回寫（中優先）
 - admin 處理完退貨後（接受/拒絕/收到/免退），目前沒有把 portal_status 改回 `issued`
 - 需要在 adminAcceptReturn / adminRejectReturn / adminWaiveReturn / adminMarkReturnReceived 加檢查：所有 items returnStatus 都已處理 → 改回 issued
-
-### admin 銷貨單列表退貨 badge（低優先）
-- admin 銷貨單列表用 `o.items.some(i => i.returnStatus !== 'none')` 判斷退貨，但 items: [] 永遠為空
-- 改用 `o.status === 'disputed'` 判斷即可（等 RPC 修好後）
-
-### admin 銷貨單管理無 wave_id 分組問題（低優先）
-- 沒有 wave_id 的銷貨單（舊單、EZTOOL 匯入）全部歸到同一組，顯示為超大卡片（如 239 間分店）
-- 可改為按日期分組
 
 ## DB 變更（2026/04/15）
 - `xiaolan_order_tracking` 新增 `order_number_1688 TEXT`
@@ -923,7 +944,9 @@ function openSharedLink(url) {
 
 **違反此規則 = 浪費使用者一整天修 bug，絕對不可接受。**
 
-### 禁止行為
+### 禁止行為（嚴格執行，違反任何一條都不可接受）
+- **絕對禁止猜測任何事實**：不知道就說「我不知道」，不確定就問使用者。包括但不限於：哪家店、哪張單、哪個欄位、哪個版本、什麼時候改的、誰做的、在哪個頁面。用猜的會浪費使用者時間追錯方向，絕對不可接受。必須用 grep、DB 查詢、git log 等工具確認事實後才能回答。
+- **絕對禁止自做主張**：任何不確定的決策都要先問使用者。不要自己假設「應該是這樣」然後就做了。問一句話只花 5 秒，做錯了要花一整天修。
 - 不確定欄位名時禁止猜測，一律查 `docs/supabase/` CSV
 - 不要每改一個功能就 push，等使用者確認後再推
 - 漂漂館區功能不自行增減，有疑問先問
