@@ -8670,15 +8670,32 @@
   async function loadMockSalesOrdersFromDB() {
     if (_mockSOLoaded) return;
     try {
+      // 只抓分店（包子媽）的銷貨單，不抓 index.html 的一般客戶
       var all = [], offset = 0;
       while (true) {
-        var res = await fetch(SB_URL + '/sales_orders?select=*&order=created_at.desc&limit=1000&offset=' + offset, { headers: HEADERS });
+        var res = await fetch(SB_URL + '/sales_orders?customer_name=like.*包子媽*&select=*&order=created_at.desc&limit=1000&offset=' + offset, { headers: HEADERS });
         if (!res.ok) break;
         var data = await res.json();
         all = all.concat(data);
         if (data.length < 1000) break;
         offset += 1000;
       }
+
+      // 批量查每張單的明細筆數（一次查完，不逐筆）
+      var itemCountMap = {};
+      try {
+        var orderIds = all.map(function(o) { return o.id; });
+        // 分批查（避免 URL 太長）
+        for (var b = 0; b < orderIds.length; b += 50) {
+          var batch = orderIds.slice(b, b + 50);
+          var cRes = await fetch(SB_URL + '/sales_details?order_id=in.(' + batch.join(',') + ')&select=order_id', { headers: HEADERS });
+          if (cRes.ok) {
+            var cRows = await cRes.json();
+            cRows.forEach(function(r) { itemCountMap[r.order_id] = (itemCountMap[r.order_id] || 0) + 1; });
+          }
+        }
+      } catch(e) { console.warn('查明細筆數失敗:', e); }
+
       var dbOrders = all.map(function(o) {
         var ca = new Date(o.created_at);
         var fmt = ca.getFullYear() + '/' + String(ca.getMonth()+1).padStart(2,'0') + '/' + String(ca.getDate()).padStart(2,'0') + ' ' + String(ca.getHours()).padStart(2,'0') + ':' + String(ca.getMinutes()).padStart(2,'0');
@@ -8694,7 +8711,8 @@
           finalAmount: Number(o.grand_total) || 0,
           note: o.note || '',
           orderType: o.order_type || 'normal',
-          items: [] // 明細在需要時載入
+          itemCount: itemCountMap[o.id] || 0,
+          items: [] // 完整明細在點開時載入
         };
       });
       // 合併：DB 資料為基底，session 中 push 的保留
@@ -8702,7 +8720,7 @@
       var sessionOnly = mockSalesOrders.filter(function(o) { return !existingIds.has(o.id); });
       mockSalesOrders = dbOrders.concat(sessionOnly);
       _mockSOLoaded = true;
-      console.log('[mockSalesOrders] 從 DB 載入', dbOrders.length, '筆');
+      console.log('[mockSalesOrders] 從 DB 載入', dbOrders.length, '筆（僅分店）');
     } catch(e) { console.error('loadMockSalesOrdersFromDB error:', e); }
   }
 
@@ -9319,14 +9337,15 @@
 
       const storeRows = group.orders.map(o => {
         const amount = o.status === 'issued' ? o.finalAmount : calcOrderAmount(o);
-        const hasReturn = (o.items || []).some(i => i.returnStatus !== 'none');
+        const hasReturn = o.status === 'disputed';
+        const itemCountDisplay = o.items.length > 0 ? o.items.length : (o.itemCount || 0);
         return `<tr style="border-bottom:1px solid #f1f5f9; cursor:pointer; transition:0.15s;" onmouseover="this.style.background='#f0f7ff'" onmouseout="this.style.background=''" onclick="showSalesOrderDetail('${o.id}')">
           <td style="padding:8px 6px; text-align:center; width:32px;" onclick="event.stopPropagation();">
             <input type="checkbox" class="so-check" value="${o.id}" onchange="updateSOSelectCount()" style="width:16px; height:16px; cursor:pointer;">
           </td>
           <td style="padding:8px 12px; font-weight:bold; font-size:13px;">${o.storeName}</td>
           <td style="padding:8px 12px; font-family:monospace; font-size:11px; color:#718096;">${o.id}</td>
-          <td style="padding:8px 12px; font-size:12px;">${(o.items || []).length} 項${hasReturn ? ' <span style="color:#c53030; font-size:11px;">有退貨</span>' : ''}</td>
+          <td style="padding:8px 12px; font-size:12px;">${itemCountDisplay} 項${hasReturn ? ' <span style="color:#c53030; font-size:11px;">退貨處理中</span>' : ''}</td>
           <td style="padding:8px 12px; text-align:right; font-weight:bold; font-size:13px;">$${amount.toLocaleString()}</td>
           <td style="padding:8px 12px; text-align:center;">
             <span style="font-size:11px; font-weight:bold; color:${sColor[o.status]};">${sLabel[o.status]}</span>
