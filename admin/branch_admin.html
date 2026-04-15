@@ -9604,10 +9604,32 @@
   }
 
   // ── 明細頁 ──
-  function showSalesOrderDetail(id) {
+  async function showSalesOrderDetail(id) {
     syncSalesOrdersFromPortal();
     const o = mockSalesOrders.find(s => s.id === id);
     if (!o) return;
+
+    // 從 DB 載入明細（items 為空時）
+    if (!o.items || o.items.length === 0) {
+      try {
+        const dRes = await fetch(`${SB_URL}/sales_details?order_id=eq.${id}&select=*&order=id.asc`, { headers: HEADERS });
+        if (dRes.ok) {
+          const details = await dRes.json();
+          o.items = details.map(d => ({
+            detailId: d.id, productId: d.product_id, name: d.product_name,
+            qty: Math.abs(d.qty), unitPrice: Number(d.unit_price) || 0,
+            cost: Number(d.unit_cost) || 0, note: d.note || '',
+            expectedQty: d.expected_qty || 0,
+            returnQty: d.return_qty || 0,
+            returnStatus: d.return_status || 'none',
+            returnReason: d.return_reason || '',
+            reportType: d.report_type || '',
+            adminReturnQty: 0, rejectionReason: ''
+          }));
+        }
+      } catch(e) { console.error('載入銷貨單明細失敗:', e); }
+    }
+
     const editable = o.status !== 'closed';
     const amount   = o.finalAmount || calcOrderAmount(o);
 
