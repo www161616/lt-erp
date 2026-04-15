@@ -45,7 +45,86 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `_pendingBranchOrdersSave` 追蹤 cloudSave 是否完成
 - `cloudLoadAll` 開頭 `await _pendingBranchOrdersSave`，避免切頁時 load 搶先拉到舊資料覆蓋剛存的 localStorage
 
-## 完成功能（2026/04/14）
+## 完成功能（2026/04/14 下午）
+
+### 每日備份工具（Google Apps Script）
+- **Google Drive 資料夾**：`LT-ERP 備份`（程式自動建立）
+- **每月一個 Google Sheet**：如 `2026-04`，每天新增一個分頁快照（如 `04-14`），永不刪除
+- **備份內容**：branchOrders / branchOrderList / branchOrdersLocked / branchDataList / importedStoreNames / branchTypeMap
+- **branchOrders 分頁格式**：開團總表矩陣（結單日分組 YYYY-MM-DD 格式，新到舊排序，含商品名稱 + 各店數量 + 合計）
+- **商品名稱來源**：先查 branchOrderList，查不到再從 products 表補
+- **Google Drive JSON**：每日存完整 JSON 檔（可用於還原）
+- **備份紀錄**分頁追蹤每次備份的時間、成功/失敗、筆數摘要
+- **排程**：每日凌晨 2 點自動執行（setupDailyTrigger 已設定）
+- **Apps Script 專案**：獨立於 Sheet，不依賴特定 Sheet ID
+- ERP 端完全不用改，備份邏輯獨立在 Google Apps Script
+- ⚠️ 資料夾名稱必須精確匹配 `LT-ERP 備份`，否則會重建新資料夾
+
+### 大備份工具（Console 腳本，手動執行）
+- 在 branch_admin Console 跑一段腳本，匯出所有 Supabase 表 + localStorage 到 JSON 下載
+- 備份 34 張表 + 14 個 localStorage key
+- 檔名：`LT-ERP-完整備份-YYYY-MM-DD.json`
+- 還原方式：用 Supabase REST API 逐表 INSERT（注意外鍵順序）
+
+### portalSalesOrders 從自動清除名單移除
+- **問題**：localStorage QuotaExceeded 時，`portalSalesOrders` 被列在可清除名單，清掉後 cloudSave 把不完整版本推上雲端 → 所有店的「今日進貨單」4/8~4/13 資料消失
+- **修法**：branch_admin.html 兩處自動清除名單移除 `portalSalesOrders`
+  - 第 227 行 cloudLoadAll 的 QuotaExceeded catch
+  - 第 3107 行 saveMockSavedWaves 的 QuotaExceeded catch
+- **效果**：`portalSalesOrders` 現在跟 `lt_savedWaves` 一樣不可被自動清除
+- ⚠️ branch_portal.html 沒有自動清除 portalSalesOrders 的程式碼，不需要改
+
+### 店轉店刪除按鈕隱藏
+- branch_portal.html 第 3715 行 `canDelete` 改為 `false`
+- 原因：store 角色沒有 DELETE 權限，按了沒反應。統一用「作廢」代替
+- 作廢功能正常（PATCH status='cancelled'）
+
+### 4/13 銷貨單補回 portalSalesOrders
+- **問題**：portalSalesOrders 被 QuotaExceeded 清除後，4/8~4/13 的單在「今日進貨單」和「銷貨單管理」都看不到
+- **修法**：Console 腳本從 sales_orders + sales_details 重建 4/13 的 51 筆單
+  - 用 lt_savedWaves 的 delivery_date + 各店分配配對 waveId
+  - PICK-915474（17 店）、PICK-405103（16 店）、PICK-369116（15 店）正確配對
+  - 5 筆手動開單正確標記為「手動開單」
+  - storeName 用短名格式（「泰山」不是「包子媽-泰山店」），跟 portal 的 currentStore.name 一致
+  - 明細用 `order_id`（不是 `sales_order_id`）查 sales_details
+  - 每次查 5 筆避免 URL 太長 400 錯誤
+- ⚠️ 店家的確認收貨、退貨回報紀錄無法還原（只存在 portalSalesOrders，DB 沒有）
+- ⚠️ 4/8~4/12 的單尚未補回
+
+### sales_orders order_date 修正（149 筆）
+- **問題**：發現 149 筆銷貨單的 `order_date` 被改成錯誤日期（如 SO20260407010 的 order_date 被改成 2026-04-14）
+- **根因**：程式碼在開銷貨單時，可能把舊單的 order_date 一起改成當天日期（具體觸發點待查）
+- **影響範圍**：跨 14 家店、日期從 3/31 到 4/8 都有被改
+- **修法**：Console 腳本從單號 ID 還原正確日期（SO20260407010 → 2026-04-07）
+  - 成功修正 106 筆
+  - 43 筆舊格式單號（SO00001~SO00046、SO-20260323-134）無法從 ID 取日期，未修正
+- ⚠️ **order_date 被改壞的 bug 尚未找到根因**，可能會再發生
+
+### 平鎮店店轉店還原
+- TF20260413-191750 誤作廢 → Console PATCH 改回 status='pending'
+- TF20260414-155705/155702/155659 互助交流按錯 → Console PATCH 作廢
+
+## 發現的問題（2026/04/14，待處理）
+
+### portalSalesOrders 架構問題（高優先）
+- `portalSalesOrders` 存在 shared_kv，跟 branchOrders 有相同的覆蓋風險
+- 確認收貨（storeConfirmedAt）、退貨回報（returnStatus/returnQty）只存在 portalSalesOrders，DB 沒有
+- **正確做法**：「今日進貨單」改成直接讀 DB，確認收貨和退貨回報也寫進 DB
+- **需要先在 DB 加欄位**：
+  - sales_orders 加 3 欄：`wave_id TEXT`、`portal_status TEXT`、`issued_at TIMESTAMP`
+  - sales_details 加 6 欄：`expected_qty INTEGER`、`selling_price NUMERIC`、`return_qty INTEGER`、`return_status TEXT`、`return_reason TEXT`、`report_type TEXT`
+
+### order_date 被改壞的 bug（中優先）
+- 149 筆銷貨單的 order_date 被改成非原始日期
+- 疑似在開銷貨單時，批次更新了不相關的舊單的 order_date
+- 需要 grep 所有 PATCH sales_orders 且包含 order_date 的程式碼，找出觸發點
+
+### branchOrders 孤兒資料（低優先）
+- 備份工具發現大量「無結單日」的商品（branchOrderList 已刪除但 branchOrders 殘留）
+- 這些孤兒 key 佔空間且未來同編號開團會帶出舊數量
+- 等 branchOrders 加結單日維度時一併清理
+
+## 完成功能（2026/04/14 早上）
 
 ### admin cloudSave dirty tracking（根治歷史資料被洗掉）
 - **4/14 事故**：萬華 2994→577 筆、經國 4538→2419 筆，1~3 月歷史資料消失
@@ -85,6 +164,11 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 3. **員工 admin 頁面不關閉的風險**：已用 dirty tracking 解決「推送覆蓋」問題。但員工本機看到的開團總表數字可能是過時的（需要切頁或重整才會 cloudLoadAll）
 4. **清空步驟會清同 cleanPid 的所有 key**：包括其他結單日的歷史 key。如果同編號在多個 open 檔期同時進行（罕見），舊檔期數量會被清掉
 5. **portal 匯入樂樂的 `#編號#` regex 不容許空格**：如 `#360407262 #`（編號後有空格）會解析失敗，該筆會被丟進「無法解析」。目前不修改 regex
+6. **portalSalesOrders 覆蓋風險**：跟 branchOrders 同樣問題，已從自動清除名單移除但仍存在 shared_kv 覆蓋風險。確認收貨/退貨回報只存 shared_kv 不存 DB，資料丟失無法還原
+7. **order_date 會被改壞**：開銷貨單時可能把舊單的 order_date 改成當天日期，bug 根因未查到
+8. **店轉店刪除按鈕已隱藏**：store 角色沒有 DELETE 權限，統一用作廢。canDelete 設為 false
+9. **4/8~4/12 銷貨單未補回 portalSalesOrders**：DB 資料完整但「今日進貨單」和「銷貨單管理」看不到這些單
+10. **舊格式銷貨單 order_date 未修正**：SO00001~SO00046、SO-20260323-134 共 43 筆無法從 ID 還原日期
 
 ## Git 備份還原點
 
@@ -472,13 +556,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 branchOrders[店][商品編號][結單日] = 數量
 ```
 
-**需要改的地方**（明天再做）：
+**需要改的地方**：
 1. ImportGroupBuy 寫入邏輯（雖然 menu 拿掉但檔案還在）
 2. branch_portal 結單填表的讀取/寫入
 3. 開團總表（branch_portal + branch_admin 都要改）
 4. 訂貨追蹤 syncOrderTrackingData
 5. 一次性遷移腳本：把現有 branchOrders 資料按檔期拆開
 6. 各讀取端的 fallback 補丁可以拆掉
+7. **清理孤兒資料**：branchOrders 裡存在但 branchOrderList 已無對應的商品（04/14 備份工具發現大量「無結單日」孤兒 key，各店都有數量但開團總表查不到）。遷移時一併清除，釋放空間並避免未來同編號開團帶出舊數量
+8. **branchOrderList id 統一用純編號**：目前 syncToERP 寫純編號、ImportGroupBuy 寫 `編號_結單日`，改造後 id 一律用純編號（跟 products 表一致），結單日由 branchOrders 第三層結構區分
 
 ### 中優先：店家匯入樂樂前的舊數量自動處理
 - 目前店家自己有「清除數量」按鈕，但要記得按

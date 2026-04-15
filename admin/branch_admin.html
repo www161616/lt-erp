@@ -216,7 +216,7 @@
 
     async function cloudLoadAll() {
       try {
-        const resp = await fetch(`${SB_URL}/shared_kv?key=in.("branchOrderList","branchOrders","branchDataList","branchTypeMap","portalAllRequests","portalTransferList","portalMutualAidBoard","portalSalesOrders","importedStoreNames","importedPersonalNames","lt_savedWaves","lt_backorderMeta","branchOrdersLocked","shortageNegotiations")`, { headers: HEADERS });
+        const resp = await fetch(`${SB_URL}/shared_kv?key=in.("branchOrderList","branchOrders","branchDataList","branchTypeMap","portalAllRequests","portalTransferList","portalMutualAidBoard","importedStoreNames","importedPersonalNames","lt_savedWaves","lt_backorderMeta","branchOrdersLocked","shortageNegotiations")`, { headers: HEADERS });
         if (resp.ok) {
           const rows = await resp.json();
           rows.forEach(r => {
@@ -502,6 +502,7 @@
 
         applyRolePermissions();
         await cloudLoadAll();
+        loadMockSalesOrdersFromDB(); // 背景載入銷貨單（不 await，不擋登入）
         await updateSidebarBadges();
         await logActivity('登入系統', 'USER', `員工 ${currentUser.username} 登入成功`);
 
@@ -578,6 +579,7 @@
     window.onload = async () => {
       await checkLoginStatus();
       await cloudLoadAll();
+      loadMockSalesOrdersFromDB(); // 背景載入銷貨單
       await updateSidebarBadges();
       fetchCustomers();
       fetchSuppliers();
@@ -681,7 +683,7 @@
         renderBackupStation();
       } else if (tabId === 'accounting') {
         title.innerText = '當前功能：銷貨單管理';
-        renderAccountingStation();
+        loadMockSalesOrdersFromDB().then(() => renderAccountingStation());  return;
       } else if (tabId === 'warehouseReturn') {
         title.innerText = '當前功能：轉回總倉記錄';
         renderWarehouseReturn();
@@ -4747,12 +4749,15 @@
             }
             if (res.ok) {
               if (!soId) { successCount++; continue; }
+              // PATCH 新欄位到 DB（wave_id, portal_status, issued_at）
+              fetch(SB_URL + '/sales_orders?id=eq.' + soId, {
+                method: 'PATCH', headers: { ...HEADERS, 'Content-Type': 'application/json' },
+                body: JSON.stringify({ wave_id: waveId, portal_status: 'pending', issued_at: new Date().toISOString() })
+              }).catch(e => console.error('PATCH new fields failed:', e));
               const issuedTime = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
-              // createdAt 用配送日（跟 order_date 一致），時間用當下
               const createdAtTime = wave.delivery_date
                 ? `${wave.delivery_date.replace(/-/g, '/')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`
                 : issuedTime;
-              // 同步到 mockSalesOrders（讓 portal 今日進貨單也看得到）
               console.log('[generateSalesOrder] push storeName:', branch);
               mockSalesOrders.push({
                 id: soId,
@@ -6247,7 +6252,11 @@
         if (soRes.ok) {
           const soData = await soRes.json();
           soId = typeof soData === 'string' ? soData : (soData.order_id || soData.id || '');
-          // 同步到 mockSalesOrders（讓 portal 看得到）
+          // PATCH 新欄位
+          fetch(SB_URL + '/sales_orders?id=eq.' + soId, {
+            method: 'PATCH', headers: { ...HEADERS, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ wave_id: 'RESTOCK-' + backorderId, portal_status: 'pending', issued_at: new Date().toISOString() })
+          }).catch(e => console.error('PATCH restock fields failed:', e));
           const issuedTime = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
           mockSalesOrders.push({
             id: soId, dbId: soId, waveId: 'RESTOCK-' + backorderId, storeName: store,
@@ -8611,20 +8620,51 @@
   // 功能六：銷貨單與帳務管理
   // ============================
 
-  // 從 localStorage 載入銷貨單（頁面重新整理也不會遺失）
-  let mockSalesOrders = JSON.parse(localStorage.getItem('portalSalesOrders') || '[]');
+  // 銷貨單資料（從 DB 載入，不再依賴 portalSalesOrders shared_kv）
+  let mockSalesOrders = [];
+  let _mockSOLoaded = false;
+
+  async function loadMockSalesOrdersFromDB() {
+    if (_mockSOLoaded) return;
+    try {
+      var all = [], offset = 0;
+      while (true) {
+        var res = await fetch(SB_URL + '/sales_orders?select=*&order=created_at.desc&limit=1000&offset=' + offset, { headers: HEADERS });
+        if (!res.ok) break;
+        var data = await res.json();
+        all = all.concat(data);
+        if (data.length < 1000) break;
+        offset += 1000;
+      }
+      var dbOrders = all.map(function(o) {
+        var ca = new Date(o.created_at);
+        var fmt = ca.getFullYear() + '/' + String(ca.getMonth()+1).padStart(2,'0') + '/' + String(ca.getDate()).padStart(2,'0') + ' ' + String(ca.getHours()).padStart(2,'0') + ':' + String(ca.getMinutes()).padStart(2,'0');
+        var sca = null;
+        if (o.store_confirmed_at) { var sc = new Date(o.store_confirmed_at); sca = sc.getFullYear() + '/' + String(sc.getMonth()+1).padStart(2,'0') + '/' + String(sc.getDate()).padStart(2,'0') + ' ' + String(sc.getHours()).padStart(2,'0') + ':' + String(sc.getMinutes()).padStart(2,'0'); }
+        return {
+          id: o.id, dbId: o.id, waveId: o.wave_id || '',
+          storeName: o.customer_name || '',
+          createdAt: fmt,
+          storeConfirmedAt: sca,
+          status: o.portal_status || 'issued',
+          issuedAt: o.issued_at ? (function(d){ return d.getFullYear()+'/'+String(d.getMonth()+1).padStart(2,'0')+'/'+String(d.getDate()).padStart(2,'0')+' '+String(d.getHours()).padStart(2,'0')+':'+String(d.getMinutes()).padStart(2,'0'); })(new Date(o.issued_at)) : fmt,
+          finalAmount: Number(o.grand_total) || 0,
+          note: o.note || '',
+          orderType: o.order_type || 'normal',
+          items: null // 明細在需要時載入
+        };
+      });
+      // 合併：DB 資料為基底，session 中 push 的保留
+      var existingIds = new Set(dbOrders.map(function(o) { return o.id; }));
+      var sessionOnly = mockSalesOrders.filter(function(o) { return !existingIds.has(o.id); });
+      mockSalesOrders = dbOrders.concat(sessionOnly);
+      _mockSOLoaded = true;
+      console.log('[mockSalesOrders] 從 DB 載入', dbOrders.length, '筆');
+    } catch(e) { console.error('loadMockSalesOrdersFromDB error:', e); }
+  }
 
   function syncSalesOrdersToPortal() {
-    // 去重後再存，避免累積重複資料
-    const seenIds = new Set();
-    const unique = mockSalesOrders.filter(o => {
-      if (seenIds.has(o.id)) return false;
-      seenIds.add(o.id);
-      return true;
-    });
-    mockSalesOrders = unique;
-    localStorage.setItem('portalSalesOrders', JSON.stringify(unique));
-    cloudSave('portalSalesOrders');
+    // 不再 cloudSave portalSalesOrders，資料已在 DB
   }
 
   // 銷貨單開立後自動更新分店庫存
@@ -8667,49 +8707,7 @@
   }
 
   function syncSalesOrdersFromPortal() {
-    // 先去重 mockSalesOrders 本身
-    const seenIds = new Set();
-    mockSalesOrders = mockSalesOrders.filter(o => {
-      if (seenIds.has(o.id)) return false;
-      seenIds.add(o.id);
-      return true;
-    });
-    try {
-      const portalData = JSON.parse(localStorage.getItem('portalSalesOrders') || '[]');
-      portalData.forEach(po => {
-        const local = mockSalesOrders.find(o => o.id === po.id);
-        if (!local) {
-          // localStorage 有但 mockSalesOrders 沒有的訂單，加入
-          mockSalesOrders.push(po);
-          return;
-        }
-        // 同步店家確認到貨狀態
-        if (po.status === 'confirmed' && local.status === 'pending') {
-          local.status = 'confirmed';
-          local.storeConfirmedAt = po.storeConfirmedAt;
-        }
-        // 同步 PendingReview 審核後的 issued 狀態
-        if (po.status === 'issued' && local.status !== 'issued' && local.status !== 'closed') {
-          local.status = 'issued';
-          local.issuedAt = po.issuedAt;
-        }
-        // 同步退貨狀態
-        let hasNewReturn = false;
-        po.items.forEach((pi, idx) => {
-          if (local.items[idx] && pi.returnStatus === 'requested' && local.items[idx].returnStatus === 'none') {
-            local.items[idx].returnQty = pi.returnQty;
-            local.items[idx].returnStatus = 'requested';
-            local.items[idx].returnReason = pi.returnReason || '';
-            local.items[idx].reportType = pi.reportType || 'return';
-            hasNewReturn = true;
-          }
-        });
-        // 有新退貨申請時，自動將狀態改為退貨處理中
-        if (hasNewReturn && (local.status === 'issued' || local.status === 'confirmed')) {
-          local.status = 'disputed';
-        }
-      });
-    } catch(e) { console.error('syncSalesOrdersFromPortal error:', e); }
+    // 不再從 portalSalesOrders localStorage 同步，資料已改由 DB 載入
   }
 
   // 需求表：從各分店 localStorage 同步
@@ -9166,6 +9164,13 @@
     }
 
     var status = createType === 'issued' ? 'issued' : 'pending';
+    // PATCH 新欄位
+    if (dbId) {
+      fetch(SB_URL + '/sales_orders?id=eq.' + dbId, {
+        method: 'PATCH', headers: { ...HEADERS, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ wave_id: 'MANUAL', portal_status: status, issued_at: status === 'issued' ? new Date().toISOString() : null })
+      }).catch(function(e) { console.error('PATCH manual order fields failed:', e); });
+    }
 
     mockSalesOrders.push({
       id: soId,
@@ -12120,7 +12125,6 @@
           <th style="width:70px;padding:6px;border:1px solid #e2e8f0;background:#edf2f7;">進貨價</th>
           <th style="width:80px;padding:6px;border:1px solid #e2e8f0;background:#edf2f7;">採購進度</th>
           <th style="width:140px;padding:6px;border:1px solid #e2e8f0;background:#edf2f7;">1688訂單號</th>
-          <th style="width:130px;padding:6px;border:1px solid #e2e8f0;background:#edf2f7;">1688連結</th>
           <th style="width:90px;padding:6px;border:1px solid #e2e8f0;background:#edf2f7;">退換貨</th>
         </tr></thead><tbody>`;
 
@@ -12146,11 +12150,6 @@
       html += `<td style="${tdS}text-align:center;"><span style="color:${procColor[ordered]||'#718096'};font-weight:600;font-size:11px;">${procLabel[ordered]||'⏳ 待處理'}</span></td>`;
       const orderNum1688 = r.order_number_1688 || '';
       html += `<td style="${tdS}text-align:center;"><input type="text" value="${gbEsc(orderNum1688)}" data-pid="${gbEsc(pid)}" placeholder="填入1688訂單號" onblur="onGB1688OrderChange(this)" style="width:120px;font-size:11px;padding:2px 4px;border:1px solid #e2e8f0;border-radius:3px;font-family:monospace;${orderNum1688?'background:#f0fdf4;':''}"></td>`;
-      if (r.url) {
-        html += `<td style="${tdS}text-align:center;"><span class="shared-link" data-url="${gbEsc(r.url)}" style="color:#2b6cb0;cursor:pointer;text-decoration:underline;font-size:11px;">前往</span> <span onclick="this.nextElementSibling.style.display='inline';this.style.display='none';" style="cursor:pointer;font-size:10px;color:#a0aec0;" title="編輯">✏️</span><input type="text" value="${gbEsc(r.url)}" data-pid="${gbEsc(pid)}" onblur="onGBUrlChange(this)" style="display:none;width:100px;font-size:11px;padding:2px 4px;border:1px solid #e2e8f0;border-radius:3px;"></td>`;
-      } else {
-        html += `<td style="${tdS}text-align:center;"><input type="text" placeholder="貼上1688連結" data-pid="${gbEsc(pid)}" onblur="onGBUrlChange(this)" style="width:100px;font-size:11px;padding:2px 4px;border:1px solid #e2e8f0;border-radius:3px;"></td>`;
-      }
       // 退換貨欄
       const pendingCnt = gbReturnPendingMap[pid] || 0;
       const pendingBadge = pendingCnt > 0
@@ -12161,7 +12160,7 @@
     });
 
     if (data.length === 0) {
-      html += `<tr><td colspan="11" style="text-align:center;padding:40px;color:#718096;">訂貨追蹤中沒有廠商為「小瀾」的商品</td></tr>`;
+      html += `<tr><td colspan="10" style="text-align:center;padding:40px;color:#718096;">訂貨追蹤中沒有廠商為「小瀾」的商品</td></tr>`;
     }
 
     html += `</tbody></table></div>

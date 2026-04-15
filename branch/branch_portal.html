@@ -1144,7 +1144,7 @@
       try {
         // portal 不需要的大 key，主動清掉騰空間
         ['lt_savedWaves','lt_backorderMeta','supplier_xiaolan_orders','branchOrderList_pre_normalize_backup'].forEach(k => localStorage.removeItem(k));
-        const resp = await fetch(`${SB_URL}/shared_kv?key=in.("branchOrderList","branchOrders","branchDataList","branchTypeMap","portalAllRequests","portalMutualAidBoard","portalTrackingData","portalBulletin","portalSalesOrders","branchOrdersLocked","shortageNegotiations")`, { headers: SB_HEADERS });
+        const resp = await fetch(`${SB_URL}/shared_kv?key=in.("branchOrderList","branchOrders","branchDataList","branchTypeMap","portalAllRequests","portalMutualAidBoard","portalTrackingData","portalBulletin","branchOrdersLocked","shortageNegotiations")`, { headers: SB_HEADERS });
         if (resp.ok) {
           const rows = await resp.json();
           rows.forEach(r => {
@@ -1233,9 +1233,7 @@
         ? Math.max(...aidBoard.map(a => parseInt(a.id.replace('MA','')) || 0)) + 1
         : 1;
 
-      // 待結貨款（從共用 key 讀，篩選本店）
-      const allSO = JSON.parse(localStorage.getItem('portalSalesOrders') || '[]');
-      portalOrders = allSO.filter(o => o.storeName === currentStore?.name);
+      // portalOrders 改由 initBillingPage 從 DB 載入，不再依賴 portalSalesOrders
 
       // 進貨紀錄（改由 Supabase sales_orders 查詢，initHistoryPage 時載入）
 
@@ -3712,7 +3710,7 @@ function renderTransferPage() {
       : mine.map(t => {
           const st = t.admin_status || 'pending';
           const isCancelled = st === 'cancelled';
-          const canDelete = (now - new Date(t.created_at))/1000/3600 < 24 && st === 'pending';
+          const canDelete = false; // store 角色無 DELETE 權限，統一用作廢
           const canCancel = !isCancelled && st !== 'received';
           const statusBadge = `<span style="background:${adminStatusBg[st]||'#f3f4f6'}; color:${adminStatusColor[st]||'#374151'}; padding:2px 8px; border-radius:10px; font-size:11px; font-weight:700; white-space:nowrap;">${adminStatusLabel[st]||st}</span>`;
           const noteHtml = t.warehouse_note ? `<div style="font-size:11px; color:#2563eb; margin-top:2px;">總倉：${t.warehouse_note}</div>` : '';
@@ -4444,10 +4442,52 @@ function onTfCategoryChange(idx, category) {
 // ============================
 // 待結貨款
 // ============================
-// 銷貨單資料（各店獨立，由 initStoreData 從 localStorage 載入）
+// 銷貨單資料（從 DB 載入，不再依賴 portalSalesOrders shared_kv）
 let portalOrders = [];
 
 const MONTHLY_FEE = 5000;
+
+function _fmtTs(iso) {
+  if (!iso) return '';
+  var d = new Date(iso);
+  return d.getFullYear() + '/' + String(d.getMonth()+1).padStart(2,'0') + '/' + String(d.getDate()).padStart(2,'0') + ' ' + String(d.getHours()).padStart(2,'0') + ':' + String(d.getMinutes()).padStart(2,'0');
+}
+
+function _dbOrderToPortal(o) {
+  return {
+    id: o.id, dbId: o.id, waveId: o.wave_id || '',
+    storeName: o.customer_name || '',
+    createdAt: _fmtTs(o.created_at),
+    storeConfirmedAt: o.store_confirmed_at ? _fmtTs(o.store_confirmed_at) : null,
+    status: o.portal_status || 'issued',
+    issuedAt: o.issued_at ? _fmtTs(o.issued_at) : _fmtTs(o.created_at),
+    finalAmount: Number(o.grand_total) || 0,
+    note: o.note || '',
+    orderType: o.order_type || 'normal',
+    items: null  // 明細懶載入
+  };
+}
+
+function _dbDetailToPortal(d) {
+  return {
+    detailId: d.id, productId: d.product_id || '',
+    name: d.product_name || '', expectedQty: d.expected_qty || d.qty || 0,
+    qty: d.qty || 0, unitPrice: Number(d.unit_price) || 0,
+    sellingPrice: Number(d.selling_price) || 0,
+    returnQty: d.return_qty || 0, returnStatus: d.return_status || 'none',
+    returnReason: d.return_reason || '', reportType: d.report_type || '',
+    returnDate: '', damaged: d.report_type === 'damaged',
+    adminReturnQty: 0, note: d.note || ''
+  };
+}
+
+async function _loadOrderItems(orderId) {
+  try {
+    var res = await fetch(SB_URL + '/sales_details?order_id=eq.' + orderId + '&select=*', { headers: SB_HEADERS });
+    if (res.ok) return (await res.json()).map(_dbDetailToPortal);
+  } catch(e) { console.error('_loadOrderItems error:', e); }
+  return [];
+}
 
 function calcPortalOrderAmount(order) {
   if (order.items && order.items.length > 0) {
@@ -4729,12 +4769,28 @@ function exportDeliveryPreviewExcel() {
   XLSX.writeFile(wb, '到貨預告_' + myName + '_' + targetDate + '.xlsx');
 }
 
-function initBillingPage() {
-  // 重讀最新資料
-  const freshSO = JSON.parse(localStorage.getItem('portalSalesOrders') || '[]');
-  console.log('[billing] currentStore.name:', currentStore?.name);
-  console.log('[billing] portalSalesOrders storeName samples:', freshSO.slice(0,3).map(o=>o.storeName));
-  portalOrders = freshSO.filter(o => o.storeName === currentStore?.name);
+async function initBillingPage() {
+  document.getElementById('billingTableBody').innerHTML = '<tr><td colspan="6" style="padding:24px; text-align:center; color:#9ca3af;">載入中...</td></tr>';
+  const custId = await findCustomerId();
+  if (!custId) {
+    document.getElementById('billingTableBody').innerHTML = '<tr><td colspan="6" style="padding:24px; text-align:center; color:#9ca3af;">找不到對應的客戶資料</td></tr>';
+    return;
+  }
+  try {
+    var all = [], offset = 0;
+    while (true) {
+      var res = await fetch(SB_URL + '/sales_orders?customer_id=eq.' + custId + '&select=*&order=created_at.desc&limit=1000&offset=' + offset, { headers: SB_HEADERS });
+      if (!res.ok) break;
+      var data = await res.json();
+      all = all.concat(data);
+      if (data.length < 1000) break;
+      offset += 1000;
+    }
+    portalOrders = all.map(_dbOrderToPortal);
+  } catch(e) {
+    console.error('initBillingPage error:', e);
+    portalOrders = [];
+  }
   const months = [...new Set(portalOrders.map(r => r.createdAt.substring(0,7)))].sort().reverse();
   const now = new Date();
   const thisMonth = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}`;
@@ -4806,12 +4862,11 @@ function renderBillingPage() {
   document.getElementById('billingDetailTitle').textContent = '← 點左側單號查看明細';
 }
 
-function showBillingDetail(orderId) {
-  // 重讀最新資料
-  const freshSO = JSON.parse(localStorage.getItem('portalSalesOrders') || '[]');
-  portalOrders = freshSO.filter(o => o.storeName === currentStore?.name);
+async function showBillingDetail(orderId) {
   const r = portalOrders.find(r => r.id === orderId);
   if (!r) return;
+  // 懶載入明細
+  if (!r.items) r.items = await _loadOrderItems(orderId);
   document.getElementById('billingDetailTitle').textContent = `${r.id}`;
   document.getElementById('billingDetailBtns').style.display = 'flex';
   document.getElementById('billingDetailBtns').setAttribute('data-order-id', r.id);
@@ -4885,7 +4940,7 @@ function showBillingDetail(orderId) {
       <div style="font-size:12px; color:#6b7280;">建立時間：${r.createdAt}${r.issuedAt?'　開立時間：'+r.issuedAt:''}${r.storeConfirmedAt?'　確認到貨：'+r.storeConfirmedAt:''}</div>
       <div style="display:flex; align-items:center; gap:8px;">
         ${r.status === 'pending' ? `<button onclick="confirmReceived('${r.id}')" style="padding:6px 16px; background:#047857; color:white; border:none; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;">✅ 確認收貨</button>` : ''}
-        ${r.status === 'confirmed' && !r.dbId ? `<button onclick="revokeConfirm('${r.id}')" style="padding:6px 16px; background:#b7791f; color:white; border:none; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;">↩ 撤銷確認</button>` : ''}
+        ${r.status === 'confirmed' ? `<button onclick="revokeConfirm('${r.id}')" style="padding:6px 16px; background:#b7791f; color:white; border:none; border-radius:6px; font-size:13px; font-weight:700; cursor:pointer; font-family:inherit;">↩ 撤銷確認</button>` : ''}
         <span style="background:${sc.bg}; color:${sc.text}; padding:3px 12px; border-radius:8px; font-size:12px; font-weight:700;">${sc.label}</span>
       </div>
     </div>`;
@@ -5236,18 +5291,23 @@ function confirmReceived(orderId) {
     confirmButtonText: '✅ 確認收貨',
     cancelButtonText: '取消',
     confirmButtonColor: '#047857'
-  }).then(result => {
+  }).then(async result => {
     if (!result.isConfirmed) return;
-    const allSO = JSON.parse(localStorage.getItem('portalSalesOrders') || '[]');
-    const order = allSO.find(o => o.id === orderId);
+    const order = portalOrders.find(o => o.id === orderId);
     if (!order) return;
+    // PATCH DB
+    const patchRes = await fetch(SB_URL + '/sales_orders?id=eq.' + orderId, {
+      method: 'PATCH',
+      headers: { ...SB_HEADERS, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ portal_status: 'confirmed', store_confirmed_at: new Date().toISOString() })
+    });
+    if (!patchRes.ok) { Swal.fire('失敗', '更新失敗，請重試', 'error'); return; }
     const now = new Date();
     const ts = `${now.getFullYear()}/${String(now.getMonth()+1).padStart(2,'0')}/${String(now.getDate()).padStart(2,'0')} ${String(now.getHours()).padStart(2,'0')}:${String(now.getMinutes()).padStart(2,'0')}`;
     order.status = 'confirmed';
     order.storeConfirmedAt = ts;
-    localStorage.setItem('portalSalesOrders', JSON.stringify(allSO));
-    cloudSave('portalSalesOrders');
-    // 確認收貨時自動更新分店庫存
+    // 確認收貨時自動更新分店庫存（需先載入明細）
+    if (!order.items) order.items = await _loadOrderItems(orderId);
     if (order.items && order.items.length > 0) {
       const inv = getInventory();
       const invMap = {};
@@ -5267,34 +5327,31 @@ function confirmReceived(orderId) {
       });
       saveInventory(inv);
     }
-    // 同步到 DB（有 dbId 才 PATCH）
-    if (order.dbId) {
-      fetch(SB_URL + '/sales_orders?id=eq.' + order.dbId, {
-        method: 'PATCH',
-        headers: { ...SB_HEADERS, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ store_confirmed_at: new Date().toISOString() })
-      }).catch(function(e) { console.error('PATCH store_confirmed_at failed:', e); });
-    }
-    // 更新本地
-    portalOrders = allSO.filter(o => o.storeName === currentStore?.name);
     Swal.fire({ title: '已確認收貨！', text: '總倉將會開立正式銷貨單', icon: 'success', timer: 1500, showConfirmButton: false });
     renderBillingPage();
   });
 }
 
-function submitReturnReport(orderId, itemIdx, data) {
-  const allSO = JSON.parse(localStorage.getItem('portalSalesOrders') || '[]');
-  const order = allSO.find(o => o.id === orderId);
-  if (!order || !order.items[itemIdx]) return;
-
+async function submitReturnReport(orderId, itemIdx, data) {
+  const order = portalOrders.find(o => o.id === orderId);
+  if (!order || !order.items || !order.items[itemIdx]) return;
   const item = order.items[itemIdx];
+
+  // PATCH sales_details in DB
+  if (item.detailId) {
+    var patchRes = await fetch(SB_URL + '/sales_details?id=eq.' + item.detailId, {
+      method: 'PATCH',
+      headers: { ...SB_HEADERS, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ return_qty: data.qty, return_status: 'requested', return_reason: data.reason, report_type: data.type })
+    });
+    if (!patchRes.ok) { Swal.fire('回報失敗', '無法更新退貨資料，請重試', 'error'); return; }
+  }
+
+  // 更新本地
   item.returnQty = data.qty;
   item.returnStatus = 'requested';
   item.returnReason = data.reason;
   item.reportType = data.type;
-
-  localStorage.setItem('portalSalesOrders', JSON.stringify(allSO));
-  cloudSave('portalSalesOrders');
 
   // 退貨時自動將庫存加回
   const returnQty = parseInt(data.qty) || 0;
@@ -5314,9 +5371,6 @@ function submitReturnReport(orderId, itemIdx, data) {
     }
     saveInventory(inv);
   }
-
-  // 同步更新本地 portalOrders
-  portalOrders = allSO.filter(o => o.storeName === currentStore?.name);
 }
 
 function printReturnSlipFromBtn() {
@@ -5333,24 +5387,17 @@ function revokeConfirm(orderId) {
     confirmButtonText: '確認撤銷',
     cancelButtonText: '取消',
     confirmButtonColor: '#b7791f'
-  }).then(function(result) {
+  }).then(async function(result) {
     if (!result.isConfirmed) return;
-    var allSO = JSON.parse(localStorage.getItem('portalSalesOrders') || '[]');
-    var order = allSO.find(function(o) { return o.id === orderId; });
-    if (!order) return;
-    order.status = 'pending';
-    order.storeConfirmedAt = null;
-    localStorage.setItem('portalSalesOrders', JSON.stringify(allSO));
-    cloudSave('portalSalesOrders');
-    // 同步清除 DB 的 store_confirmed_at
-    if (order.dbId) {
-      fetch(SB_URL + '/sales_orders?id=eq.' + order.dbId, {
-        method: 'PATCH',
-        headers: { ...SB_HEADERS, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ store_confirmed_at: null })
-      }).catch(function(e) { console.error('revoke DB sync failed:', e); });
-    }
-    portalOrders = allSO.filter(function(o) { return o.storeName === currentStore?.name; });
+    // PATCH DB
+    var patchRes = await fetch(SB_URL + '/sales_orders?id=eq.' + orderId, {
+      method: 'PATCH',
+      headers: { ...SB_HEADERS, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ portal_status: 'pending', store_confirmed_at: null })
+    });
+    if (!patchRes.ok) { Swal.fire('失敗', '更新失敗，請重試', 'error'); return; }
+    var order = portalOrders.find(function(o) { return o.id === orderId; });
+    if (order) { order.status = 'pending'; order.storeConfirmedAt = null; }
     Swal.fire({ icon: 'success', title: '已撤銷確認', timer: 1500, showConfirmButton: false });
     renderBillingPage();
   });
@@ -9214,13 +9261,22 @@ async function importFromSalesOrders() {
   });
   if (!fromDate) return;
 
-  const allSO = JSON.parse(localStorage.getItem('portalSalesOrders') || '[]');
-  const myName = currentStore?.name || '';
-  const myOrders = allSO.filter(o => {
-    if (o.orderType === 'return') return false;
-    const nameMatch = o.storeName === myName || o.storeName === '包子媽-' + myName + '店';
-    return nameMatch && o.createdAt && o.createdAt.replace(/\//g, '-').substring(0, 10) === fromDate;
-  });
+  // 從 DB 查詢該日進貨單
+  const custId = await findCustomerId();
+  if (!custId) { Swal.fire('錯誤', '找不到對應的客戶資料', 'error'); return; }
+  const soRes = await fetch(SB_URL + '/sales_orders?customer_id=eq.' + custId + '&order_date=eq.' + fromDate + '&order_type=neq.return&select=id,grand_total,created_at', { headers: SB_HEADERS });
+  if (!soRes.ok) { Swal.fire('查詢失敗', '無法讀取進貨單', 'error'); return; }
+  const myOrdersRaw = await soRes.json();
+  // 載入明細
+  let allItems = [];
+  for (let i = 0; i < myOrdersRaw.length; i += 5) {
+    const batch = myOrdersRaw.slice(i, i + 5).map(o => o.id);
+    const dRes = await fetch(SB_URL + '/sales_details?order_id=in.(' + batch.join(',') + ')&select=product_id,product_name,qty', { headers: SB_HEADERS });
+    if (dRes.ok) allItems = allItems.concat(await dRes.json());
+  }
+  const myOrders = myOrdersRaw.map(o => ({
+    items: allItems.filter(d => d.order_id === o.id).map(d => ({ productId: d.product_id, name: d.product_name, qty: d.qty }))
+  }));
 
   if (myOrders.length === 0) {
     Swal.fire('無資料', `${fromDate} 之後沒有進貨單`, 'info');
