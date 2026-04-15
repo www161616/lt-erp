@@ -2767,18 +2767,13 @@
       localStorage.setItem('branchOrderList', JSON.stringify(saved));
       cloudSave('branchOrderList');
 
-      // ④ 自動清掉本次新建商品在分店訂貨表的歷史殘留（會跳確認彈窗）
+      // ④ 結果提示（殘值清除改由 portal 匯入樂樂時處理，不在建商品時清）
       Swal.close();
-      const codes = stagingList.map(it => it.code);
-      const cleaned = await autoCleanBranchOrdersForNewProducts(codes);
-
-      // ⑤ 結果提示
       let msg = '';
       if (productWriteError) msg += `⚠️ 商品主檔寫入失敗：${productWriteError}<br>（檔期仍已同步至分店）<br>`;
       if (savedCount)      msg += `✅ 寫入 ERP 商品主檔：<b>${savedCount}</b> 件新品<br>`;
       if (skipped.length)  msg += `⏭️ 編號已存在跳過：<b>${skipped.length}</b> 件<br>`;
       msg += `📤 已同步 <b>${stagingList.length}</b> 件至分店結單填表`;
-      if (cleaned) msg += `<br>🧹 已清除歷史殘留數量`;
 
       // 匯入後同步訂貨追蹤給分店
       syncOrderTrackingData().then(() => syncProcurementToPortal());
