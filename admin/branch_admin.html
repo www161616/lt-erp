@@ -9259,7 +9259,7 @@
     const sLabel = { pending:'📋 暫存待確認', confirmed:'✔ 已確認到貨', issued:'✅ 已開立', disputed:'⚠️ 退貨處理中', closed:'📁 已結案' };
     const sColor = { pending:'#92400e', confirmed:'#1d4ed8', issued:'#047857', disputed:'#c53030', closed:'#718096' };
 
-    const cards = Object.entries(waveGroups).reverse().map(([waveId, group]) => {
+    const cards = Object.entries(waveGroups).sort((a, b) => (b[1].date || '').localeCompare(a[1].date || '')).map(([waveId, group]) => {
       const totalAmt = group.orders.reduce((s, o) => s + (o.finalAmount || calcOrderAmount(o)), 0);
       const pendingCount = group.orders.filter(o => o.status === 'pending').length;
       const confirmedCount = group.orders.filter(o => o.status === 'confirmed').length;
@@ -9276,14 +9276,14 @@
 
       const storeRows = group.orders.map(o => {
         const amount = o.status === 'issued' ? o.finalAmount : calcOrderAmount(o);
-        const hasReturn = o.items.some(i => i.returnStatus !== 'none');
+        const hasReturn = (o.items || []).some(i => i.returnStatus !== 'none');
         return `<tr style="border-bottom:1px solid #f1f5f9; cursor:pointer; transition:0.15s;" onmouseover="this.style.background='#f0f7ff'" onmouseout="this.style.background=''" onclick="showSalesOrderDetail('${o.id}')">
           <td style="padding:8px 6px; text-align:center; width:32px;" onclick="event.stopPropagation();">
             <input type="checkbox" class="so-check" value="${o.id}" onchange="updateSOSelectCount()" style="width:16px; height:16px; cursor:pointer;">
           </td>
           <td style="padding:8px 12px; font-weight:bold; font-size:13px;">${o.storeName}</td>
           <td style="padding:8px 12px; font-family:monospace; font-size:11px; color:#718096;">${o.id}</td>
-          <td style="padding:8px 12px; font-size:12px;">${o.items.length} 項${hasReturn ? ' <span style="color:#c53030; font-size:11px;">有退貨</span>' : ''}</td>
+          <td style="padding:8px 12px; font-size:12px;">${(o.items || []).length} 項${hasReturn ? ' <span style="color:#c53030; font-size:11px;">有退貨</span>' : ''}</td>
           <td style="padding:8px 12px; text-align:right; font-weight:bold; font-size:13px;">$${amount.toLocaleString()}</td>
           <td style="padding:8px 12px; text-align:center;">
             <span style="font-size:11px; font-weight:bold; color:${sColor[o.status]};">${sLabel[o.status]}</span>
