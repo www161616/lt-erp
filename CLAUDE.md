@@ -4,6 +4,73 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # 龍潭總倉 ERP 系統
 
+## 完成功能（2026/04/15）
+
+### Google Sheets 雙向同步（取代 supplier_xiaolan.html）
+- **目的**：小瀾改用 Google Sheets 管理採購，取代 supplier_xiaolan.html
+- **Google Apps Script**：`google-apps-script/xiaolan_sync.gs`
+  - 7 個分頁自動建立：叫貨清單、訂單記錄、到貨清單、退換貨、漂漂館、月結報表、設定
+  - 雙向同步 Supabase ↔ Google Sheets（每 5 分鐘自動或手動）
+  - 智能匯入 1688/拼多多訂單（自動偵測格式，支援有表頭/無表頭/自由格式）
+  - 月結報表產生（篩選用途=團購，含合計列，可選月份）
+  - 配對公式：先用 1688 訂單號比對，找不到再用 linked_product 比對商品編號
+  - 進貨價自動同步到 xiaolan_order_tracking
+- **DB 變更**：`xiaolan_order_tracking` 新增 `order_number_1688 TEXT`
+- **RLS 變更**：xiaolan_* 6 張表加 anon SELECT/INSERT/UPDATE（Apps Script 用 anon key）
+- **branch_admin 團購叫貨區**：
+  - 新增「1688訂單號」欄位（助理下單後填入，小瀾在 Sheets 自動配對）
+  - 移除「1688連結」欄位（不再需要）
+  - `onGB1688OrderChange` 函式 PATCH 到 xiaolan_order_tracking
+
+### admin 開團總表 cleanPid fallback
+- **問題**：1-3 月 CSV 匯入的 branchOrders key 帶 `_結單日` 後綴（如 `360324014_3/26`），但 branchOrderList 的 id 是純編號（`360324014`），admin 開團總表直接用 `item.id` 查 → 查不到 → 顯示 0
+- **修法**：`filterAdminSummary` 加 cleanPid + 結單日 fallback（與 portal 相同邏輯）
+- **影響**：只改 branch_admin.html 的 `filterAdminSummary`，不影響 portal
+
+### 銷貨單明細從 DB 載入
+- **問題**：`loadMockSalesOrdersFromDB` 設 `items: []`，但 `showSalesOrderDetail` 直接用 `o.items` 渲染，沒有從 DB 載入 → 頁面重整後品項全部空白
+- **修法**：`showSalesOrderDetail` 改為 async，items 為空時從 `sales_details` 載入
+- **載入欄位**：包含 return_status, return_qty, return_reason, report_type 等退貨欄位
+
+### portal 退貨回報 await 修正
+- **問題**：`openReturnReport` 呼叫 `submitReturnReport` 時沒有 await → PATCH DB + 本地更新未完成就重新渲染 → 狀態沒變
+- **修法**：`.then(async result =>` + `await submitReturnReport()` + `await Swal.fire()`
+
+### 商品建檔後自動清殘值
+- **修法**：syncToERP 建商品後，用 cleanPid 清除 branchOrders 裡同編號的所有歷史殘留
+- admin 鎖定的數量跳過不清
+
+## 發現的問題（2026/04/15，待處理）
+
+### portal 退貨回報 RLS 問題（高優先）
+- **問題**：store 角色沒有 sales_details 和 sales_orders 的 UPDATE 權限
+- `submitReturnReport` PATCH sales_details → 被 RLS 擋 → 回傳 200 但更新 0 行 → 本地顯示「已回報」但 DB 沒寫入 → 重整後回到原狀
+- **正確做法**：建 RPC `submit_return_report` 用 SECURITY DEFINER 繞過 RLS
+- **同時要做**：PATCH `sales_orders.portal_status = 'disputed'`，讓 admin 能在列表看到退貨通知
+
+### portal_status disputed 狀態回寫（中優先）
+- admin 處理完退貨後（接受/拒絕/收到/免退），目前沒有把 portal_status 改回 `issued`
+- 需要在 adminAcceptReturn / adminRejectReturn / adminWaiveReturn / adminMarkReturnReceived 加檢查：所有 items returnStatus 都已處理 → 改回 issued
+
+### admin 銷貨單列表退貨 badge（低優先）
+- admin 銷貨單列表用 `o.items.some(i => i.returnStatus !== 'none')` 判斷退貨，但 items: [] 永遠為空
+- 改用 `o.status === 'disputed'` 判斷即可（等 RPC 修好後）
+
+### admin 銷貨單管理無 wave_id 分組問題（低優先）
+- 沒有 wave_id 的銷貨單（舊單、EZTOOL 匯入）全部歸到同一組，顯示為超大卡片（如 239 間分店）
+- 可改為按日期分組
+
+## DB 變更（2026/04/15）
+- `xiaolan_order_tracking` 新增 `order_number_1688 TEXT`
+- xiaolan_* 6 張表加 anon RLS（SELECT/INSERT/UPDATE）
+
+## Git 還原點（更新 04/15）
+
+- `stable-20260415-before-return-rpc`：04/15 退貨 RPC 修改前的穩定狀態
+- `stable-20260411-branchorders-fixed`：04/11 RPC + 精準送出 + 清空加強完成
+- `stable-20260414-before-admin-fix`：04/14 修 admin dirty tracking 前的狀態
+- 本機備份檔：`branch_portal_backup_20260415.html`、`branch_admin_backup_20260415.html`
+
 ## 完成功能（2026/04/11）
 
 ### branchOrders 雲端覆蓋根治：改用 RPC merge_branch_order 原子合併
