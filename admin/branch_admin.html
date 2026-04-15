@@ -10580,12 +10580,24 @@
       tbody.innerHTML = pageData.map((item, idx) => {
         const bg = idx % 2 === 1 ? '#fafafa' : '#fff';
         const isClosed = item.status === 'closed';
-        const total = allColumnNames.reduce((s, n) => s + ((branchOrders[n] && branchOrders[n][item.id]) || 0), 0);
+        const _cleanId = (item.productId || item.id || '').replace(/_.*$/, '');
+        function _lookupBO(store, id) {
+          if (!branchOrders[store]) return 0;
+          var v = branchOrders[store][id];
+          if (v && Number(v) > 0) return Number(v);
+          // cleanPid fallback：查帶日期尾碼的 key
+          var sum = 0;
+          Object.entries(branchOrders[store]).forEach(function(e) {
+            if (e[0].replace(/_.*$/, '') === _cleanId && Number(e[1]) > 0) sum += Number(e[1]);
+          });
+          return sum;
+        }
+        const total = allColumnNames.reduce((s, n) => s + _lookupBO(n, item.id), 0);
         const statusBtn = isClosed
           ? `<button onclick="toggleSummaryStatus('${item.id}')" style="background:#fef2f2; color:#c53030; border:1px solid #c53030; padding:3px 8px; border-radius:4px; font-size:11px; cursor:pointer; font-weight:bold; white-space:nowrap;">🔴結</button>`
           : `<button onclick="toggleSummaryStatus('${item.id}')" style="background:#f0fdf4; color:#276749; border:1px solid #276749; padding:3px 8px; border-radius:4px; font-size:11px; cursor:pointer; font-weight:bold; white-space:nowrap;">🟢開</button>`;
         const storeCells = summaryStoreNames.map(n => {
-          const qty = (branchOrders[n] && branchOrders[n][item.id]) || 0;
+          const qty = _lookupBO(n, item.id);
           const filled = qty > 0;
           const cellBg = isClosed ? (filled ? '#e0f2fe' : '#fef2f2') : (filled ? '' : '');
           const cellColor = filled ? 'color:#2b6cb0; font-weight:600;' : (isClosed ? 'color:#fca5a5;' : 'color:#d1d5db;');
@@ -10595,7 +10607,7 @@
           return `<td style="${tdCell} ${cellColor} ${cellBg ? 'background:'+cellBg+';' : ''} ${locked ? 'background:#fef3c7;' : ''} cursor:pointer;" onclick="editSummaryQty(this,'${n}','${item.id}',${qty})" title="點擊編輯">${cellDisplay}${lockIcon}</td>`;
         }).join('');
         const personalCells = summaryPersonalNames.map(n => {
-          const qty = (branchOrders[n] && branchOrders[n][item.id]) || 0;
+          const qty = _lookupBO(n, item.id);
           return `<td style="${tdCell} ${qty > 0 ? 'color:#92400e; font-weight:600; background:#fef3c7;' : 'color:#718096;'}">${qty > 0 ? qty : '-'}</td>`;
         }).join('');
         return `<tr style="background:${bg}; ${isClosed ? 'opacity:0.7;' : ''}">
