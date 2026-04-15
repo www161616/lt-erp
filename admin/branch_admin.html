@@ -2767,8 +2767,56 @@
       localStorage.setItem('branchOrderList', JSON.stringify(saved));
       cloudSave('branchOrderList');
 
-      // ④ 結果提示（殘值清除改由 portal 匯入樂樂時處理，不在建商品時清）
+      // ④ 清除該結單日商品的殘留數量（邏輯同 portal：用 cleanPid 清所有同編號 key，admin 鎖定跳過）
       Swal.close();
+      const endDateForClean = stagingList[0]?.endDate || '';
+      if (endDateForClean) {
+        const orders = JSON.parse(localStorage.getItem('branchOrders') || '{}');
+        const locked = JSON.parse(localStorage.getItem('branchOrdersLocked') || '{}');
+        const cleanPids = new Set(stagingList.map(it => String(it.code).replace(/_.*$/, '')));
+        // 掃描所有店，找同 cleanPid 有值的 key
+        let residualCount = 0;
+        Object.entries(orders).forEach(([store, m]) => {
+          const storeLocked = locked[store] || {};
+          Object.entries(m || {}).forEach(([k, v]) => {
+            if (storeLocked[k]) return;
+            const kClean = String(k).replace(/_.*$/, '');
+            if (cleanPids.has(kClean) && Number(v) > 0) residualCount++;
+          });
+        });
+        if (residualCount > 0) {
+          const cleanR = await Swal.fire({
+            title: '偵測到歷史殘留',
+            html: `<div style="text-align:left;font-size:13px;">
+              結單日 <b>${endDateForClean}</b> 的商品在各店有 <b>${residualCount}</b> 筆舊數量。<br><br>
+              <div style="background:#fff3cd;padding:10px;border-radius:6px;color:#856404;font-size:12px;">
+                清除後店家會從 0 開始填寫。<br>admin 鎖定的數量不受影響。
+              </div></div>`,
+            icon: 'warning', showCancelButton: true,
+            confirmButtonText: '清除殘留數量', cancelButtonText: '保留',
+            confirmButtonColor: '#dc2626'
+          });
+          if (cleanR.isConfirmed) {
+            let cleaned = 0;
+            Object.entries(orders).forEach(([store, m]) => {
+              const storeLocked = locked[store] || {};
+              Object.keys(m || {}).forEach(k => {
+                if (storeLocked[k]) return;
+                const kClean = String(k).replace(/_.*$/, '');
+                if (cleanPids.has(kClean) && Number(m[k]) > 0) {
+                  delete orders[store][k];
+                  _dirtyBranchStores.add(store);
+                  cleaned++;
+                }
+              });
+            });
+            localStorage.setItem('branchOrders', JSON.stringify(orders));
+            cloudSave('branchOrders');
+          }
+        }
+      }
+
+      // ⑤ 結果提示
       let msg = '';
       if (productWriteError) msg += `⚠️ 商品主檔寫入失敗：${productWriteError}<br>（檔期仍已同步至分店）<br>`;
       if (savedCount)      msg += `✅ 寫入 ERP 商品主檔：<b>${savedCount}</b> 件新品<br>`;
