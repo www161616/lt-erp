@@ -4910,19 +4910,20 @@ async function showBillingDetail(orderId) {
         <button onclick="openReturnReport(\x27${r.id}\x27,${idx},\x27damaged\x27)" style="padding:2px 6px;font-size:10px;background:#fef2f2;color:#dc2626;border:1px solid #fca5a5;border-radius:3px;cursor:pointer;font-weight:600;white-space:nowrap;">壞損</button>
       </div>`;
     } else if (item.returnStatus === 'requested') {
-      actionHtml = '<span style="font-size:10px; color:#be185d; font-weight:600;">⏳ 已回報</span>';
+      const rLabel = item.reportType==='shortage'?'少收到':item.reportType==='damaged'?'壞損回報':item.reportType==='missing'?'未收到回報':'退貨回報';
+      actionHtml = `<span style="font-size:10px; color:#92400e; font-weight:600;">⏳ ${rLabel}</span>`;
     } else if (item.returnStatus === 'accepted') {
-      actionHtml = '<span style="font-size:10px; color:#be185d; font-weight:600;">✅ 已接受</span>';
+      actionHtml = '<span style="font-size:10px; color:#1d4ed8; font-weight:600;">✅ 總倉已接受</span>';
     } else if (item.returnStatus === 'received' || item.returnStatus === 'waived') {
-      actionHtml = '<span style="font-size:10px; color:#be185d; font-weight:600;">✅ 已完成</span>';
+      actionHtml = '<span style="font-size:10px; color:#047857; font-weight:600;">✅ 已處理完成</span>';
     } else if (item.returnStatus === 'rejected') {
-      actionHtml = '<span style="font-size:10px; color:#dc2626; font-weight:600;" title="' + (item.rejectionReason||'') + '">❌ 不接受</span>';
+      actionHtml = '<span style="font-size:10px; color:#dc2626; font-weight:600;" title="' + (item.rejectionReason||'') + '">❌ 總倉不接受</span>';
     }
     html += `
       <tr style="border-bottom:1px solid #f3f4f6; ${hasReturn?'background:#fce7f3;':''}">
         <td style="padding:10px 16px; text-align:center; vertical-align:top;"><input type="checkbox" class="billing-label-ck" checked style="width:16px; height:16px; cursor:pointer; accent-color:#7c3aed;"></td>
         <td style="padding:10px 16px; color:#6b7280; font-size:12px;">${item.productId}</td>
-        <td style="padding:10px 16px; font-weight:500; color:#1f2937;">${item.name}${hasReturn?` <span style="font-size:11px; color:#ef4444; background:#fee2e2; padding:1px 6px; border-radius:8px; margin-left:4px;">退 ${item.returnQty}</span>`:''}${((item.note||'').match(/超發 \+(\d+)/))?` <span style="font-size:11px; color:#c05621; background:#fef3c7; padding:1px 6px; border-radius:8px; margin-left:4px;">超發 +${(item.note||'').match(/超發 \+(\d+)/)[1]}</span>`:''}
+        <td style="padding:10px 16px; font-weight:500; color:#1f2937;">${item.name}${hasReturn?` <span style="font-size:11px; color:#ef4444; background:#fee2e2; padding:1px 6px; border-radius:8px; margin-left:4px;">${item.reportType==='shortage'?'少':item.reportType==='damaged'?'損':item.reportType==='missing'?'缺':'退'} ${item.returnQty}</span>`:''}${((item.note||'').match(/超發 \+(\d+)/))?` <span style="font-size:11px; color:#c05621; background:#fef3c7; padding:1px 6px; border-radius:8px; margin-left:4px;">超發 +${(item.note||'').match(/超發 \+(\d+)/)[1]}</span>`:''}
         </td>
         <td style="padding:10px 16px; text-align:center;">${effectiveQty}</td>
         <td style="padding:10px 16px; text-align:right; color:#6b7280;">$${item.unitPrice.toLocaleString()}</td>
