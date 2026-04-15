@@ -5337,14 +5337,20 @@ async function submitReturnReport(orderId, itemIdx, data) {
   if (!order || !order.items || !order.items[itemIdx]) return;
   const item = order.items[itemIdx];
 
-  // PATCH sales_details in DB
+  // 用 RPC 同時更新 sales_details + sales_orders（SECURITY DEFINER 繞過 RLS）
   if (item.detailId) {
-    var patchRes = await fetch(SB_URL + '/sales_details?id=eq.' + item.detailId, {
-      method: 'PATCH',
+    var rpcRes = await fetch(SB_URL + '/rpc/submit_return_report', {
+      method: 'POST',
       headers: { ...SB_HEADERS, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ return_qty: data.qty, return_status: 'requested', return_reason: data.reason, report_type: data.type })
+      body: JSON.stringify({
+        p_detail_id: item.detailId,
+        p_order_id: orderId,
+        p_return_qty: data.qty,
+        p_return_reason: data.reason,
+        p_report_type: data.type
+      })
     });
-    if (!patchRes.ok) { Swal.fire('回報失敗', '無法更新退貨資料，請重試', 'error'); return; }
+    if (!rpcRes.ok) { Swal.fire('回報失敗', '無法更新退貨資料，請重試', 'error'); return; }
   }
 
   // 更新本地
@@ -5352,6 +5358,7 @@ async function submitReturnReport(orderId, itemIdx, data) {
   item.returnStatus = 'requested';
   item.returnReason = data.reason;
   item.reportType = data.type;
+  order.status = 'disputed';
 
   // 退貨時自動將庫存加回
   const returnQty = parseInt(data.qty) || 0;
