@@ -1131,11 +1131,12 @@
         return savePromise;
       }
 
-      fetch(`${SB_URL}/shared_kv`, {
+      return fetch(`${SB_URL}/shared_kv`, {
         method: 'POST',
         headers: { ...SB_HEADERS, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
         body: JSON.stringify({ key, value: JSON.parse(raw), updated_at: new Date().toISOString() })
-      }).catch(e => console.error('cloudSave error:', e));
+      }).then(r => r.ok)
+        .catch(e => { console.error('cloudSave error:', e); return false; });
     }
 
     async function cloudLoadAll() {
@@ -3340,7 +3341,7 @@ function onReqTypeChange(type) {
   }
 }
 
-function addRequest() {
+async function addRequest() {
   const name = document.getElementById('reqName').value.trim();
   const codeEl = document.getElementById('reqCode');
   const code = codeEl.value.trim();
@@ -3354,7 +3355,8 @@ function addRequest() {
   const uniqueId = 'REQ' + Date.now().toString(36).toUpperCase();
   requestList.unshift({ id: uniqueId, storeId: currentStore?.name || '未知', category, code: code || '', name, price: price || 0, qty, note, createdAt: new Date(), status: 'pending', reply: '' });
   localStorage.setItem('portalAllRequests', JSON.stringify(requestList));
-  cloudSave('portalAllRequests');
+  const ok = await cloudSave('portalAllRequests');
+  if (!ok) { Swal.fire('儲存失敗', '請重試，若持續失敗請聯絡管理員', 'error'); return; }
   document.getElementById('reqName').value = '';
   document.getElementById('reqCode').value = '';
   codeEl.dataset.price = 0;
@@ -3367,7 +3369,14 @@ function addRequest() {
 
 function deleteRequest(id) {
   Swal.fire({ title:'確定刪除？', icon:'warning', showCancelButton:true, confirmButtonText:'刪除', cancelButtonText:'取消', confirmButtonColor:'#ef4444' })
-    .then(result => { if (result.isConfirmed) { requestList = requestList.filter(r => r.id !== id); localStorage.setItem('portalAllRequests', JSON.stringify(requestList)); cloudSave('portalAllRequests'); renderRequestPage(); } });
+    .then(async result => {
+      if (!result.isConfirmed) return;
+      requestList = requestList.filter(r => r.id !== id);
+      localStorage.setItem('portalAllRequests', JSON.stringify(requestList));
+      const ok = await cloudSave('portalAllRequests');
+      if (!ok) { Swal.fire('儲存失敗', '請重試，若持續失敗請聯絡管理員', 'error'); return; }
+      renderRequestPage();
+    });
 }
 
 function editRequest(id) {
@@ -3397,7 +3406,15 @@ function editRequest(id) {
       }
       return { name, qty: 0 };
     }
-  }).then(result => { if (result.isConfirmed) { r.name = result.value.name; r.qty = result.value.qty; localStorage.setItem('portalAllRequests', JSON.stringify(requestList)); cloudSave('portalAllRequests'); renderRequestPage(); } });
+  }).then(async result => {
+    if (!result.isConfirmed) return;
+    r.name = result.value.name;
+    r.qty = result.value.qty;
+    localStorage.setItem('portalAllRequests', JSON.stringify(requestList));
+    const ok = await cloudSave('portalAllRequests');
+    if (!ok) { Swal.fire('儲存失敗', '請重試，若持續失敗請聯絡管理員', 'error'); return; }
+    renderRequestPage();
+  });
 }
 
 // ============================
