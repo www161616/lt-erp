@@ -111,6 +111,48 @@
 
 ---
 
+### BUG-012: portalAllRequests 整份覆蓋（Admin 端 6 處寫入點）
+- **狀態**: [ ] 未修
+- **嚴重度**: 🔴 嚴重 — 店家需求單會消失，admin 也收不到
+- **症狀**: 店家填需求單、按送出看起來成功，重整頁面後消失，admin 的需求與欠品管理也看不到
+- **根因**:
+  `portalAllRequests` 是整份 array 存在 shared_kv。admin 的 6 個寫入點全部是「讀本機 snapshot → 改一筆 → 整份 POST 覆蓋雲端」，且 cloudSave 是 fire-and-forget。admin 長時間開著 branch_admin 頁面時，本機 snapshot 會落後於雲端。只要 admin 做任何操作觸發 cloudSave，就會把店家剛送的新需求單整份覆蓋掉。
+- **時間軸範例**:
+  - T+0：store 送新需求 → await cloudSave → 雲端多 1 筆 ✓
+  - T+30min：admin 早上 10 點開的 branch_admin 頁面還在，本機 portalAllRequests 是 10 點的 snapshot（沒那筆新需求）
+  - T+31min：admin 回覆另一筆舊需求 → syncReplyToPortal → cloudSave → 本機整份推回雲端 → 店家的新需求被覆蓋
+  - store 重整頁面 → cloudLoadAll 從雲端拉 → 看到被覆蓋後的版本 → 需求單消失
+- **涉及檔案**: admin/branch_admin.html
+- **涉及位置（6 處）**:
+
+| 行號 | 函式 | 操作 |
+|------|------|------|
+| 6796 | toggleDemandComplete | 切換完成狀態 |
+| 6869 | deleteDemandItem | 刪除單筆需求 |
+| 8547 | adminCreateAidDemand | 互助補發自動建需求 |
+| 8651 | 批次刪除需求（lambda） | 批次刪除 |
+| 8932 | CSV 匯入 | 批次匯入需求 |
+| 8995 | syncReplyToPortal | 回覆需求 |
+
+- **修法方向**: fetch-before-write helper（最小可行方案）
+  1. 加 async helper `safePortalRequestsUpdate(mutatorFn)`：先從雲端拉最新 → 寫入本機 → 跑 mutator → **await** cloudSave（注意這個 await 不能漏）
+  2. 6 個寫入點改成呼叫 helper
+  3. grep 所有呼叫鏈，涉及函式改 async 後，呼叫端可能要跟著改 async
+- **已知限制**:
+  - 不是真正 atomic，還有 ~100ms 的 race window（fetch 拉到推回雲端中間）
+  - 每次操作多一個 HTTP 往返（約 100-200ms 延遲，使用者感受不到）
+  - 真正根治需要做 RPC（類似 branchOrders 的 `merge_branch_order`），但需要動 DB，風險較大，之後再評估
+- **測試項目**:
+  - [ ] store 送需求 → 立刻重整 → 看得到
+  - [ ] store 送需求 + admin 同時回覆別筆需求 → 兩邊都有
+  - [ ] admin 回覆 → store 重整 → 有回覆內容
+  - [ ] admin CSV 批次匯入期間 store 送需求 → 兩邊都有（至少不會靜默丟失）
+  - [ ] 網路斷線時 admin 操作 → 失敗有提示（不是假成功）
+- **Portal 端暫時不動**: `deleteRequest` / `editRequest` 雖然也有 stale 問題，但 store 只改自己的需求，衝突機率極低。優先修 admin，portal 等觀察一段時間再決定
+- **相關**: 跟 BUG-002（portalSalesOrders 整份覆蓋）同型問題，但資料不同、修法可獨立
+
+---
+
 ## 🟠 中等 (功能異常 / 靜默失敗)
 
 ### BUG-005: branch_admin 多處 PATCH/DELETE 無錯誤處理

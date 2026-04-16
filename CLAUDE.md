@@ -42,7 +42,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - BUG-011 → BUG-010 → BUG-009 → BUG-003 → BUG-006 → BUG-004
 
 **之後再修（需要小心）：**
-- BUG-005 → BUG-007
+- BUG-005 → BUG-007 → BUG-012
 
 **最後才修（牽連最廣，需要完整計畫）：**
 - BUG-001 → BUG-008 → BUG-002
