@@ -13,6 +13,7 @@
 | 04/16 | BUG-003: SalesReturn 庫存回補加 res.ok 檢查 + 失敗警告 | PATCH/POST 沒檢查回應，靜默失敗顯示成功 | 所有寫入操作都要檢查 res.ok，失敗要告訴使用者 |
 | 04/16 | BUG-006: PendingReview 5 處 PATCH 加 res.ok 檢查 | 轉單/駁回/回寫狀態沒驗證回應，可能資料不一致 | 同上 |
 | 04/16 | BUG-004: submitOrder 加防連點 (_submitting + disabled + finally) | async 函式無 re-entry guard，連點重複觸發 RPC | 所有 async 按鈕操作都要加防連點 |
+| 04/16 | BUG-005: branch_admin 16 處 bare await 加 res.ok 檢查 (inventory/procurement_followup/transfer/picking/xiaolan) | 大量 PATCH/DELETE 沒檢查回應，靜默失敗 | bare await 是 anti-pattern，所有寫入都要驗證 |
 
 ---
 
@@ -112,7 +113,7 @@
 ## 🟠 中等 (功能異常 / 靜默失敗)
 
 ### BUG-005: branch_admin 多處 PATCH/DELETE 無錯誤處理
-- **狀態**: [ ] 未修
+- **狀態**: [x] 已修 (2026-04-16)
 - **嚴重度**: 🟠 中等 — 操作靜默失敗
 - **問題**: 以下位置全部是 bare `await fetch()` 沒有 res.ok 檢查
 - **涉及檔案**: admin/branch_admin.html

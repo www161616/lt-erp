@@ -3763,7 +3763,8 @@
         });
         if (!wRes.ok) { console.error('br_picking_waves upsert failed:', await wRes.text()); return; }
 
-        await fetch(SB_URL + '/br_picking_items?wave_id=eq.' + wave.id, { method: 'DELETE', headers: HEADERS });
+        var delItemsRes = await fetch(SB_URL + '/br_picking_items?wave_id=eq.' + wave.id, { method: 'DELETE', headers: HEADERS });
+        if (!delItemsRes.ok) console.error('清除舊揀貨品項失敗:', wave.id, await delItemsRes.text());
 
         var items = [];
         wave.matrix.forEach(function(row) {
@@ -8627,8 +8628,10 @@
       if (!res.isConfirmed) return;
       const idList = ids.map(id => `"${id}"`).join(',');
       // 先刪明細再刪主單
-      await fetch(`${SB_URL}/transfer_items?transfer_id=in.(${idList})`, { method: 'DELETE', headers: HEADERS });
-      await fetch(`${SB_URL}/transfer_orders?id=in.(${idList})`, { method: 'DELETE', headers: HEADERS });
+      const dtiRes = await fetch(`${SB_URL}/transfer_items?transfer_id=in.(${idList})`, { method: 'DELETE', headers: HEADERS });
+      if (!dtiRes.ok) console.error('刪除店轉店明細失敗:', await dtiRes.text());
+      const dtoRes = await fetch(`${SB_URL}/transfer_orders?id=in.(${idList})`, { method: 'DELETE', headers: HEADERS });
+      if (!dtoRes.ok) console.error('刪除店轉店主單失敗:', await dtoRes.text());
       Swal.fire({ title: '已刪除 ' + ids.length + ' 筆', icon: 'success', timer: 1200, showConfirmButton: false });
       await refreshTransferTable();
     });
@@ -13403,7 +13406,8 @@
       }
       for (const r of toUpdate) {
         const {_dirty,id,created_at,...rest} = r;
-        await fetch(`${SB_URL}/xiaolan_piaopiao?id=eq.${id}`, { method:'PATCH', headers:{...HEADERS,'Content-Type':'application/json'}, body:JSON.stringify(rest) });
+        const ppuRes = await fetch(`${SB_URL}/xiaolan_piaopiao?id=eq.${id}`, { method:'PATCH', headers:{...HEADERS,'Content-Type':'application/json'}, body:JSON.stringify(rest) });
+        if (!ppuRes.ok) console.error('漂漂館 PATCH 失敗:', id, await ppuRes.text());
         updated++;
       }
       if (isAuto) {
@@ -13427,7 +13431,8 @@
       const idx = cb.dataset.idx;
       if (idx.startsWith('s')) {
         const id = parseInt(idx.slice(1));
-        await fetch(`${SB_URL}/xiaolan_piaopiao?id=eq.${id}`, {method:'DELETE',headers:HEADERS});
+        const ppdRes = await fetch(`${SB_URL}/xiaolan_piaopiao?id=eq.${id}`, {method:'DELETE',headers:HEADERS});
+        if (!ppdRes.ok) console.error('漂漂館 DELETE 失敗:', id, await ppdRes.text());
       } else { newPPARows[parseInt(idx.slice(1))] = null; }
     }
     newPPARows = newPPARows.filter(r=>r!==null);
@@ -13951,7 +13956,8 @@
           content: rest.content,
           note: rest.note
         };
-        await fetch(`${SB_URL}/xiaolan_returns?id=eq.${id}`, { method:'PATCH', headers:{...HEADERS,'Content-Type':'application/json'}, body:JSON.stringify(patch) });
+        const cnruRes = await fetch(`${SB_URL}/xiaolan_returns?id=eq.${id}`, { method:'PATCH', headers:{...HEADERS,'Content-Type':'application/json'}, body:JSON.stringify(patch) });
+        if (!cnruRes.ok) console.error('退換貨 PATCH 失敗:', id, await cnruRes.text());
       }
       cnReturnRows.forEach(r => delete r._dirty);
     } catch(e) { /* 靜默 */ }
@@ -13965,7 +13971,8 @@
       const idx = cb.dataset.idx;
       if (idx.startsWith('cs')) {
         const id = parseInt(idx.slice(2));
-        await fetch(`${SB_URL}/xiaolan_returns?id=eq.${id}`, {method:'DELETE',headers:HEADERS});
+        const cnrdRes = await fetch(`${SB_URL}/xiaolan_returns?id=eq.${id}`, {method:'DELETE',headers:HEADERS});
+        if (!cnrdRes.ok) console.error('退換貨 DELETE 失敗:', id, await cnrdRes.text());
       } else { newCnReturnRows[parseInt(idx.slice(2))] = null; }
     }
     newCnReturnRows = newCnReturnRows.filter(r=>r!==null);
