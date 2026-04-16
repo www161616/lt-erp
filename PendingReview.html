@@ -623,11 +623,12 @@
       const newPoId = await res.json();
 
       // 更新 internal_purchases 狀態為「已轉單」
-      await fetch(`${SB_URL}/internal_purchases?id=eq.${id}`, {
+      const statusRes = await fetch(`${SB_URL}/internal_purchases?id=eq.${id}`, {
         method: 'PATCH',
         headers: { ...HEADERS, 'Prefer': 'return=minimal' },
         body: JSON.stringify({ status: '已轉單' })
       });
+      if (!statusRes.ok) console.error('PATCH 已轉單狀態失敗:', await statusRes.text());
 
       Swal.fire({
         title: '轉入成功',
@@ -726,7 +727,8 @@
         };
         var res = await fetch(SB_URL + '/rpc/web_save_purchase_order', { method: 'POST', headers: HEADERS, body: JSON.stringify({ p_order_data: orderData }) });
         if (!res.ok) throw new Error(await res.text());
-        await fetch(SB_URL + '/internal_purchases?id=eq.' + ids[i], { method: 'PATCH', headers: { ...HEADERS, 'Prefer': 'return=minimal' }, body: JSON.stringify({ status: '已轉單' }) });
+        var stRes = await fetch(SB_URL + '/internal_purchases?id=eq.' + ids[i], { method: 'PATCH', headers: { ...HEADERS, 'Prefer': 'return=minimal' }, body: JSON.stringify({ status: '已轉單' }) });
+        if (!stRes.ok) console.error('批次 PATCH 已轉單失敗:', ids[i]);
         ok++;
         Swal.update({ title: '批次轉入中... ' + (ok + fail) + '/' + ids.length });
       } catch(e) { console.error('batch PO error:', ids[i], e); fail++; }
@@ -754,11 +756,12 @@
     Swal.fire({ title: '處理中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
 
     try {
-      await fetch(`${SB_URL}/internal_purchases?id=eq.${id}`, {
+      const rejRes = await fetch(`${SB_URL}/internal_purchases?id=eq.${id}`, {
         method: 'PATCH',
         headers: { ...HEADERS, 'Prefer': 'return=minimal' },
         body: JSON.stringify({ status: '駁回', note: result.value ? `駁回原因: ${result.value}` : undefined })
       });
+      if (!rejRes.ok) throw new Error('駁回失敗: ' + await rejRes.text());
 
       Swal.fire({ title: '已駁回', icon: 'success', timer: 1500, showConfirmButton: false });
       await loadPendingPurchases();
@@ -1021,11 +1024,12 @@
 
       // 回寫 converted_po_id 到每個 detail
       const detailIds = selectedItems.map(it => `"${it.detailId}"`).join(',');
-      await fetch(`${SB_URL}/internal_purchase_details?id=in.(${detailIds})`, {
+      const cvRes = await fetch(`${SB_URL}/internal_purchase_details?id=in.(${detailIds})`, {
         method: 'PATCH',
         headers: { ...HEADERS, 'Prefer': 'return=minimal' },
         body: JSON.stringify({ converted_po_id: newPoId })
       });
+      if (!cvRes.ok) console.error('PATCH converted_po_id 失敗:', await cvRes.text());
 
       // 更新來源 internal_purchases 的狀態
       for (const orderId of sourceOrders) {
@@ -1033,11 +1037,12 @@
         const checkRes = await fetch(`${SB_URL}/internal_purchase_details?order_id=eq.${orderId}&converted_po_id=is.null&select=id&limit=1`, { headers: HEADERS });
         const remaining = checkRes.ok ? await checkRes.json() : [{ id: 'unknown' }];
         const newStatus = remaining.length === 0 ? '已轉單' : '部分到貨';
-        await fetch(`${SB_URL}/internal_purchases?id=eq.${orderId}`, {
+        const ipRes = await fetch(`${SB_URL}/internal_purchases?id=eq.${orderId}`, {
           method: 'PATCH',
           headers: { ...HEADERS, 'Prefer': 'return=minimal' },
           body: JSON.stringify({ status: newStatus })
         });
+        if (!ipRes.ok) console.error('PATCH internal_purchases 狀態失敗:', orderId, await ipRes.text());
       }
 
       const payNow = await Swal.fire({
