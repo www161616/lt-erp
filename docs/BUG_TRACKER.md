@@ -7,7 +7,7 @@
 
 | 日期 | 修了什麼 | 根本原因 | 下次怎麼避免 |
 |------|---------|---------|------------|
-| | | | |
+| 04/16 | BUG-011: SalesReturn activity_logs 空 catch → 加 console.error | 空 catch 吞掉所有錯誤，稽核軌跡遺失無提示 | 寫 try-catch 時不要用空 catch，至少 console.error |
 
 ---
 
@@ -195,7 +195,7 @@
 ---
 
 ### BUG-011: SalesReturn.html activity_logs 空 catch
-- **狀態**: [ ] 未修
+- **狀態**: [x] 已修 (2026-04-16)
 - **嚴重度**: 🟡 低 — 稽核軌跡遺失
 - **問題**: POST activity_logs 的 catch(e) {} 完全吞掉錯誤
 - **涉及檔案**: SalesReturn.html ~第 458 行

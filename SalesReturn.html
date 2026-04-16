@@ -455,7 +455,7 @@ async function submitReturn() {
           detail: { customer: custName, items: cart.length, total: -total }
         })
       });
-    } catch(e) {}
+    } catch(e) { console.error('activity_logs 寫入失敗:', e); }
 
     Swal.fire({
       icon: 'success',
