@@ -4,6 +4,68 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 # 龍潭總倉 ERP 系統
 
+---
+
+## ⚠️ 開工前必讀清單（每次開工都要做，不可跳過）
+
+開始任何工作前，必須依序執行以下步驟：
+
+```
+第一步：閱讀 docs/architecture/CROSS_FILE_MAP.md
+        → 了解這次改動會影響哪些檔案、哪些共享資料
+
+第二步：閱讀 docs/BUG_TRACKER.md
+        → 確認這次改動不會踩到已知 bug，也不會讓未修的 bug 變更嚴重
+
+第三步：閱讀 docs/supabase/SCHEMA_QUICK_REF.md（如果會動到 DB）
+        → 確認欄位名稱正確，禁止憑記憶猜測
+```
+
+沒有完成以上三步，禁止寫任何程式碼。
+
+---
+
+## 修 Bug 專用流程
+
+### 每次只修一個 bug
+
+修 bug 前必須先告訴我：
+1. 這個 bug 涉及哪些檔案
+2. 修法是什麼
+3. 會不會影響其他地方
+
+等我說「對，可以修」才開始。
+
+### 修 bug 的安全順序（照這個順序，不要跳）
+
+**現在可以修（影響範圍小，一次一個）：**
+- BUG-011 → BUG-010 → BUG-009 → BUG-003 → BUG-006 → BUG-004
+
+**之後再修（需要小心）：**
+- BUG-005 → BUG-007
+
+**最後才修（牽連最廣，需要完整計畫）：**
+- BUG-001 → BUG-008 → BUG-002
+
+### 修完一個 bug 之後必須做
+
+1. 給我看 diff（不要自己 push）
+2. 告訴我測試了哪些情境
+3. 等我確認後再 push
+4. Push 完把 BUG_TRACKER.md 裡那個 bug 的狀態打勾、填上 commit
+
+---
+
+## 我不懂程式碼，所以你必須做到以下幾件事
+
+1. **用我看得懂的話解釋你在做什麼** — 不要只貼程式碼，要告訴我「我要改的是 XX 功能，因為 XX 原因，改法是 XX」
+2. **主動告訴我風險** — 不要等我問，改任何東西前先說「這樣改可能影響到 XX，我已確認不會壞」
+3. **不確定的事情一定要問我** — 不要自己假設然後去做，問一句話只花 5 秒，做錯要花一整天修
+4. **每次改完主動提醒我測試什麼** — 告訴我「請你用分店帳號試試看 XX 功能」
+5. **不要一次改太多** — 一次只改一件事，改完確認沒問題再繼續
+
+---
+
 ## 完成功能（2026/04/15）
 
 ### Google Sheets 雙向同步（取代 supplier_xiaolan.html）
@@ -91,6 +153,54 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `stable-20260411-branchorders-fixed`：04/11 RPC + 精準送出 + 清空加強完成
 - `stable-20260414-before-admin-fix`：04/14 修 admin dirty tracking 前的狀態
 - 本機備份檔：`branch_portal_backup_20260415.html`、`branch_admin_backup_20260415.html`
+
+### 如何用還原點回到過去的版本
+
+**情境：改壞了，想把某個檔案退回之前的樣子**
+
+1. 先看一下有哪些還原點可以用：
+   ```
+   git tag
+   ```
+   會列出所有還原點名稱（像 `stable-20260415-before-return-rpc`）
+
+2. 想看那個還原點的某個檔案長什麼樣子（只是看，還不會改動）：
+   ```
+   git show stable-20260415-before-return-rpc:branch/branch_portal.html
+   ```
+   把 `stable-20260415-before-return-rpc` 換成你要的還原點，把 `branch/branch_portal.html` 換成你要看的檔案
+
+3. 確定要把某個檔案退回那個版本：
+   ```
+   git checkout stable-20260415-before-return-rpc -- branch/branch_portal.html
+   ```
+   這樣只會動那一個檔案，其他檔案不受影響
+
+4. 退回之後記得測試，確認沒問題再 commit
+
+**情境：整個專案都想退回某個還原點（比較激烈，慎用）**
+
+1. 先把目前的改動存起來，避免弄丟：
+   ```
+   git stash
+   ```
+2. 切到那個還原點看看：
+   ```
+   git checkout stable-20260415-before-return-rpc
+   ```
+3. 如果確認要用這個版本，開一個新 branch 繼續工作：
+   ```
+   git checkout -b fix-from-0415
+   ```
+4. 如果看完覺得不需要，回到原本的 main：
+   ```
+   git checkout main
+   git stash pop
+   ```
+
+**情境：用本機備份檔還原**
+
+備份檔（像 `branch_portal_backup_20260415.html`）就是當時的完整複本，直接把內容複製貼上覆蓋現有檔案就好，但記得先備份目前的版本。
 
 ## 完成功能（2026/04/11）
 
@@ -902,6 +1012,7 @@ function openSharedLink(url) {
 6. **跨店資料隔離**：branch_id 有沒有正確帶入查詢條件？
 7. **localStorage key**：有沒有用 lt_ prefix？
 8. **欄位名稱**：和 docs/supabase/ CSV 比對過了嗎？
+9. **跨檔案影響確認**：查 docs/architecture/CROSS_FILE_MAP.md 的「改動觸發規則」表，這次改的東西有沒有出現在「你在改...」欄？有的話，「你必須同時確認...」欄的每一項逐條回答 YES 或 N/A，不能空著。
 
 ### 停下來問我的時機（Stop Triggers）
 遇到以下任一情況，**立刻停下來問我，不要自己假設後繼續**：
@@ -918,6 +1029,22 @@ function openSharedLink(url) {
 2. 測試情境清單（至少包含：正常流程、空值、重複操作、不同角色）
 3. 「我注意到的潛在問題」（就算沒有也要寫「無」）
 4. 問我：「符合預期嗎？確認後我再繼續。」
+
+### 固定測試清單（每次改完都要跑，不能跳過）
+
+以下用對應帳號實際操作確認，不能只看程式碼說「應該沒問題」：
+
+| 測試項目 | 用哪個角色 | 確認什麼 |
+|---------|-----------|---------|
+| branch_portal 結單填表送出 | store 帳號 | 數字有上雲端，admin 看得到 |
+| branch_portal 確認收貨 | store 帳號 | 狀態有變，重整後還在 |
+| branch_portal 退貨回報 | store 帳號 | 狀態有變，admin 看得到通知 |
+| branch_admin 開團總表 | assistant 帳號 | 數字正確，和 portal 一致 |
+| branch_admin 銷貨單管理 | assistant 帳號 | 列表顯示正常，可以開單 |
+| 重整頁面 | 任何帳號 | 資料還在，沒有空白或報錯 |
+
+這次改動有影響到哪些項目，那些項目就必須測。
+全部測完後逐項回報結果，不能只說「已測試沒問題」。
 
 ### 進度記錄與備份
 - 每完成一個獨立功能區塊，主動問我：「這段已完成，要我先 commit 備份嗎？」

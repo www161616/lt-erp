@@ -1,5 +1,9 @@
 # 參考資料（不部署到 GitHub Pages）
-docs/
+docs/supabase/
+docs/sql/
+docs/handover/
+docs/ERP_All_Frontend.txt
+docs/lt_erp_reviewer.html
 
 # 備份檔、暫存檔
 *_backup*.html
