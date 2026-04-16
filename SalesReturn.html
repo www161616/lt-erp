@@ -418,17 +418,23 @@ async function submitReturn() {
     if (!dRes.ok) throw new Error('退貨明細寫入失敗');
 
     // 3. 庫存回補
+    const invFailedItems = [];
     for (const item of cart) {
       try {
         const invRes = await fetch(`${SB_URL}/inventory?product_id=eq.${encodeURIComponent(item.product_id)}&select=qty`, { headers: H() });
         const invData = await invRes.json();
         if (invData.length > 0) {
           const newQty = (Number(invData[0].qty) || 0) + item.qty;
-          await fetch(`${SB_URL}/inventory?product_id=eq.${encodeURIComponent(item.product_id)}`, {
+          const patchRes = await fetch(`${SB_URL}/inventory?product_id=eq.${encodeURIComponent(item.product_id)}`, {
             method: 'PATCH', headers: H(),
             body: JSON.stringify({ qty: newQty, last_updated: new Date().toISOString() })
           });
-          await fetch(`${SB_URL}/inventory_logs`, {
+          if (!patchRes.ok) {
+            console.error('庫存回補 PATCH 失敗:', item.product_id, await patchRes.text());
+            invFailedItems.push(item.product_name || item.product_id);
+            continue;
+          }
+          const logRes = await fetch(`${SB_URL}/inventory_logs`, {
             method: 'POST', headers: H(),
             body: JSON.stringify({
               product_id: item.product_id,
@@ -439,8 +445,12 @@ async function submitReturn() {
               log_date: new Date().toISOString()
             })
           });
+          if (!logRes.ok) console.error('庫存異動記錄寫入失敗:', item.product_id, await logRes.text());
         }
-      } catch(e) { console.warn('庫存回補失敗:', item.product_id, e); }
+      } catch(e) {
+        console.warn('庫存回補失敗:', item.product_id, e);
+        invFailedItems.push(item.product_name || item.product_id);
+      }
     }
 
     // 4. 操作紀錄
@@ -457,12 +467,21 @@ async function submitReturn() {
       });
     } catch(e) { console.error('activity_logs 寫入失敗:', e); }
 
-    Swal.fire({
-      icon: 'success',
-      title: '退貨單已開立',
-      html: `單號：<b>${returnId}</b><br>退貨金額：<b style="color:#c53030;">$${total.toLocaleString()}</b><br>庫存已回補`,
-      confirmButtonColor: '#475569'
-    });
+    if (invFailedItems.length > 0) {
+      Swal.fire({
+        icon: 'warning',
+        title: '退貨單已開立，但庫存回補部分失敗',
+        html: `單號：<b>${returnId}</b><br>退貨金額：<b style="color:#c53030;">$${total.toLocaleString()}</b><br><br><span style="color:#c53030;">以下商品庫存未回補：</span><br>${invFailedItems.join('、')}`,
+        confirmButtonColor: '#475569'
+      });
+    } else {
+      Swal.fire({
+        icon: 'success',
+        title: '退貨單已開立',
+        html: `單號：<b>${returnId}</b><br>退貨金額：<b style="color:#c53030;">$${total.toLocaleString()}</b><br>庫存已回補`,
+        confirmButtonColor: '#475569'
+      });
+    }
 
     cart = [];
     renderCart();

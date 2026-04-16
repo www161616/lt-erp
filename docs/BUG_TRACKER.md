@@ -10,6 +10,7 @@
 | 04/16 | BUG-011: SalesReturn activity_logs 空 catch → 加 console.error | 空 catch 吞掉所有錯誤，稽核軌跡遺失無提示 | 寫 try-catch 時不要用空 catch，至少 console.error |
 | 04/16 | BUG-010: SalesOrder 客戶資料 fetch 空 catch × 2 → 加 console.warn | 同上，Excel 匯出缺欄位但無任何提示 | 同上 |
 | 04/16 | BUG-009: admin 退貨處理後 return_status + portal_status 寫回 DB | 四個函式只改 local memory 沒寫 DB，syncSalesOrdersToPortal 是空函式 | 改狀態後一定要同步寫 DB，不能只改記憶體 |
+| 04/16 | BUG-003: SalesReturn 庫存回補加 res.ok 檢查 + 失敗警告 | PATCH/POST 沒檢查回應，靜默失敗顯示成功 | 所有寫入操作都要檢查 res.ok，失敗要告訴使用者 |
 
 ---
 
@@ -74,7 +75,7 @@
 ---
 
 ### BUG-003: SalesReturn.html 庫存更新無錯誤檢查
-- **狀態**: [ ] 未修
+- **狀態**: [x] 已修 (2026-04-16)
 - **嚴重度**: 🔴 嚴重 — 庫存錯誤難追溯
 - **問題**: 退貨時 PATCH inventory 和 POST inventory_logs 都沒有檢查 res.ok
 - **涉及檔案**: SalesReturn.html
