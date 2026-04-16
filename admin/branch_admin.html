@@ -9397,7 +9397,8 @@
       if (closedCount) statusSummary.push(`<span style="color:#718096;">${closedCount} 已結案</span>`);
 
       const storeRows = group.orders.map(o => {
-        const amount = o.status === 'issued' ? o.finalAmount : calcOrderAmount(o);
+        // 列表渲染時 items 可能還沒載入（延後載明細），優先用 DB 的 finalAmount
+        const amount = (typeof o.finalAmount === 'number' && o.finalAmount !== 0) ? o.finalAmount : calcOrderAmount(o);
         const hasReturn = o.status === 'disputed';
         const itemCountDisplay = o.items.length > 0 ? o.items.length : (o.itemCount || 0);
         return `<tr style="border-bottom:1px solid #f1f5f9; cursor:pointer; transition:0.15s;" onmouseover="this.style.background='#f0f7ff'" onmouseout="this.style.background=''" onclick="showSalesOrderDetail('${o.id}')">
