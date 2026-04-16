@@ -7685,7 +7685,8 @@
         if (!r) continue;
         var logs = r.follow_up_logs || [];
         logs.push({ date: dateStr, note: note });
-        await fetch(SB_URL + '/procurement_followup?id=eq.' + ids[i], { method: 'PATCH', headers: HEADERS, body: JSON.stringify({ status: '催貨中', follow_up_logs: logs }) });
+        var fuRes = await fetch(SB_URL + '/procurement_followup?id=eq.' + ids[i], { method: 'PATCH', headers: HEADERS, body: JSON.stringify({ status: '催貨中', follow_up_logs: logs }) });
+        if (!fuRes.ok) console.error('批次催貨 PATCH 失敗:', ids[i]);
       }
     } else if (action === 'arrived') {
       var result = await Swal.fire({ title: '批次標記已到倉 ' + ids.length + ' 筆？', icon: 'question', showCancelButton: true, confirmButtonText: '確認', cancelButtonText: '取消', confirmButtonColor: '#059669' });
@@ -7693,13 +7694,15 @@
       Swal.fire({ title: '更新中...', allowOutsideClick: false, didOpen: function() { Swal.showLoading(); } });
       var dateStr = new Date().toISOString().split('T')[0];
       var idList = ids.join(',');
-      await fetch(SB_URL + '/procurement_followup?id=in.(' + idList + ')', { method: 'PATCH', headers: HEADERS, body: JSON.stringify({ status: '已到倉', arrived_at: dateStr }) });
+      var arRes = await fetch(SB_URL + '/procurement_followup?id=in.(' + idList + ')', { method: 'PATCH', headers: HEADERS, body: JSON.stringify({ status: '已到倉', arrived_at: dateStr }) });
+      if (!arRes.ok) console.error('批次已到倉 PATCH 失敗:', await arRes.text());
     } else if (action === 'outofstock') {
       var result = await Swal.fire({ title: '批次標記斷貨 ' + ids.length + ' 筆？', html: '將自動發佈斷貨公告', icon: 'warning', showCancelButton: true, confirmButtonText: '確認斷貨', cancelButtonText: '取消', confirmButtonColor: '#dc2626' });
       if (!result.isConfirmed) return;
       Swal.fire({ title: '更新中...', allowOutsideClick: false, didOpen: function() { Swal.showLoading(); } });
       var idList = ids.join(',');
-      await fetch(SB_URL + '/procurement_followup?id=in.(' + idList + ')', { method: 'PATCH', headers: HEADERS, body: JSON.stringify({ status: '斷貨' }) });
+      var osRes = await fetch(SB_URL + '/procurement_followup?id=in.(' + idList + ')', { method: 'PATCH', headers: HEADERS, body: JSON.stringify({ status: '斷貨' }) });
+      if (!osRes.ok) console.error('批次斷貨 PATCH 失敗:', await osRes.text());
       // 批次發公告
       var bulletins = JSON.parse(localStorage.getItem('portalBulletin') || '[]');
       var now = new Date();
@@ -7737,10 +7740,11 @@
     if (!r) return;
     var logs = r.follow_up_logs || [];
     logs.push({ date: new Date().toISOString().split('T')[0], note: result.value.trim() });
-    await fetch(SB_URL + '/procurement_followup?id=eq.' + id, {
+    var fuRes2 = await fetch(SB_URL + '/procurement_followup?id=eq.' + id, {
       method: 'PATCH', headers: HEADERS,
       body: JSON.stringify({ status: '催貨中', follow_up_logs: logs })
     });
+    if (!fuRes2.ok) console.error('單筆催貨 PATCH 失敗:', id);
     await loadArrivalData();
     renderArrivalPage();
   }
@@ -7748,10 +7752,11 @@
   async function atArrived(id) {
     var r = _arrivalData.find(function(x) { return x.id === id; });
     if (!r) return;
-    await fetch(SB_URL + '/procurement_followup?id=eq.' + id, {
+    var arRes2 = await fetch(SB_URL + '/procurement_followup?id=eq.' + id, {
       method: 'PATCH', headers: HEADERS,
       body: JSON.stringify({ status: '已到倉', arrived_at: new Date().toISOString().split('T')[0] })
     });
+    if (!arRes2.ok) console.error('單筆已到倉 PATCH 失敗:', id);
     // 同步 mockConsolidatedOrders
     if (typeof mockConsolidatedOrders !== 'undefined') {
       var item = mockConsolidatedOrders.find(function(i) { return (i.productId || i.id) === r.product_id; });
@@ -7771,10 +7776,11 @@
       confirmButtonText: '確認斷貨', cancelButtonText: '取消', confirmButtonColor: '#dc2626'
     });
     if (!result.isConfirmed) return;
-    await fetch(SB_URL + '/procurement_followup?id=eq.' + id, {
+    var osRes2 = await fetch(SB_URL + '/procurement_followup?id=eq.' + id, {
       method: 'PATCH', headers: HEADERS,
       body: JSON.stringify({ status: '斷貨' })
     });
+    if (!osRes2.ok) console.error('單筆斷貨 PATCH 失敗:', id);
     // 自動發公告
     try {
       var bulletins = JSON.parse(localStorage.getItem('portalBulletin') || '[]');
@@ -10428,10 +10434,12 @@
             const id = await ir.json();
             if (id.length > 0) {
               const nq = (Number(id[0].qty) || 0) + diff;
-              await fetch(`${SB_URL}/inventory?product_id=eq.${encodeURIComponent(ni.product_id)}`, { method: 'PATCH', headers: HEADERS, body: JSON.stringify({ qty: nq, last_updated: new Date().toISOString() }) });
-              await fetch(`${SB_URL}/inventory_logs`, { method: 'POST', headers: HEADERS, body: JSON.stringify({ product_id: ni.product_id, log_type: '退貨單修改', qty_change: diff, after_qty: nq, doc_no: orderId, log_date: new Date().toISOString() }) });
+              const pRes = await fetch(`${SB_URL}/inventory?product_id=eq.${encodeURIComponent(ni.product_id)}`, { method: 'PATCH', headers: HEADERS, body: JSON.stringify({ qty: nq, last_updated: new Date().toISOString() }) });
+              if (!pRes.ok) console.error('庫存調整 PATCH 失敗:', ni.product_id);
+              const lRes = await fetch(`${SB_URL}/inventory_logs`, { method: 'POST', headers: HEADERS, body: JSON.stringify({ product_id: ni.product_id, log_type: '退貨單修改', qty_change: diff, after_qty: nq, doc_no: orderId, log_date: new Date().toISOString() }) });
+              if (!lRes.ok) console.error('庫存異動記錄寫入失敗:', ni.product_id);
             }
-          } catch(e) {}
+          } catch(e) { console.error('退貨單修改庫存調整失敗:', ni.product_id, e); }
         }
       }
       // 被刪除的項目扣回庫存
@@ -10442,10 +10450,12 @@
             const id = await ir.json();
             if (id.length > 0) {
               const nq = (Number(id[0].qty) || 0) - oi.qty;
-              await fetch(`${SB_URL}/inventory?product_id=eq.${encodeURIComponent(oi.product_id)}`, { method: 'PATCH', headers: HEADERS, body: JSON.stringify({ qty: nq, last_updated: new Date().toISOString() }) });
-              await fetch(`${SB_URL}/inventory_logs`, { method: 'POST', headers: HEADERS, body: JSON.stringify({ product_id: oi.product_id, log_type: '退貨單修改（移除）', qty_change: -oi.qty, after_qty: nq, doc_no: orderId, log_date: new Date().toISOString() }) });
+              const pRes = await fetch(`${SB_URL}/inventory?product_id=eq.${encodeURIComponent(oi.product_id)}`, { method: 'PATCH', headers: HEADERS, body: JSON.stringify({ qty: nq, last_updated: new Date().toISOString() }) });
+              if (!pRes.ok) console.error('庫存扣回 PATCH 失敗:', oi.product_id);
+              const lRes = await fetch(`${SB_URL}/inventory_logs`, { method: 'POST', headers: HEADERS, body: JSON.stringify({ product_id: oi.product_id, log_type: '退貨單修改（移除）', qty_change: -oi.qty, after_qty: nq, doc_no: orderId, log_date: new Date().toISOString() }) });
+              if (!lRes.ok) console.error('庫存異動記錄寫入失敗:', oi.product_id);
             }
-          } catch(e) {}
+          } catch(e) { console.error('退貨單修改（移除）庫存扣回失敗:', oi.product_id, e); }
         }
       }
 
@@ -10485,10 +10495,12 @@
           const id = await ir.json();
           if (id.length > 0) {
             const nq = (Number(id[0].qty) || 0) - rq;
-            await fetch(`${SB_URL}/inventory?product_id=eq.${encodeURIComponent(d.product_id)}`, { method: 'PATCH', headers: HEADERS, body: JSON.stringify({ qty: nq, last_updated: new Date().toISOString() }) });
-            await fetch(`${SB_URL}/inventory_logs`, { method: 'POST', headers: HEADERS, body: JSON.stringify({ product_id: d.product_id, log_type: '退貨單作廢', qty_change: -rq, after_qty: nq, doc_no: orderId, log_date: new Date().toISOString() }) });
+            const pRes = await fetch(`${SB_URL}/inventory?product_id=eq.${encodeURIComponent(d.product_id)}`, { method: 'PATCH', headers: HEADERS, body: JSON.stringify({ qty: nq, last_updated: new Date().toISOString() }) });
+            if (!pRes.ok) console.error('退貨單作廢庫存扣回 PATCH 失敗:', d.product_id);
+            const lRes = await fetch(`${SB_URL}/inventory_logs`, { method: 'POST', headers: HEADERS, body: JSON.stringify({ product_id: d.product_id, log_type: '退貨單作廢', qty_change: -rq, after_qty: nq, doc_no: orderId, log_date: new Date().toISOString() }) });
+            if (!lRes.ok) console.error('退貨單作廢異動記錄寫入失敗:', d.product_id);
           }
-        } catch(e) {}
+        } catch(e) { console.error('退貨單作廢庫存調整失敗:', d.product_id, e); }
       }
 
       await fetch(`${SB_URL}/sales_details?order_id=eq.${orderId}`, { method: 'DELETE', headers: HEADERS });
