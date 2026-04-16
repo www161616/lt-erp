@@ -9,6 +9,7 @@
 |------|---------|---------|------------|
 | 04/16 | BUG-011: SalesReturn activity_logs 空 catch → 加 console.error | 空 catch 吞掉所有錯誤，稽核軌跡遺失無提示 | 寫 try-catch 時不要用空 catch，至少 console.error |
 | 04/16 | BUG-010: SalesOrder 客戶資料 fetch 空 catch × 2 → 加 console.warn | 同上，Excel 匯出缺欄位但無任何提示 | 同上 |
+| 04/16 | BUG-009: admin 退貨處理後 return_status + portal_status 寫回 DB | 四個函式只改 local memory 沒寫 DB，syncSalesOrdersToPortal 是空函式 | 改狀態後一定要同步寫 DB，不能只改記憶體 |
 
 ---
 
@@ -177,7 +178,7 @@
 ## 🟡 低風險 (邊緣情況)
 
 ### BUG-009: portal_status disputed 沒有回寫機制
-- **狀態**: [ ] 未修
+- **狀態**: [x] 已修 (2026-04-16)
 - **嚴重度**: 🟡 低 — 狀態卡住但不丟資料
 - **問題**: admin 處理完退貨後 (接受/拒絕/免退)，沒有把 portal_status 改回 issued
 - **涉及檔案**: admin/branch_admin.html (adminAcceptReturn / adminRejectReturn / adminWaiveReturn / adminMarkReturnReceived)

@@ -9903,6 +9903,31 @@
     window.open(URL.createObjectURL(blob), '_blank');
   }
 
+  // BUG-009: admin 處理退貨後同步 return_status + portal_status 到 DB
+  async function syncReturnStatusToDB(o, item) {
+    try {
+      // 1. PATCH sales_details.return_status
+      if (item.detailId) {
+        const r1 = await fetch(SB_URL + '/sales_details?id=eq.' + item.detailId, {
+          method: 'PATCH', headers: { ...HEADERS, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ return_status: item.returnStatus })
+        });
+        if (!r1.ok) console.error('PATCH sales_details return_status 失敗:', await r1.text());
+      }
+      // 2. 檢查所有 items 是否都已處理完 → 改回 portal_status='issued'
+      if (o.dbId && o.items) {
+        const allHandled = o.items.every(it => !it.returnStatus || it.returnStatus === 'none' || ['accepted','rejected','waived','received'].includes(it.returnStatus));
+        if (allHandled) {
+          const r2 = await fetch(SB_URL + '/sales_orders?id=eq.' + o.dbId, {
+            method: 'PATCH', headers: { ...HEADERS, 'Content-Type': 'application/json' },
+            body: JSON.stringify({ portal_status: 'issued' })
+          });
+          if (!r2.ok) console.error('PATCH sales_orders portal_status 失敗:', await r2.text());
+        }
+      }
+    } catch(e) { console.error('syncReturnStatusToDB 失敗:', e); }
+  }
+
   function adminAcceptReturn(orderId, itemIdx) {
     const o = mockSalesOrders.find(s => s.id === orderId);
     if (!o) return;
@@ -9922,12 +9947,13 @@
         qty: parseInt(document.getElementById('swal-adminQty').value) || item.returnQty,
         date: document.getElementById('swal-returnDate').value
       })
-    }).then(res => {
+    }).then(async res => {
       if (!res.isConfirmed) return;
       item.returnStatus = 'accepted';
       item.adminReturnQty = res.value.qty;
       item.expectedReturnDate = res.value.date || '待確認';
       syncSalesOrdersToPortal();
+      await syncReturnStatusToDB(o, item);
       showSalesOrderDetail(orderId);
     });
   }
@@ -9964,6 +9990,7 @@
       if (!res.isConfirmed) return;
       item.returnStatus = 'waived';
       syncSalesOrdersToPortal();
+      await syncReturnStatusToDB(o, item);
       // 建立正式退貨單（不回補庫存，因為是壞損/免退回）
       await createReturnOrderFromItem(o, item, item.returnQty, false, '免退回（壞損認定）：' + (item.returnReason || ''));
       showSalesOrderDetail(orderId);
@@ -9985,11 +10012,12 @@
       showCancelButton: true, confirmButtonText: '確認不接受', cancelButtonText: '取消',
       confirmButtonColor: '#c53030',
       preConfirm: () => document.getElementById('swal-rejectReason').value.trim() || '無說明'
-    }).then(res => {
+    }).then(async res => {
       if (!res.isConfirmed) return;
       item.returnStatus = 'rejected';
       item.rejectionReason = res.value;
       syncSalesOrdersToPortal();
+      await syncReturnStatusToDB(o, item);
       showSalesOrderDetail(orderId);
     });
   }
@@ -10007,6 +10035,7 @@
       if (!res.isConfirmed) return;
       item.returnStatus = 'received';
       syncSalesOrdersToPortal();
+      await syncReturnStatusToDB(o, item);
       // 建立正式退貨單（回補庫存，因為實際收到退貨品）
       const returnQty = item.adminReturnQty || item.returnQty;
       await createReturnOrderFromItem(o, item, returnQty, true, '退貨收回：' + (item.returnReason || ''));
