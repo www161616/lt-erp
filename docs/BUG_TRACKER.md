@@ -8,6 +8,7 @@
 | 日期 | 修了什麼 | 根本原因 | 下次怎麼避免 |
 |------|---------|---------|------------|
 | 04/16 | BUG-011: SalesReturn activity_logs 空 catch → 加 console.error | 空 catch 吞掉所有錯誤，稽核軌跡遺失無提示 | 寫 try-catch 時不要用空 catch，至少 console.error |
+| 04/16 | BUG-010: SalesOrder 客戶資料 fetch 空 catch × 2 → 加 console.warn | 同上，Excel 匯出缺欄位但無任何提示 | 同上 |
 
 ---
 
@@ -186,7 +187,7 @@
 ---
 
 ### BUG-010: SalesOrder.html 客戶資料 fetch 空 catch
-- **狀態**: [ ] 未修
+- **狀態**: [x] 已修 (2026-04-16)
 - **嚴重度**: 🟡 低 — Excel 匯出缺欄位
 - **問題**: 客戶電話/地址 fetch 失敗被空 catch 吃掉
 - **涉及檔案**: SalesOrder.html ~第 1293-1297 行

@@ -1294,7 +1294,7 @@ async function exportSavedToExcel(orderId) {
         const cRes = await fetch(`${SB_URL}/customers?id=eq.${o.customer_id}&select=phone,mobile,address`, { headers: HEADERS });
         const cData = await cRes.json();
         if (cData.length > 0) { custPhone = cData[0].phone || cData[0].mobile || ''; custAddr = cData[0].address || ''; }
-      } catch(e) {}
+      } catch(e) { console.warn('查詢客戶電話/地址失敗:', e); }
     }
 
     const st = Number(o.subtotal || 0);
@@ -1521,7 +1521,7 @@ async function executeSalesPrint(orderId, format, extraInfo = null) {
         const cRes = await fetch(`${SB_URL}/customers?id=eq.${o.customer_id}&select=phone,mobile,address`, { headers: HEADERS });
         const cData = await cRes.json();
         if (cData.length > 0) cust = cData[0];
-      } catch(e) {}
+      } catch(e) { console.warn('查詢客戶資料失敗:', e); }
     }
     const custPhone = cust.phone || cust.mobile || '';
     const custAddr = cust.address || '';
