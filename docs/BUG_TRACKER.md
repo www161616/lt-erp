@@ -114,10 +114,10 @@
 ## 🟠 中等 (功能異常 / 靜默失敗)
 
 ### BUG-005: branch_admin 多處 PATCH/DELETE 無錯誤處理
-- **狀態**: [x] 已修 (2026-04-16)
+- **狀態**: [x] 已修 (2026-04-16) — ⚠️ 2026-04-16 發現遺漏項目：branch_portal.html `saveBranchSetting`
 - **嚴重度**: 🟠 中等 — 操作靜默失敗
 - **問題**: 以下位置全部是 bare `await fetch()` 沒有 res.ok 檢查
-- **涉及檔案**: admin/branch_admin.html
+- **涉及檔案**: admin/branch_admin.html, branch/branch_portal.html (遺漏)
 - **涉及位置**:
 
 | 約略行號 | 操作 | 表 | 影響 |
@@ -128,6 +128,13 @@
 | 8624-8625 | DELETE | transfer 相關 | 刪除靜默失敗 |
 | 3766 | DELETE | br_picking_items | 揀貨品項刪不掉 |
 | 13365, 13913, 13927 | PATCH/DELETE | xiaolan 表 | 小瀾資料操作無回饋 |
+
+#### ⚠️ 2026-04-16 補充遺漏項目：branch_portal.html `saveBranchSetting`
+- **位置**: branch/branch_portal.html ~第 6693-6702 行
+- **問題**: POST `branch_settings` 表 bare await fetch，無 res.ok 檢查，catch 只 console.error 不提示使用者
+- **影響**: 行事曆事件/備忘錄、自訂網址、常用語錄儲存靜默失敗（店長實際遇到）
+- **呼叫端共 10 處**: migrateBranchSettings (3) / loadMemos 舊版轉換 (1) / addMemo / deleteMemo / addCustomLink / removeCustomLink / addPhrase / removePhrase / saveMemos 遺漏
+- **修法**: 加 res.ok 檢查 + 失敗 Swal 提示「儲存失敗，請重試」
 
 - **修法**: 逐一加 `if (!res.ok) { Swal.fire('錯誤', ...) }` — 可以分批做
 - **測試項目**:

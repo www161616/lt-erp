@@ -6691,14 +6691,25 @@ async function loadBranchSetting(key) {
 }
 
 async function saveBranchSetting(key, value) {
-  if (!currentStore) return;
+  if (!currentStore) return false;
   try {
-    await fetch(`${SB_URL}/branch_settings`, {
+    const res = await fetch(`${SB_URL}/branch_settings`, {
       method: 'POST',
       headers: { ...SB_HEADERS, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
       body: JSON.stringify({ store_name: currentStore.name, setting_key: key, setting_value: value, updated_at: new Date().toISOString() })
     });
-  } catch(e) { console.error('saveBranchSetting error:', e); }
+    if (!res.ok) {
+      const txt = await res.text().catch(() => '');
+      console.error('saveBranchSetting failed:', res.status, txt);
+      Swal.fire('儲存失敗', '請重試，若持續失敗請聯絡管理員', 'error');
+      return false;
+    }
+    return true;
+  } catch(e) {
+    console.error('saveBranchSetting error:', e);
+    Swal.fire('儲存失敗', '網路錯誤，請重試', 'error');
+    return false;
+  }
 }
 
 // 自動遷移 localStorage → DB（只跑一次）
