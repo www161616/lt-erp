@@ -14,6 +14,7 @@
 | 04/16 | BUG-006: PendingReview 5 處 PATCH 加 res.ok 檢查 | 轉單/駁回/回寫狀態沒驗證回應，可能資料不一致 | 同上 |
 | 04/16 | BUG-004: submitOrder 加防連點 (_submitting + disabled + finally) | async 函式無 re-entry guard，連點重複觸發 RPC | 所有 async 按鈕操作都要加防連點 |
 | 04/16 | BUG-005: branch_admin 16 處 bare await 加 res.ok 檢查 (inventory/procurement_followup/transfer/picking/xiaolan) | 大量 PATCH/DELETE 沒檢查回應，靜默失敗 | bare await 是 anti-pattern，所有寫入都要驗證 |
+| 04/16 | BUG-007: cloudSave 序列化保護 + beforeunload + 同步指示 | fire-and-forget 多次呼叫導致 RPC race condition (整店資料覆寫，後到的舊資料蓋掉新資料) | 連續觸發的 async write 必須序列化，否則整資料覆寫型 RPC 會丟資料 |
 
 ---
 
@@ -152,7 +153,7 @@
 ---
 
 ### BUG-007: branch_admin cloudSave 是 fire-and-forget
-- **狀態**: [ ] 未修
+- **狀態**: [x] 已修 (2026-04-16)
 - **嚴重度**: 🟠 中等 — 關 tab 就丟資料
 - **問題**: admin 改開團總表數字後，cloudSave 沒有 await，關 tab 資料可能沒上雲端
 - **涉及檔案**: admin/branch_admin.html
