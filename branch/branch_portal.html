@@ -2545,7 +2545,9 @@
     // ============================
     // 送出訂單
     // ============================
+    let _submitting = false;
     function submitOrder() {
+      if (_submitting) return;
       if (!importMode) {
         Swal.fire('提醒', '請先匯入樂樂報表，或直接手動修改數量（手動修改會自動儲存，不需按送出）。', 'info');
         return;
@@ -2622,7 +2624,11 @@
         cancelButtonColor: '#6b7280',
         width: '560px',
       }).then(async result => {
-        if (result.isConfirmed) {
+        if (!result.isConfirmed) return;
+        _submitting = true;
+        const submitBtn = document.getElementById('submitOrderBtn');
+        if (submitBtn) submitBtn.disabled = true;
+        try {
           const saved = JSON.parse(localStorage.getItem('branchOrders') || '{}');
           if (!saved[storeName]) saved[storeName] = {};
           items.forEach(item => { saved[storeName][item.id] = item.qty; });
@@ -2645,7 +2651,6 @@
           orderDirty = false;
           importMode = false;
           importedIds = [];
-          const submitBtn = document.getElementById('submitOrderBtn');
           if (submitBtn) submitBtn.style.display = 'none';
           Swal.fire({
             icon: cloudOk ? 'success' : 'warning',
@@ -2655,6 +2660,9 @@
               : `共 <b>${items.length}</b> 項已存到本機，但雲端同步失敗，請檢查網路後重新按「送出」`,
             confirmButtonColor: '#be185d'
           });
+        } finally {
+          _submitting = false;
+          if (submitBtn) submitBtn.disabled = false;
         }
       });
     }

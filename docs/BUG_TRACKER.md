@@ -12,6 +12,7 @@
 | 04/16 | BUG-009: admin 退貨處理後 return_status + portal_status 寫回 DB | 四個函式只改 local memory 沒寫 DB，syncSalesOrdersToPortal 是空函式 | 改狀態後一定要同步寫 DB，不能只改記憶體 |
 | 04/16 | BUG-003: SalesReturn 庫存回補加 res.ok 檢查 + 失敗警告 | PATCH/POST 沒檢查回應，靜默失敗顯示成功 | 所有寫入操作都要檢查 res.ok，失敗要告訴使用者 |
 | 04/16 | BUG-006: PendingReview 5 處 PATCH 加 res.ok 檢查 | 轉單/駁回/回寫狀態沒驗證回應，可能資料不一致 | 同上 |
+| 04/16 | BUG-004: submitOrder 加防連點 (_submitting + disabled + finally) | async 函式無 re-entry guard，連點重複觸發 RPC | 所有 async 按鈕操作都要加防連點 |
 
 ---
 
@@ -93,7 +94,7 @@
 ---
 
 ### BUG-004: submitOrder 沒有防連點
-- **狀態**: [ ] 未修
+- **狀態**: [x] 已修 (2026-04-16)
 - **嚴重度**: 🔴 嚴重 — 每天分店都在用
 - **問題**: submitOrder() 是 async 但按鈕沒有 disabled，連點會觸發重複 RPC
 - **涉及檔案**: branch/branch_portal.html
