@@ -25,6 +25,30 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ---
 
+## ⚠️ 絕對不要碰的事（資料語意誤判會釀災）
+
+### branchOrders 是「未結案訂單清單」，不是「當期訂單快照」
+- 店家清除 = 訂單結案
+- 沒清除 = 還在等貨（**廠商斷貨等好幾個月是常態**）
+- 跨檔期殘值 = 真實追蹤中的未到貨訂單，**不是 bug、不是殘影**
+- admin 的 `_lookupBO`（branch_admin.html `filterAdminSummary` 內）跨檔期加總雖然位置錯，但讓 admin 看得到積壓，是**刻意保留的行為**
+- **絕對禁止**以「修鬼影／殘影」為由改 admin 的 `_lookupBO`、或清 branchOrders 的孤兒純編號 key
+- 要真正解決，必須先做「未到貨積壓檢視」頁面（admin 能看到歷史積壓後），才能動顯示邏輯
+
+### 歷史教訓（2026/04/17）
+事件：差點以「修殘影 bug」為由改 `_lookupBO` fallback（加結單日匹配檢查）。掃描發現 19,110 筆孤兒純編號 key、總數量 102,069 件。審查員指出這是店家追討中的真實未到貨訂單（店家用「清除+重填」表示已結案），若改 fallback → admin 看不到這些積壓 → 店家追討時以為訂單不存在。已在 commit 前 revert，未推上 prod。
+
+---
+
+## 🔧 未來要做的「未到貨積壓檢視」頁面（中優先）
+- 位置：admin 加新 tab
+- 顯示：所有 branchOrders 有數量、但不在當期 branchOrderList 的記錄（孤兒純編號 key）
+- 分組：按店家 + 商品
+- 操作：admin 可逐筆標「已處理 / 仍等貨」，已處理的自動清除 branchOrders
+- 前提：這個頁面做完，admin 能看到所有積壓之後，才能安全動 `_lookupBO` 的 fallback 邏輯
+
+---
+
 ## 修 Bug 專用流程
 
 ### 每次只修一個 bug
