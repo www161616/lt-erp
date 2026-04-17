@@ -7,6 +7,7 @@
 
 | 日期 | 修了什麼 | 根本原因 | 下次怎麼避免 |
 |------|---------|---------|------------|
+| 04/17 | saveBranchSetting 加 on_conflict=store_name,setting_key 修正 409 | PostgREST upsert 沒指定 on_conflict 時預設用 PK，遇到複合 UNIQUE 會失敗 | 所有複合 UNIQUE 的 upsert 必須在 URL 加 ?on_conflict=col1,col2 |
 | 04/16 | BUG-011: SalesReturn activity_logs 空 catch → 加 console.error | 空 catch 吞掉所有錯誤，稽核軌跡遺失無提示 | 寫 try-catch 時不要用空 catch，至少 console.error |
 | 04/16 | BUG-010: SalesOrder 客戶資料 fetch 空 catch × 2 → 加 console.warn | 同上，Excel 匯出缺欄位但無任何提示 | 同上 |
 | 04/16 | BUG-009: admin 退貨處理後 return_status + portal_status 寫回 DB | 四個函式只改 local memory 沒寫 DB，syncSalesOrdersToPortal 是空函式 | 改狀態後一定要同步寫 DB，不能只改記憶體 |
@@ -177,6 +178,14 @@
 - **影響**: 行事曆事件/備忘錄、自訂網址、常用語錄儲存靜默失敗（店長實際遇到）
 - **呼叫端共 10 處**: migrateBranchSettings (3) / loadMemos 舊版轉換 (1) / addMemo / deleteMemo / addCustomLink / removeCustomLink / addPhrase / removePhrase / saveMemos 遺漏
 - **修法**: 加 res.ok 檢查 + 失敗 Swal 提示「儲存失敗，請重試」
+
+#### ⚠️ 2026-04-17 補充真正根因：upsert 少 `on_conflict` 參數（commit 89f578f）
+- **位置**: branch/branch_portal.html:6713
+- **問題**: 04/16 加了 res.ok 檢查後才發現每次儲存都回 409
+- **根因**: POST + `Prefer: resolution=merge-duplicates` 沒在 URL 加 `on_conflict=store_name,setting_key`。PostgREST 預設拿 PK (`id`) 當衝突目標，body 無 `id` → 當純 INSERT → 命中 `(store_name, setting_key)` UNIQUE → 23505 / 409
+- **修法**: URL 改成 `?on_conflict=store_name,setting_key`（一行改動）
+- **對照**: admin/branch_admin.html:5588 的 `xiaolan_order_tracking` upsert 本來就有加 `on_conflict=product_id`，這次是當時漏抄
+- **教訓**: PostgREST upsert 碰到複合 UNIQUE 必須明確指定 `on_conflict`；只加 res.ok 檢查治標不治本，看到 409 要追根因
 
 - **修法**: 逐一加 `if (!res.ok) { Swal.fire('錯誤', ...) }` — 可以分批做
 - **測試項目**:
