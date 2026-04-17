@@ -10641,7 +10641,7 @@
             <button onclick="batchSummaryStatus('closed')" style="background:#c53030; color:#fff; border:none; border-radius:6px; padding:5px 14px; font-size:13px; cursor:pointer; font-weight:600;">🔴 批次結單</button>
             <button onclick="batchSummaryStatus('open')" style="background:#2b6cb0; color:#fff; border:none; border-radius:6px; padding:5px 14px; font-size:13px; cursor:pointer; font-weight:600;">🟢 批次開放</button>
             <button onclick="generatePOFromSummary()" style="background:#047857; color:#fff; border:none; border-radius:6px; padding:5px 14px; font-size:13px; cursor:pointer; font-weight:600;">📝 產生採購單</button>
-            <button onclick="clearBranchOrderQty()" style="background:#b7791f; color:#fff; border:none; border-radius:6px; padding:5px 14px; font-size:13px; cursor:pointer; font-weight:600;">🧹 清除本期數量</button>
+            <button onclick="clearBranchOrderQty()" style="background:#b7791f; color:#fff; border:none; border-radius:6px; padding:5px 14px; font-size:13px; cursor:pointer; font-weight:600;">🧹 清空勾選商品的叫貨數量</button>
             <button onclick="batchDeleteSummaryItems()" style="background:#c53030; color:#fff; border:none; border-radius:6px; padding:5px 14px; font-size:13px; cursor:pointer; font-weight:600;">🗑️ 批次刪除</button>
           </div>
           <div id="asPagination" style="display:flex; align-items:center; gap:6px; margin-top:8px; flex-wrap:wrap;"></div>
@@ -10801,44 +10801,164 @@
   }
 
   async function clearBranchOrderQty() {
-    // 檢查是否有勾選的商品
-    const checked = [...document.querySelectorAll('.as-check:checked')].map(c => c.dataset.id);
-    const isPartial = checked.length > 0;
+    // 1. 必須先勾選商品（防止誤清全部）
+    const checked = [...document.querySelectorAll('.as-checkbox:checked')].map(cb => cb.value);
+    if (checked.length === 0) {
+      Swal.fire('請先勾選', '請先勾選要清除叫貨數量的商品，再按此按鈕', 'info');
+      return;
+    }
 
-    const confirmMsg = isPartial
-      ? `確定清除勾選的 <b>${checked.length}</b> 個商品的所有分店填單數量？<br>分店需要重新填寫。`
-      : `確定清除<b>所有商品</b>的所有分店填單數量？<br>分店需要重新填寫。`;
-
-    const result = await Swal.fire({
-      title: '🧹 清除分店填單數量',
-      html: confirmMsg,
-      icon: 'warning',
-      showCancelButton: true,
-      confirmButtonText: '確定清除',
-      cancelButtonText: '取消',
-      confirmButtonColor: '#b7791f'
+    // 2. 從 branchOrderList 查每個勾選商品的 endDate
+    const list = JSON.parse(localStorage.getItem('branchOrderList') || '[]');
+    const checkedItems = [];
+    const missingEndDate = [];
+    checked.forEach(id => {
+      const item = list.find(p => p.id === id);
+      if (!item) { missingEndDate.push(id); return; }
+      const cleanPid = String(id).includes('_') ? String(id).split('_')[0] : id;
+      const endDateMD = _normDateKey(item.endDate || '');
+      if (!endDateMD) { missingEndDate.push(id); return; }
+      checkedItems.push({ id, cleanPid, endDateMD, endDateRaw: item.endDate });
     });
-    if (!result.isConfirmed) return;
 
+    if (checkedItems.length === 0) {
+      Swal.fire('資料不足', `勾選的 ${checked.length} 個商品都沒有結單日資訊，無法安全清除`, 'warning');
+      return;
+    }
+
+    // 3. 掃描 branchOrders：找屬於「勾選商品 × 該商品的 endDate」的 key，跳過 admin 鎖定
     const saved = JSON.parse(localStorage.getItem('branchOrders') || '{}');
-    let clearCount = 0;
+    const locked = JSON.parse(localStorage.getItem('branchOrdersLocked') || '{}');
+
+    // 純編號 key 的 endDate lookup（處理舊格式殘留）
+    const cleanPidToMD = {};
+    list.forEach(item => {
+      if (item.id && item.endDate && !String(item.id).includes('_')) {
+        cleanPidToMD[item.id] = _normDateKey(item.endDate);
+      }
+    });
+
+    // 勾選商品整理：cleanPid → Set(endDateMD)
+    const pidToMDSet = {};
+    checkedItems.forEach(ci => {
+      if (!pidToMDSet[ci.cleanPid]) pidToMDSet[ci.cleanPid] = new Set();
+      pidToMDSet[ci.cleanPid].add(ci.endDateMD);
+    });
+
+    const toClear = {};
+    const byDate = {};
+    let totalClearCount = 0;
+    let totalSkipCount = 0;
+
+    function ensureDateBucket(md, raw) {
+      if (!byDate[md]) byDate[md] = { products: new Set(), stores: new Set(), qtyCount: 0, skipCount: 0, raw };
+      return byDate[md];
+    }
 
     Object.keys(saved).forEach(storeName => {
-      const targets = isPartial ? checked : Object.keys(saved[storeName]);
-      targets.forEach(pid => {
-        if (saved[storeName][pid] !== undefined) {
-          delete saved[storeName][pid];
+      const storeData = saved[storeName] || {};
+      Object.keys(storeData).forEach(key => {
+        const qty = storeData[key];
+        if (!(qty > 0)) return;
+
+        let cleanPid, keyMD;
+        if (String(key).includes('_')) {
+          const parts = String(key).split('_');
+          cleanPid = parts[0];
+          keyMD = _normDateKey(parts.slice(1).join('_'));
+        } else {
+          cleanPid = key;
+          keyMD = cleanPidToMD[key] || '';
+        }
+
+        if (!pidToMDSet[cleanPid]) return;
+        if (!pidToMDSet[cleanPid].has(keyMD)) return;
+
+        const matchItem = checkedItems.find(ci => ci.cleanPid === cleanPid && ci.endDateMD === keyMD);
+        const rawDate = matchItem ? matchItem.endDateRaw : keyMD;
+        const bucket = ensureDateBucket(keyMD, rawDate);
+        bucket.products.add(cleanPid);
+        bucket.stores.add(storeName);
+
+        if (locked[storeName] && locked[storeName][key]) {
+          bucket.skipCount++;
+          totalSkipCount++;
+          return;
+        }
+
+        if (!toClear[storeName]) toClear[storeName] = [];
+        toClear[storeName].push(key);
+        bucket.qtyCount++;
+        totalClearCount++;
+      });
+    });
+
+    if (totalClearCount === 0 && totalSkipCount === 0) {
+      Swal.fire('無資料可清', '勾選的商品在各店都沒有訂購數量', 'info');
+      return;
+    }
+
+    // 4. 預覽（依結單日分組顯示）
+    const dateRows = Object.keys(byDate).sort((a, b) => {
+      return String(byDate[b].raw).localeCompare(String(byDate[a].raw));
+    }).map(md => {
+      const b = byDate[md];
+      return `<div style="padding:4px 0; border-bottom:1px dashed #eee;">
+        <b style="color:#b7791f;">${b.raw}</b>：
+        ${b.products.size} 個商品 × ${b.stores.size} 家店，
+        <b style="color:#c53030;">清除 ${b.qtyCount} 筆</b>
+        ${b.skipCount > 0 ? `<span style="color:#047857;">（鎖定跳過 ${b.skipCount}）</span>` : ''}
+      </div>`;
+    }).join('');
+
+    const confirmResult = await Swal.fire({
+      title: '確認清空叫貨數量？',
+      html: `
+        <div style="text-align:left; font-size:13px; max-height:300px; overflow-y:auto;">
+          ${dateRows}
+        </div>
+        <div style="margin-top:12px; padding:8px; background:#fff5f5; border-left:3px solid #c53030; text-align:left; font-size:13px; color:#c53030;">
+          總計將清除 <b>${totalClearCount}</b> 筆（鎖定跳過 ${totalSkipCount} 筆）<br>
+          ⚠️ 此操作無法復原。分店 portal 需重整頁面才會同步。
+        </div>
+      `,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonText: `確定清除 ${totalClearCount} 筆`,
+      cancelButtonText: '取消',
+      confirmButtonColor: '#c53030'
+    });
+    if (!confirmResult.isConfirmed) return;
+
+    // 5. 實際清除
+    let clearedCount = 0;
+    Object.keys(toClear).forEach(storeName => {
+      toClear[storeName].forEach(key => {
+        if (saved[storeName][key] !== undefined) {
+          delete saved[storeName][key];
           _dirtyBranchStores.add(storeName);
-          clearCount++;
+          clearedCount++;
         }
       });
     });
 
     localStorage.setItem('branchOrders', JSON.stringify(saved));
-    cloudSave('branchOrders');
-    await logActivity('清除分店填單數量', 'BRANCH_ORDERS', { count: clearCount, partial: isPartial });
+    await cloudSave('branchOrders');
+    await logActivity('清空勾選商品的叫貨數量', 'BRANCH_ORDERS', {
+      checkedCount: checked.length,
+      clearCount: clearedCount,
+      skipLocked: totalSkipCount,
+      dates: Object.keys(byDate).map(md => byDate[md].raw)
+    });
 
-    Swal.fire({ icon: 'success', title: '已清除', text: `共清除 ${clearCount} 筆分店填單數量`, timer: 2000, showConfirmButton: false });
+    Swal.fire({
+      icon: 'success',
+      title: '已清除',
+      html: `共清除 <b>${clearedCount}</b> 筆叫貨數量<br>涉及 ${Object.keys(byDate).length} 個結單日`,
+      timer: 2500,
+      showConfirmButton: false
+    });
+
     filterAdminSummary(false, 1);
   }
 
