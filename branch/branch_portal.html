@@ -6710,7 +6710,7 @@ async function loadBranchSetting(key) {
 async function saveBranchSetting(key, value) {
   if (!currentStore) return false;
   try {
-    const res = await fetch(`${SB_URL}/branch_settings`, {
+    const res = await fetch(`${SB_URL}/branch_settings?on_conflict=store_name,setting_key`, {
       method: 'POST',
       headers: { ...SB_HEADERS, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
       body: JSON.stringify({ store_name: currentStore.name, setting_key: key, setting_value: value, updated_at: new Date().toISOString() })
