@@ -5521,7 +5521,22 @@
         eta: item.eta || '',
         supplier: item.supplier || ''
       }));
-      localStorage.setItem('portalTrackingData', JSON.stringify(trackingData));
+      const payload = JSON.stringify(trackingData);
+      try {
+        localStorage.setItem('portalTrackingData', payload);
+      } catch(qe) {
+        // QuotaExceeded：清掉本頁不需要的快取後重試（沿用 cloudLoadAll 的名單）
+        const junk = ['portalTrackingData','supplier_xiaolan_orders','branchOrderList_pre_normalize_backup','bp_orderQtyCache'];
+        junk.forEach(k => localStorage.removeItem(k));
+        Object.keys(localStorage).forEach(k => {
+          if (/^branch_inventory_/.test(k) || /^portal_seen_/.test(k) || /_bunRecords$/.test(k) || /_ledger$/.test(k)) localStorage.removeItem(k);
+        });
+        try {
+          localStorage.setItem('portalTrackingData', payload);
+        } catch(e2) {
+          console.warn('localStorage 空間不足，portalTrackingData 僅寫入雲端（本機跳過）');
+        }
+      }
       cloudSave('portalTrackingData');
       // 同步廠商專屬資料（小瀾）
       syncSupplierData();
