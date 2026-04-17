@@ -179,6 +179,20 @@
     };
 
     // ============================
+    // 共用：日期正規化為 M/D（去年份、去前導零）
+    // 用途：branchOrders key 後綴、開團總表 fallback 比對
+    // ============================
+    function _normDateKey(s) {
+      if (!s) return '';
+      const str = String(s).trim();
+      const m = str.match(/^\d{4}-(\d{1,2})-(\d{1,2})/);
+      if (m) return parseInt(m[1], 10) + '/' + parseInt(m[2], 10);
+      const m2 = str.match(/^(\d{1,2})[\/\-](\d{1,2})/);
+      if (m2) return parseInt(m2[1], 10) + '/' + parseInt(m2[2], 10);
+      return str;
+    }
+
+    // ============================
     // 雲端同步工具 (shared_kv)
     // ============================
     // admin 追蹤「哪些店被 admin 改過」，cloudSave 只推這些店，不碰其他店
@@ -1215,15 +1229,7 @@
       // branchOrders key 可能是純編號 (160203140) 或帶尾碼 (160203140_4/15)
       // 用 cleanPid 匹配，但限定「尾碼=該結單日」或「無尾碼」，避免撿到其他檔期
       const branchOrders = JSON.parse(localStorage.getItem('branchOrders') || '{}');
-      function _normDK(s) {
-        if (!s) return '';
-        const m = String(s).trim().match(/^\d{4}-(\d{1,2})-(\d{1,2})/);
-        if (m) return parseInt(m[1],10) + '/' + parseInt(m[2],10);
-        const m2 = String(s).trim().match(/^(\d{1,2})[\/\-](\d{1,2})/);
-        if (m2) return parseInt(m2[1],10) + '/' + parseInt(m2[2],10);
-        return String(s).trim();
-      }
-      const targetDK = _normDK(endDate);  // 例：'4/15'
+      const targetDK = _normDateKey(endDate);  // 例：'4/15'
       const qtyMap = {};
       items.forEach(item => {
         const cleanPid = String(item.id).replace(/_.*$/, '');
@@ -1237,7 +1243,7 @@
             const idx = str.indexOf('_');
             const kClean = idx >= 0 ? str.substring(0, idx) : str;
             if (kClean !== cleanPid) return;
-            const kSuffix = idx >= 0 ? _normDK(str.substring(idx + 1)) : '';
+            const kSuffix = idx >= 0 ? _normDateKey(str.substring(idx + 1)) : '';
             if (kSuffix === targetDK || kSuffix === '') {
               total += Number(v || 0);
             }
@@ -2800,8 +2806,11 @@
       // 注意：branchOrderList key 統一用純商品編號（與 ImportGroupBuy 一致）
       const saved = JSON.parse(localStorage.getItem('branchOrderList') || '[]');
       stagingList.forEach(item => {
+        const dateSuffix = _normDateKey(item.endDate);
         const entry = {
-          id: item.code, name: item.name,
+          id: dateSuffix ? (item.code + '_' + dateSuffix) : item.code,
+          productId: item.code,
+          name: item.name,
           price: Number(item.price), storePrice: Number(item.storePrice),
           wholesalePrice: Number(item.wholesalePrice) || 0,
           groupPrice: Number(item.groupPrice) || 0,
@@ -2811,7 +2820,8 @@
           startDate: item.startDate, endDate: item.endDate,
           status: 'open'
         };
-        const idx = saved.findIndex(p => p.id === item.code);
+        const newId = entry.id;
+        const idx = saved.findIndex(p => p.id === newId || p.id === item.code);
         if (idx >= 0) saved[idx] = entry;
         else saved.push(entry);
       });
