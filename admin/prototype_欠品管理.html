@@ -145,6 +145,10 @@
       <!-- 動態產生選項 -->
     </div>
   </div>
+  <span id="selectedPill" style="display:none; background:#dbeafe; color:#1e40af; padding:4px 10px; border-radius:14px; font-size:12px; font-weight:600;">
+    已選 <b id="pillCount">0</b> 項
+    <span id="pillClear" style="background:#1e40af; color:white; width:16px; height:16px; border-radius:50%; display:inline-flex; align-items:center; justify-content:center; cursor:pointer; font-size:11px; margin-left:4px;">✗</span>
+  </span>
 
   <div style="flex:1"></div>
 
@@ -157,7 +161,7 @@
   <button class="btn btn-secondary">📥 匯出 Excel</button>
 </div>
 
-<!-- 已選商品 + 快速篩選 -->
+<!-- 快速篩選 -->
 <div class="matrix-wrap" style="margin-bottom: 10px;">
   <div class="chips-row" style="border-top: none;">
     <span class="chip-label">⚡ 快速篩選：</span>
@@ -168,10 +172,6 @@
       <button class="qf-btn warn" data-filter="overdue">⚠️ 未完成的歷史單</button>
       <button class="qf-btn" data-filter="shortage">欠補中</button>
     </div>
-  </div>
-  <div class="chips-row" id="chipsContainer">
-    <span class="chip-label">📌 已選商品：</span>
-    <span style="color:#94a3b8; font-size:12px;">（從上方搜尋框點選後，這裡會列出，矩陣只顯示這些）</span>
   </div>
 </div>
 
@@ -427,7 +427,9 @@
 
   const searchInput = document.getElementById('searchInput');
   const dropdown = document.getElementById('searchDropdown');
-  const chipsContainer = document.getElementById('chipsContainer');
+  const selectedPill = document.getElementById('selectedPill');
+  const pillCount = document.getElementById('pillCount');
+  const pillClear = document.getElementById('pillClear');
 
   function renderDropdown(filter) {
     const kw = (filter || '').toLowerCase().trim();
@@ -452,27 +454,16 @@
     dropdown.classList.add('show');
   }
 
-  function renderChips() {
+  function updatePill() {
     if (selected.size === 0) {
-      chipsContainer.innerHTML = '<span class="chip-label">📌 已選商品：</span><span style="color:#94a3b8; font-size:12px;">（從上方搜尋框點選後，這裡會列出，矩陣只顯示這些）</span>';
-      return;
+      selectedPill.style.display = 'none';
+    } else {
+      selectedPill.style.display = '';
+      pillCount.textContent = selected.size;
     }
-    let html = '<span class="chip-label">📌 已選 ' + selected.size + ' 項：</span>';
-    selected.forEach(key => {
-      const p = ALL_PRODUCTS.find(x => (x.pid + '_' + x.date) === key);
-      if (!p) return;
-      const shortName = p.name.length > 14 ? p.name.substring(0, 14) + '…' : p.name;
-      html += `<span class="chip" data-key="${key}">
-        ${shortName}
-        <span class="chip-date">${p.date}</span>
-        <span class="chip-x" onclick="removeChip('${key}')">✗</span>
-      </span>`;
-    });
-    html += '<button class="chip-clear" onclick="clearChips()">✗ 全部清除</button>';
-    chipsContainer.innerHTML = html;
   }
 
-  // ★★★ 矩陣過濾：依已選 chips 顯示/隱藏列 ★★★
+  // ★★★ 矩陣過濾：依已選顯示/隱藏列 ★★★
   function filterMatrix() {
     const tbody = document.querySelector('#matrixTable tbody');
     const rows = tbody.querySelectorAll('tr');
@@ -480,62 +471,25 @@
     if (selected.size === 0) {
       // 沒選 → 顯示全部
       rows.forEach(r => r.style.display = '');
-      updateMatchInfo(null);
       return;
     }
 
     // 有選 → 隱藏未選的、隱藏所有 group divider
-    let visibleCount = 0;
-    let unmatchedKeys = new Set(selected);
     rows.forEach(r => {
       if (r.classList.contains('group-divider')) {
-        r.style.display = 'none';  // 過濾時不顯示分隔
+        r.style.display = 'none';
         return;
       }
       const key = r.dataset.key;
-      if (selected.has(key)) {
-        r.style.display = '';
-        visibleCount++;
-        unmatchedKeys.delete(key);
-      } else {
-        r.style.display = 'none';
-      }
+      r.style.display = selected.has(key) ? '' : 'none';
     });
-
-    updateMatchInfo({ matched: visibleCount, total: selected.size, unmatched: [...unmatchedKeys] });
   }
 
-  // 顯示「找到 X / Y 項」訊息（若有商品在當前頁找不到）
-  function updateMatchInfo(info) {
-    let infoBox = document.getElementById('matchInfo');
-    if (!info) {
-      if (infoBox) infoBox.remove();
-      return;
-    }
-    if (!infoBox) {
-      infoBox = document.createElement('div');
-      infoBox.id = 'matchInfo';
-      infoBox.style.cssText = 'background:#dbeafe; color:#1e40af; padding:6px 12px; font-size:12px; border-bottom:1px solid #bfdbfe;';
-      document.querySelector('.matrix-wrap:last-of-type .matrix-scroll').before(infoBox);
-    }
-    let msg = `🎯 已選 ${info.total} 項，矩陣顯示 <b>${info.matched}</b> 列`;
-    if (info.unmatched.length > 0) {
-      msg += `，<span style="color:#b45309;">⚠️ ${info.unmatched.length} 項當前資料中查無（可能是其他月份／已結案）</span>`;
-    }
-    infoBox.innerHTML = msg;
-  }
-
-  window.removeChip = (key) => {
-    selected.delete(key);
-    renderChips();
-    filterMatrix();
-    if (dropdown.classList.contains('show')) renderDropdown(searchInput.value);
-  };
-  window.clearChips = () => {
+  pillClear.addEventListener('click', () => {
     selected.clear();
-    renderChips();
+    updatePill();
     filterMatrix();
-  };
+  });
 
   searchInput.addEventListener('focus', () => renderDropdown(searchInput.value));
   searchInput.addEventListener('input', e => renderDropdown(e.target.value));
@@ -548,7 +502,7 @@
     const key = opt.dataset.key;
     if (selected.has(key)) selected.delete(key);
     else selected.add(key);
-    renderChips();
+    updatePill();
     filterMatrix();
     renderDropdown(searchInput.value);
   });
