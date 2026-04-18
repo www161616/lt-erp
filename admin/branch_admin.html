@@ -5537,7 +5537,12 @@
           console.warn('localStorage 空間不足，portalTrackingData 僅寫入雲端（本機跳過）');
         }
       }
-      cloudSave('portalTrackingData');
+      // 直接推雲端（不透過 cloudSave 讀 localStorage，避免 QuotaExceeded 時推空資料覆蓋雲端）
+      fetch(`${SB_URL}/shared_kv`, {
+        method: 'POST',
+        headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
+        body: JSON.stringify({ key: 'portalTrackingData', value: trackingData, updated_at: new Date().toISOString() })
+      }).catch(e => console.error('portalTrackingData cloudSave error:', e));
       // 同步廠商專屬資料（小瀾）
       syncSupplierData();
     }
