@@ -496,7 +496,10 @@
   document.addEventListener('click', e => {
     if (!e.target.closest('.search-wrap')) dropdown.classList.remove('show');
   });
+  // mousedown 阻止失焦（input 失焦會讓下拉收掉）
+  dropdown.addEventListener('mousedown', e => { e.preventDefault(); });
   dropdown.addEventListener('click', e => {
+    e.stopPropagation();
     const opt = e.target.closest('.search-option');
     if (!opt || !opt.dataset.key) return;
     const key = opt.dataset.key;
@@ -504,7 +507,8 @@
     else selected.add(key);
     updatePill();
     filterMatrix();
-    renderDropdown(searchInput.value);
+    renderDropdown(searchInput.value);  // 重新渲染 → 維持下拉開著
+    searchInput.focus();  // 保持游標在搜尋框，下次直接打字
   });
 
   // 快速篩選
