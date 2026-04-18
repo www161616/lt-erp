@@ -41,11 +41,16 @@
 
   /* 凍結欄（左邊 6 欄）*/
   .col-freeze-1 { position: sticky; left: 0;   z-index: 4; background: white; min-width: 60px; }
-  .col-freeze-2 { position: sticky; left: 60px;  z-index: 4; background: white; min-width: 60px; }
-  .col-freeze-3 { position: sticky; left: 120px; z-index: 4; background: white; min-width: 70px; }
-  .col-freeze-4 { position: sticky; left: 190px; z-index: 4; background: white; min-width: 90px; }
-  .col-freeze-5 { position: sticky; left: 280px; z-index: 4; background: white; min-width: 220px; text-align: left; }
-  .col-freeze-6 { position: sticky; left: 500px; z-index: 4; background: #fff7ed; min-width: 50px; font-weight: 700; color: #9a3412; }
+  .col-freeze-2 { position: sticky; left: 60px;  z-index: 4; background: white; min-width: 100px; cursor: pointer; }
+  .col-freeze-3 { position: sticky; left: 160px; z-index: 4; background: white; min-width: 70px; }
+  .col-freeze-4 { position: sticky; left: 230px; z-index: 4; background: white; min-width: 90px; }
+  .col-freeze-5 { position: sticky; left: 320px; z-index: 4; background: white; min-width: 220px; text-align: left; }
+  .col-freeze-6 { position: sticky; left: 540px; z-index: 4; background: #fff7ed; min-width: 50px; font-weight: 700; color: #9a3412; }
+  .col-freeze-2:hover { background: #eff6ff; }
+  .col-freeze-2.notified { background: #dcfce7; color: #15803d; font-weight: 600; }
+  .col-freeze-2.notified.eta-passed { background: #fee2e2; color: #b91c1c; font-weight: 700; }
+  .col-freeze-2 .notify-eta { display: block; font-size: 10px; font-weight: normal; color: #64748b; }
+  .col-freeze-2.notified.eta-passed .notify-eta { color: #b91c1c; font-weight: 700; }
   thead .col-freeze-1, thead .col-freeze-2, thead .col-freeze-3, thead .col-freeze-4, thead .col-freeze-5, thead .col-freeze-6 { z-index: 6; background: #f8fafc; }
   thead .col-freeze-6 { background: #fed7aa; color: #7c2d12; }
 
@@ -150,12 +155,6 @@
 
   <div style="flex:1"></div>
 
-  <div class="mode-switch">
-    <button class="active">📦 訂購量視圖</button>
-    <button>⚠️ 欠品視圖</button>
-    <button>📊 兩者並排</button>
-  </div>
-
   <button class="btn btn-secondary">📥 匯出 Excel</button>
 </div>
 
@@ -171,22 +170,22 @@
       <button class="qf-btn" data-filter="shortage">欠補中</button>
     </div>
     <div style="flex:1"></div>
-    <span class="chip-label">🎨 顏色說明：</span>
-    <span style="display:inline-flex; align-items:center; gap:4px; font-size:12px;">
-      <span style="background:#eff6ff; color:#1e40af; padding:2px 8px; border-radius:3px; font-weight:600;">5</span>
-      <span style="color:#475569;">訂購量</span>
-    </span>
+    <span class="chip-label">🎨 顏色：</span>
     <span style="display:inline-flex; align-items:center; gap:4px; font-size:12px;">
       <span style="background:#fee2e2; color:#b91c1c; padding:2px 8px; border-radius:3px; font-weight:700;">-3</span>
-      <span style="color:#475569;">欠補（負）</span>
+      <span style="color:#475569;">欠補</span>
     </span>
     <span style="display:inline-flex; align-items:center; gap:4px; font-size:12px;">
       <span style="background:#ede9fe; color:#7c3aed; padding:2px 8px; border-radius:3px; font-weight:600;">+1</span>
-      <span style="color:#475569;">多給（正，賣掉就好）</span>
+      <span style="color:#475569;">多給（賣就好）</span>
     </span>
     <span style="display:inline-flex; align-items:center; gap:4px; font-size:12px;">
-      <span style="color:#cbd5e1; padding:2px 8px;">0</span>
-      <span style="color:#475569;">沒訂</span>
+      <span style="background:#dcfce7; color:#15803d; padding:2px 8px; border-radius:3px; font-weight:600;">✓ Y</span>
+      <span style="color:#475569;">已通知廠商</span>
+    </span>
+    <span style="display:inline-flex; align-items:center; gap:4px; font-size:12px;">
+      <span style="background:#fee2e2; color:#b91c1c; padding:2px 8px; border-radius:3px; font-weight:700;">⚠️ Y</span>
+      <span style="color:#475569;">通知過 ETA 未補</span>
     </span>
   </div>
 </div>
@@ -197,7 +196,7 @@
       <thead>
         <tr>
           <th class="col-freeze-1">剩餘</th>
-          <th class="col-freeze-2">訂貨</th>
+          <th class="col-freeze-2">📞 已通知</th>
           <th class="col-freeze-3">結單日</th>
           <th class="col-freeze-4">商品編號</th>
           <th class="col-freeze-5">商品名稱</th>
@@ -238,7 +237,7 @@
 
         <tr data-key="340520051_3/26" data-group="3/26">
           <td class="col-freeze-1"></td>
-          <td class="col-freeze-2"></td>
+          <td class="col-freeze-2" onclick="openNotifyModal('340520051_3/26')"><span style="color:#94a3b8;">點擊通知</span></td>
           <td class="col-freeze-3">3/26</td>
           <td class="col-freeze-4">340520051</td>
           <td class="col-freeze-5">西螺阿財粉粿-梔子粉粿</td>
@@ -265,7 +264,7 @@
 
         <tr data-key="360312018_3/14" data-group="3/14">
           <td class="col-freeze-1"></td>
-          <td class="col-freeze-2"></td>
+          <td class="col-freeze-2 notified" onclick="openNotifyModal('360312018_3/14')" title="已通知 4/15&#10;廠商說：補貨中">✓ Y<span class="notify-eta">ETA 4/22</span></td>
           <td class="col-freeze-3">3/14</td>
           <td class="col-freeze-4">360312018</td>
           <td class="col-freeze-5">오씨엘 Osseo® 專櫃海藍晶潤高效保濕唇蜜 7ml-經典裸色</td>
@@ -288,7 +287,7 @@
 
         <tr data-key="151212180_3/14" data-group="3/14">
           <td class="col-freeze-1"></td>
-          <td class="col-freeze-2">Y</td>
+          <td class="col-freeze-2 notified eta-passed" onclick="openNotifyModal('151212180_3/14')" title="已通知 3/20&#10;廠商說：4/5 到&#10;⚠️ ETA 已過 13 天廠商還沒補">⚠️ Y<span class="notify-eta">ETA 4/5 (過 13 天)</span></td>
           <td class="col-freeze-3">3/14</td>
           <td class="col-freeze-4">151212180</td>
           <td class="col-freeze-5">懷舊池上風味排骨 4 入</td>
@@ -315,7 +314,7 @@
         <!-- 不補的列 -->
         <tr class="row-no-replenish" data-key="151125050_11/27" data-group="11/27">
           <td class="col-freeze-1" style="color:#475569;font-weight:700;">不補</td>
-          <td class="col-freeze-2">+1</td>
+          <td class="col-freeze-2" style="color:#cbd5e1;">—</td>
           <td class="col-freeze-3">11/27</td>
           <td class="col-freeze-4">151125050</td>
           <td class="col-freeze-5">咖哩虱目魚可樂餅</td>
@@ -344,13 +343,85 @@
   <span style="color:#94a3b8; margin-left:auto; font-size:11px;">💡 待撿的商品在「新增揀貨單」頁面，這頁不顯示</span>
 </div>
 
+<!-- 通知廠商對話框 -->
+<div id="notifyModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.4); z-index:1000; align-items:center; justify-content:center;">
+  <div style="background:white; border-radius:8px; padding:24px; min-width:480px; max-width:90vw; max-height:90vh; overflow-y:auto; box-shadow:0 8px 32px rgba(0,0,0,0.2);">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px; padding-bottom:12px; border-bottom:1px solid #e2e8f0;">
+      <h3 style="margin:0; color:#1e293b; font-size:16px;">📞 通知廠商紀錄</h3>
+      <button onclick="closeNotifyModal()" style="border:none; background:none; font-size:20px; cursor:pointer; color:#64748b;">✕</button>
+    </div>
+    <div style="font-size:12px; color:#64748b; margin-bottom:8px;">商品</div>
+    <div style="font-weight:700; color:#1e293b; margin-bottom:14px;" id="notifyProductName">—</div>
+
+    <div style="display:flex; gap:14px; margin-bottom:14px;">
+      <label style="flex:1;">
+        <span style="display:block; font-size:12px; color:#475569; font-weight:600; margin-bottom:4px;">廠商</span>
+        <input type="text" value="義美食品" readonly style="width:100%; padding:6px 10px; border:1px solid #cbd5e1; border-radius:4px; background:#f8fafc; font-family:inherit; font-size:13px;">
+      </label>
+      <label style="flex:1;">
+        <span style="display:block; font-size:12px; color:#475569; font-weight:600; margin-bottom:4px;">通知人</span>
+        <input type="text" value="小美（自動帶入登入者）" readonly style="width:100%; padding:6px 10px; border:1px solid #cbd5e1; border-radius:4px; background:#f8fafc; font-family:inherit; font-size:13px;">
+      </label>
+    </div>
+
+    <div style="background:#f1f5f9; border-radius:6px; padding:12px; margin-bottom:14px;">
+      <label style="display:flex; align-items:center; gap:8px; cursor:pointer; font-weight:600; color:#1e293b;">
+        <input type="checkbox" checked style="width:16px; height:16px; cursor:pointer;">
+        ✅ 已通知廠商（記錄今天 2026-04-18 由小美通知）
+      </label>
+    </div>
+
+    <label style="display:block; margin-bottom:14px;">
+      <span style="display:block; font-size:12px; color:#475569; font-weight:600; margin-bottom:4px;">廠商回應內容</span>
+      <input type="text" placeholder="例：明天會送 / 缺貨中、大概一週後 / 這個沒了 ..." value="明天 4/22 會送 3 件" style="width:100%; padding:6px 10px; border:1px solid #cbd5e1; border-radius:4px; font-family:inherit; font-size:13px;">
+    </label>
+
+    <div style="display:flex; gap:14px; margin-bottom:14px;">
+      <label style="flex:1;">
+        <span style="display:block; font-size:12px; color:#475569; font-weight:600; margin-bottom:4px;">📅 預計到貨日 (ETA)</span>
+        <input type="date" value="2026-04-22" style="width:100%; padding:6px 10px; border:1px solid #cbd5e1; border-radius:4px; font-family:inherit; font-size:13px;">
+      </label>
+      <label style="flex:1;">
+        <span style="display:block; font-size:12px; color:#475569; font-weight:600; margin-bottom:4px;">📦 廠商承諾補幾件</span>
+        <input type="number" value="3" min="0" style="width:100%; padding:6px 10px; border:1px solid #cbd5e1; border-radius:4px; font-family:inherit; font-size:13px;">
+      </label>
+    </div>
+
+    <label style="display:block; margin-bottom:14px;">
+      <span style="display:block; font-size:12px; color:#475569; font-weight:600; margin-bottom:4px;">備註（內部）</span>
+      <textarea rows="2" placeholder="（選填）" style="width:100%; padding:6px 10px; border:1px solid #cbd5e1; border-radius:4px; font-family:inherit; font-size:13px; resize:vertical;"></textarea>
+    </label>
+
+    <!-- 歷史通知紀錄 -->
+    <div style="background:#fef3c7; border:1px solid #fcd34d; border-radius:6px; padding:10px; margin-bottom:14px;">
+      <div style="font-size:12px; font-weight:700; color:#78350f; margin-bottom:6px;">📜 過去通知紀錄</div>
+      <div style="font-size:12px; color:#78350f; line-height:1.6;">
+        • 4/15 由小美通知 → 廠商說「補貨中」→ ETA 4/22 → <span style="color:#b91c1c; font-weight:700;">⚠️ 過期未到</span><br>
+        • 3/28 由阿明通知 → 廠商說「下次到貨會補」→ ETA 4/5 → <span style="color:#b91c1c; font-weight:700;">⚠️ 過期未到</span>
+      </div>
+    </div>
+
+    <div style="display:flex; gap:8px; justify-content:flex-end;">
+      <button onclick="closeNotifyModal()" style="padding:8px 16px; background:#e2e8f0; color:#475569; border:none; border-radius:4px; font-weight:600; cursor:pointer; font-family:inherit;">取消</button>
+      <button onclick="closeNotifyModal(); alert('[原型示意] 已儲存通知紀錄。\n下次廠商過 ETA 還沒補，會跳警示。');" style="padding:8px 20px; background:#2b6cb0; color:white; border:none; border-radius:4px; font-weight:600; cursor:pointer; font-family:inherit;">💾 儲存</button>
+    </div>
+  </div>
+</div>
+
 <script>
-  // 模式切換
-  document.querySelectorAll('.mode-switch button').forEach(btn => {
-    btn.onclick = () => {
-      document.querySelectorAll('.mode-switch button').forEach(b => b.classList.remove('active'));
-      btn.classList.add('active');
-    };
+  // ===== 通知廠商對話框 =====
+  function openNotifyModal(itemKey) {
+    const row = document.querySelector(`tr[data-key="${itemKey}"]`);
+    const name = row?.querySelector('.col-freeze-5')?.textContent || '—';
+    document.getElementById('notifyProductName').textContent = name;
+    document.getElementById('notifyModal').style.display = 'flex';
+  }
+  function closeNotifyModal() {
+    document.getElementById('notifyModal').style.display = 'none';
+  }
+  // 點背景關閉
+  document.getElementById('notifyModal').addEventListener('click', e => {
+    if (e.target.id === 'notifyModal') closeNotifyModal();
   });
 
   // 動作按鈕（原型階段只彈出說明）
