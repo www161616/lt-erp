@@ -161,7 +161,7 @@
   <button class="btn btn-secondary">📥 匯出 Excel</button>
 </div>
 
-<!-- 快速篩選 -->
+<!-- 快速篩選 + 顏色圖例 -->
 <div class="matrix-wrap" style="margin-bottom: 10px;">
   <div class="chips-row" style="border-top: none;">
     <span class="chip-label">⚡ 快速篩選：</span>
@@ -172,6 +172,24 @@
       <button class="qf-btn warn" data-filter="overdue">⚠️ 未完成的歷史單</button>
       <button class="qf-btn" data-filter="shortage">欠補中</button>
     </div>
+    <div style="flex:1"></div>
+    <span class="chip-label">🎨 顏色說明：</span>
+    <span style="display:inline-flex; align-items:center; gap:4px; font-size:12px;">
+      <span style="background:#eff6ff; color:#1e40af; padding:2px 8px; border-radius:3px; font-weight:600;">5</span>
+      <span style="color:#475569;">訂購量</span>
+    </span>
+    <span style="display:inline-flex; align-items:center; gap:4px; font-size:12px;">
+      <span style="background:#fee2e2; color:#b91c1c; padding:2px 8px; border-radius:3px; font-weight:700;">3</span>
+      <span style="color:#475569;">撿後欠補</span>
+    </span>
+    <span style="display:inline-flex; align-items:center; gap:4px; font-size:12px;">
+      <span style="background:#ede9fe; color:#7c3aed; padding:2px 8px; border-radius:3px; font-weight:600;">-1</span>
+      <span style="color:#475569;">多撿（要退）</span>
+    </span>
+    <span style="display:inline-flex; align-items:center; gap:4px; font-size:12px;">
+      <span style="color:#cbd5e1; padding:2px 8px;">0</span>
+      <span style="color:#475569;">沒訂</span>
+    </span>
   </div>
 </div>
 
