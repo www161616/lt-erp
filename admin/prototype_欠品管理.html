@@ -83,6 +83,36 @@
 
   /* 群組分隔線 */
   tr.group-divider td { background: #fef3c7; padding: 4px 8px; text-align: left; font-weight: 700; color: #78350f; font-size: 12px; }
+
+  /* 多選自動完成 */
+  .search-wrap { position: relative; display: inline-block; }
+  .search-input { padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 13px; font-family: inherit; width: 240px; }
+  .search-dropdown { display: none; position: absolute; top: 100%; left: 0; background: white; border: 1px solid #cbd5e1; border-radius: 4px; box-shadow: 0 4px 12px rgba(0,0,0,0.15); max-height: 280px; overflow-y: auto; z-index: 100; min-width: 320px; margin-top: 2px; }
+  .search-dropdown.show { display: block; }
+  .search-option { padding: 7px 12px; cursor: pointer; font-size: 13px; border-bottom: 1px solid #f1f5f9; display: flex; align-items: center; gap: 8px; }
+  .search-option:hover { background: #eff6ff; }
+  .search-option.selected { background: #dbeafe; }
+  .search-option .pid { color: #64748b; font-size: 11px; min-width: 80px; }
+  .search-option .pname { flex: 1; }
+  .search-option .pdate { background: #fef3c7; color: #78350f; padding: 1px 6px; border-radius: 3px; font-size: 11px; }
+  .search-option input[type=checkbox] { margin-right: 4px; }
+
+  /* 已選 chips */
+  .chips-row { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; padding: 8px 12px; background: #f8fafc; border-top: 1px solid #e2e8f0; min-height: 38px; }
+  .chips-row .chip-label { font-size: 12px; color: #64748b; font-weight: 600; }
+  .chip { display: inline-flex; align-items: center; gap: 5px; background: #dbeafe; color: #1e40af; padding: 3px 4px 3px 9px; border-radius: 12px; font-size: 12px; font-weight: 600; }
+  .chip .chip-date { background: #93c5fd; color: white; padding: 1px 5px; border-radius: 8px; font-size: 10px; }
+  .chip .chip-x { background: #1e40af; color: white; width: 16px; height: 16px; border-radius: 50%; display: inline-flex; align-items: center; justify-content: center; cursor: pointer; font-size: 11px; line-height: 1; }
+  .chip .chip-x:hover { background: #1e3a8a; }
+  .chip-clear { background: #fee2e2; color: #991b1b; cursor: pointer; padding: 3px 10px; border-radius: 12px; font-size: 12px; font-weight: 600; border: none; font-family: inherit; }
+
+  /* 快速篩選 chips */
+  .quick-filters { display: flex; gap: 6px; align-items: center; }
+  .qf-btn { background: white; border: 1px solid #cbd5e1; padding: 5px 12px; border-radius: 14px; font-size: 12px; font-weight: 600; color: #475569; cursor: pointer; font-family: inherit; }
+  .qf-btn:hover { background: #f1f5f9; }
+  .qf-btn.active { background: #2b6cb0; color: white; border-color: #2b6cb0; }
+  .qf-btn.warn { background: #fef3c7; color: #92400e; border-color: #fcd34d; }
+  .qf-btn.warn.active { background: #b45309; color: white; border-color: #b45309; }
 </style>
 </head>
 <body>
@@ -109,9 +139,12 @@
   </select>
 
   <label style="margin-left:12px;">搜尋：</label>
-  <input type="text" placeholder="商品編號或名稱">
-
-  <button class="btn btn-primary">🔍 篩選</button>
+  <div class="search-wrap">
+    <input type="text" id="searchInput" class="search-input" placeholder="打商品名稱或編號（可多選）" autocomplete="off">
+    <div id="searchDropdown" class="search-dropdown">
+      <!-- 動態產生選項 -->
+    </div>
+  </div>
 
   <div style="flex:1"></div>
 
@@ -122,6 +155,24 @@
   </div>
 
   <button class="btn btn-secondary">📥 匯出 Excel</button>
+</div>
+
+<!-- 已選商品 + 快速篩選 -->
+<div class="matrix-wrap" style="margin-bottom: 10px;">
+  <div class="chips-row" style="border-top: none;">
+    <span class="chip-label">⚡ 快速篩選：</span>
+    <div class="quick-filters">
+      <button class="qf-btn active" data-filter="all">全部</button>
+      <button class="qf-btn" data-filter="thisweek">本週結單</button>
+      <button class="qf-btn" data-filter="today">今日結單</button>
+      <button class="qf-btn warn" data-filter="overdue">⚠️ 未完成的歷史單</button>
+      <button class="qf-btn" data-filter="shortage">欠補中</button>
+    </div>
+  </div>
+  <div class="chips-row" id="chipsContainer">
+    <span class="chip-label">📌 已選商品：</span>
+    <span style="color:#94a3b8; font-size:12px;">（從上方搜尋框點選後，這裡會列出，矩陣只顯示這些）</span>
+  </div>
 </div>
 
 <div class="matrix-wrap">
@@ -354,6 +405,112 @@
       else if (txt.includes('結案')) msg = '結案：\nstatus → closed\nclosed_at = NOW()\nqty 永遠保留（歷史可查）';
       else msg = '編輯數量對話框';
       alert('[原型示意] ' + msg);
+    };
+  });
+
+  // ===== 多選自動完成搜尋 =====
+  const ALL_PRODUCTS = [
+    { pid: '231127020', name: '新鮮脆嫩綜合生菜 300g ± 20', date: '4/19' },
+    { pid: '360327015', name: '台灣雲林產地直送蒜米（特米）250g', date: '4/19' },
+    { pid: '360327015', name: '台灣雲林產地直送蒜米（特米）250g', date: '3/15' },
+    { pid: '360225031', name: 'EasyLight 纖盈奶昔-濃郁香蕉', date: '2/27' },
+    { pid: '360312018', name: '오씨엘 Osseo® 專櫃海藍晶潤高效保濕唇蜜 7ml-經典裸色', date: '3/14' },
+    { pid: '151125050', name: '咖哩虱目魚可樂餅', date: '11/27' },
+    { pid: '340520051', name: '西螺阿財粉粿-梔子粉粿', date: '3/26' },
+    { pid: '151212180', name: '懷舊池上風味排骨 4 入', date: '3/14' },
+    { pid: '199070101', name: '包子媽醬燒豬腳 550g-原味', date: '4/19' },
+    { pid: '360120100', name: '紅棗小腹餅餅茶 5g*30 入', date: '4/19' },
+    { pid: '140429010', name: '明倫蛋餅千層 3 星厚蔥餅 (5 入/包)', date: '4/18' },
+    { pid: '140508060', name: '梅花豬肉片 500g', date: '4/17' },
+  ];
+  const selected = new Set();
+
+  const searchInput = document.getElementById('searchInput');
+  const dropdown = document.getElementById('searchDropdown');
+  const chipsContainer = document.getElementById('chipsContainer');
+
+  function renderDropdown(filter) {
+    const kw = (filter || '').toLowerCase().trim();
+    const matches = ALL_PRODUCTS.filter(p => {
+      if (!kw) return true;
+      return p.name.toLowerCase().includes(kw) || p.pid.includes(kw);
+    });
+    if (matches.length === 0) {
+      dropdown.innerHTML = '<div class="search-option" style="color:#94a3b8; cursor:default;">沒有相關商品</div>';
+    } else {
+      dropdown.innerHTML = matches.map(p => {
+        const key = p.pid + '_' + p.date;
+        const isSel = selected.has(key);
+        return `<div class="search-option ${isSel ? 'selected' : ''}" data-key="${key}" data-pid="${p.pid}" data-name="${p.name}" data-date="${p.date}">
+          <input type="checkbox" ${isSel ? 'checked' : ''}>
+          <span class="pid">${p.pid}</span>
+          <span class="pname">${p.name}</span>
+          <span class="pdate">${p.date}</span>
+        </div>`;
+      }).join('');
+    }
+    dropdown.classList.add('show');
+  }
+
+  function renderChips() {
+    if (selected.size === 0) {
+      chipsContainer.innerHTML = '<span class="chip-label">📌 已選商品：</span><span style="color:#94a3b8; font-size:12px;">（從上方搜尋框點選後，這裡會列出，矩陣只顯示這些）</span>';
+      return;
+    }
+    let html = '<span class="chip-label">📌 已選 ' + selected.size + ' 項：</span>';
+    selected.forEach(key => {
+      const p = ALL_PRODUCTS.find(x => (x.pid + '_' + x.date) === key);
+      if (!p) return;
+      const shortName = p.name.length > 14 ? p.name.substring(0, 14) + '…' : p.name;
+      html += `<span class="chip" data-key="${key}">
+        ${shortName}
+        <span class="chip-date">${p.date}</span>
+        <span class="chip-x" onclick="removeChip('${key}')">✗</span>
+      </span>`;
+    });
+    html += '<button class="chip-clear" onclick="clearChips()">✗ 全部清除</button>';
+    chipsContainer.innerHTML = html;
+  }
+
+  window.removeChip = (key) => {
+    selected.delete(key);
+    renderChips();
+    if (dropdown.classList.contains('show')) renderDropdown(searchInput.value);
+  };
+  window.clearChips = () => {
+    selected.clear();
+    renderChips();
+  };
+
+  searchInput.addEventListener('focus', () => renderDropdown(searchInput.value));
+  searchInput.addEventListener('input', e => renderDropdown(e.target.value));
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.search-wrap')) dropdown.classList.remove('show');
+  });
+  dropdown.addEventListener('click', e => {
+    const opt = e.target.closest('.search-option');
+    if (!opt || !opt.dataset.key) return;
+    const key = opt.dataset.key;
+    if (selected.has(key)) selected.delete(key);
+    else selected.add(key);
+    renderChips();
+    renderDropdown(searchInput.value);
+  });
+
+  // 快速篩選
+  document.querySelectorAll('.qf-btn').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('.qf-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const f = btn.dataset.filter;
+      let msg = '';
+      if (f === 'overdue') msg = '⚠️ 列出所有結單日 < 今天，且 status ∈ (pending, shortage, partial) 的單。\n→ 撿這批時順便補這些。';
+      else if (f === 'shortage') msg = '只看 status = shortage 的（撿過後欠的）';
+      else if (f === 'today') msg = '只看今日結單的';
+      else if (f === 'thisweek') msg = '只看本週結單的';
+      else msg = '顯示全部（依日期分組）';
+      // 原型階段不真的篩，給文字提示
+      console.log('[原型] 篩選：', msg);
     };
   });
 </script>
