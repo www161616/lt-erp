@@ -218,9 +218,9 @@
       </thead>
       <tbody>
         <!-- 群組分隔 -->
-        <tr class="group-divider"><td colspan="33">📅 4/19 結單</td></tr>
+        <tr class="group-divider" data-group="4/19"><td colspan="33">📅 4/19 結單</td></tr>
 
-        <tr>
+        <tr data-key="231127020_4/19" data-group="4/19">
           <td class="col-freeze-1"></td>
           <td class="col-freeze-2"></td>
           <td class="col-freeze-3">4/19</td>
@@ -238,7 +238,7 @@
           <td><div class="action-btns"><button class="mini-btn">✏️</button></div></td>
         </tr>
 
-        <tr>
+        <tr data-key="360327015_4/19" data-group="4/19">
           <td class="col-freeze-1"></td>
           <td class="col-freeze-2">Y</td>
           <td class="col-freeze-3">4/19</td>
@@ -257,9 +257,9 @@
         </tr>
 
         <!-- 群組分隔 -->
-        <tr class="group-divider"><td colspan="33">📅 4/12 結單（撿貨後欠單）</td></tr>
+        <tr class="group-divider" data-group="2/27"><td colspan="33">📅 2/27 結單（撿貨後欠單）</td></tr>
 
-        <tr>
+        <tr data-key="360225031_2/27" data-group="2/27">
           <td class="col-freeze-1" style="color:#b91c1c;font-weight:700;">-3</td>
           <td class="col-freeze-2">Y</td>
           <td class="col-freeze-3">2/27</td>
@@ -279,7 +279,7 @@
           <td><div class="action-btns"><button class="mini-btn btn-close">✓ 結案</button></div></td>
         </tr>
 
-        <tr>
+        <tr data-key="360312018_3/14" data-group="3/14">
           <td class="col-freeze-1"></td>
           <td class="col-freeze-2"></td>
           <td class="col-freeze-3">3/14</td>
@@ -303,7 +303,7 @@
         </tr>
 
         <!-- 不補的列 -->
-        <tr class="row-no-replenish">
+        <tr class="row-no-replenish" data-key="151125050_11/27" data-group="11/27">
           <td class="col-freeze-1" style="color:#475569;font-weight:700;">不補</td>
           <td class="col-freeze-2">-1</td>
           <td class="col-freeze-3">11/27</td>
@@ -321,7 +321,7 @@
           <td><div class="action-btns"><button class="mini-btn btn-close">✓ 結案</button></div></td>
         </tr>
 
-        <tr>
+        <tr data-key="340520051_3/26" data-group="3/26">
           <td class="col-freeze-1"></td>
           <td class="col-freeze-2"></td>
           <td class="col-freeze-3">3/26</td>
@@ -346,9 +346,9 @@
         </tr>
 
         <!-- 群組分隔 -->
-        <tr class="group-divider"><td colspan="33">📅 3/14 結單（跨期積壓中）</td></tr>
+        <tr class="group-divider" data-group="3/14"><td colspan="33">📅 3/14 結單（跨期積壓中）</td></tr>
 
-        <tr>
+        <tr data-key="151212180_3/14" data-group="3/14">
           <td class="col-freeze-1"></td>
           <td class="col-freeze-2">Y</td>
           <td class="col-freeze-3">3/14</td>
@@ -472,14 +472,69 @@
     chipsContainer.innerHTML = html;
   }
 
+  // ★★★ 矩陣過濾：依已選 chips 顯示/隱藏列 ★★★
+  function filterMatrix() {
+    const tbody = document.querySelector('#matrixTable tbody');
+    const rows = tbody.querySelectorAll('tr');
+
+    if (selected.size === 0) {
+      // 沒選 → 顯示全部
+      rows.forEach(r => r.style.display = '');
+      updateMatchInfo(null);
+      return;
+    }
+
+    // 有選 → 隱藏未選的、隱藏所有 group divider
+    let visibleCount = 0;
+    let unmatchedKeys = new Set(selected);
+    rows.forEach(r => {
+      if (r.classList.contains('group-divider')) {
+        r.style.display = 'none';  // 過濾時不顯示分隔
+        return;
+      }
+      const key = r.dataset.key;
+      if (selected.has(key)) {
+        r.style.display = '';
+        visibleCount++;
+        unmatchedKeys.delete(key);
+      } else {
+        r.style.display = 'none';
+      }
+    });
+
+    updateMatchInfo({ matched: visibleCount, total: selected.size, unmatched: [...unmatchedKeys] });
+  }
+
+  // 顯示「找到 X / Y 項」訊息（若有商品在當前頁找不到）
+  function updateMatchInfo(info) {
+    let infoBox = document.getElementById('matchInfo');
+    if (!info) {
+      if (infoBox) infoBox.remove();
+      return;
+    }
+    if (!infoBox) {
+      infoBox = document.createElement('div');
+      infoBox.id = 'matchInfo';
+      infoBox.style.cssText = 'background:#dbeafe; color:#1e40af; padding:6px 12px; font-size:12px; border-bottom:1px solid #bfdbfe;';
+      document.querySelector('.matrix-wrap:last-of-type .matrix-scroll').before(infoBox);
+    }
+    let msg = `🎯 已選 ${info.total} 項，矩陣顯示 <b>${info.matched}</b> 列`;
+    if (info.unmatched.length > 0) {
+      msg += `，<span style="color:#b45309;">⚠️ ${info.unmatched.length} 項當前資料中查無（可能是其他月份／已結案）</span>`;
+    }
+    infoBox.innerHTML = msg;
+  }
+
   window.removeChip = (key) => {
     selected.delete(key);
     renderChips();
+    filterMatrix();
     if (dropdown.classList.contains('show')) renderDropdown(searchInput.value);
   };
   window.clearChips = () => {
     selected.clear();
     renderChips();
+    filterMatrix();
   };
 
   searchInput.addEventListener('focus', () => renderDropdown(searchInput.value));
@@ -494,6 +549,7 @@
     if (selected.has(key)) selected.delete(key);
     else selected.add(key);
     renderChips();
+    filterMatrix();
     renderDropdown(searchInput.value);
   });
 
