@@ -3450,11 +3450,13 @@ async function loadProductDB() {
 
 
 // 從 branchDataList 讀取（與總倉一致），若無則用預設
+// 注意：淡水、板橋已倒店，從 hardcoded fallback 移除（2026-04-18）
+// 否則使用者清 localStorage 後第一次載入會看到倒店的店
 const _tfStoreNames = JSON.parse(localStorage.getItem('importedStoreNames') || '[]');
 const _tfBase = JSON.parse(localStorage.getItem('branchDataList') || 'null') || [
   {name:'三峽'},{name:'中和'},{name:'文山'},{name:'四號'},{name:'永和'},{name:'忠順'},
-  {name:'淡水'},{name:'環球'},{name:'平鎮'},{name:'古華'},{name:'林口'},{name:'南平'},
-  {name:'泰山'},{name:'萬華'},{name:'板橋'},{name:'湖口'},{name:'經國'},{name:'松山'}
+  {name:'環球'},{name:'平鎮'},{name:'古華'},{name:'林口'},{name:'南平'},
+  {name:'泰山'},{name:'萬華'},{name:'湖口'},{name:'經國'},{name:'松山'}
 ];
 if (!_tfBase.some(function(b) { return b.name === '總倉'; })) _tfBase.unshift({name:'總倉'});
 const TF_STORES = _tfBase
