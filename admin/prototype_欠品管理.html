@@ -130,12 +130,10 @@
 
   <label style="margin-left:12px;">狀態：</label>
   <select>
-    <option>全部</option>
-    <option selected>未結案（pending/shortage/partial）</option>
+    <option selected>未處理完（shortage + no_replenish）</option>
     <option>欠補中（shortage）</option>
-    <option>已到貨（received）</option>
     <option>不補（no_replenish）</option>
-    <option>結案（closed）</option>
+    <option>已結案（closed，看歷史）</option>
   </select>
 
   <label style="margin-left:12px;">搜尋：</label>
@@ -472,7 +470,7 @@
       btn.classList.add('active');
       const f = btn.dataset.filter;
       let msg = '';
-      if (f === 'overdue') msg = '⚠️ 列出所有結單日 < 今天，且 status ∈ (pending, shortage, partial) 的單。\n→ 撿這批時順便補這些。';
+      if (f === 'overdue') msg = '⚠️ 列出所有結單日 < 今天且 status = shortage 的單。\n→ 撿這批時順便補這些。';
       else if (f === 'shortage') msg = '只看 status = shortage 的（撿過後欠的）';
       else if (f === 'today') msg = '只看今日結單的';
       else if (f === 'thisweek') msg = '只看本週結單的';
