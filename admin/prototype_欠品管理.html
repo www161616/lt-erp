@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<title>原型 - 欠品管理 v2</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: 'Microsoft JhengHei', sans-serif; background: #f1f5f9; color: #1e293b; padding: 12px; }
+
+  .banner { background: #fef3c7; border: 1px solid #f59e0b; border-radius: 6px; padding: 10px 14px; margin-bottom: 12px; font-size: 13px; color: #78350f; }
+  .banner b { color: #b45309; }
+
+  /* 頂部控制列 */
+  .toolbar { background: white; border-radius: 8px; padding: 12px; margin-bottom: 12px; display: flex; flex-wrap: wrap; gap: 10px; align-items: center; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .toolbar label { font-size: 13px; color: #475569; font-weight: 600; }
+  .toolbar input, .toolbar select { padding: 6px 10px; border: 1px solid #cbd5e1; border-radius: 4px; font-size: 13px; font-family: inherit; }
+  .toolbar input[type=date] { width: 130px; }
+  .toolbar input[type=text] { width: 180px; }
+  .btn { padding: 6px 14px; border: none; border-radius: 4px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit; }
+  .btn-primary { background: #2b6cb0; color: white; }
+  .btn-primary:hover { background: #2c5282; }
+  .btn-success { background: #059669; color: white; }
+  .btn-warning { background: #b45309; color: white; }
+  .btn-secondary { background: #e2e8f0; color: #334155; }
+
+  /* 模式切換 */
+  .mode-switch { display: flex; gap: 4px; background: #e2e8f0; padding: 3px; border-radius: 6px; }
+  .mode-switch button { padding: 5px 14px; border: none; background: transparent; color: #64748b; font-size: 13px; font-weight: 600; cursor: pointer; border-radius: 4px; font-family: inherit; }
+  .mode-switch button.active { background: white; color: #2b6cb0; box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
+
+  /* 矩陣表 */
+  .matrix-wrap { background: white; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); overflow: hidden; }
+  .matrix-scroll { overflow: auto; max-height: calc(100vh - 180px); }
+  table { border-collapse: collapse; font-size: 12px; min-width: 100%; }
+  th, td { border: 1px solid #e2e8f0; padding: 5px 6px; text-align: center; white-space: nowrap; }
+
+  /* 表頭 */
+  thead th { background: #f8fafc; color: #334155; font-weight: 700; position: sticky; top: 0; z-index: 5; }
+  thead th.shortage-header { background: #fee2e2; color: #991b1b; }
+  thead th.bg-personal { background: #fef3c7; color: #78350f; }
+
+  /* 凍結欄（左邊 6 欄）*/
+  .col-freeze-1 { position: sticky; left: 0;   z-index: 4; background: white; min-width: 60px; }
+  .col-freeze-2 { position: sticky; left: 60px;  z-index: 4; background: white; min-width: 60px; }
+  .col-freeze-3 { position: sticky; left: 120px; z-index: 4; background: white; min-width: 70px; }
+  .col-freeze-4 { position: sticky; left: 190px; z-index: 4; background: white; min-width: 90px; }
+  .col-freeze-5 { position: sticky; left: 280px; z-index: 4; background: white; min-width: 220px; text-align: left; }
+  .col-freeze-6 { position: sticky; left: 500px; z-index: 4; background: #fff7ed; min-width: 50px; font-weight: 700; color: #9a3412; }
+  thead .col-freeze-1, thead .col-freeze-2, thead .col-freeze-3, thead .col-freeze-4, thead .col-freeze-5, thead .col-freeze-6 { z-index: 6; background: #f8fafc; }
+  thead .col-freeze-6 { background: #fed7aa; color: #7c2d12; }
+
+  /* 各店欄 */
+  td.qty { font-weight: 600; }
+  td.qty.has-value { color: #1e40af; background: #eff6ff; }
+  td.qty.shortage { color: #b91c1c; background: #fee2e2; font-weight: 700; }
+  td.qty.over { color: #7c3aed; background: #ede9fe; }  /* 多撿 -1 */
+  td.qty.zero { color: #cbd5e1; }
+
+  /* 狀態列 */
+  td.status-cell { font-size: 11px; font-weight: 600; padding: 3px 8px; border-radius: 10px; display: inline-block; }
+  .st-pending { background: #fef3c7; color: #78350f; }
+  .st-shortage { background: #fee2e2; color: #991b1b; }
+  .st-partial { background: #fed7aa; color: #7c2d12; }
+  .st-received { background: #d1fae5; color: #065f46; }
+  .st-no_replenish { background: #e2e8f0; color: #475569; }
+  .st-closed { background: #cbd5e1; color: #1e293b; }
+
+  /* 列高亮 */
+  tbody tr:hover { background: #fefce8 !important; }
+  tr.row-no-replenish td:not(.col-freeze-6) { background: #f1f5f9; opacity: 0.7; }
+
+  /* 動作按鈕 */
+  .action-btns { display: flex; gap: 3px; justify-content: center; }
+  .mini-btn { padding: 2px 7px; font-size: 11px; border: 1px solid #cbd5e1; background: white; border-radius: 3px; cursor: pointer; font-family: inherit; }
+  .mini-btn:hover { background: #f1f5f9; }
+  .mini-btn.btn-supply { background: #dcfce7; border-color: #86efac; color: #15803d; }
+  .mini-btn.btn-no-supply { background: #fee2e2; border-color: #fca5a5; color: #991b1b; }
+  .mini-btn.btn-close { background: #e0e7ff; border-color: #a5b4fc; color: #3730a3; }
+
+  /* 底部統計 */
+  .summary { background: white; padding: 10px 14px; border-radius: 8px; margin-top: 10px; display: flex; gap: 24px; font-size: 13px; box-shadow: 0 1px 3px rgba(0,0,0,0.06); }
+  .summary span b { color: #2b6cb0; font-size: 15px; margin-right: 4px; }
+
+  /* 群組分隔線 */
+  tr.group-divider td { background: #fef3c7; padding: 4px 8px; text-align: left; font-weight: 700; color: #78350f; font-size: 12px; }
+</style>
+</head>
+<body>
+
+<div class="banner">
+  📋 <b>這是原型（PROTOTYPE）</b>，資料是假的、按鈕還不會動。設計給員工看、確認操作流程後，再做正式版。
+  &nbsp;|&nbsp; <a href="javascript:void(0)" onclick="alert('原本員工 Google Sheet 的設計已經套用：紅頭欠品區、總數欄、各店並排、不補標記、剩餘/訂貨欄')">設計理念</a>
+</div>
+
+<div class="toolbar">
+  <label>結單日：</label>
+  <input type="date" value="2026-04-01">
+  <span>~</span>
+  <input type="date" value="2026-04-30">
+
+  <label style="margin-left:12px;">狀態：</label>
+  <select>
+    <option>全部</option>
+    <option selected>未結案（pending/shortage/partial）</option>
+    <option>欠補中（shortage）</option>
+    <option>已到貨（received）</option>
+    <option>不補（no_replenish）</option>
+    <option>結案（closed）</option>
+  </select>
+
+  <label style="margin-left:12px;">搜尋：</label>
+  <input type="text" placeholder="商品編號或名稱">
+
+  <button class="btn btn-primary">🔍 篩選</button>
+
+  <div style="flex:1"></div>
+
+  <div class="mode-switch">
+    <button class="active">📦 訂購量視圖</button>
+    <button>⚠️ 欠品視圖</button>
+    <button>📊 兩者並排</button>
+  </div>
+
+  <button class="btn btn-secondary">📥 匯出 Excel</button>
+</div>
+
+<div class="matrix-wrap">
+  <div class="matrix-scroll">
+    <table id="matrixTable">
+      <thead>
+        <tr>
+          <th class="col-freeze-1">剩餘</th>
+          <th class="col-freeze-2">訂貨</th>
+          <th class="col-freeze-3">結單日</th>
+          <th class="col-freeze-4">商品編號</th>
+          <th class="col-freeze-5">商品名稱</th>
+          <th class="col-freeze-6">總數</th>
+          <th class="shortage-header">三峽</th>
+          <th class="shortage-header">中和</th>
+          <th class="shortage-header">文山</th>
+          <th class="shortage-header">四號</th>
+          <th class="shortage-header">永和</th>
+          <th class="shortage-header">忠順</th>
+          <th class="shortage-header">淡水</th>
+          <th class="shortage-header">環球</th>
+          <th class="shortage-header">平鎮</th>
+          <th class="shortage-header">古華</th>
+          <th class="shortage-header">林口</th>
+          <th class="shortage-header">南平</th>
+          <th class="shortage-header">泰山</th>
+          <th class="shortage-header">萬華</th>
+          <th class="shortage-header">板橋</th>
+          <th class="shortage-header">湖口</th>
+          <th class="shortage-header">經國</th>
+          <th class="shortage-header">松山</th>
+          <th class="shortage-header">龍潭</th>
+          <th class="bg-personal">買上癮</th>
+          <th class="bg-personal">山張</th>
+          <th class="bg-personal">全民</th>
+          <th class="bg-personal">泗玖</th>
+          <th class="bg-personal">永樂鎂</th>
+          <th class="bg-personal">光鮮</th>
+          <th class="bg-personal">大溪</th>
+          <th>狀態</th>
+          <th>動作</th>
+        </tr>
+      </thead>
+      <tbody>
+        <!-- 群組分隔 -->
+        <tr class="group-divider"><td colspan="33">📅 4/19 結單</td></tr>
+
+        <tr>
+          <td class="col-freeze-1"></td>
+          <td class="col-freeze-2"></td>
+          <td class="col-freeze-3">4/19</td>
+          <td class="col-freeze-4">231127020</td>
+          <td class="col-freeze-5">新鮮脆嫩綜合生菜 300g ± 20</td>
+          <td class="col-freeze-6">88</td>
+          <td class="qty has-value">5</td><td class="qty has-value">8</td><td class="qty has-value">6</td><td class="qty has-value">10</td>
+          <td class="qty zero">-</td><td class="qty has-value">4</td><td class="qty zero">-</td><td class="qty has-value">7</td>
+          <td class="qty has-value">5</td><td class="qty has-value">6</td><td class="qty has-value">8</td><td class="qty has-value">5</td>
+          <td class="qty has-value">9</td><td class="qty has-value">3</td><td class="qty zero">-</td><td class="qty has-value">2</td>
+          <td class="qty has-value">5</td><td class="qty has-value">3</td><td class="qty zero">-</td>
+          <td class="qty zero">-</td><td class="qty zero">-</td><td class="qty has-value">2</td>
+          <td class="qty zero">-</td><td class="qty zero">-</td><td class="qty zero">-</td><td class="qty zero">-</td>
+          <td><span class="status-cell st-pending">待撿</span></td>
+          <td><div class="action-btns"><button class="mini-btn">✏️</button></div></td>
+        </tr>
+
+        <tr>
+          <td class="col-freeze-1"></td>
+          <td class="col-freeze-2">Y</td>
+          <td class="col-freeze-3">4/19</td>
+          <td class="col-freeze-4">360327015</td>
+          <td class="col-freeze-5">台灣雲林產地直送蒜米（特米）250g</td>
+          <td class="col-freeze-6">15</td>
+          <td class="qty has-value">3</td><td class="qty has-value">2</td><td class="qty zero">-</td><td class="qty has-value">2</td>
+          <td class="qty zero">-</td><td class="qty has-value">2</td><td class="qty zero">-</td><td class="qty has-value">2</td>
+          <td class="qty zero">-</td><td class="qty zero">-</td><td class="qty zero">-</td><td class="qty has-value">2</td>
+          <td class="qty has-value">2</td><td class="qty zero">-</td><td class="qty zero">-</td><td class="qty zero">-</td>
+          <td class="qty zero">-</td><td class="qty zero">-</td><td class="qty zero">-</td>
+          <td class="qty zero">-</td><td class="qty zero">-</td><td class="qty zero">-</td>
+          <td class="qty zero">-</td><td class="qty zero">-</td><td class="qty zero">-</td><td class="qty zero">-</td>
+          <td><span class="status-cell st-pending">待撿</span></td>
+          <td><div class="action-btns"><button class="mini-btn">✏️</button></div></td>
+        </tr>
+
+        <!-- 群組分隔 -->
+        <tr class="group-divider"><td colspan="33">📅 4/12 結單（撿貨後欠單）</td></tr>
+
+        <tr>
+          <td class="col-freeze-1" style="color:#b91c1c;font-weight:700;">-3</td>
+          <td class="col-freeze-2">Y</td>
+          <td class="col-freeze-3">2/27</td>
+          <td class="col-freeze-4">360225031</td>
+          <td class="col-freeze-5">EasyLight 纖盈奶昔-濃郁香蕉</td>
+          <td class="col-freeze-6">20</td>
+          <td class="qty zero">0</td>
+          <td class="qty over" title="多撿 1">-1</td>
+          <td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td>
+          <td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td>
+          <td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td>
+          <td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td>
+          <td class="qty zero">0</td><td class="qty zero">0</td>
+          <td class="qty over" title="多撿 2">-2</td>
+          <td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td>
+          <td><span class="status-cell st-received">全到貨</span></td>
+          <td><div class="action-btns"><button class="mini-btn btn-close">✓ 結案</button></div></td>
+        </tr>
+
+        <tr>
+          <td class="col-freeze-1"></td>
+          <td class="col-freeze-2"></td>
+          <td class="col-freeze-3">3/14</td>
+          <td class="col-freeze-4">360312018</td>
+          <td class="col-freeze-5">오씨엘 Osseo® 專櫃海藍晶潤高效保濕唇蜜 7ml-經典裸色</td>
+          <td class="col-freeze-6">60</td>
+          <td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td>
+          <td class="qty zero">0</td><td class="qty zero">0</td><td class="qty shortage">2</td><td class="qty zero">0</td>
+          <td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td><td class="qty shortage">2</td>
+          <td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td>
+          <td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td>
+          <td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td>
+          <td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td>
+          <td><span class="status-cell st-shortage">欠 4 件</span></td>
+          <td>
+            <div class="action-btns">
+              <button class="mini-btn btn-supply">📦 補</button>
+              <button class="mini-btn btn-no-supply">✗ 不補</button>
+            </div>
+          </td>
+        </tr>
+
+        <!-- 不補的列 -->
+        <tr class="row-no-replenish">
+          <td class="col-freeze-1" style="color:#475569;font-weight:700;">不補</td>
+          <td class="col-freeze-2">-1</td>
+          <td class="col-freeze-3">11/27</td>
+          <td class="col-freeze-4">151125050</td>
+          <td class="col-freeze-5">咖哩虱目魚可樂餅</td>
+          <td class="col-freeze-6">41</td>
+          <td class="qty zero">0</td><td class="qty over" title="多撿 1">-1</td>
+          <td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td>
+          <td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td>
+          <td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td>
+          <td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td>
+          <td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td>
+          <td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td>
+          <td><span class="status-cell st-no_replenish">不補</span></td>
+          <td><div class="action-btns"><button class="mini-btn btn-close">✓ 結案</button></div></td>
+        </tr>
+
+        <tr>
+          <td class="col-freeze-1"></td>
+          <td class="col-freeze-2"></td>
+          <td class="col-freeze-3">3/26</td>
+          <td class="col-freeze-4">340520051</td>
+          <td class="col-freeze-5">西螺阿財粉粿-梔子粉粿</td>
+          <td class="col-freeze-6">56</td>
+          <td class="qty has-value">13</td><td class="qty shortage">3</td>
+          <td class="qty zero">0</td><td class="qty has-value">5</td><td class="qty has-value">10</td><td class="qty has-value">2</td>
+          <td class="qty zero">0</td><td class="qty has-value">5</td><td class="qty zero">0</td><td class="qty has-value">4</td>
+          <td class="qty has-value">2</td><td class="qty has-value">4</td><td class="qty zero">0</td><td class="qty zero">0</td>
+          <td class="qty zero">0</td><td class="qty has-value">2</td><td class="qty zero">0</td>
+          <td class="qty zero">0</td><td class="qty zero">0</td>
+          <td class="qty has-value">2</td><td class="qty zero">0</td>
+          <td class="qty has-value">4</td><td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td>
+          <td><span class="status-cell st-partial">部分到貨</span></td>
+          <td>
+            <div class="action-btns">
+              <button class="mini-btn btn-supply">📦 補</button>
+              <button class="mini-btn">✏️</button>
+            </div>
+          </td>
+        </tr>
+
+        <!-- 群組分隔 -->
+        <tr class="group-divider"><td colspan="33">📅 3/14 結單（跨期積壓中）</td></tr>
+
+        <tr>
+          <td class="col-freeze-1"></td>
+          <td class="col-freeze-2">Y</td>
+          <td class="col-freeze-3">3/14</td>
+          <td class="col-freeze-4">151212180</td>
+          <td class="col-freeze-5">懷舊池上風味排骨 4 入</td>
+          <td class="col-freeze-6">150</td>
+          <td class="qty has-value">20</td><td class="qty has-value">19</td><td class="qty has-value">23</td><td class="qty has-value">11</td>
+          <td class="qty zero">0</td><td class="qty shortage">6</td><td class="qty zero">0</td><td class="qty has-value">5</td>
+          <td class="qty has-value">7</td><td class="qty has-value">10</td><td class="qty zero">0</td><td class="qty zero">0</td>
+          <td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td>
+          <td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td>
+          <td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td>
+          <td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td><td class="qty zero">0</td>
+          <td><span class="status-cell st-shortage">欠 6 件 ⚠️ 積壓 5 週</span></td>
+          <td>
+            <div class="action-btns">
+              <button class="mini-btn btn-supply">📦 補</button>
+              <button class="mini-btn btn-no-supply">✗ 不補</button>
+            </div>
+          </td>
+        </tr>
+
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="summary">
+  <span><b>6</b> 商品</span>
+  <span><b>3</b> 待撿</span>
+  <span><b>2</b> 欠補中</span>
+  <span><b>1</b> 部分到貨</span>
+  <span><b>1</b> 全到貨</span>
+  <span><b>1</b> 不補</span>
+  <span style="color:#dc2626;">⚠️ <b>1</b> 跨期積壓超過 30 天</span>
+</div>
+
+<script>
+  // 模式切換
+  document.querySelectorAll('.mode-switch button').forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll('.mode-switch button').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+    };
+  });
+
+  // 動作按鈕（原型階段只彈出說明）
+  document.querySelectorAll('.mini-btn').forEach(btn => {
+    btn.onclick = (e) => {
+      const txt = e.target.textContent.trim();
+      let msg = '';
+      if (txt.includes('補')) msg = '補貨對話框：\n選擇補了幾件給該店 → 自動扣 shortage_qty → 自動更新 status';
+      else if (txt.includes('不補')) msg = '標記「不補」：\nstatus → no_replenish\nshortage_qty 歸 0\n保留歷史紀錄';
+      else if (txt.includes('結案')) msg = '結案：\nstatus → closed\nclosed_at = NOW()\nqty 永遠保留（歷史可查）';
+      else msg = '編輯數量對話框';
+      alert('[原型示意] ' + msg);
+    };
+  });
+</script>
+
+</body>
+</html>
