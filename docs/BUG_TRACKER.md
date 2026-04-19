@@ -154,6 +154,40 @@
 
 ---
 
+### BUG-013: branchOrders cloudSave 推不完整版覆蓋雲端（localStorage QuotaExceeded 引發）
+- **狀態**: [ ] 未修
+- **嚴重度**: 🔴 嚴重 — 店家資料靜默消失，無 audit log 無法還原
+- **症狀**: 突然發現某店某結單日資料整批消失。已發生兩次：
+  - 2026-04-18：portal 訂貨動態追蹤全店家 3080 筆被空陣列覆蓋
+  - 2026-04-19：經國店 4/15 數字全部消失（24 筆靠 04-18 手動 JSON 才救回）
+- **根因**:
+  - `branchOrders` 超過 1MB（21 家店塞同一個 shared_kv jsonb key）
+  - admin/portal 打開時 `cloudLoadAll` 拉雲端 → 寫 `localStorage['branchOrders']`
+  - 瀏覽器 localStorage 約 5MB 上限，`QuotaExceeded` 導致**寫入失敗或部分成功** → 本機 localStorage 資料不完整
+  - 使用者做任何會觸發 cloudSave 的操作（editSummaryQty / clearBranchOrderQty / batchDeleteSummaryItems / finalizeShortageNegotiation / autoCleanBranchOrders / submitOrder / autoSaveSingleQty 等）
+  - cloudSave 讀本機 localStorage（不完整版）→ 傳 RPC `merge_branch_order`
+  - RPC 是「整店替換」→ 雲端該店被推成不完整版 → 原本的 key 消失
+- **跟 BUG-007 的關係**:
+  - BUG-007（已修 2026-04-16）：cloudSave fire-and-forget（關 tab 丟資料）→ 加 serialization + beforeunload
+  - BUG-013（未修）：cloudSave 邏輯假設 localStorage 是對的，但 localStorage 不完整時仍會推 → 這層保護沒做
+- **涉及檔案**:
+  - admin/branch_admin.html（~218-270 行 `_doActualBranchOrdersSave` / `_flushBranchOrders` / `cloudSave`）
+  - branch/branch_portal.html（對應的 cloudSave + submitOrder + autoSaveSingleQty）
+- **修法方向**:
+  - **A. 最小改動（立即可做）**: `_doActualBranchOrdersSave` 推送前比對「本機 storeData 筆數 vs 上次 cloudLoadAll 拉到的筆數」，若差異超過閾值（例如 >50% 或 >100 筆消失）→ 跳 Swal 警告 + **取消推送** + 要求重整
+  - **B. 短期**: localStorage 寫入時 try/catch，寫失敗立刻警告 + 停用所有 cloudSave 路徑直到重整
+  - **C. 長期（根治）**: `branchOrders` 拆店存（每店一個 shared_kv key，例如 `branchOrders_經國`）→ 每店獨立、localStorage 也不會整份塞滿 → 參考 CLAUDE.md 待辦 #11
+- **⚠️ 搬家型改動（C 方案）**: 必須遵守 CLAUDE.md 搬家型改動強制規則（讀寫端同步、admin + store 跨角色測試）
+- **測試項目**:
+  - [ ] 模擬 localStorage QuotaExceeded → cloudSave 不推不完整版
+  - [ ] 模擬本機 branchOrders 被部分截斷 → 偵測並警告
+  - [ ] admin + portal 都測
+  - [ ] 6 個 cloudSave 入口都測
+- **相關**: 跟 BUG-002（portalSalesOrders 整份覆蓋）、BUG-008（cloudLoadAll 競態）同型問題，都是「整份覆蓋 + 狀態只在某處」引發
+- **修 bug 順序**: 歸「最後才修（需完整計畫）」批次，加入 `BUG-001 → BUG-008 → BUG-002 → BUG-013`
+
+---
+
 ## 🟠 中等 (功能異常 / 靜默失敗)
 
 ### BUG-005: branch_admin 多處 PATCH/DELETE 無錯誤處理
