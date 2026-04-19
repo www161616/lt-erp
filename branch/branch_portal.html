@@ -6531,7 +6531,7 @@ function renderArrivalGrid() {
     '<div style="background:white; border-radius:8px; border:1px solid var(--border); overflow:hidden; box-shadow:0 2px 4px rgba(0,0,0,0.04);">' +
       '<div style="padding:14px 20px; border-bottom:1px solid var(--border); display:flex; align-items:center; gap:10px; flex-wrap:wrap;">' +
         '<div style="font-size:15px; font-weight:700; color:var(--primary);">📦 到貨狀況</div>' +
-        '<input id="arrivalSearchKw" type="text" placeholder="搜尋商品名稱或編號..." value="' + kw + '" oninput="renderArrivalGrid()" style="padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; font-family:inherit; width:220px;">' +
+        '<input id="arrivalSearchKw" type="text" placeholder="搜尋商品名稱或編號（按 Enter 搜尋）..." value="' + kw + '" onkeydown="if(event.key===\'Enter\') renderArrivalGrid()" style="padding:6px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; font-family:inherit; width:220px;">' +
         '<span style="font-size:12px; color:#9ca3af;">共 ' + data.length + ' 筆</span>' +
       '</div>' +
       '<div style="overflow:auto;">' +
