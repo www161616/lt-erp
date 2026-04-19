@@ -4162,14 +4162,39 @@ function ppSpecBtn(idx, si, specCount) {
 function getPPSettings() {
   try { return JSON.parse(localStorage.getItem('xiaolan_pp_settings') || '{}'); } catch { return {}; }
 }
-function savePPSettings() {
+async function savePPSettings() {
   const settings = {
     shipRate: parseFloat(document.getElementById('ppShipRate').value) || 0,
     exRate: parseFloat(document.getElementById('ppExRate').value) || 0
   };
+  // 1. 先寫本機（跟現有 cloudSave pattern 一致）
   localStorage.setItem('xiaolan_pp_settings', JSON.stringify(settings));
+  // 2. 推雲端 shared_kv（失敗只警告不 block UI，本機仍有值當 fallback）
+  try {
+    const res = await fetch(`${SB_URL}/shared_kv`, {
+      method: 'POST',
+      headers: { ...HEADERS, 'Content-Type': 'application/json', 'Prefer': 'resolution=merge-duplicates' },
+      body: JSON.stringify({ key: 'xiaolan_pp_settings', value: settings, updated_at: new Date().toISOString() })
+    });
+    if (!res.ok) console.warn('雲端同步漂漂館設定失敗 (local 已存)：', await res.text());
+  } catch (e) {
+    console.warn('雲端同步漂漂館設定失敗 (local 已存)：', e);
+  }
 }
-function loadPPSettings() {
+async function loadPPSettings() {
+  // 1. 先從雲端拉最新 → 同步到 local
+  try {
+    const res = await fetch(`${SB_URL}/shared_kv?key=eq.xiaolan_pp_settings&select=value`, { headers: HEADERS });
+    if (res.ok) {
+      const rows = await res.json();
+      if (rows.length && rows[0].value) {
+        localStorage.setItem('xiaolan_pp_settings', JSON.stringify(rows[0].value));
+      }
+    }
+  } catch (e) {
+    console.warn('雲端拉漂漂館設定失敗，用本機：', e);
+  }
+  // 2. 從 local 讀（已被雲端最新值更新過）
   const s = getPPSettings();
   if (s.shipRate) document.getElementById('ppShipRate').value = s.shipRate;
   if (s.exRate) document.getElementById('ppExRate').value = s.exRate;

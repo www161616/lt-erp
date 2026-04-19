@@ -281,7 +281,7 @@
 
     async function cloudLoadAll() {
       try {
-        const resp = await fetch(`${SB_URL}/shared_kv?key=in.("branchOrderList","branchOrders","branchDataList","branchTypeMap","portalAllRequests","portalTransferList","portalMutualAidBoard","importedStoreNames","importedPersonalNames","lt_savedWaves","lt_backorderMeta","branchOrdersLocked","shortageNegotiations")`, { headers: HEADERS });
+        const resp = await fetch(`${SB_URL}/shared_kv?key=in.("branchOrderList","branchOrders","branchDataList","branchTypeMap","portalAllRequests","portalTransferList","portalMutualAidBoard","importedStoreNames","importedPersonalNames","lt_savedWaves","lt_backorderMeta","branchOrdersLocked","shortageNegotiations","xiaolan_pp_settings")`, { headers: HEADERS });
         if (resp.ok) {
           const rows = await resp.json();
           rows.forEach(r => {
