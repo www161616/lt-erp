@@ -7,6 +7,7 @@
 
 | 日期 | 修了什麼 | 根本原因 | 下次怎麼避免 |
 |------|---------|---------|------------|
+| 04/21 | BUG-014 規模擴大：掃描發現 04/14~04/16 共 9 個 wave 受害。04/21 補回 81 張 $502,800.5（6 個 wave）。**累計 102 張 $688,992.5** | 同 04/20 推論；新資料顯示 04/14、04/15、04/16 每天早上同一時間批次建單都中招，04/17 後自然停 | 確認「連續建多張揀貨單」是觸發條件；單張建單可能安全；詳見 `docs/changelog/2026-04-21.md` |
 | 04/20 | BUG-014: 2026-04-16 03:09 UTC 一分鐘內 28 張單 21 張空白（PICK-397503 9 張 + PICK-492631 12 張）→ 手動補回 325 筆 + 主表金額共 $186,192 | generateSalesOrder 的 RPC items 空傳，根因未解；PICK-492631 全失敗提供新線索：同一次操作連續處理兩張揀貨單時污染後續 RPC call | 下次揀貨分發要盯緊，連續多張揀貨單時特別小心；若重現 0 項單立刻存 wave 快照 |
 | 04/17 | saveBranchSetting 加 on_conflict=store_name,setting_key 修正 409 | PostgREST upsert 沒指定 on_conflict 時預設用 PK，遇到複合 UNIQUE 會失敗 | 所有複合 UNIQUE 的 upsert 必須在 URL 加 ?on_conflict=col1,col2 |
 | 04/16 | BUG-011: SalesReturn activity_logs 空 catch → 加 console.error | 空 catch 吞掉所有錯誤，稽核軌跡遺失無提示 | 寫 try-catch 時不要用空 catch，至少 console.error |
@@ -194,7 +195,11 @@
   - 當時 admin 本機 wave.matrix 某些 branch 的 actual 讀不到（BUG-013 類型的 localStorage 截斷）
   - 某個清空 branchData 的 code path 被觸發
   - 並發 race condition（但 for-await 是序列）
-- **補救紀錄**: 2026-04-20 從 wave.matrix 補回 **21 張單共 325 筆 sales_details**（PICK-397503 305 筆 $174,577 + PICK-492631 20 筆 $11,615 = 合計 $186,192）。詳見 [docs/changelog/2026-04-20.md](changelog/2026-04-20.md)
+- **補救紀錄**:
+  - 2026-04-20 補 21 張 / 325 筆 / $186,192（PICK-397503 + PICK-492631）
+  - 2026-04-21 掃描發現 04/14~04/15 共 6 個 wave 也中招，補 81 張 / 1238 筆 / $502,800.5（PICK-254135 / 001991 / 697028 / 628499 / 809644 / 015159）
+  - **累計 102 張 / 1563 筆 / $688,992.5**
+  - 詳見 [docs/changelog/2026-04-20.md](changelog/2026-04-20.md) + [docs/changelog/2026-04-21.md](changelog/2026-04-21.md)
 - **下次如何診斷**:
   - 若重現，立刻在 admin Console 跑 `console.log(JSON.stringify(mockSavedWaves.find(w=>w.id==='PICK-XXX')))` 存下當下 wave 快照
   - 比對 branchBundles（需在 generateSalesOrder 加 log）
