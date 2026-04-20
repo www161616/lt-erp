@@ -7,7 +7,8 @@
 
 | 日期 | 修了什麼 | 根本原因 | 下次怎麼避免 |
 |------|---------|---------|------------|
-| 04/21 | BUG-014 規模擴大：掃描發現 04/14~04/16 共 9 個 wave 受害。04/21 補回 81 張 $502,800.5（6 個 wave）。**累計 102 張 $688,992.5** | 同 04/20 推論；新資料顯示 04/14、04/15、04/16 每天早上同一時間批次建單都中招，04/17 後自然停 | 確認「連續建多張揀貨單」是觸發條件；單張建單可能安全；詳見 `docs/changelog/2026-04-21.md` |
+| 04/21 | BUG-014 + 連環 bug 修復：04/21 下午發現 104 張被改 order_date + payment_status → SQL 修回 + 補 PICK-757876 2 張（$36,919）。**最終累計 104 張 $725,911** | 下午發現：04-20 當天有「某個操作」對所有 $0 分店單做批次 UPDATE（源頭不明），改 order_date=04-20、payment_status=已收款。另揭露「REST PATCH sales_orders 會讓 payment_status 變已收款」的新副作用（SQL UPDATE 沒這問題） | 不要用 REST PATCH sales_orders，改用 SQL UPDATE；不要按「開立正式銷貨單」（BUG-001 未修）；員工別連續建揀貨單 |
+| 04/21 | BUG-014 規模擴大：掃描發現 04/14~04/16 共 9 個 wave 受害。04/21 補回 81 張 $502,800.5（6 個 wave）。累計 102 張 $688,992.5 | 同 04/20 推論；新資料顯示 04/14、04/15、04/16 每天早上同一時間批次建單都中招，04/17 後自然停 | 確認「連續建多張揀貨單」是觸發條件；單張建單可能安全；詳見 `docs/changelog/2026-04-21.md` |
 | 04/20 | BUG-014: 2026-04-16 03:09 UTC 一分鐘內 28 張單 21 張空白（PICK-397503 9 張 + PICK-492631 12 張）→ 手動補回 325 筆 + 主表金額共 $186,192 | generateSalesOrder 的 RPC items 空傳，根因未解；PICK-492631 全失敗提供新線索：同一次操作連續處理兩張揀貨單時污染後續 RPC call | 下次揀貨分發要盯緊，連續多張揀貨單時特別小心；若重現 0 項單立刻存 wave 快照 |
 | 04/17 | saveBranchSetting 加 on_conflict=store_name,setting_key 修正 409 | PostgREST upsert 沒指定 on_conflict 時預設用 PK，遇到複合 UNIQUE 會失敗 | 所有複合 UNIQUE 的 upsert 必須在 URL 加 ?on_conflict=col1,col2 |
 | 04/16 | BUG-011: SalesReturn activity_logs 空 catch → 加 console.error | 空 catch 吞掉所有錯誤，稽核軌跡遺失無提示 | 寫 try-catch 時不要用空 catch，至少 console.error |
@@ -156,6 +157,29 @@
 
 ---
 
+### BUG-015: REST PATCH sales_orders 會讓 payment_status 變已收款（機制不明）
+- **狀態**: [ ] 未修（機制不明）
+- **嚴重度**: 🟠 中 — 影響應收帳款報表
+- **發現時間**: 2026-04-21
+- **現象**: 透過 PostgREST REST API 做 PATCH `sales_orders`，即使 body 不包含 `payment_status` 欄位，這個欄位**會被連帶改成「已收款」**
+- **反例**（證明不是 trigger/default）:
+  - `sales_orders.payment_status` 的 DB default = `'未收款'`
+  - `information_schema.triggers` 查 sales_orders → 無 trigger
+  - SQL UPDATE（直接 DB）**沒有**這個副作用
+  - 04-17 之後新建正常分店單 payment_status = 未收款（符合 default）
+  - 只有 PostgREST PATCH 會觸發
+- **影響**: 2026-04-21 的補救腳本用 PATCH 寫主表，導致 104 張 payment_status 全部變「已收款」（後來用 SQL UPDATE 修回「未收款」）
+- **可能方向**（需驗證）:
+  - Supabase 的 RLS policy 或 function（information_schema 查不到的底層）
+  - Edge Function 被 webhook 觸發
+  - 查 pg_rules / pg_policies / pg_trigger
+- **暫時對策**:
+  - 不要用 REST API PATCH sales_orders
+  - 要改欄位改用 Supabase SQL Editor 的 SQL UPDATE
+- **跟 04-20 批次 UPDATE 源頭的關係**: 04-20 那次批次操作**也可能**是透過 PostgREST PATCH 做的（這樣才會同時改 order_date 和讓 payment_status 變已收款）。換句話說，**BUG-015 可能就是 04-20 事故的部分機制**
+
+---
+
 ### BUG-014: generateSalesOrder items 空傳，主表建成功但明細 0 筆（根因未解）
 - **狀態**: [ ] 未修（根因未解，資料已手動補回 2026-04-20）
 - **嚴重度**: 🔴 嚴重 — 下次揀貨分發可能重現，造成銷貨單明細丟失
@@ -197,8 +221,10 @@
   - 並發 race condition（但 for-await 是序列）
 - **補救紀錄**:
   - 2026-04-20 補 21 張 / 325 筆 / $186,192（PICK-397503 + PICK-492631）
-  - 2026-04-21 掃描發現 04/14~04/15 共 6 個 wave 也中招，補 81 張 / 1238 筆 / $502,800.5（PICK-254135 / 001991 / 697028 / 628499 / 809644 / 015159）
-  - **累計 102 張 / 1563 筆 / $688,992.5**
+  - 2026-04-21 上午掃描發現 04/14~04/15 共 6 個 wave 也中招，補 81 張 / 1238 筆 / $502,800.5
+  - 2026-04-21 下午補 PICK-757876 2 張（04/02 受害單）/ $36,919
+  - **最終累計 104 張 $725,911**
+  - 2026-04-21 下午同時發現：**04-20 當天有某個操作把 104 張 $0 分店單的 order_date 改成 04-20、payment_status 改成已收款**（源頭不明），已 SQL UPDATE 修回
   - 詳見 [docs/changelog/2026-04-20.md](changelog/2026-04-20.md) + [docs/changelog/2026-04-21.md](changelog/2026-04-21.md)
 - **下次如何診斷**:
   - 若重現，立刻在 admin Console 跑 `console.log(JSON.stringify(mockSavedWaves.find(w=>w.id==='PICK-XXX')))` 存下當下 wave 快照
