@@ -7,6 +7,7 @@
 
 | 日期 | 修了什麼 | 根本原因 | 下次怎麼避免 |
 |------|---------|---------|------------|
+| 04/20 | BUG-014: 2026-04-16 03:09 UTC 一分鐘內 28 張單 21 張空白（PICK-397503 9 張 + PICK-492631 12 張）→ 手動補回 325 筆 + 主表金額共 $186,192 | generateSalesOrder 的 RPC items 空傳，根因未解；PICK-492631 全失敗提供新線索：同一次操作連續處理兩張揀貨單時污染後續 RPC call | 下次揀貨分發要盯緊，連續多張揀貨單時特別小心；若重現 0 項單立刻存 wave 快照 |
 | 04/17 | saveBranchSetting 加 on_conflict=store_name,setting_key 修正 409 | PostgREST upsert 沒指定 on_conflict 時預設用 PK，遇到複合 UNIQUE 會失敗 | 所有複合 UNIQUE 的 upsert 必須在 URL 加 ?on_conflict=col1,col2 |
 | 04/16 | BUG-011: SalesReturn activity_logs 空 catch → 加 console.error | 空 catch 吞掉所有錯誤，稽核軌跡遺失無提示 | 寫 try-catch 時不要用空 catch，至少 console.error |
 | 04/16 | BUG-010: SalesOrder 客戶資料 fetch 空 catch × 2 → 加 console.warn | 同上，Excel 匯出缺欄位但無任何提示 | 同上 |
@@ -151,6 +152,54 @@
   - [ ] 網路斷線時 admin 操作 → 失敗有提示（不是假成功）
 - **Portal 端暫時不動**: `deleteRequest` / `editRequest` 雖然也有 stale 問題，但 store 只改自己的需求，衝突機率極低。優先修 admin，portal 等觀察一段時間再決定
 - **相關**: 跟 BUG-002（portalSalesOrders 整份覆蓋）同型問題，但資料不同、修法可獨立
+
+---
+
+### BUG-014: generateSalesOrder items 空傳，主表建成功但明細 0 筆（根因未解）
+- **狀態**: [ ] 未修（根因未解，資料已手動補回 2026-04-20）
+- **嚴重度**: 🔴 嚴重 — 下次揀貨分發可能重現，造成銷貨單明細丟失
+- **症狀**: 某次 `generateSalesOrder` 執行後，同一批單裡部分 sales_orders 主表建成功（grand_total=0, subtotal=0），但 sales_details **0 筆**。店家 portal 看也是空的。
+- **案例**:
+  - 2026-04-16 11:09 台灣時間，使用者**同一次操作連續建兩張揀貨單的暫存銷貨單**
+  - **PICK-397503**（03:09:02~04 UTC）：16 張單裡 7 成功 9 失敗。9 家店：中和/南平/文山/三峽/林口/經國/四號/湖口/環球
+  - **PICK-492631**（03:09:09~10 UTC，5 秒後）：12 張單**全部失敗**
+  - 兩張揀貨單的主表 `created_at` 連號（100-200ms 間隔）
+  - **重要線索**：PICK-492631 全失敗 → 篩選邏輯正確（8 家全 0 店確實沒建單），但有實分的 12 家店 items 全部空傳 → 污染源可能跟「連續建單時的狀態管理」有關
+- **涉及檔案**: admin/branch_admin.html `generateSalesOrder`（~4691 行起）
+- **關鍵邏輯**（~4747-4786）:
+  ```js
+  const branchBundles = {};
+  wave.matrix.forEach(row => {
+    Object.entries(row.branchData).forEach(([bName, data]) => {
+      const qty = data.actual ?? (typeof data === 'number' ? data : 0);
+      if (qty > 0) {
+        if (!branchBundles[bName]) branchBundles[bName] = [];
+        branchBundles[bName].push({...});  // 只有 qty>0 才 push
+      }
+    });
+  });
+  for (const [branch, items] of Object.entries(branchBundles)) {
+    // 對每家店呼叫 web_save_sales_order RPC
+  }
+  ```
+- **矛盾點**:
+  - 按邏輯，branchBundles 的 bName 必對應至少 1 筆 items
+  - 但這 9 家店的 RPC 被呼叫到了（主表建了），items 卻空傳
+  - **為什麼同一批 7 成功 9 失敗，原因不明**
+- **已排除**:
+  - ❌ 讀取 bug（portal 也是空的）
+  - ❌ price=0 導致 subtotal=0（sales_details 0 筆才是真問題）
+  - ❌ RPC transaction bug（主表成功代表 items 真的空）
+- **可能方向**（需驗證）:
+  - 當時 admin 本機 wave.matrix 某些 branch 的 actual 讀不到（BUG-013 類型的 localStorage 截斷）
+  - 某個清空 branchData 的 code path 被觸發
+  - 並發 race condition（但 for-await 是序列）
+- **補救紀錄**: 2026-04-20 從 wave.matrix 補回 **21 張單共 325 筆 sales_details**（PICK-397503 305 筆 $174,577 + PICK-492631 20 筆 $11,615 = 合計 $186,192）。詳見 [docs/changelog/2026-04-20.md](changelog/2026-04-20.md)
+- **下次如何診斷**:
+  - 若重現，立刻在 admin Console 跑 `console.log(JSON.stringify(mockSavedWaves.find(w=>w.id==='PICK-XXX')))` 存下當下 wave 快照
+  - 比對 branchBundles（需在 generateSalesOrder 加 log）
+  - 貼給 Claude 分析
+- **修復方向**: 不是改 code 就能修，要先**找到根因**，否則盲修可能誤傷
 
 ---
 
