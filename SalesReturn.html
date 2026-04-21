@@ -108,7 +108,7 @@
 
   <div style="margin-top:20px; display:flex; gap:12px; justify-content:flex-end;">
     <button class="btn" style="background:#e2e8f0; color:#374151;" onclick="clearCart()">🗑️ 清空</button>
-    <button class="btn btn-danger" onclick="submitReturn()">✅ 確認開立退貨單</button>
+    <button class="btn btn-danger" data-freeze-btn onclick="submitReturn()">✅ 確認開立退貨單</button>
   </div>
 </div>
 
@@ -121,6 +121,42 @@ function H(extra) {
   if (extra) Object.assign(h, extra);
   return h;
 }
+
+// ========== 🔴 凍結退貨單建立（2026-04-21 補凍，解凍時將下列 flag 改為 false） ==========
+// SalesReturn.html 會 POST 新 RT 退貨單到 sales_orders + sales_details。
+// BUG-015 的 PATCH 副作用目前雖然只在 REST PATCH 被觀察到，
+// 但新增路徑（POST）也未完整驗證無副作用，保守全凍。
+const SALES_WRITE_FROZEN = true;
+const FREEZE_REASON = '自 2026-04-21 起暫停開立退貨單，請改用 LINE/Excel 記錄，新 ERP 上線後補進。';
+function checkSalesWriteFrozen(action = '此操作') {
+  if (!SALES_WRITE_FROZEN) return false;
+  if (typeof Swal !== 'undefined') {
+    Swal.fire({ icon: 'warning', title: `${action}已停用`, text: FREEZE_REASON, confirmButtonText: '我知道了' });
+  } else {
+    alert(`${action}已停用\n\n${FREEZE_REASON}`);
+  }
+  return true;
+}
+function applySalesFreezeUI() {
+  if (!SALES_WRITE_FROZEN) return;
+  document.querySelectorAll('[data-freeze-btn]').forEach(btn => {
+    btn.style.opacity = '0.4';
+    btn.style.cursor = 'not-allowed';
+    btn.title = FREEZE_REASON;
+  });
+}
+document.addEventListener('DOMContentLoaded', applySalesFreezeUI);
+if (document.readyState !== 'loading') applySalesFreezeUI();
+// 點了被凍結的按鈕會跳提示
+document.addEventListener('click', (e) => {
+  if (!SALES_WRITE_FROZEN) return;
+  const b = e.target.closest && e.target.closest('[data-freeze-btn]');
+  if (b) {
+    e.preventDefault();
+    e.stopPropagation();
+    checkSalesWriteFrozen((b.textContent || '').trim() || '此操作');
+  }
+}, true);
 
 let allProducts = [];
 let allCustomers = [];
@@ -343,6 +379,7 @@ async function generateReturnId() {
 
 // ===== 開立退貨單 =====
 async function submitReturn() {
+  if (checkSalesWriteFrozen('確認開立退貨單（POST 新 RT 到 sales_orders）')) return;
   if (cart.length === 0) { Swal.fire('提示', '請先加入退貨商品', 'warning'); return; }
 
   const custId = document.getElementById('selCustomer').value;

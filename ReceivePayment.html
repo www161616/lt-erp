@@ -190,7 +190,7 @@
           <input type="text" id="note" placeholder="例如：1月份月結款、尾款...">
         </div>
         
-        <button type="submit" class="btn btn-success" id="submitBtn">✅ 確認完成收款</button>
+        <button type="submit" class="btn btn-success" id="submitBtn" data-freeze-btn>✅ 確認完成收款</button>
         <button type="button" class="btn btn-secondary" onclick="resetForm()">🔄 重新填寫</button>
       </form>
     </div>
@@ -215,6 +215,42 @@
     'Content-Type': 'application/json',
     'Prefer': 'return=representation'
   };
+
+  // ========== 🔴 凍結收款寫入（2026-04-21 補凍，解凍時將下列 flag 改為 false） ==========
+  // 稽核發現 web_batch_receive_payments RPC 內部會 UPDATE sales_orders.payment_status
+  // 雖然用 SQL UPDATE 不是 REST PATCH，04-21 實測 0 副作用，但為保持完整凍結範圍
+  // （BUG-014/015 止血一致），暫停收款操作直到新 ERP 上線
+  const SALES_WRITE_FROZEN = true;
+  const FREEZE_REASON = '自 2026-04-21 起暫停收款操作（會間接 UPDATE sales_orders），請改用 LINE/Excel 記帳，新 ERP 上線後補進。';
+  function checkSalesWriteFrozen(action = '此操作') {
+    if (!SALES_WRITE_FROZEN) return false;
+    if (typeof Swal !== 'undefined') {
+      Swal.fire({ icon: 'warning', title: `${action}已停用`, text: FREEZE_REASON, confirmButtonText: '我知道了' });
+    } else {
+      alert(`${action}已停用\n\n${FREEZE_REASON}`);
+    }
+    return true;
+  }
+  function applySalesFreezeUI() {
+    if (!SALES_WRITE_FROZEN) return;
+    document.querySelectorAll('[data-freeze-btn]').forEach(btn => {
+      btn.style.opacity = '0.4';
+      btn.style.cursor = 'not-allowed';
+      btn.title = FREEZE_REASON;
+    });
+  }
+  document.addEventListener('DOMContentLoaded', applySalesFreezeUI);
+  if (document.readyState !== 'loading') applySalesFreezeUI();
+  // 點了被凍結的按鈕會跳提示
+  document.addEventListener('click', (e) => {
+    if (!SALES_WRITE_FROZEN) return;
+    const b = e.target.closest && e.target.closest('[data-freeze-btn]');
+    if (b) {
+      e.preventDefault();
+      e.stopPropagation();
+      checkSalesWriteFrozen((b.textContent || '').trim() || '此操作');
+    }
+  }, true);
 
   let allOrders = [];       
   let lastCustomerId = '';
@@ -402,6 +438,7 @@
   // ========== 3. 批次處理收款 (RPC) ==========
   document.getElementById('paymentForm').addEventListener('submit', async function(e) {
     e.preventDefault();
+    if (checkSalesWriteFrozen('確認完成收款（會呼叫 web_batch_receive_payments，間接 UPDATE sales_orders）')) return;
     const customerId = document.getElementById('customer').value;
     const amount = parseFloat(document.getElementById('amount').value);
     
