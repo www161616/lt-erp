@@ -128,6 +128,41 @@
     'Content-Type': 'application/json'
   };
 
+  // ========== 🔴 凍結銷貨單寫入（2026-04-21 起，解凍時將下列 flag 改為 false） ==========
+  const SALES_WRITE_FROZEN = true;
+  const FREEZE_REASON = '自 2026-04-21 起暫停開立銷貨單，請改用 Google Sheets。過渡期至新 ERP 上線。';
+  function checkSalesWriteFrozen(action = '此操作') {
+    if (!SALES_WRITE_FROZEN) return false;
+    if (typeof Swal !== 'undefined') {
+      Swal.fire({ icon: 'warning', title: `${action}已停用`, text: FREEZE_REASON, confirmButtonText: '我知道了' });
+    } else {
+      alert(`${action}已停用\n\n${FREEZE_REASON}`);
+    }
+    return true;
+  }
+  function applySalesFreezeUI() {
+    if (!SALES_WRITE_FROZEN) return;
+    document.querySelectorAll('[data-freeze-btn]').forEach(btn => {
+      btn.style.opacity = '0.4';
+      btn.style.cursor = 'not-allowed';
+      btn.title = FREEZE_REASON;
+    });
+  }
+  document.addEventListener('DOMContentLoaded', applySalesFreezeUI);
+  if (document.readyState !== 'loading') applySalesFreezeUI();
+  // 點了被凍結的按鈕會跳提示（不用 disabled，因為原生 disabled 不會觸發 onclick）
+  document.addEventListener('click', (e) => {
+    if (!SALES_WRITE_FROZEN) return;
+    const b = e.target.closest && e.target.closest('[data-freeze-btn]');
+    if (b) {
+      e.preventDefault();
+      e.stopPropagation();
+      checkSalesWriteFrozen((b.textContent || '').trim() || '此操作');
+    }
+  }, true);
+  // 動態渲染的按鈕需要在 render 後呼叫 applySalesFreezeUI
+  window.__applySalesFreezeUI = applySalesFreezeUI;
+
   // ============================
   // 資料
   // ============================
@@ -216,7 +251,7 @@
 
     list.innerHTML = `<div style="display:flex; align-items:center; gap:10px; padding:8px 0; border-bottom:1px solid #e2e8f0; margin-bottom:8px;">
       <input type="checkbox" onchange="document.querySelectorAll('.so-check').forEach(function(c){c.checked=this.checked}.bind(this)); updateSOPendingCount();" style="width:16px; height:16px; cursor:pointer;">
-      <button class="btn btn-approve" style="padding:5px 14px; font-size:13px;" onclick="batchApproveSales()">✅ 批次確認開立</button>
+      <button class="btn btn-approve" style="padding:5px 14px; font-size:13px;" data-freeze-btn onclick="batchApproveSales()">✅ 批次確認開立</button>
       <span id="soPendingCount" style="font-size:12px; color:#64748b;"></span>
     </div>` + pendingSalesOrders.map(o => {
       const amount = o.finalAmount || o.items.reduce((s, i) => s + i.qty * i.unitPrice, 0);
@@ -243,11 +278,12 @@
           </div>
           <div class="order-card-actions" onclick="event.stopPropagation();">
             <button class="btn btn-detail" onclick="showSalesDetail('${o.id}')">👁 明細</button>
-            <button class="btn btn-approve" onclick="approveSalesOrder('${o.id}')">✅ 確認開立</button>
+            <button class="btn btn-approve" data-freeze-btn onclick="approveSalesOrder('${o.id}')">✅ 確認開立</button>
             <button class="btn btn-reject" onclick="rejectSalesOrder('${o.id}')">❌ 退回</button>
           </div>
         </div>`;
     }).join('');
+    applySalesFreezeUI();
   }
 
   // 顯示銷貨單明細
@@ -294,6 +330,7 @@
 
   // 確認開立銷貨單（寫入 Supabase）
   async function approveSalesOrder(id) {
+    if (checkSalesWriteFrozen('開立正式銷貨單')) return;
     const o = pendingSalesOrders.find(x => x.id === id);
     if (!o) return;
 
@@ -659,6 +696,7 @@
 
   // 批次確認開立銷貨單
   async function batchApproveSales() {
+    if (checkSalesWriteFrozen('批次開立正式銷貨單')) return;
     var ids = Array.from(document.querySelectorAll('.so-check:checked')).map(function(c) { return c.value; });
     if (ids.length === 0) { Swal.fire('提醒', '請先勾選要開立的銷貨單', 'warning'); return; }
     var result = await Swal.fire({ title: '批次確認開立 ' + ids.length + ' 筆？', icon: 'question', showCancelButton: true, confirmButtonText: '確認開立', cancelButtonText: '取消', confirmButtonColor: '#047857' });
