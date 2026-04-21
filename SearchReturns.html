@@ -115,6 +115,39 @@ function H(extra) {
   return h;
 }
 
+// ========== 🔴 凍結銷貨單寫入（2026-04-21 起，解凍時將下列 flag 改為 false） ==========
+const SALES_WRITE_FROZEN = true;
+const FREEZE_REASON = '自 2026-04-21 起暫停編輯/作廢退貨單，請改用 Google Sheets。過渡期至新 ERP 上線。';
+function checkSalesWriteFrozen(action = '此操作') {
+  if (!SALES_WRITE_FROZEN) return false;
+  if (typeof Swal !== 'undefined') {
+    Swal.fire({ icon: 'warning', title: `${action}已停用`, text: FREEZE_REASON, confirmButtonText: '我知道了' });
+  } else {
+    alert(`${action}已停用\n\n${FREEZE_REASON}`);
+  }
+  return true;
+}
+function applySalesFreezeUI() {
+  if (!SALES_WRITE_FROZEN) return;
+  document.querySelectorAll('[data-freeze-btn]').forEach(btn => {
+    btn.style.opacity = '0.4';
+    btn.style.cursor = 'not-allowed';
+    btn.title = FREEZE_REASON;
+  });
+}
+document.addEventListener('DOMContentLoaded', applySalesFreezeUI);
+if (document.readyState !== 'loading') applySalesFreezeUI();
+// 點了被凍結的按鈕會跳提示（不用 disabled，因為原生 disabled 不會觸發 onclick）
+document.addEventListener('click', (e) => {
+  if (!SALES_WRITE_FROZEN) return;
+  const b = e.target.closest && e.target.closest('[data-freeze-btn]');
+  if (b) {
+    e.preventDefault();
+    e.stopPropagation();
+    checkSalesWriteFrozen((b.textContent || '').trim() || '此操作');
+  }
+}, true);
+
 let allResults = [];
 let filteredResults = [];
 let currentPage = 1;
@@ -251,14 +284,15 @@ function renderResults() {
       <td style="text-align:right; font-weight:600; color:var(--danger);">$${amount.toLocaleString()}</td>
       <td style="font-size:12px; color:var(--text2); max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${o.note || ''}</td>
       <td style="text-align:center; white-space:nowrap;">
-        <button onclick="event.stopPropagation();editReturnOrder('${o.id}')" style="padding:3px 8px; font-size:11px; border:1px solid var(--border); background:#fff; border-radius:4px; cursor:pointer; font-family:inherit;">✏️ 編輯</button>
-        <button onclick="event.stopPropagation();voidReturnOrder('${o.id}')" style="padding:3px 8px; font-size:11px; border:1px solid #fecaca; background:#fef2f2; color:#c53030; border-radius:4px; cursor:pointer; font-family:inherit;">🗑️ 作廢</button>
+        <button data-freeze-btn onclick="event.stopPropagation();editReturnOrder('${o.id}')" style="padding:3px 8px; font-size:11px; border:1px solid var(--border); background:#fff; border-radius:4px; cursor:pointer; font-family:inherit;">✏️ 編輯</button>
+        <button data-freeze-btn onclick="event.stopPropagation();voidReturnOrder('${o.id}')" style="padding:3px 8px; font-size:11px; border:1px solid #fecaca; background:#fef2f2; color:#c53030; border-radius:4px; cursor:pointer; font-family:inherit;">🗑️ 作廢</button>
       </td>
     </tr>
     <tr class="detail-row" id="detail-${o.id}" style="display:none;"><td colspan="6" style="padding:0;"></td></tr>`;
   }).join('');
 
   renderPagination(totalPages);
+  applySalesFreezeUI();
 }
 
 // ===== 分頁 =====
@@ -324,6 +358,7 @@ async function toggleDetail(orderId, rowEl) {
 
 // ===== 編輯退貨單 =====
 async function editReturnOrder(orderId) {
+  if (checkSalesWriteFrozen('編輯退貨單')) return;
   try {
     const [oRes, dRes] = await Promise.all([
       fetch(`${SB_URL}/sales_orders?id=eq.${orderId}&select=*`, { headers: H() }),
@@ -474,6 +509,7 @@ async function editReturnOrder(orderId) {
 
 // ===== 作廢退貨單 =====
 async function voidReturnOrder(orderId) {
+  if (checkSalesWriteFrozen('作廢退貨單')) return;
   const order = filteredResults.find(o => o.id === orderId);
   if (!order) return;
 

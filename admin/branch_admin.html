@@ -178,6 +178,63 @@
       'Prefer': 'return=representation'
     };
 
+    // ========== 🔴 凍結銷貨單寫入（2026-04-21 起，解凍時將下列 flag 改為 false） ==========
+    // 凍結原因：BUG-014 sales_details 空白事故、BUG-015 order_date/payment_status 被改壞
+    // 涵蓋範圍：generateSalesOrder / restockAndClose / showManualSOForm / batchIssueSO /
+    //          issueOfficialSalesOrder / closeSalesOrder / rtEditOrder / rtVoidOrder /
+    //          syncReturnStatusToDB / syncSalesOrderAmountToDB
+    const SALES_WRITE_FROZEN = true;
+    const FREEZE_REASON = '自 2026-04-21 起暫停總倉所有銷貨單/退貨單寫入，請改用 Google Sheets。過渡期至新 ERP 上線。';
+    function checkSalesWriteFrozen(action = '此操作') {
+      if (!SALES_WRITE_FROZEN) return false;
+      if (typeof Swal !== 'undefined') {
+        Swal.fire({ icon: 'warning', title: `${action}已停用`, text: FREEZE_REASON, confirmButtonText: '我知道了' });
+      } else {
+        alert(`${action}已停用\n\n${FREEZE_REASON}`);
+      }
+      return true;
+    }
+    function _freezeBtn(btn) {
+      if (!btn || btn.dataset.frozenApplied === '1') return;
+      // 不用原生 disabled（會讓 onclick 不觸發，看不到「已停用」提示）
+      // 改用視覺灰化 + document click capture 攔截
+      btn.style.opacity = '0.4';
+      btn.style.cursor = 'not-allowed';
+      btn.title = FREEZE_REASON;
+      btn.dataset.frozenApplied = '1';
+    }
+    function applySalesFreezeUI(root) {
+      if (!SALES_WRITE_FROZEN) return;
+      (root || document).querySelectorAll('[data-freeze-btn]').forEach(_freezeBtn);
+    }
+    document.addEventListener('DOMContentLoaded', () => {
+      applySalesFreezeUI();
+      // 動態渲染的按鈕自動套凍結（避免 render 函式個別呼叫）
+      const mo = new MutationObserver(muts => {
+        if (!SALES_WRITE_FROZEN) return;
+        for (const m of muts) {
+          for (const n of m.addedNodes) {
+            if (n.nodeType !== 1) continue;
+            if (n.matches && n.matches('[data-freeze-btn]')) _freezeBtn(n);
+            if (n.querySelectorAll) n.querySelectorAll('[data-freeze-btn]').forEach(_freezeBtn);
+          }
+        }
+      });
+      mo.observe(document.body, { childList: true, subtree: true });
+    });
+    if (document.readyState !== 'loading') applySalesFreezeUI();
+    // 點了被凍結的按鈕會跳提示（capture 階段搶在 onclick 前）
+    document.addEventListener('click', (e) => {
+      if (!SALES_WRITE_FROZEN) return;
+      const b = e.target.closest && e.target.closest('[data-freeze-btn]');
+      if (b) {
+        e.preventDefault();
+        e.stopPropagation();
+        checkSalesWriteFrozen((b.textContent || '').trim() || '此操作');
+      }
+    }, true);
+    window.__applySalesFreezeUI = applySalesFreezeUI;
+
     // ============================
     // 共用：日期正規化為 M/D（去年份、去前導零）
     // 用途：branchOrders key 後綴、開團總表 fallback 比對
@@ -3898,7 +3955,7 @@
         '</div>' +
         '<div style="display:flex; gap:8px; flex-wrap:wrap;">' +
           '<button class="btn" style="background:#b7791f; padding:8px 16px; font-size:13px;" onclick="openCorrectionPanel(\'' + waveId + '\')">✏️ 修正數量</button>' +
-          (!isCompleted ? '<button class="btn" style="background:#2b6cb0; padding:8px 16px; font-size:13px;" onclick="generateSalesOrder(\'' + waveId + '\')">📋 暫存銷貨單</button>' : '') +
+          (!isCompleted ? '<button class="btn" data-freeze-btn style="background:#2b6cb0; padding:8px 16px; font-size:13px;" onclick="generateSalesOrder(\'' + waveId + '\')">📋 暫存銷貨單</button>' : '') +
           '<button class="btn btn-print" style="padding:8px 16px; font-size:13px;" onclick="printPickingWave(\'' + waveId + '\')">🖨️ 列印</button>' +
         '</div>' +
       '</div>';
@@ -4136,7 +4193,7 @@
           </div>`;
         } else {
           salesCell = `<div style="display:flex; flex-direction:column; gap:4px; justify-content:center; align-items:center;">
-               <button class="btn btn-print" style="padding:5px 10px; font-size:12px; background:#2b6cb0; width:100%;" onclick="generateSalesOrder('${wave.id}')">暫存銷貨單</button>
+               <button class="btn btn-print" data-freeze-btn style="padding:5px 10px; font-size:12px; background:#2b6cb0; width:100%;" onclick="generateSalesOrder('${wave.id}')">暫存銷貨單</button>
                <button class="btn btn-print" style="padding:5px 10px; font-size:12px; width:100%;" onclick="printPickingWave('${wave.id}')">🖨️ 列印</button>
                <button class="btn" style="padding:5px 10px; font-size:12px; background:#c53030; width:100%;" onclick="deletePickingWave('${wave.id}')">🗑️ 刪除</button>
              </div>`;
@@ -4625,6 +4682,7 @@
 
     // 刪除單張銷貨單
     function deleteSalesOrder(soId) {
+      if (checkSalesWriteFrozen('刪除銷貨單（DELETE sales_orders）')) return;
       const so = mockSalesOrders.find(o => o.id === soId);
       if (!so) return;
       Swal.fire({
@@ -4689,6 +4747,7 @@
     }
 
     async function generateSalesOrder(waveId) {
+      if (checkSalesWriteFrozen('暫存銷貨單（揀貨完成→自動開單）')) return;
       const wave = mockSavedWaves.find(w => w.id === waveId);
       if (!wave) return;
 
@@ -6289,6 +6348,7 @@
   }
 
   async function restockAndClose(backorderId, productId, productName, store, shortageQty) {
+    if (checkSalesWriteFrozen('補發結案（開立補發銷貨單）')) return;
     const cust = allCustomers.find(c => c.name.includes(store)) || { id: 'UNKNOWN', name: store, tax_type: '免稅' };
 
     // 查商品分店價
@@ -6731,7 +6791,7 @@
         } else {
           operationBtn = `<div style="display:flex; flex-direction:column; gap:3px;">
             <button class="btn" style="padding:4px 8px; font-size:11px; white-space:nowrap; background:#c53030;" onclick="loadShortageToPickingStation('${r.wave_id}','${r.product_id}')">➕ 建立補發</button>
-            <button class="btn" style="padding:4px 8px; font-size:11px; white-space:nowrap; background:#047857;" onclick="restockAndClose(${r.id},'${r.product_id}','${r.product_name||''}','${r.store}',${Math.abs(r.diff)},${r.actual_qty ? (r.expected_qty - r.actual_qty > 0 ? r.expected_qty - r.actual_qty : 0) : 0})">✅ 補發結案</button>
+            <button class="btn" data-freeze-btn style="padding:4px 8px; font-size:11px; white-space:nowrap; background:#047857;" onclick="restockAndClose(${r.id},'${r.product_id}','${r.product_name||''}','${r.store}',${Math.abs(r.diff)},${r.actual_qty ? (r.expected_qty - r.actual_qty > 0 ? r.expected_qty - r.actual_qty : 0) : 0})">✅ 補發結案</button>
             <button class="btn" style="padding:4px 8px; font-size:11px; white-space:nowrap; background:#718096;" onclick="markNoRestock(${r.id})">🚫 不補</button>
           </div>`;
         }
@@ -7100,7 +7160,7 @@
           '<td style="padding:8px 12px;">' + r.name + '</td>' +
           '<td style="padding:8px 12px; text-align:center; font-weight:700; color:#c53030;">' + r.qty + '</td>' +
           '<td style="padding:8px 12px; color:#718096;">' + r.expectedDate + '</td>' +
-          '<td style="padding:8px 12px; text-align:center;"><button class="btn" style="padding:4px 10px; font-size:12px; background:#047857;" onclick="adminMarkReturnReceived(\'' + r.orderId + '\',' + r.itemIdx + ')">✅ 確認收到</button></td>' +
+          '<td style="padding:8px 12px; text-align:center;"><button class="btn" data-freeze-btn style="padding:4px 10px; font-size:12px; background:#047857;" onclick="adminMarkReturnReceived(\'' + r.orderId + '\',' + r.itemIdx + ')">✅ 確認收到</button></td>' +
         '</tr>';
       }).join('');
       returnHtml = '<div style="background:#fef2f2; border:1px solid #fecaca; border-radius:8px; padding:12px 16px; margin-bottom:15px;">' +
@@ -9076,13 +9136,13 @@
             </select>
             <input type="text" id="acStoreFilter" placeholder="分店名稱" oninput="refreshAccountingTable()" style="padding:6px 10px; border:1px solid var(--border); border-radius:4px; font-size:13px; width:90px; font-family:inherit;">
             <input type="text" id="acProductFilter" placeholder="商品名稱/編號" oninput="refreshAccountingTable()" style="padding:6px 10px; border:1px solid var(--border); border-radius:4px; font-size:13px; width:120px; font-family:inherit;">
-            <button class="btn" style="padding:5px 12px; font-size:12px; background:#2b6cb0;" onclick="showManualSOForm()">➕ 新增銷貨單</button>
+            <button class="btn" data-freeze-btn style="padding:5px 12px; font-size:12px; background:#2b6cb0;" onclick="showManualSOForm()">➕ 新增銷貨單</button>
             <span style="color:#e2e8f0;">│</span>
             <button class="btn" style="padding:5px 12px; font-size:12px; background:#718096;" onclick="toggleSelectAllSO()">☑ 全選</button>
-            <button class="btn" style="padding:5px 12px; font-size:12px; background:#047857;" onclick="batchIssueSO()">✅ 批次開立</button>
+            <button class="btn" data-freeze-btn style="padding:5px 12px; font-size:12px; background:#047857;" onclick="batchIssueSO()">✅ 批次開立</button>
             <button class="btn btn-print" style="padding:5px 12px; font-size:12px;" onclick="batchPrintSO()">🖨️ 批次列印</button>
             <button class="btn" style="padding:5px 12px; font-size:12px; background:#b7791f;" onclick="batchSalesReturn()">📤 批次銷退</button>
-            <button class="btn" style="padding:5px 12px; font-size:12px; background:#c53030;" onclick="batchDeleteSO()">🗑️ 批次刪除</button>
+            <button class="btn" data-freeze-btn style="padding:5px 12px; font-size:12px; background:#c53030;" onclick="batchDeleteSO()">🗑️ 批次刪除</button>
             <span id="soSelectCount" style="font-size:12px; color:#718096; display:none;">已選 0 筆</span>
           </div>
         </div>
@@ -9190,6 +9250,7 @@
   }
 
   async function showManualSOForm() {
+    if (checkSalesWriteFrozen('手動新增銷貨單')) return;
     soCart = [];
     Swal.fire({ title: '載入商品中...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
     try {
@@ -9445,10 +9506,10 @@
           <td style="padding:8px 12px; text-align:center;">
             <div style="display:flex; gap:4px; justify-content:center;">
               <button class="btn btn-print" style="padding:3px 8px; font-size:11px;" onclick="event.stopPropagation();printSalesOrderDetail('${o.id}')">🖨️</button>
-              ${o.status === 'confirmed' || o.status === 'pending' ? `<button class="btn" style="padding:3px 8px; font-size:11px; background:#047857;" onclick="event.stopPropagation();issueOfficialSalesOrder('${o.id}')">開立正式銷貨單</button>` : ''}
+              ${o.status === 'confirmed' || o.status === 'pending' ? `<button class="btn" data-freeze-btn style="padding:3px 8px; font-size:11px; background:#047857;" onclick="event.stopPropagation();issueOfficialSalesOrder('${o.id}')">開立正式銷貨單</button>` : ''}
               ${o.status === 'issued' || o.status === 'closed' ? `<button class="btn" style="padding:3px 8px; font-size:11px; background:#b7791f;" onclick="event.stopPropagation();openSalesReturn('${o.id}')">📤 銷貨退回</button>` : ''}
               ${o.status === 'disputed' ? `<button class="btn" style="padding:3px 8px; font-size:11px; background:#c53030;" onclick="event.stopPropagation();showSalesOrderDetail('${o.id}')">處理退貨</button>` : ''}
-              <button class="btn" style="padding:3px 8px; font-size:11px; background:#c53030;" onclick="event.stopPropagation();deleteSalesOrder('${o.id}')">🗑️</button>
+              <button class="btn" data-freeze-btn style="padding:3px 8px; font-size:11px; background:#c53030;" onclick="event.stopPropagation();deleteSalesOrder('${o.id}')">🗑️</button>
             </div>
           </td>
         </tr>`;
@@ -9532,6 +9593,7 @@
   }
 
   function batchDeleteSO() {
+    if (checkSalesWriteFrozen('批次刪除銷貨單（DELETE sales_orders）')) return;
     const ids = getCheckedSOIds();
     if (ids.length === 0) return Swal.fire('提醒', '請先勾選要刪除的銷貨單', 'warning');
     Swal.fire({
@@ -9557,6 +9619,7 @@
   }
 
   async function batchIssueSO() {
+    if (checkSalesWriteFrozen('批次開立銷貨單')) return;
     syncSalesOrdersFromPortal();
     const ids = getCheckedSOIds();
     if (ids.length === 0) return Swal.fire('提醒', '請先勾選要開立的銷貨單', 'warning');
@@ -9764,17 +9827,17 @@
             <div style="font-size:12px; color:#92400e; font-weight:bold;">⚠️ 少收到 ${item.returnQty} 件，待補發</div>
             <div style="font-size:11px; color:#718096; margin:2px 0;">原因：${item.returnReason}</div>
             ${editable ? `<div style="margin-top:6px; display:flex; gap:4px; flex-wrap:wrap;">
-              <button class="btn" style="padding:3px 8px; font-size:11px; background:#b7791f;" onclick="adminMarkShortage('${id}',${idx})">標記補發</button>
-              <button class="btn" style="padding:3px 8px; font-size:11px; background:#c53030;" onclick="adminRejectReturn('${id}',${idx})">不接受</button>
+              <button class="btn" data-freeze-btn style="padding:3px 8px; font-size:11px; background:#b7791f;" onclick="adminMarkShortage('${id}',${idx})">標記補發</button>
+              <button class="btn" data-freeze-btn style="padding:3px 8px; font-size:11px; background:#c53030;" onclick="adminRejectReturn('${id}',${idx})">不接受</button>
             </div>` : ''}`;
         } else if (rType === 'damaged') {
           returnCell = `
             <div style="font-size:12px; color:#dc2626; font-weight:bold;">💥 壞損 ${item.returnQty} 件</div>
             <div style="font-size:11px; color:#718096; margin:2px 0;">原因：${item.returnReason}</div>
             ${editable ? `<div style="margin-top:6px; display:flex; gap:4px; flex-wrap:wrap;">
-              <button class="btn" style="padding:3px 8px; font-size:11px; background:#2b6cb0;" onclick="adminAcceptReturn('${id}',${idx})">需退回</button>
-              <button class="btn" style="padding:3px 8px; font-size:11px; background:#b7791f;" onclick="adminWaiveReturn('${id}',${idx})">免退回扣款</button>
-              <button class="btn" style="padding:3px 8px; font-size:11px; background:#c53030;" onclick="adminRejectReturn('${id}',${idx})">不接受</button>
+              <button class="btn" data-freeze-btn style="padding:3px 8px; font-size:11px; background:#2b6cb0;" onclick="adminAcceptReturn('${id}',${idx})">需退回</button>
+              <button class="btn" data-freeze-btn style="padding:3px 8px; font-size:11px; background:#b7791f;" onclick="adminWaiveReturn('${id}',${idx})">免退回扣款</button>
+              <button class="btn" data-freeze-btn style="padding:3px 8px; font-size:11px; background:#c53030;" onclick="adminRejectReturn('${id}',${idx})">不接受</button>
             </div>` : ''}`;
         } else {
           // return（退貨需退回）— 原有邏輯
@@ -9782,9 +9845,9 @@
             <div style="font-size:12px; color:#be185d; font-weight:bold;">📦 申請退回 ${item.returnQty} 件</div>
             <div style="font-size:11px; color:#718096; margin:2px 0;">原因：${item.returnReason}</div>
             ${editable ? `<div style="margin-top:6px; display:flex; gap:4px; flex-wrap:wrap;">
-              <button class="btn" style="padding:3px 8px; font-size:11px; background:#2b6cb0;" onclick="adminAcceptReturn('${id}',${idx})">接受退回</button>
-              <button class="btn" style="padding:3px 8px; font-size:11px; background:#2b6cb0;" onclick="adminWaiveReturn('${id}',${idx})">接受免退回</button>
-              <button class="btn" style="padding:3px 8px; font-size:11px; background:#c53030;" onclick="adminRejectReturn('${id}',${idx})">不接受退回</button>
+              <button class="btn" data-freeze-btn style="padding:3px 8px; font-size:11px; background:#2b6cb0;" onclick="adminAcceptReturn('${id}',${idx})">接受退回</button>
+              <button class="btn" data-freeze-btn style="padding:3px 8px; font-size:11px; background:#2b6cb0;" onclick="adminWaiveReturn('${id}',${idx})">接受免退回</button>
+              <button class="btn" data-freeze-btn style="padding:3px 8px; font-size:11px; background:#c53030;" onclick="adminRejectReturn('${id}',${idx})">不接受退回</button>
             </div>` : ''}`;
         }
       } else if (item.returnStatus === 'accepted') {
@@ -9792,7 +9855,7 @@
           <div style="font-size:12px; color:#2b6cb0; font-weight:bold;">✔ 已接受，等待退回 ${item.adminReturnQty} 件</div>
           <div style="font-size:11px; color:#718096;">預計退回日：${item.expectedReturnDate}</div>
           <div style="font-size:11px; color:#718096; margin-bottom:4px;">原因：${item.returnReason}</div>
-          ${editable ? `<button class="btn" style="padding:3px 8px; font-size:11px; background:#2b6cb0;" onclick="adminMarkReturnReceived('${id}',${idx})">確認已收到退貨</button>` : ''}`;
+          ${editable ? `<button class="btn" data-freeze-btn style="padding:3px 8px; font-size:11px; background:#2b6cb0;" onclick="adminMarkReturnReceived('${id}',${idx})">確認已收到退貨</button>` : ''}`;
       } else if (item.returnStatus === 'received') {
         returnCell = item.adminReturnQty === 0
           ? `<div style="color:#047857; font-size:12px; font-weight:bold;">✅ 已標記補發，不扣款</div><div style="font-size:11px; color:#718096;">原因：${item.returnReason}</div>`
@@ -9826,9 +9889,9 @@
     if ((o.status === 'pending' || o.status === 'confirmed') && hasPendingReturn) {
       actionBtn = `<span style="font-size:12px; color:#c53030; font-weight:bold;">⚠ 有未完成的退貨，請先處理完才能開立</span>`;
     } else if (o.status === 'pending' || o.status === 'confirmed') {
-      actionBtn = `<button class="btn" style="background:#047857; padding:8px 20px;" onclick="issueOfficialSalesOrder('${id}')">✅ 開立正式銷貨單</button>`;
+      actionBtn = `<button class="btn" data-freeze-btn style="background:#047857; padding:8px 20px;" onclick="issueOfficialSalesOrder('${id}')">✅ 開立正式銷貨單</button>`;
     } else if (o.status === 'disputed' && !hasUnhandled) {
-      actionBtn = `<button class="btn" style="background:#047857; padding:8px 20px;" onclick="closeSalesOrder('${id}')">📁 退貨已處理完畢，結案</button>`;
+      actionBtn = `<button class="btn" data-freeze-btn style="background:#047857; padding:8px 20px;" onclick="closeSalesOrder('${id}')">📁 退貨已處理完畢，結案</button>`;
     } else if (o.status === 'disputed' && hasUnhandled) {
       actionBtn = `<span style="font-size:12px; color:#c53030; font-weight:bold;">⚠ 尚有未處理的退貨項目</span>`;
     }
@@ -9996,6 +10059,7 @@
 
   // BUG-009: admin 處理退貨後同步 return_status + portal_status 到 DB
   async function syncReturnStatusToDB(o, item) {
+    if (checkSalesWriteFrozen('同步退貨狀態到 DB（PATCH sales_orders）')) return;
     try {
       // 1. PATCH sales_details.return_status
       if (item.detailId) {
@@ -10020,6 +10084,7 @@
   }
 
   function adminAcceptReturn(orderId, itemIdx) {
+    if (checkSalesWriteFrozen('admin 接受退貨（同步會寫 sales_orders / sales_details）')) return;
     const o = mockSalesOrders.find(s => s.id === orderId);
     if (!o) return;
     const item = o.items[itemIdx];
@@ -10050,6 +10115,7 @@
   }
 
   function adminMarkShortage(orderId, itemIdx) {
+    if (checkSalesWriteFrozen('admin 標記補發（同步會寫 sales_orders / sales_details）')) return;
     var o = mockSalesOrders.find(function(s) { return s.id === orderId; });
     if (!o) return;
     var item = o.items[itemIdx];
@@ -10069,6 +10135,7 @@
   }
 
   function adminWaiveReturn(orderId, itemIdx) {
+    if (checkSalesWriteFrozen('admin 免退回扣款（同步會寫 sales_orders / sales_details）')) return;
     const o = mockSalesOrders.find(s => s.id === orderId);
     if (!o) return;
     const item = o.items[itemIdx];
@@ -10089,6 +10156,7 @@
   }
 
   function adminRejectReturn(orderId, itemIdx) {
+    if (checkSalesWriteFrozen('admin 拒絕退貨（同步會寫 sales_orders / sales_details）')) return;
     const o = mockSalesOrders.find(s => s.id === orderId);
     if (!o) return;
     const item = o.items[itemIdx];
@@ -10114,6 +10182,7 @@
   }
 
   function adminMarkReturnReceived(orderId, itemIdx) {
+    if (checkSalesWriteFrozen('admin 確認收到退貨（同步會寫 sales_orders / sales_details）')) return;
     const o = mockSalesOrders.find(s => s.id === orderId);
     if (!o) return;
     const item = o.items[itemIdx];
@@ -10135,6 +10204,7 @@
   }
 
   async function syncSalesOrderAmountToDB(orderId) {
+    if (checkSalesWriteFrozen('同步銷貨單金額到 DB（PATCH sales_orders）')) return;
     var o = mockSalesOrders.find(function(s) { return s.id === orderId; });
     if (!o || !o.dbId) return;
     var newAmount = calcOrderAmount(o);
@@ -10404,8 +10474,8 @@
         <td style="padding:8px 12px; text-align:right; font-weight:600; color:#c53030;">$${amt.toLocaleString()}</td>
         <td style="padding:8px 12px; font-size:12px; color:var(--text2); max-width:200px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${o.note || ''}</td>
         <td style="padding:8px 12px; text-align:center; white-space:nowrap;">
-          <button class="btn" style="padding:3px 8px; font-size:11px; background:#2b6cb0;" onclick="rtEditOrder('${o.id}')">✏️ 編輯</button>
-          <button class="btn" style="padding:3px 8px; font-size:11px; background:#c53030;" onclick="rtVoidOrder('${o.id}')">🗑️ 作廢</button>
+          <button class="btn" data-freeze-btn style="padding:3px 8px; font-size:11px; background:#2b6cb0;" onclick="rtEditOrder('${o.id}')">✏️ 編輯</button>
+          <button class="btn" data-freeze-btn style="padding:3px 8px; font-size:11px; background:#c53030;" onclick="rtVoidOrder('${o.id}')">🗑️ 作廢</button>
         </td>
       </tr>
       <tr id="rtDetail-${o.id}" style="display:none;"><td colspan="6" style="padding:0;"></td></tr>`;
@@ -10461,6 +10531,7 @@
   }
 
   async function rtEditOrder(orderId) {
+    if (checkSalesWriteFrozen('編輯退貨單')) return;
     try {
       const [oRes, dRes] = await Promise.all([
         fetch(`${SB_URL}/sales_orders?id=eq.${orderId}&select=*`, { headers: HEADERS }),
@@ -10556,6 +10627,7 @@
   }
 
   async function rtVoidOrder(orderId) {
+    if (checkSalesWriteFrozen('作廢退貨單')) return;
     const order = rtFilteredResults.find(o => o.id === orderId);
     if (!order) return;
 
@@ -11699,6 +11771,7 @@
 
   // 開立正式銷貨單（confirmed → issued，寫入 Supabase）
   async function issueOfficialSalesOrder(id) {
+    if (checkSalesWriteFrozen('開立正式銷貨單')) return;
     syncSalesOrdersFromPortal(); // 先同步最新狀態
     const o = mockSalesOrders.find(s => s.id === id);
     if (!o || (o.status !== 'confirmed' && o.status !== 'pending')) return;
@@ -11832,6 +11905,7 @@
   }
 
   function closeSalesOrder(id) {
+    if (checkSalesWriteFrozen('結案銷貨單（PATCH sales_orders）')) return;
     const o = mockSalesOrders.find(s => s.id === id);
     if (!o || o.status === 'closed') return;
     const finalAmt = calcOrderAmount(o);
