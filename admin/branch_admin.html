@@ -6896,8 +6896,25 @@
   function exportDemandExcel() {
     var items = getCheckedDemandItems();
     if (items.length === 0) { Swal.fire('提醒', '請先勾選要匯出的筆數', 'warning'); return; }
+    // 匯出所有欄位（排除 _uid 內部用）
+    var statusMap = { 'pending': '待回覆', 'replied': '已回覆' };
     var rows = items.map(function(inq) {
-      return { '時間': inq.createdAt, '分店': inq.storeId, '商品編號': inq.productId || '', '商品名稱': inq.productName, '數量': inq.qty || 0, '單價': inq.price || 0 };
+      return {
+        '時間': inq.createdAt || '',
+        '分店': inq.storeId || '',
+        '流水號': inq.id || '',
+        '類別': inq.category || '',
+        '商品編號': inq.productId || '',
+        '商品名稱': inq.productName || '',
+        '數量': inq.qty || 0,
+        '單價': inq.price || 0,
+        '狀態': statusMap[inq.status] || inq.status || '',
+        '是否完成': inq.completed ? '已完成' : '',
+        '需求備註': inq.message || '',
+        '回覆內容': inq.reply || '',
+        '回覆時間': inq.repliedAt || '',
+        '預計到貨': inq.newEta || ''
+      };
     });
     var ws = XLSX.utils.json_to_sheet(rows);
     var wb = XLSX.utils.book_new();
