@@ -4746,7 +4746,16 @@
       });
     }
 
+    // BUG-014 防護：re-entry guard（避免連點/並行呼叫污染共用狀態）
+    let _generatingSalesOrder = false;
+
     async function generateSalesOrder(waveId) {
+      if (_generatingSalesOrder) {
+        console.warn('[generateSalesOrder] 已有建單進行中，忽略本次點擊', { waveId });
+        return;
+      }
+      _generatingSalesOrder = true;
+      try {
       if (checkSalesWriteFrozen('暫存銷貨單（揀貨完成→自動開單）')) return;
       const wave = mockSavedWaves.find(w => w.id === waveId);
       if (!wave) return;
@@ -4803,6 +4812,8 @@
         }
 
         // 1. 按分店分組需要開單的商品 (數量 > 0)
+        // BUG-014 防護：記錄 wave 進入這段時的快照，供 branchBundles 異常時診斷
+        const waveSnapshotAtStart = JSON.parse(JSON.stringify({ id: wave.id, matrixLen: wave.matrix.length, delivery_date: wave.delivery_date, converted: wave.converted, salesOrderGenerated: wave.salesOrderGenerated, matrix: wave.matrix }));
         const branchBundles = {};
         wave.matrix.forEach(row => {
           if (row.branchData) {
@@ -4841,6 +4852,23 @@
         const dateStr = wave.delivery_date || `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-${String(now.getDate()).padStart(2,'0')}`;
         let successCount = 0;
 
+        // BUG-014 防護：branchBundles 全空代表整張 wave 沒有任何分店有數量，不應建任何單
+        if (Object.keys(branchBundles).length === 0) {
+          console.error('[BUG-014 SUSPECT] branchBundles is empty — 整張 wave 無可發數量', {
+            waveId,
+            waveMatrixLen: wave.matrix.length,
+            waveSnapshotAtStart
+          });
+          Swal.close();
+          await Swal.fire({
+            icon: 'warning',
+            title: '⚠️ 這張揀貨單沒有任何分店有數量',
+            html: `揀貨單 <b>${waveId}</b> 的 <code>branchData.actual</code> 全部為 0 或 null，<br>不產生任何銷貨單。<br><br><span style="font-size:12px;color:#718096;">若你預期應該要建單，請打開 F12 → Console，把紅字訊息截圖傳給工程師。</span>`,
+            confirmButtonText: '關閉'
+          });
+          return;
+        }
+
         // 2. 為每間分店建立銷貨單
         for (const [branch, items] of Object.entries(branchBundles)) {
           // 找尋對應的客戶 ID (名稱包含分店名)
@@ -4861,6 +4889,41 @@
             grand_total: grand_total,
             items: items
           };
+
+          // BUG-014 觀測 log：每張單送出前把關鍵欄位印出，重現時可直接對照 Console
+          const bug014LogPayload = {
+            waveId,
+            branch,
+            itemCount: (items || []).length,
+            productIds: (items || []).map(i => i.product_id),
+            subtotal,
+            grand_total,
+            custId: cust.id,
+            custName: cust.name,
+            waveMatrixLen: wave.matrix.length,
+            waveConverted: !!wave.converted,
+            waveSalesOrderGenerated: !!wave.salesOrderGenerated
+          };
+          console.log('[generateSalesOrder] ABOUT TO CALL RPC', bug014LogPayload);
+
+          // BUG-014 防護：items 空傳直接擋下，絕不呼叫 RPC 建 $0 空單
+          if (!items || items.length === 0) {
+            console.error('[BUG-014 SUSPECT] empty items detected before RPC', {
+              ...bug014LogPayload,
+              waveSnapshotAtStart,
+              branchBundlesKeys: Object.keys(branchBundles),
+              branchBundlesSizes: Object.fromEntries(Object.entries(branchBundles).map(([k, v]) => [k, (v || []).length])),
+              generatingFlag: _generatingSalesOrder
+            });
+            Swal.close();
+            await Swal.fire({
+              icon: 'error',
+              title: '⛔ 已擋下：items 空傳（BUG-014）',
+              html: `揀貨單 <b>${waveId}</b> 分店 <b>${branch}</b> 的明細是空的，<br>系統不會建這張單。<br><br><span style="font-size:12px;color:#718096;">其他分店會繼續開立。<br>請打開 F12 → Console，把紅字訊息截圖傳給工程師。</span>`,
+              confirmButtonText: '我知道了'
+            });
+            continue;
+          }
 
           if (MOCK_MODE) {
             // 寫入 mockSalesOrders，讓銷貨單管理可以看到
@@ -5045,6 +5108,9 @@
         }
       } catch (e) {
         Swal.fire('開立失敗', e.message, 'error');
+      }
+      } finally {
+        _generatingSalesOrder = false;
       }
     }
 
