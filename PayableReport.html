@@ -211,16 +211,36 @@
         const orders = await orderRes.json();
 
         let paymentsMap = {};
+        let payLoadFailed = false;
         try {
-          const payQuery = `${SB_URL}/payment_made?select=ref_id,amount`;
-          const payRes = await fetch(payQuery, { headers: HEADERS });
-          if (payRes.ok) {
+          // BUG-AUDIT-031 + 分頁 + 失敗警告（同 Receivablereport 030 修法）：
+          //   ref_id → order_id（payment_made 表沒有 ref_id 欄位，正確是 order_id）
+          //   加 while loop 分頁（預防未來筆數 >1000；現有 160 筆）
+          //   失敗時 throw → catch 印 HTTP 狀態 → Swal 警告會計
+          // 已知遺留風險：payment_made 有 2 筆 D 類異常 order_id（非 PI 開頭），
+          //   修復後仍可能算不到，待另行 SQL migration 處理。
+          let offset = 0;
+          const limit = 1000;
+          while (true) {
+            const payQuery = `${SB_URL}/payment_made?select=order_id,amount&limit=${limit}&offset=${offset}`;
+            const payRes = await fetch(payQuery, { headers: HEADERS });
+            if (!payRes.ok) {
+              throw new Error('付款紀錄讀取失敗: HTTP ' + payRes.status);
+            }
             const payments = await payRes.json();
             payments.forEach(p => {
-              if (p.ref_id) paymentsMap[p.ref_id] = (paymentsMap[p.ref_id] || 0) + Number(p.amount || 0);
+              if (p.order_id) paymentsMap[p.order_id] = (paymentsMap[p.order_id] || 0) + Number(p.amount || 0);
             });
+            if (payments.length < limit) break;
+            offset += limit;
           }
-        } catch (e) { console.warn('payment_made 查詢失敗'); }
+        } catch (e) {
+          console.error('載入付款紀錄失敗:', e);
+          payLoadFailed = true;
+        }
+        if (payLoadFailed) {
+          Swal.fire('⚠️ 警告', '無法載入付款紀錄，本次報表的已付/未付以 payment_status 欄位估算，可能不準確。請稍後重試。', 'warning');
+        }
 
         const reportData = orders.map(o => {
           const totalAmount = Number(o.grand_total || o.subtotal || 0);
@@ -404,16 +424,31 @@
         }
 
         let paymentsMap = {};
+        let payLoadFailed = false;
         try {
-          const payQuery = `${SB_URL}/payment_made?select=ref_id,amount&payment_date=gte.${startDate}&payment_date=lte.${endDate}`;
-          const payRes = await fetch(payQuery, { headers: HEADERS });
-          if (payRes.ok) {
+          // BUG-AUDIT-031（列印流程版本，含日期篩選）：同上修法，保留 payment_date 範圍
+          let offset = 0;
+          const limit = 1000;
+          while (true) {
+            const payQuery = `${SB_URL}/payment_made?select=order_id,amount&payment_date=gte.${startDate}&payment_date=lte.${endDate}&limit=${limit}&offset=${offset}`;
+            const payRes = await fetch(payQuery, { headers: HEADERS });
+            if (!payRes.ok) {
+              throw new Error('付款紀錄讀取失敗: HTTP ' + payRes.status);
+            }
             const payments = await payRes.json();
             payments.forEach(p => {
-              if (p.ref_id) paymentsMap[p.ref_id] = (paymentsMap[p.ref_id] || 0) + Number(p.amount || 0);
+              if (p.order_id) paymentsMap[p.order_id] = (paymentsMap[p.order_id] || 0) + Number(p.amount || 0);
             });
+            if (payments.length < limit) break;
+            offset += limit;
           }
-        } catch (e) { console.warn('payment_made 表查詢失敗'); }
+        } catch (e) {
+          console.error('載入付款紀錄失敗:', e);
+          payLoadFailed = true;
+        }
+        if (payLoadFailed) {
+          Swal.fire('⚠️ 警告', '無法載入付款紀錄，本次列印的已付/未付以 payment_status 欄位估算，可能不準確。請稍後重試。', 'warning');
+        }
 
         const supplierMap = {};
         orders.forEach(o => {
