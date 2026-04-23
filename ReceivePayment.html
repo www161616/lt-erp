@@ -216,11 +216,13 @@
     'Prefer': 'return=representation'
   };
 
-  // ========== 🔴 凍結收款寫入（2026-04-21 補凍，解凍時將下列 flag 改為 false） ==========
-  // 稽核發現 web_batch_receive_payments RPC 內部會 UPDATE sales_orders.payment_status
-  // 雖然用 SQL UPDATE 不是 REST PATCH，04-21 實測 0 副作用，但為保持完整凍結範圍
-  // （BUG-014/015 止血一致），暫停收款操作直到新 ERP 上線
-  const SALES_WRITE_FROZEN = true;
+  // ========== 🟢 ReceivePayment.html 已於 2026-04-23 解凍（新增防連點） ==========
+  // 歷史：2026-04-21 補凍原因是「web_batch_receive_payments RPC 內部會 UPDATE sales_orders.payment_status」
+  // 但 04-21 實測該 SQL UPDATE 0 副作用（BUG-015 的 PATCH 副作用不走 RPC）
+  // BUG-001 order_date 覆寫也已於 2026-04-23 確認修復
+  // 解凍條件：補上 submit handler 的 re-entry guard（原本完全沒防連點）
+  // 其他寫入檔（admin/branch_admin / PendingReview / SalesReturn / SearchReturns / MakePayment）仍凍結中
+  const SALES_WRITE_FROZEN = false;
   const FREEZE_REASON = '自 2026-04-21 起暫停收款操作（會間接 UPDATE sales_orders），請改用 LINE/Excel 記帳，新 ERP 上線後補進。';
   function checkSalesWriteFrozen(action = '此操作') {
     if (!SALES_WRITE_FROZEN) return false;
@@ -436,8 +438,19 @@
   }
   
   // ========== 3. 批次處理收款 (RPC) ==========
+  // BUG-AUDIT-017 防護：re-entry guard（避免連點重複收款）
+  let _processingPayment = false;
+
   document.getElementById('paymentForm').addEventListener('submit', async function(e) {
     e.preventDefault();
+    if (_processingPayment) {
+      console.warn('[paymentForm] 已有收款處理中，忽略本次提交');
+      return;
+    }
+    _processingPayment = true;
+    const submitBtn = document.getElementById('submitBtn');
+    if (submitBtn) submitBtn.disabled = true;
+    try {
     if (checkSalesWriteFrozen('確認完成收款（會呼叫 web_batch_receive_payments，間接 UPDATE sales_orders）')) return;
     const customerId = document.getElementById('customer').value;
     const amount = parseFloat(document.getElementById('amount').value);
@@ -522,6 +535,10 @@
       Swal.fire('❌ 收款處理失敗', error.message, 'error');
     } finally {
       document.getElementById('loadingOverlay').classList.add('hidden');
+    }
+    } finally {
+      _processingPayment = false;
+      if (submitBtn) submitBtn.disabled = false;
     }
   });
   
