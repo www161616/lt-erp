@@ -460,8 +460,10 @@ const HEADERS = {
   'Prefer': 'return=representation'
 };
 
-// ========== 🔴 凍結銷貨單寫入（2026-04-21 起，解凍時將下列 flag 改為 false） ==========
-const SALES_WRITE_FROZEN = true;
+// ========== 🟢 SalesOrder.html 已於 2026-04-23 解凍（BUG-001 已修 + 新增防連點） ==========
+// 其他寫入檔（admin/branch_admin / PendingReview / SalesReturn / SearchReturns / ReceivePayment）仍凍結中
+// 歷史：2026-04-21 BUG-014 事故後全面凍結
+const SALES_WRITE_FROZEN = false;
 const FREEZE_REASON = '自 2026-04-21 起暫停開立銷貨單，請改用 Google Sheets。過渡期至新 ERP 上線。';
 function checkSalesWriteFrozen(action = '此操作') {
   if (!SALES_WRITE_FROZEN) return false;
@@ -1146,7 +1148,18 @@ async function saveSpecialPrice() {
 }
 
 // ========== 8. 存檔核心 (RPC 呼叫) ==========
+// BUG-AUDIT-001 防護：re-entry guard（避免連點建重複單）
+let _savingOrder = false;
+
 async function saveOrder(autoPrint) {
+  if (_savingOrder) {
+    console.warn('[saveOrder] 已有儲存進行中，忽略本次點擊');
+    return;
+  }
+  _savingOrder = true;
+  const saveBtns = document.querySelectorAll('[onclick^="saveOrder"]');
+  saveBtns.forEach(b => { b.disabled = true; });
+  try {
   if (checkSalesWriteFrozen('開立銷貨單')) return;
   const cId = document.getElementById('customer').value;
   if(!cId) { Swal.fire({ icon: 'warning', title: '請選擇客戶' }); return; }
@@ -1217,6 +1230,10 @@ async function saveOrder(autoPrint) {
   } catch(error) {
     document.getElementById('loadingOverlay').classList.add('hidden');
     Swal.fire('儲存失敗', error.message, 'error');
+  }
+  } finally {
+    _savingOrder = false;
+    saveBtns.forEach(b => { b.disabled = false; });
   }
 }
 
