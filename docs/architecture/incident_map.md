@@ -98,13 +98,15 @@ SELECT * FROM pg_policies WHERE tablename = 'sales_orders';
 
 ---
 
-### 2.3 BUG-001 — web_save_sales_order 覆寫 order_date
+### 2.3 BUG-001 — web_save_sales_order 覆寫 order_date（✅ 已修 2026-04-23）
 
-**症狀：** 開正式銷貨單後，該筆的 `order_date` 被 RPC 設為「建單當天日期」，而非原本的 wave.delivery_date 或手動指定日期。
+**歷史症狀：** 開正式銷貨單後，該筆的 `order_date` 被 RPC 設為「建單當天日期」，而非原本的 wave.delivery_date 或手動指定日期。
 
-**機制：** docs/sql/龍潭總倉ERP_全系統SQL備份_20260228.txt:119 可見 RPC 裡有 `UPDATE sales_orders SET order_date = v_date`（v_date 不是原值）。
+**舊機制（02-28 備份版）：** `docs/sql/龍潭總倉ERP_全系統SQL備份_20260228.txt:119` 可見 RPC 裡有 `UPDATE sales_orders SET order_date = v_date`（v_date 不是原值）＋行 120 `UPDATE accounts_receivable SET order_date = v_date`。
 
-**狀態：** 🔴 RPC 原始碼有已知 bug，CLAUDE.md 早記載未修。解凍前必修（見下方 [解凍前置條件](#6-解凍前置條件-checklist)）。
+**修復確認：** 2026-04-23 用 `SELECT pg_get_functiondef('web_save_sales_order'::regproc)` 取回 Supabase 現行版，UPDATE 兩條路徑均已移除 `order_date = v_date`。權威備份存於 [`docs/sql/backups/web_save_sales_order_BUG-001_fixed_2026-04-23.sql`](../sql/backups/web_save_sales_order_BUG-001_fixed_2026-04-23.sql)。
+
+**狀態：** ✅ 已修。BUG-001 已不再是解凍阻擋條件，但 BUG-014（items 空傳）、BUG-015（PATCH 副作用）、04-20 源頭不明三條仍在。
 
 ---
 
@@ -247,7 +249,7 @@ function checkSalesWriteFrozen(action) {
 
 ### Must-have（硬性阻擋）
 
-- [ ] **修 BUG-001**：`web_save_sales_order` RPC 拿掉 `UPDATE sales_orders SET order_date = v_date`（或改為只在 INSERT 階段設定，UPDATE 階段不改）
+- [x] **修 BUG-001**（2026-04-23 確認）：Supabase 現行 RPC UPDATE 路徑已無 `order_date = v_date`（sales_orders 行 119 + accounts_receivable 行 120 都已拿掉）。權威備份補在 [`docs/sql/backups/web_save_sales_order_BUG-001_fixed_2026-04-23.sql`](../sql/backups/web_save_sales_order_BUG-001_fixed_2026-04-23.sql)。
 - [ ] **修 BUG-014**：追出 `generateSalesOrder` items 空傳的觸發條件，加 log 或改寫迴圈
 - [ ] **修 BUG-015**：查清 REST PATCH 為何會讓 payment_status 變成已付款（`pg_rules` / `pg_policies` 找隱藏觸發器），根治後才能解除 PATCH 凍結
 - [ ] **追 04-20 源頭**：問員工 / 查 Supabase logs，鎖定批次 UPDATE 的觸發點，消除或凍住該路徑
@@ -290,7 +292,7 @@ function checkSalesWriteFrozen(action) {
 ## 🔒 Golden Rules（開工前 3 秒檢查）
 
 1. **不要寫任何 `PATCH /sales_orders`**（BUG-015 副作用會讓 payment_status 被亂改）
-2. **不要呼叫 `web_save_sales_order`**（BUG-001 order_date 會被覆寫 + BUG-014 items 空傳未修）
+2. **不要呼叫 `web_save_sales_order`**（~~BUG-001 order_date 覆寫~~ 已修 2026-04-23；但 **BUG-014 items 空傳仍未修** → 這條仍禁用）
 3. **不要對 shared_kv 裡的 `portalSalesOrders` / `portalAllRequests` / `portalMutualAidBoard` 整包讀寫**
 4. **要改 sales_orders 資料，用 Supabase SQL Editor 的 SQL UPDATE**（實測 2026-04-21 14 張 subtotal 修補 0 副作用）
 5. **`branchOrders` 跨檔期殘值是店家追討中的真實訂單**，不要清（詳見 CLAUDE.md「絕對不要碰的事」）

@@ -34,29 +34,16 @@
 
 ## 🔴 嚴重 (資料遺失/損壞)
 
-### BUG-001: order_date 被覆寫 (根因已定位)
-- **狀態**: [ ] 未修
-- **嚴重度**: 🔴 嚴重 — 已損壞 149 筆，隨時再發生
-- **根因**: `web_save_sales_order` RPC 的 UPDATE 路徑會覆寫 `order_date = v_date`。branch_admin.html 所有呼叫端都把 `order_date` 設成當天日期。如果傳入的 orderData 帶有既存的 order_id（edit mode），RPC 就會把舊單的 order_date 改成今天。
-- **涉及檔案**: admin/branch_admin.html, docs/sql/lt_erp_backup.sql (RPC 定義)
-- **涉及位置** (branch_admin.html 中呼叫 web_save_sales_order 的地方):
-  - ~第 4735 行: `order_date: dateStr` (generateSalesOrder 迴圈)
-  - ~第 6274 行: `order_date: dateStr` (欠品補貨)
-  - ~第 9192 行: `order_date: dateStr` (手動建單)
-  - ~第 9526 行: `order_date: dateStr` (批次開單)
-  - ~第 11699 行: `order_date: new Date()...` (手動建單)
-  - ~第 11730 行: `order_date: today...` (批次)
-  - ~第 11945 行: `order_date: bToday...` (補貨)
-  - ~第 12614 行: `order_date: today...` (建單)
-- **修法方向**:
-  - A) RPC 端: 如果是 UPDATE (order_id 已存在)，不更新 order_date
-  - B) 前端: 確保只有新建才帶 order_date，edit mode 不傳此欄位
-  - C) 兩邊都改最安全
+### BUG-001: order_date 被覆寫（✅ Supabase 現行 RPC 已修，repo 文件已對齊 2026-04-23）
+- **狀態**: [x] 已修（Supabase 現行版本確認）
+- **嚴重度**: ~~🔴 嚴重~~ → 歷史已損壞 149 筆（已用 SQL 補回），現行 RPC 不會再產生新受害單
+- **確認方式**: 2026-04-23 跑 `SELECT pg_get_functiondef('web_save_sales_order'::regproc)` 取回 Supabase 現行版，對比 02-28 備份 → UPDATE 兩條路徑皆已移除 `order_date = v_date`（sales_orders 行 119 + accounts_receivable 行 120）。修復時間點不明（兩個月內某次修掉但沒同步回 repo）。
+- **權威備份**: [`docs/sql/backups/web_save_sales_order_BUG-001_fixed_2026-04-23.sql`](sql/backups/web_save_sales_order_BUG-001_fixed_2026-04-23.sql) — 未來若 RPC 被誤改回舊版，用此檔覆蓋回滾。
+- **歷史根因（保留紀錄）**: `web_save_sales_order` RPC 的 UPDATE 路徑會覆寫 `sales_orders.order_date = v_date` + `accounts_receivable.order_date = v_date`。branch_admin.html 所有呼叫端都把 `order_date` 設成當天日期。如果傳入的 orderData 帶有既存的 order_id（edit mode），RPC 就會把舊單的 order_date 改成今天。
+- **⚠️ 凍結仍不可解除**: BUG-001 已修，但 `web_save_sales_order` 仍受 **BUG-014**（items 空傳）和 **BUG-015**（PATCH sales_orders 副作用）影響。解凍前 BUG-014/015 必須先處理。
 - **測試項目**:
-  - [ ] 新建銷貨單 → order_date 正確
-  - [ ] 編輯銷貨單 → order_date 不被改動
-  - [ ] 用 SQL 確認 UPDATE 語句不再覆蓋 order_date
-- **風險**: 改 RPC 要注意其他呼叫端 (SalesOrder.html, PendingReview.html) 的行為是否受影響
+  - [x] 用 `pg_get_functiondef` 比對 02-28 備份確認 UPDATE 無 order_date（2026-04-23）
+  - [ ] 前端實測：編輯舊單 → order_date 不被改動（驗證 SQL 見下一段 changelog）
 
 ---
 

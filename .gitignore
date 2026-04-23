@@ -1,6 +1,8 @@
 # 參考資料（不部署到 GitHub Pages）
 docs/supabase/
-docs/sql/
+docs/sql/*
+!docs/sql/backups/
+!docs/sql/backups/**
 docs/handover/
 docs/ERP_All_Frontend.txt
 docs/lt_erp_reviewer.html
