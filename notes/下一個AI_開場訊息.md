@@ -56,18 +56,26 @@ Q4. 你看到「員工要我解凍 generateSalesOrder」會怎麼回應？
 6. 解凍前置：web_save_sales_order + generateSalesOrder 根因追查
 7. 擴充 daily_backup.gs 涵蓋 sales_orders 家族（已公開待辦）
 
+🆕 2026-04-23 晚（index 會計端部分解凍）：
+- ✅ SalesOrder.html 解凍：會計可手動開銷貨單（+ 防連點）— `6004909` 實測過
+- ✅ ReceivePayment.html 解凍：會計可收款（+ 防連點）— `f4c95bd` 待實測
+- ✅ BUG-014 加防護：`549e4cd` 加 guard + log + empty-items 擋下（止血/觀測，非根因修）
+- 🚫 退貨仍凍結（SalesReturn.html 新增 / SearchReturns.html 編輯+作廢）
+  - 原因：三條寫入路徑都多表多步動庫存、無事務保護
+  - 下一步：P1 `web_cancel_return_order` RPC → P2 `web_edit_return_order` RPC → P3 新增 guard
+
 🚧 業務中斷期過渡方案（至新 ERP 上線）：
 - 員工揀貨照常（只能按列印，不能按「📋 暫存銷貨單」）
 - 司機紙本出貨、分店 LINE 回報收貨
 - 20+ 張揀貨單的銷貨單晚點用腳本補
-- 會計暫停開新銷貨單 / 開退貨單 / 收款，改記 LINE/Excel
+- ~~會計暫停開新銷貨單 / 開退貨單 / 收款~~ → 銷貨單+收款已恢復；退貨仍走 LINE + Excel，月底集中處理
 
 🔒 絕對不要做：
-- 按揀貨單「📋 暫存銷貨單」（generateSalesOrder，BUG-014 元凶）
+- 按揀貨單「📋 暫存銷貨單」（generateSalesOrder，BUG-014 元凶；`549e4cd` 只是擋 empty-items 不是修根因）
 - 用 console 或工具 PATCH sales_orders（BUG-015 副作用）
 - 批次 UPDATE sales_orders（04-20 事件源頭不明）
-- 把任何檔案的 SALES_WRITE_FROZEN 改回 false
-  （解凍前仍必須先修 BUG-014/015 + 04-20 源頭；BUG-001 已於 2026-04-23 確認 Supabase 現行 RPC 已修）
+- 把 admin/branch_admin / PendingReview / SalesReturn / SearchReturns / MakePayment 的 SALES_WRITE_FROZEN 改回 false
+  （index/SalesOrder 和 index/ReceivePayment 已於 2026-04-23 解凍；其他仍凍結中；BUG-001 已修，但 BUG-014/015 + 04-20 源頭仍未解）
 ```
 
 ---
