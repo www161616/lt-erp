@@ -273,15 +273,36 @@
 
         // 讀取收款紀錄
         let paymentsMap = {};
+        let payLoadFailed = false;
         try {
-          const payRes = await fetch(`${SB_URL}/payment_received?select=ref_id,amount`, { headers: HEADERS, cache: 'no-store' });
-          if (payRes.ok) {
+          // BUG-AUDIT-010 + 021 + 030 fix:
+          //   030: ref_id → order_id（payment_received 表沒有 ref_id 欄位，正確是 order_id）
+          //   010: 加 while loop 分頁（預防未來筆數 >1000）
+          //   021: 失敗時不再靜默（throw 讓 catch 捕獲並在 console.error 印 HTTP 狀態 + Swal 警告會計）
+          // 已知歷史髒資料：payment_received 有 4 筆（PY00001-04）order_id 欄位存了 customer_id
+          //   值（如 C00015），無法 match sales_orders.id → 那些單的收款不會被算入。
+          //   金額合計 $6,600，列為已知風險，待另行 SQL migration 修。
+          let offset = 0;
+          const limit = 1000;
+          while (true) {
+            const payRes = await fetch(`${SB_URL}/payment_received?select=order_id,amount&limit=${limit}&offset=${offset}`, { headers: HEADERS, cache: 'no-store' });
+            if (!payRes.ok) {
+              throw new Error('收款紀錄讀取失敗: HTTP ' + payRes.status);
+            }
             const payments = await payRes.json();
             payments.forEach(p => {
-              if (p.ref_id) paymentsMap[p.ref_id] = (paymentsMap[p.ref_id] || 0) + Number(p.amount || 0);
+              if (p.order_id) paymentsMap[p.order_id] = (paymentsMap[p.order_id] || 0) + Number(p.amount || 0);
             });
+            if (payments.length < limit) break;
+            offset += limit;
           }
-        } catch (e) {}
+        } catch (e) {
+          console.error('載入收款紀錄失敗:', e);
+          payLoadFailed = true;
+        }
+        if (payLoadFailed) {
+          Swal.fire('⚠️ 警告', '無法載入收款紀錄，本次報表的已收/未收以 payment_status 欄位估算，可能不準確。請稍後重試。', 'warning');
+        }
 
         let sumTotal = 0, sumPaid = 0, sumUnpaid = 0;
 
