@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Microsoft JhengHei', 'PingFang TC', sans-serif;
+    margin: 0;
+    padding: 16px;
+    font-size: 14px;
+    background: #f5f7fa;
+    color: #2c3e50;
+  }
+  h3 { margin: 0 0 12px 0; font-size: 18px; color: #1565c0; }
+
+  .header-card {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 12px;
+    margin-bottom: 12px;
+  }
+  .order-no {
+    font-family: monospace;
+    font-size: 17px;
+    font-weight: bold;
+    color: #1565c0;
+    margin-bottom: 6px;
+  }
+  .meta {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    font-size: 13px;
+    margin-top: 6px;
+  }
+  .meta-item {
+    background: #eceff1;
+    padding: 3px 10px;
+    border-radius: 4px;
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 3px 10px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: bold;
+    margin-left: 8px;
+  }
+  .b-pending { background: #ffebee; color: #c62828; }
+  .b-agreed  { background: #fff3e0; color: #e65100; }
+
+  .detail-card {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 14px;
+    margin-bottom: 12px;
+  }
+  .detail-card h4 {
+    margin: 0 0 10px 0;
+    font-size: 15px;
+    color: #555;
+    border-bottom: 1px solid #eee;
+    padding-bottom: 6px;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: 110px 1fr;
+    gap: 10px 14px;
+    align-items: start;
+  }
+  .grid label {
+    font-weight: bold;
+    color: #555;
+    padding-top: 4px;
+  }
+  .grid .val {
+    background: #f5f7fa;
+    padding: 5px 10px;
+    border-radius: 4px;
+    min-height: 28px;
+    word-break: break-word;
+  }
+  .grid textarea {
+    padding: 6px 10px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+    font-family: inherit;
+    width: 100%;
+    box-sizing: border-box;
+    resize: vertical;
+    min-height: 60px;
+  }
+
+  .qty-emph { font-size: 16px; font-weight: bold; color: #c62828; }
+  .reason-box { white-space: pre-wrap; }
+
+  .action-explain {
+    background: #fff8e1;
+    border: 1px solid #ffe0b2;
+    border-radius: 6px;
+    padding: 10px 14px;
+    margin-bottom: 12px;
+    font-size: 12px;
+    color: #555;
+  }
+  .action-explain h4 { margin: 0 0 6px 0; font-size: 13px; color: #e65100; }
+  .action-explain ul { margin: 0; padding-left: 20px; }
+  .action-explain li { margin-bottom: 3px; }
+
+  .actions {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+    gap: 8px;
+    margin-top: 8px;
+  }
+  button {
+    padding: 12px 8px;
+    font-size: 14px;
+    border: 0;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    color: white;
+  }
+  button:disabled { background: #aaa !important; cursor: not-allowed; }
+  .btn-agree   { background: #fb8c00; }  /* 橘 — 中間狀態 */
+  .btn-agree:hover   { background: #f57c00; }
+  .btn-receive { background: #4caf50; }  /* 綠 — 終態 */
+  .btn-receive:hover { background: #43a047; }
+  .btn-reject  { background: #e53935; }  /* 紅 — 終態 */
+  .btn-reject:hover  { background: #c62828; }
+  .btn-waive   { background: #8e24aa; }  /* 紫 — 終態 */
+  .btn-waive:hover   { background: #7b1fa2; }
+
+  #status {
+    padding: 10px;
+    margin-bottom: 10px;
+    border-radius: 4px;
+    font-size: 14px;
+    text-align: center;
+    font-weight: bold;
+  }
+  .status-info    { background: #e3f2fd; color: #1565c0; }
+  .status-success { background: #e8f5e9; color: #2e7d32; }
+  .status-error   { background: #ffebee; color: #c62828; }
+</style>
+</head>
+<body>
+
+<h3>🔧 處理退貨</h3>
+
+<div id="status" style="display:none;"></div>
+
+<div class="header-card">
+  <div class="order-no" id="hdr-line"></div>
+  <div class="meta" id="hdr-meta"></div>
+</div>
+
+<div class="detail-card">
+  <h4>退貨資訊</h4>
+  <div class="grid">
+    <label>商品</label>
+    <div class="val" id="d-product"></div>
+    <label>訂購量</label>
+    <div class="val" id="d-qty"></div>
+    <label>退貨類型</label>
+    <div class="val" id="d-type"></div>
+    <label>退貨數量</label>
+    <div class="val qty-emph" id="d-rqty"></div>
+    <label>退貨原因</label>
+    <div class="val reason-box" id="d-reason"></div>
+    <label>申請時間</label>
+    <div class="val" id="d-time"></div>
+    <label>admin 回應</label>
+    <textarea id="admin-response" placeholder="（建議填寫，店家會看到。例如：已通知總部補寄 / 請寄回，地址 XXX / 此次免退）"></textarea>
+  </div>
+</div>
+
+<div class="action-explain">
+  <h4>處理動作說明</h4>
+  <ul>
+    <li><b>✅ 同意</b> — 接受退貨申請，待店家寄回實物（中間狀態，後續還要再開此 dialog 處理為「已收到」或「免退」）</li>
+    <li><b>📦 已收到</b> — 已收到店家寄回的實物，案件結案</li>
+    <li><b>❌ 拒絕</b> — 不接受退貨申請，案件結案</li>
+    <li><b>⛔ 免退</b> — 不需店家寄回（admin 主動補寄、誤報等），案件結案</li>
+  </ul>
+</div>
+
+<div class="actions">
+  <button class="btn-agree"   onclick="doProcess('同意')">✅ 同意</button>
+  <button class="btn-receive" onclick="doProcess('已收到')">📦 已收到</button>
+  <button class="btn-reject"  onclick="doProcess('拒絕')">❌ 拒絕</button>
+  <button class="btn-waive"   onclick="doProcess('免退')">⛔ 免退</button>
+</div>
+
+<script>
+  var INFO = <?!= JSON.stringify(info).replace(/</g, '\\u003c') ?>;
+
+  function setStatus(msg, type) {
+    var el = document.getElementById('status');
+    if (!msg) { el.style.display = 'none'; return; }
+    el.className = 'status-' + (type || 'info');
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+
+  function setButtonsDisabled(b) {
+    var btns = document.querySelectorAll('button');
+    for (var i = 0; i < btns.length; i++) btns[i].disabled = !!b;
+  }
+
+  function escHtml(s) {
+    if (s === null || s === undefined) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function render() {
+    var statusCls = INFO.return_status === '申請中' ? 'b-pending' : 'b-agreed';
+
+    document.getElementById('hdr-line').innerHTML =
+      escHtml(INFO.order_no) + ' / ' + escHtml(INFO.store_name) +
+      '<span class="badge ' + statusCls + '">' + escHtml(INFO.return_status) + '</span>';
+
+    document.getElementById('hdr-meta').innerHTML =
+      '<span class="meta-item">📦 訂購 ' + (INFO.qty || 0) + '</span>' +
+      '<span class="meta-item">📤 退貨 ' + escHtml(INFO.report_type) + ' ×' + (INFO.return_qty || 0) + '</span>';
+
+    document.getElementById('d-product').textContent =
+      INFO.product_id + '  ' + INFO.product_name;
+    document.getElementById('d-qty').textContent    = INFO.qty || 0;
+    document.getElementById('d-type').textContent   = INFO.report_type || '';
+    document.getElementById('d-rqty').textContent   = (INFO.return_qty || 0) + ' / ' + (INFO.qty || 0);
+    document.getElementById('d-reason').textContent = INFO.return_reason || '（店家未填寫）';
+    document.getElementById('d-time').textContent   = INFO.return_reported_at || '';
+
+    if (INFO.admin_response) {
+      document.getElementById('admin-response').value = INFO.admin_response;
+    }
+  }
+
+  function doProcess(action) {
+    var resp = (document.getElementById('admin-response').value || '').trim();
+    var msg = '確定處理為「' + action + '」嗎？\n\n'
+            + '單號：' + INFO.order_no + '\n'
+            + '店家：' + INFO.store_name + '\n'
+            + '商品：' + INFO.product_name + '\n'
+            + '退貨：' + INFO.report_type + ' ×' + INFO.return_qty + '\n'
+            + 'admin 回應：' + (resp || '（未填寫）') + '\n\n';
+    if (action === '同意') {
+      msg += '⚠️ 「同意」是中間狀態，店家寄回後仍需再處理為「已收到」/「免退」/「拒絕」';
+    } else {
+      msg += '✅ 「' + action + '」是終態，案件結案後不能再變更';
+    }
+    if (!confirm(msg)) return;
+
+    setButtonsDisabled(true);
+    setStatus('處理中...', 'info');
+
+    google.script.run
+      .withSuccessHandler(function (json) {
+        var r;
+        try { r = JSON.parse(json); } catch (e) { r = {}; }
+        if (r && r.success) {
+          setStatus('✅ 處理成功（剩餘該單未結案：' + (r.remaining_pending == null ? '?' : r.remaining_pending) + ' 筆）→ 視窗將自動關閉，請手動點「🔁 刷新退貨待辦」', 'success');
+          setTimeout(function () {
+            try { google.script.host.close(); } catch (e) { /* ignore */ }
+          }, 2500);
+        } else {
+          setStatus('❌ ' + (r && r.error ? r.error : '失敗'), 'error');
+          setButtonsDisabled(false);
+        }
+      })
+      .withFailureHandler(function (err) {
+        setStatus('❌ ' + err.message, 'error');
+        setButtonsDisabled(false);
+      })
+      .processReturnFromDialog(INFO.detail_id, action, resp);
+  }
+
+  render();
+</script>
+</body>
+</html>

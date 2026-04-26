@@ -43,6 +43,9 @@ const PICKER_EMAILS = ADMIN_EMAILS.concat([
   // 之後填撿貨員 email
 ]);
 
+// 任務 5：退貨待辦分頁名稱
+const TAB_RETURN_PENDING = '🔁 退貨待辦';
+
 const SB_URL = 'https://asugjynpocwygggttxyo.supabase.co/rest/v1';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFzdWdqeW5wb2N3eWdnZ3R0eHlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNzU3MjksImV4cCI6MjA4ODk1MTcyOX0.LzcRQAl80rZxKKD8NIYWGvylfwCbs1ek5LtKpmZodBc';
 
@@ -84,6 +87,9 @@ function onOpen() {
       .addItem('📦 建立今日撿貨表', 'createTodayPickingSheet')
       .addItem('🔎 搜尋商品（加入撿貨表）', 'showPickingSearchSidebar')
       .addItem('📦 撿貨完成 → 一鍵建單', 'createSalesOrdersFromPicking')
+      .addSeparator()
+      .addItem('🔁 刷新退貨待辦', 'refreshReturnPending')
+      .addItem('🔧 處理選定退貨（先點某筆）', 'openReturnProcessDialog')
       .addSeparator()
       .addItem('🔒 結單鎖定（指定結單日）', 'showLockDialog')
       .addItem('🔓 解除鎖定（指定結單日）', 'showUnlockDialog')
@@ -1941,4 +1947,256 @@ function _parseExpectedFromNote_(noteText) {
   if (!noteText) return 0;
   var m = String(noteText).match(/應撿\s*[:：]\s*(\d+)/);
   return m ? parseInt(m[1], 10) : 0;
+}
+
+
+// ============================================================
+// 任務 5：退貨待辦處理（admin 限定）
+// ============================================================
+
+/** 取 Script Property: ADMIN_SECRET */
+function _getAdminSecret_() {
+  var v = PropertiesService.getScriptProperties().getProperty('ADMIN_SECRET');
+  if (!v || String(v).trim().length === 0) {
+    throw new Error('Script Properties「ADMIN_SECRET」未設定（請到專案設定 → 指令碼屬性新增）');
+  }
+  return String(v).trim();
+}
+
+
+/** 通用 RPC 呼叫（throws on error） */
+function _callSimpleRpc_(funcName, body) {
+  var response = UrlFetchApp.fetch(SB_URL + '/rpc/' + funcName, {
+    method: 'post',
+    headers: {
+      'apikey': SB_KEY,
+      'Authorization': 'Bearer ' + SB_KEY,
+      'Content-Type': 'application/json'
+    },
+    payload: JSON.stringify(body),
+    muteHttpExceptions: true
+  });
+  var code = response.getResponseCode();
+  var text = response.getContentText();
+  if (code < 200 || code >= 300) {
+    var msg = text;
+    try { var j = JSON.parse(text); msg = j.message || j.hint || j.details || text; } catch (e) {}
+    throw new Error('RPC ' + funcName + ' 失敗 (HTTP ' + code + ')：' + msg);
+  }
+  try { return JSON.parse(text); } catch (e) { return text; }
+}
+
+
+/** 刷新退貨待辦分頁 */
+function refreshReturnPending() {
+  var ui = SpreadsheetApp.getUi();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  var secret;
+  try { secret = _getAdminSecret_(); }
+  catch (err) { ui.alert('❌ 設定錯誤', err.message, ui.ButtonSet.OK); return; }
+
+  var rows;
+  try {
+    rows = _callSimpleRpc_('simple_get_pending_returns', {
+      p_admin_secret: secret,
+      p_include_resolved: true
+    });
+    if (!Array.isArray(rows)) rows = [];
+  } catch (err) {
+    ui.alert('❌ 拉退貨待辦失敗', err.message, ui.ButtonSet.OK);
+    return;
+  }
+
+  _writeReturnPendingSheet_(ss, rows);
+
+  var sh = ss.getSheetByName(TAB_RETURN_PENDING);
+  if (sh) ss.setActiveSheet(sh);
+
+  var pendingCnt = 0, resolvedCnt = 0;
+  for (var i = 0; i < rows.length; i++) {
+    if (['申請中','同意'].indexOf(rows[i].return_status) >= 0) pendingCnt++;
+    else resolvedCnt++;
+  }
+
+  ui.alert('✅ 完成',
+    '已刷新「' + TAB_RETURN_PENDING + '」\n\n' +
+    '  未結案：' + pendingCnt + ' 筆（申請中 / 同意）\n' +
+    '  最近 30 天已結案：' + resolvedCnt + ' 筆\n\n' +
+    '處理方式：點某筆 → 選單「🔧 處理選定退貨」',
+    ui.ButtonSet.OK);
+}
+
+
+/** 確保退貨待辦分頁存在 */
+function _ensureReturnPendingSheet_(ss) {
+  var sh = ss.getSheetByName(TAB_RETURN_PENDING);
+  if (sh) return sh;
+
+  sh = ss.insertSheet(TAB_RETURN_PENDING);
+
+  var headers = [
+    '申請時間', '單號', '店名', '商品編號', '商品名稱',
+    '訂購量', '類型', '退貨量', '原因', '狀態',
+    '處理時間', 'admin 回應', 'detail_id'
+  ];
+
+  sh.getRange(1, 1, 1, headers.length).setValues([headers])
+    .setFontWeight('bold').setBackground('#1565c0').setFontColor('#ffffff').setFontSize(13);
+  sh.setFrozenRows(1);
+
+  sh.setColumnWidth(1, 140); // 申請時間
+  sh.setColumnWidth(2, 180); // 單號
+  sh.setColumnWidth(3, 70);  // 店名
+  sh.setColumnWidth(4, 110); // 商品編號
+  sh.setColumnWidth(5, 220); // 商品名稱
+  sh.setColumnWidth(6, 70);  // 訂購量
+  sh.setColumnWidth(7, 60);  // 類型
+  sh.setColumnWidth(8, 70);  // 退貨量
+  sh.setColumnWidth(9, 250); // 原因
+  sh.setColumnWidth(10, 80); // 狀態
+  sh.setColumnWidth(11, 140); // 處理時間
+  sh.setColumnWidth(12, 200); // admin 回應
+  sh.setColumnWidth(13, 80);  // detail_id
+
+  sh.hideColumns(13);  // 隱藏 detail_id 欄
+
+  return sh;
+}
+
+
+/** 寫退貨資料 + 依狀態著色 */
+function _writeReturnPendingSheet_(ss, rows) {
+  var sh = _ensureReturnPendingSheet_(ss);
+
+  if (sh.getLastRow() > 1) {
+    var oldRange = sh.getRange(2, 1, sh.getLastRow() - 1, 13);
+    oldRange.clearContent();
+    oldRange.setBackground(null);
+  }
+
+  if (rows.length === 0) return;
+
+  var tz = Session.getScriptTimeZone() || 'Asia/Taipei';
+  var data = [];
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    data.push([
+      r.return_reported_at ? Utilities.formatDate(new Date(r.return_reported_at), tz, 'yyyy-MM-dd HH:mm') : '',
+      r.order_no || '',
+      r.store_name || '',
+      r.product_id || '',
+      r.product_name || '',
+      r.qty || 0,
+      r.report_type || '',
+      r.return_qty || 0,
+      r.return_reason || '',
+      r.return_status || '',
+      r.return_resolved_at ? Utilities.formatDate(new Date(r.return_resolved_at), tz, 'yyyy-MM-dd HH:mm') : '',
+      r.admin_response || '',
+      r.detail_id || ''
+    ]);
+  }
+
+  sh.getRange(2, 1, data.length, 13).setValues(data).setFontSize(13);
+  // 強制單號、商品編號為文字格式
+  sh.getRange(2, 2, data.length, 1).setNumberFormat('@');
+  sh.getRange(2, 4, data.length, 1).setNumberFormat('@');
+
+  // 依狀態著色
+  for (var j = 0; j < rows.length; j++) {
+    var status = rows[j].return_status;
+    var bg = null;
+    if (status === '申請中')      bg = '#ffebee'; // 紅底（最緊急）
+    else if (status === '同意')   bg = '#fff3e0'; // 橘底（待寄回）
+    else if (status === '拒絕')   bg = '#fafafa'; // 灰底
+    else if (status === '已收到') bg = '#e8f5e9'; // 綠底
+    else if (status === '免退')   bg = '#f3e5f5'; // 紫底
+    if (bg) sh.getRange(j + 2, 1, 1, 13).setBackground(bg);
+  }
+}
+
+
+/** 開退貨處理 dialog（從 active cell 取 detail_id） */
+function openReturnProcessDialog() {
+  var ui = SpreadsheetApp.getUi();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getActiveSheet();
+
+  if (sh.getName() !== TAB_RETURN_PENDING) {
+    ui.alert('❌ 請在「' + TAB_RETURN_PENDING + '」分頁操作',
+      '請先點下方分頁切到「' + TAB_RETURN_PENDING + '」，選一筆退貨後再點「🔧 處理選定退貨」。',
+      ui.ButtonSet.OK);
+    return;
+  }
+
+  var cell = sh.getActiveCell();
+  if (!cell || cell.getRow() < 2) {
+    ui.alert('❌ 沒選任何退貨', '請先點某一行（第 2 列以後）再點「🔧 處理選定退貨」', ui.ButtonSet.OK);
+    return;
+  }
+
+  var rowNum = cell.getRow();
+  var rowData = sh.getRange(rowNum, 1, 1, 13).getValues()[0];
+
+  var detailId = rowData[12];
+  if (!detailId) {
+    ui.alert('❌ 此行無 detail_id', '請先點「🔁 刷新退貨待辦」重新載入', ui.ButtonSet.OK);
+    return;
+  }
+
+  var status = rowData[9];
+  if (['申請中', '同意'].indexOf(status) < 0) {
+    ui.alert('❌ 此筆已結案',
+      '狀態為「' + status + '」，admin 已處理完畢，無法再變更。',
+      ui.ButtonSet.OK);
+    return;
+  }
+
+  var info = {
+    detail_id:          detailId,
+    order_no:           rowData[1],
+    store_name:         rowData[2],
+    product_id:         rowData[3],
+    product_name:       rowData[4],
+    qty:                rowData[5],
+    report_type:        rowData[6],
+    return_qty:         rowData[7],
+    return_reason:      rowData[8],
+    return_status:      status,
+    return_reported_at: rowData[0],
+    admin_response:     rowData[11]
+  };
+
+  var tpl = HtmlService.createTemplateFromFile('ReturnProcessDialog');
+  tpl.info = info;
+  var html = tpl.evaluate().setWidth(900).setHeight(650);
+  ui.showModelessDialog(html, '🔧 處理退貨：' + info.order_no + ' / ' + info.product_name);
+}
+
+
+/** dialog 用：執行退貨處理 RPC */
+function processReturnFromDialog(detailId, action, adminResponse) {
+  if (!detailId) return JSON.stringify({ success: false, error: 'detail_id 為空' });
+  if (['同意','拒絕','已收到','免退'].indexOf(action) < 0) {
+    return JSON.stringify({ success: false, error: '處理動作必須是 同意/拒絕/已收到/免退' });
+  }
+
+  var secret;
+  try { secret = _getAdminSecret_(); }
+  catch (err) { return JSON.stringify({ success: false, error: err.message }); }
+
+  try {
+    var r = _callSimpleRpc_('simple_admin_process_return', {
+      p_payload: {
+        admin_secret:   secret,
+        detail_id:      detailId,
+        action:         action,
+        admin_response: adminResponse || ''
+      }
+    });
+    return JSON.stringify(r || { success: true });
+  } catch (err) {
+    return JSON.stringify({ success: false, error: err.message });
+  }
 }
