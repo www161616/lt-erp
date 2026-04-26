@@ -410,6 +410,44 @@ function confirmReceivedFromSidebar(orderNo) {
 
 
 // ============================================================
+// dialog 用：申請退貨
+// ============================================================
+function submitReturnFromSidebar(orderNo, detailId, returnQty, returnReason, reportType) {
+  if (!orderNo)  return JSON.stringify({ success: false, error: '單號為空' });
+  if (!detailId) return JSON.stringify({ success: false, error: '明細 ID 為空' });
+
+  // 後端再驗一次（前端 JS 可能被繞過）
+  const qty = parseInt(returnQty, 10);
+  if (isNaN(qty) || qty < 1) {
+    return JSON.stringify({ success: false, error: '退貨數量必須是 >= 1 的整數' });
+  }
+  if (['少','損','缺','退'].indexOf(reportType) < 0) {
+    return JSON.stringify({ success: false, error: '退貨類型必須是 少/損/缺/退 其中之一' });
+  }
+
+  const storeName = _getStoreName_();
+  const secret    = _getStoreSecret_();
+
+  try {
+    const r = _callRpc_('simple_submit_return_report', {
+      p_payload: {
+        api_secret:    secret,
+        store_name:    storeName,
+        order_no:      orderNo,
+        detail_id:     detailId,
+        return_qty:    qty,
+        return_reason: returnReason || '',
+        report_type:   reportType
+      }
+    });
+    return JSON.stringify(r || { success: true });
+  } catch (err) {
+    return JSON.stringify({ success: false, error: err.message });
+  }
+}
+
+
+// ============================================================
 // sidebar 用：撤銷收貨
 // ============================================================
 function revokeReceivedFromSidebar(orderNo) {

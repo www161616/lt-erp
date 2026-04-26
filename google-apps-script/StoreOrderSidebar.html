@@ -111,6 +111,62 @@
     margin-bottom: 8px;
     font-size: 12px;
   }
+
+  .btn-return {
+    background: #e91e63;
+    color: white;
+    padding: 4px 10px;
+    font-size: 12px;
+    border: 0;
+    border-radius: 4px;
+    cursor: pointer;
+    font-weight: bold;
+  }
+  .btn-return:hover { background: #c2185b; }
+
+  tr.return-form-row td {
+    background: #fff8e1;
+    padding: 12px;
+  }
+  .return-form-title {
+    font-weight: bold;
+    color: #e65100;
+    margin-bottom: 8px;
+  }
+  .return-form-grid {
+    display: grid;
+    grid-template-columns: 110px 1fr;
+    gap: 8px 12px;
+    align-items: center;
+  }
+  .return-form-grid label { font-weight: bold; color: #555; }
+  .return-form-grid select,
+  .return-form-grid input,
+  .return-form-grid textarea {
+    padding: 6px 8px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 13px;
+    font-family: inherit;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  .return-form-grid textarea { resize: vertical; min-height: 50px; }
+  .return-form-actions {
+    margin-top: 10px;
+    display: flex;
+    gap: 8px;
+    justify-content: flex-end;
+  }
+  .return-form-actions button {
+    flex: 0 0 auto;
+    padding: 8px 16px;
+    font-size: 13px;
+  }
+  .btn-cancel { background: #999; color: white; }
+  .btn-cancel:hover { background: #777; }
+  .btn-submit { background: #4caf50; color: white; }
+  .btn-submit:hover { background: #43a047; }
 </style>
 </head>
 <body>
@@ -126,6 +182,8 @@
 <script>
   var ORDER_NO = '<?= orderNo ?>';
   var currentOrder = null;
+  var currentItems = [];
+  var pendingSuccessMsg = '';
 
   function setStatus(msg, type) {
     var el = document.getElementById('status');
@@ -149,6 +207,10 @@
         }
         currentOrder = data.order;
         render(data);
+        if (pendingSuccessMsg) {
+          setStatus(pendingSuccessMsg, 'success');
+          pendingSuccessMsg = '';
+        }
       })
       .withFailureHandler(function (err) {
         setStatus('讀取失敗：' + err.message, 'error');
@@ -184,11 +246,16 @@
     }
     html += '</div>';
 
+    currentItems = items;
+
     if (items.length === 0) {
       html += '<div class="info-warning">⚠️ 無明細，可能單號不存在或不屬於本店</div>';
     } else {
       html += '<table>';
-      html += '<thead><tr><th>編號</th><th>商品</th><th class="r">數量</th><th class="r">單價</th><th class="r">小計</th></tr></thead>';
+      html += '<thead><tr>';
+      html += '<th>編號</th><th>商品</th><th class="r">數量</th>';
+      html += '<th class="r">單價</th><th class="r">小計</th><th class="c">動作</th>';
+      html += '</tr></thead>';
       html += '<tbody>';
       for (var i = 0; i < items.length; i++) {
         var it = items[i];
@@ -208,6 +275,41 @@
         html += '<td class="r">' + (it.qty || 0) + '</td>';
         html += '<td class="r">$' + (Number(it.unit_price) || 0).toLocaleString() + '</td>';
         html += '<td class="r">$' + (Number(it.subtotal)   || 0).toLocaleString() + '</td>';
+        html += '<td class="c">';
+        if (!hasReturn && (it.qty || 0) > 0 && (o.status === '已建單' || o.status === '有問題')) {
+          html += '<button class="btn-return" onclick="openReturnForm(' + i + ')">📤 退貨</button>';
+        } else if (hasReturn) {
+          html += '<small style="color:#c62828;">已申請</small>';
+        } else if (o.status === '已收到') {
+          html += '<small style="color:#999;">已收貨</small>';
+        } else {
+          html += '<small style="color:#999;">-</small>';
+        }
+        html += '</td>';
+        html += '</tr>';
+
+        // 退貨表單行（預設隱藏）
+        html += '<tr id="return-form-' + i + '" class="return-form-row" style="display:none;">';
+        html += '<td colspan="6">';
+        html += '<div class="return-form-title">📤 申請退貨：' + escHtml(it.product_name) + '（訂購 ' + (it.qty || 0) + '）</div>';
+        html += '<div class="return-form-grid">';
+        html += '<label>類型</label>';
+        html += '<select id="rf-type-' + i + '">';
+        html +=   '<option value="損">損 — 商品損壞</option>';
+        html +=   '<option value="少">少 — 數量不足</option>';
+        html +=   '<option value="缺">缺 — 完全沒到</option>';
+        html +=   '<option value="退">退 — 不需要</option>';
+        html += '</select>';
+        html += '<label>數量</label>';
+        html += '<input type="number" id="rf-qty-' + i + '" min="1" max="' + (it.qty || 1) + '" step="1" value="' + (it.qty || 1) + '"/>';
+        html += '<label>原因</label>';
+        html += '<textarea id="rf-reason-' + i + '" placeholder="說明退貨原因（admin 處理時會看，請盡量填寫）"></textarea>';
+        html += '</div>';
+        html += '<div class="return-form-actions">';
+        html += '<button class="btn-cancel" onclick="closeReturnForm(' + i + ')">✕ 取消</button>';
+        html += '<button class="btn-submit" onclick="doSubmitReturn(' + i + ')">✅ 送出申請</button>';
+        html += '</div>';
+        html += '</td>';
         html += '</tr>';
       }
       html += '</tbody></table>';
@@ -236,7 +338,7 @@
     google.script.run
       .withSuccessHandler(function (json) {
         var r; try { r = JSON.parse(json); } catch (e) { r = {}; }
-        if (r && r.success) { setStatus('✅ 已確認收貨', 'success'); load(); }
+        if (r && r.success) { pendingSuccessMsg = '✅ 已確認收貨'; load(); }
         else { setStatus('❌ ' + (r && r.error ? r.error : '失敗'), 'error'); setButtonsDisabled(false); }
       })
       .withFailureHandler(function (err) {
@@ -254,7 +356,7 @@
     google.script.run
       .withSuccessHandler(function (json) {
         var r; try { r = JSON.parse(json); } catch (e) { r = {}; }
-        if (r && r.success) { setStatus('✅ 已撤銷收貨', 'success'); load(); }
+        if (r && r.success) { pendingSuccessMsg = '✅ 已撤銷收貨'; load(); }
         else { setStatus('❌ ' + (r && r.error ? r.error : '失敗'), 'error'); setButtonsDisabled(false); }
       })
       .withFailureHandler(function (err) {
@@ -262,6 +364,76 @@
         setButtonsDisabled(false);
       })
       .revokeReceivedFromSidebar(currentOrder.order_no);
+  }
+
+  function openReturnForm(idx) {
+    var row = document.getElementById('return-form-' + idx);
+    if (row) {
+      row.style.display = '';
+      var qtyEl = document.getElementById('rf-qty-' + idx);
+      if (qtyEl) { qtyEl.focus(); qtyEl.select(); }
+    }
+  }
+
+  function closeReturnForm(idx) {
+    var row = document.getElementById('return-form-' + idx);
+    if (row) row.style.display = 'none';
+  }
+
+  function doSubmitReturn(idx) {
+    var it = currentItems[idx];
+    if (!it) return;
+
+    var typeEl   = document.getElementById('rf-type-' + idx);
+    var qtyEl    = document.getElementById('rf-qty-' + idx);
+    var reasonEl = document.getElementById('rf-reason-' + idx);
+    if (!typeEl || !qtyEl || !reasonEl) return;
+
+    var reportType = typeEl.value;
+    var returnQty  = parseInt(qtyEl.value, 10);
+    var reason     = (reasonEl.value || '').trim();
+
+    // 前端驗證
+    if (['少','損','缺','退'].indexOf(reportType) < 0) {
+      alert('請選擇退貨類型'); return;
+    }
+    if (isNaN(returnQty) || returnQty < 1) {
+      alert('退貨數量必須是 >= 1 的整數'); qtyEl.focus(); return;
+    }
+    var maxQty = it.qty || 0;
+    if (returnQty > maxQty) {
+      alert('退貨數量不能超過訂購量（' + maxQty + '）'); qtyEl.focus(); return;
+    }
+    if (returnQty !== Number(qtyEl.value) || qtyEl.value.indexOf('.') >= 0) {
+      alert('退貨數量必須是整數'); qtyEl.focus(); return;
+    }
+
+    var msg = '確定要申請退貨嗎？\n\n'
+            + '商品：' + it.product_name + '\n'
+            + '類型：' + reportType + '\n'
+            + '數量：' + returnQty + ' / ' + maxQty + '\n'
+            + '原因：' + (reason || '（未填寫）') + '\n\n'
+            + '⚠️ 申請送出後無法撤回，須由 admin 處理（同意 / 拒絕 / 已收到 / 免退）';
+    if (!confirm(msg)) return;
+
+    setButtonsDisabled(true);
+    setStatus('退貨申請傳送中...', 'info');
+    google.script.run
+      .withSuccessHandler(function (json) {
+        var r; try { r = JSON.parse(json); } catch (e) { r = {}; }
+        if (r && r.success) {
+          pendingSuccessMsg = '✅ 退貨申請已送出，等待 admin 處理';
+          load(); // reload 整個 dialog，會看到該筆變成「已申請」狀態
+        } else {
+          setStatus('❌ ' + (r && r.error ? r.error : '申請失敗'), 'error');
+          setButtonsDisabled(false);
+        }
+      })
+      .withFailureHandler(function (err) {
+        setStatus('❌ ' + err.message, 'error');
+        setButtonsDisabled(false);
+      })
+      .submitReturnFromSidebar(currentOrder.order_no, it.detail_id, returnQty, reason, reportType);
   }
 
   function setButtonsDisabled(b) {
