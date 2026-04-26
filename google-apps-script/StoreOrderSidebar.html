@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Microsoft JhengHei', 'PingFang TC', sans-serif;
+    margin: 0;
+    padding: 14px;
+    font-size: 14px;
+    background: #f5f7fa;
+    color: #2c3e50;
+  }
+  h3 { margin: 0 0 12px 0; font-size: 16px; color: #1565c0; }
+
+  .header-card {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 10px 12px;
+    margin-bottom: 10px;
+  }
+  .order-no {
+    font-family: monospace;
+    font-size: 16px;
+    font-weight: bold;
+    color: #1565c0;
+    margin-bottom: 6px;
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 6px;
+  }
+  .meta {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+    font-size: 13px;
+    margin-top: 6px;
+  }
+  .meta-item {
+    background: #eceff1;
+    padding: 3px 8px;
+    border-radius: 4px;
+  }
+
+  .badge {
+    display: inline-block;
+    padding: 3px 8px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: bold;
+  }
+  .b-pending  { background: #fff3e0; color: #e65100; }
+  .b-issued   { background: #e3f2fd; color: #1565c0; }
+  .b-received { background: #e8f5e9; color: #2e7d32; }
+  .b-issue    { background: #ffebee; color: #c62828; }
+
+  table {
+    width: 100%;
+    border-collapse: collapse;
+    background: white;
+    margin-bottom: 10px;
+    font-size: 13px;
+  }
+  th, td { border: 1px solid #ddd; padding: 5px 6px; text-align: left; }
+  th { background: #f5f5f5; }
+  td.r { text-align: right; }
+  td.c { text-align: center; }
+
+  tr.return-row { background: #fff3e0; }
+
+  .actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 10px;
+  }
+  button {
+    padding: 10px 16px;
+    font-size: 14px;
+    border: 0;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    flex: 1;
+  }
+  .btn-confirm { background: #4caf50; color: white; }
+  .btn-confirm:hover { background: #43a047; }
+  .btn-revoke  { background: #ff9800; color: white; }
+  .btn-revoke:hover  { background: #f57c00; }
+  button:disabled { background: #aaa !important; cursor: not-allowed; }
+
+  #status {
+    padding: 8px;
+    margin-bottom: 8px;
+    border-radius: 4px;
+    font-size: 13px;
+    text-align: center;
+  }
+  .status-info    { background: #e3f2fd; color: #1565c0; }
+  .status-success { background: #e8f5e9; color: #2e7d32; }
+  .status-error   { background: #ffebee; color: #c62828; }
+  .loading        { text-align: center; color: #1976d2; padding: 30px; }
+
+  .info-warning {
+    background: #fff3e0;
+    color: #e65100;
+    padding: 8px 10px;
+    border-radius: 4px;
+    margin-bottom: 8px;
+    font-size: 12px;
+  }
+</style>
+</head>
+<body>
+
+<h3>📦 單號明細</h3>
+
+<div id="status" style="display:none;"></div>
+
+<div id="content">
+  <div class="loading">⏳ 載入中...</div>
+</div>
+
+<script>
+  var ORDER_NO = '<?= orderNo ?>';
+  var currentOrder = null;
+
+  function setStatus(msg, type) {
+    var el = document.getElementById('status');
+    if (!msg) { el.style.display = 'none'; return; }
+    el.className = 'status-' + (type || 'info');
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+
+  function load() {
+    setStatus('', '');
+    document.getElementById('content').innerHTML = '<div class="loading">⏳ 載入中...</div>';
+    google.script.run
+      .withSuccessHandler(function (json) {
+        var data;
+        try { data = JSON.parse(json); } catch (e) { data = { error: '回傳格式錯誤' }; }
+        if (data.error) {
+          setStatus(data.error, 'error');
+          document.getElementById('content').innerHTML = '<div class="loading">❌ 無法載入</div>';
+          return;
+        }
+        currentOrder = data.order;
+        render(data);
+      })
+      .withFailureHandler(function (err) {
+        setStatus('讀取失敗：' + err.message, 'error');
+        document.getElementById('content').innerHTML = '<div class="loading">❌ 無法載入</div>';
+      })
+      .getOrderDetailsForSidebar(ORDER_NO);
+  }
+
+  function render(data) {
+    var o = data.order || {};
+    var items = data.items || [];
+    var html = '';
+
+    var statusCls = 'b-issued';
+    if (o.status === '待處理') statusCls = 'b-pending';
+    else if (o.status === '已收到') statusCls = 'b-received';
+    else if (o.status === '有問題') statusCls = 'b-issue';
+
+    html += '<div class="header-card">';
+    html += '<div class="order-no">' + escHtml(o.order_no);
+    html += '<span class="badge ' + statusCls + '">' + escHtml(o.status || '?') + '</span>';
+    html += '</div>';
+    html += '<div class="meta">';
+    if (o.order_date)    html += '<span class="meta-item">📅 訂單：' + escHtml(o.order_date) + '</span>';
+    if (o.delivery_date) html += '<span class="meta-item">🚚 出貨：' + escHtml(o.delivery_date) + '</span>';
+    html += '<span class="meta-item">📦 ' + (o.total_qty || 0) + ' 件</span>';
+    html += '<span class="meta-item">💰 $' + (Number(o.total_amount) || 0).toLocaleString() + '</span>';
+    if (o.has_return)    html += '<span class="meta-item" style="background:#ffcdd2;color:#c62828;">⚠️ 退貨：' + escHtml(o.return_status) + '</span>';
+    if (o.received_at)   html += '<span class="meta-item">✅ 收貨：' + escHtml(formatTs(o.received_at)) + '</span>';
+    html += '</div>';
+    if (o._outOfRange) {
+      html += '<div class="info-warning" style="margin-top:8px;">⚠️ 此單超過最近 30 天範圍，主表資訊不完整（明細仍可正常顯示）</div>';
+    }
+    html += '</div>';
+
+    if (items.length === 0) {
+      html += '<div class="info-warning">⚠️ 無明細，可能單號不存在或不屬於本店</div>';
+    } else {
+      html += '<table>';
+      html += '<thead><tr><th>編號</th><th>商品</th><th class="r">數量</th><th class="r">單價</th><th class="r">小計</th></tr></thead>';
+      html += '<tbody>';
+      for (var i = 0; i < items.length; i++) {
+        var it = items[i];
+        var hasReturn = it.return_status && it.return_status !== '無';
+        html += '<tr' + (hasReturn ? ' class="return-row"' : '') + '>';
+        html += '<td style="font-family:monospace;font-size:12px;">' + escHtml(it.product_id) + '</td>';
+        html += '<td>' + escHtml(it.product_name);
+        if (hasReturn) {
+          html += '<br/><small style="color:#c62828;">↳ '
+               + escHtml(it.report_type || '') + ' x' + (it.return_qty || 0)
+               + '（' + escHtml(it.return_status) + '）</small>';
+          if (it.admin_response) {
+            html += '<br/><small style="color:#555;">admin：' + escHtml(it.admin_response) + '</small>';
+          }
+        }
+        html += '</td>';
+        html += '<td class="r">' + (it.qty || 0) + '</td>';
+        html += '<td class="r">$' + (Number(it.unit_price) || 0).toLocaleString() + '</td>';
+        html += '<td class="r">$' + (Number(it.subtotal)   || 0).toLocaleString() + '</td>';
+        html += '</tr>';
+      }
+      html += '</tbody></table>';
+    }
+
+    html += '<div class="actions">';
+    if (o.status === '已建單') {
+      html += '<button class="btn-confirm" onclick="doConfirm()">✅ 確認收貨</button>';
+    } else if (o.status === '已收到') {
+      html += '<button class="btn-revoke" onclick="doRevoke()">↩️ 撤銷收貨</button>';
+    } else if (o.status === '有問題') {
+      html += '<div class="info-warning" style="flex:1;margin-bottom:0;">退貨處理中，需先處理完退貨才能確認收貨</div>';
+    } else if (o.status === '待處理') {
+      html += '<div class="info-warning" style="flex:1;margin-bottom:0;">尚未建單完成，請等撿貨員處理</div>';
+    }
+    html += '</div>';
+
+    document.getElementById('content').innerHTML = html;
+  }
+
+  function doConfirm() {
+    if (!currentOrder) return;
+    if (!confirm('確定要標記「' + currentOrder.order_no + '」已收到貨品嗎？')) return;
+    setButtonsDisabled(true);
+    setStatus('傳送中...', 'info');
+    google.script.run
+      .withSuccessHandler(function (json) {
+        var r; try { r = JSON.parse(json); } catch (e) { r = {}; }
+        if (r && r.success) { setStatus('✅ 已確認收貨', 'success'); load(); }
+        else { setStatus('❌ ' + (r && r.error ? r.error : '失敗'), 'error'); setButtonsDisabled(false); }
+      })
+      .withFailureHandler(function (err) {
+        setStatus('❌ ' + err.message, 'error');
+        setButtonsDisabled(false);
+      })
+      .confirmReceivedFromSidebar(currentOrder.order_no);
+  }
+
+  function doRevoke() {
+    if (!currentOrder) return;
+    if (!confirm('確定要撤銷「' + currentOrder.order_no + '」的收貨確認嗎？')) return;
+    setButtonsDisabled(true);
+    setStatus('傳送中...', 'info');
+    google.script.run
+      .withSuccessHandler(function (json) {
+        var r; try { r = JSON.parse(json); } catch (e) { r = {}; }
+        if (r && r.success) { setStatus('✅ 已撤銷收貨', 'success'); load(); }
+        else { setStatus('❌ ' + (r && r.error ? r.error : '失敗'), 'error'); setButtonsDisabled(false); }
+      })
+      .withFailureHandler(function (err) {
+        setStatus('❌ ' + err.message, 'error');
+        setButtonsDisabled(false);
+      })
+      .revokeReceivedFromSidebar(currentOrder.order_no);
+  }
+
+  function setButtonsDisabled(b) {
+    var btns = document.querySelectorAll('button');
+    for (var i = 0; i < btns.length; i++) btns[i].disabled = !!b;
+  }
+
+  function escHtml(s) {
+    if (s === null || s === undefined) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  function formatTs(ts) {
+    try {
+      var d = new Date(ts);
+      var pad = function (n) { return n < 10 ? '0' + n : n; };
+      return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate())
+           + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+    } catch (e) { return ts; }
+  }
+
+  load();
+</script>
+</body>
+</html>
