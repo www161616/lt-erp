@@ -1,0 +1,335 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<style>
+  * { box-sizing: border-box; }
+  body {
+    font-family: 'Microsoft JhengHei', 'PingFang TC', sans-serif;
+    margin: 0;
+    padding: 12px;
+    font-size: 14px;
+    background: #f5f7fa;
+    color: #2c3e50;
+  }
+  h3 {
+    margin: 0 0 12px 0;
+    font-size: 16px;
+    color: #1976d2;
+  }
+  .search-box {
+    display: flex;
+    gap: 6px;
+    margin-bottom: 10px;
+  }
+  #keyword {
+    flex: 1;
+    padding: 8px 10px;
+    font-size: 14px;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    outline: none;
+  }
+  #keyword:focus { border-color: #1976d2; }
+  button {
+    padding: 8px 14px;
+    font-size: 14px;
+    border: 0;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+  }
+  .btn-primary {
+    background: #1976d2;
+    color: white;
+  }
+  .btn-primary:hover { background: #1565c0; }
+  .btn-primary:disabled { background: #aaa; cursor: not-allowed; }
+  .btn-add {
+    background: #4caf50;
+    color: white;
+    width: 100%;
+    padding: 10px;
+    margin-top: 8px;
+    font-size: 15px;
+  }
+  .btn-add:hover { background: #43a047; }
+  .btn-add:disabled { background: #aaa; cursor: not-allowed; }
+
+  .toolbar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    font-size: 12px;
+    color: #555;
+  }
+  .toolbar a {
+    color: #1976d2;
+    cursor: pointer;
+    text-decoration: underline;
+  }
+
+  #status {
+    padding: 6px;
+    margin-bottom: 8px;
+    border-radius: 4px;
+    font-size: 13px;
+    text-align: center;
+  }
+  .status-info { background: #e3f2fd; color: #1565c0; }
+  .status-success { background: #e8f5e9; color: #2e7d32; }
+  .status-error { background: #ffebee; color: #c62828; }
+
+  #results {
+    max-height: calc(100vh - 240px);
+    overflow-y: auto;
+  }
+  .card {
+    background: white;
+    border: 1px solid #e0e0e0;
+    border-radius: 6px;
+    padding: 8px 10px;
+    margin-bottom: 6px;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .card:hover {
+    border-color: #1976d2;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  }
+  .card.checked {
+    background: #e3f2fd;
+    border-color: #1976d2;
+  }
+  .card-row {
+    display: flex;
+    align-items: flex-start;
+    gap: 8px;
+  }
+  .card input[type=checkbox] {
+    margin-top: 3px;
+    cursor: pointer;
+    transform: scale(1.2);
+  }
+  .card-body { flex: 1; min-width: 0; }
+  .card-pid {
+    font-family: monospace;
+    font-size: 13px;
+    color: #1976d2;
+    font-weight: bold;
+  }
+  .card-name {
+    font-size: 13px;
+    margin: 3px 0;
+    line-height: 1.3;
+    word-break: break-all;
+  }
+  .card-meta {
+    font-size: 11px;
+    color: #777;
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .card-meta span {
+    background: #f0f0f0;
+    padding: 1px 6px;
+    border-radius: 3px;
+  }
+  .card-meta .end-date { background: #ffebee; color: #c62828; }
+  .card-meta .total-qty { background: #fff3e0; color: #e65100; }
+
+  .empty {
+    text-align: center;
+    color: #999;
+    padding: 30px 10px;
+    font-size: 13px;
+  }
+  .loading {
+    text-align: center;
+    color: #1976d2;
+    padding: 20px;
+  }
+</style>
+</head>
+<body>
+  <h3>🔎 搜尋商品 → 加入撿貨表</h3>
+
+  <div class="search-box">
+    <input
+      type="text"
+      id="keyword"
+      placeholder="輸入商品編號或名稱..."
+      onkeydown="if(event.key==='Enter') doSearch();"
+    />
+    <button class="btn-primary" id="btnSearch" onclick="doSearch()">搜尋</button>
+  </div>
+
+  <div class="toolbar">
+    <span id="result-count"></span>
+    <span>
+      <a onclick="selectAll()">全選</a> |
+      <a onclick="deselectAll()">全不選</a>
+    </span>
+  </div>
+
+  <div id="status" class="status-info" style="display:none;"></div>
+
+  <div id="results">
+    <div class="empty">輸入商品編號或名稱開始搜尋</div>
+  </div>
+
+  <button class="btn-add" id="btnAdd" onclick="doAdd()" disabled>
+    ➕ 加入勾選的商品到撿貨表 (<span id="checked-count">0</span>)
+  </button>
+
+<script>
+  var allResults = [];
+  var checkedSet = {};
+
+  function setStatus(msg, type) {
+    var el = document.getElementById('status');
+    if (!msg) {
+      el.style.display = 'none';
+      return;
+    }
+    el.className = 'status-' + (type || 'info');
+    el.textContent = msg;
+    el.style.display = 'block';
+  }
+
+  function doSearch() {
+    var kw = document.getElementById('keyword').value.trim();
+    if (!kw) {
+      setStatus('請輸入關鍵字', 'error');
+      return;
+    }
+
+    document.getElementById('btnSearch').disabled = true;
+    setStatus('搜尋中...', 'info');
+    document.getElementById('results').innerHTML = '<div class="loading">⏳ 跨月份分頁搜尋中...</div>';
+
+    google.script.run
+      .withSuccessHandler(function(json) {
+        document.getElementById('btnSearch').disabled = false;
+        var arr;
+        try { arr = JSON.parse(json); } catch(e) { arr = []; }
+        allResults = arr;
+        checkedSet = {};
+        renderResults();
+
+        if (arr.length === 0) {
+          setStatus('找不到符合的商品', 'error');
+        } else {
+          setStatus('找到 ' + arr.length + ' 筆，請勾選要加入的', 'success');
+        }
+      })
+      .withFailureHandler(function(err) {
+        document.getElementById('btnSearch').disabled = false;
+        setStatus('搜尋失敗：' + err.message, 'error');
+        document.getElementById('results').innerHTML = '<div class="empty">搜尋失敗</div>';
+      })
+      .searchProductsAcrossMonths(kw);
+  }
+
+  function renderResults() {
+    var html = '';
+    document.getElementById('result-count').textContent =
+      allResults.length > 0 ? '共 ' + allResults.length + ' 筆' : '';
+
+    if (allResults.length === 0) {
+      html = '<div class="empty">沒有結果</div>';
+    } else {
+      for (var i = 0; i < allResults.length; i++) {
+        var r = allResults[i];
+        var key = i;
+        var checked = checkedSet[key] ? 'checked' : '';
+        var cls = checkedSet[key] ? 'card checked' : 'card';
+        html += '<div class="' + cls + '" onclick="toggleCheck(' + key + ', event)">';
+        html += '<div class="card-row">';
+        html += '<input type="checkbox" ' + checked + ' onclick="event.stopPropagation();toggleCheck(' + key + ',event)"/>';
+        html += '<div class="card-body">';
+        html += '<div class="card-pid">' + escapeHtml(r.pid) + '</div>';
+        html += '<div class="card-name">' + escapeHtml(r.name) + '</div>';
+        html += '<div class="card-meta">';
+        if (r.endDate) html += '<span class="end-date">📅 ' + escapeHtml(r.endDate) + '</span>';
+        html += '<span>📂 ' + escapeHtml(r.monthSheet) + '</span>';
+        if (r.totalQty > 0) html += '<span class="total-qty">📦 ' + r.totalQty + ' 件</span>';
+        html += '</div>';
+        html += '</div>';
+        html += '</div>';
+        html += '</div>';
+      }
+    }
+    document.getElementById('results').innerHTML = html;
+    updateAddButton();
+  }
+
+  function toggleCheck(idx, evt) {
+    if (evt) evt.stopPropagation();
+    if (checkedSet[idx]) delete checkedSet[idx];
+    else checkedSet[idx] = true;
+    renderResults();
+  }
+
+  function selectAll() {
+    for (var i = 0; i < allResults.length; i++) checkedSet[i] = true;
+    renderResults();
+  }
+
+  function deselectAll() {
+    checkedSet = {};
+    renderResults();
+  }
+
+  function updateAddButton() {
+    var n = Object.keys(checkedSet).length;
+    document.getElementById('checked-count').textContent = n;
+    document.getElementById('btnAdd').disabled = (n === 0);
+  }
+
+  function doAdd() {
+    var picks = [];
+    for (var k in checkedSet) {
+      if (checkedSet.hasOwnProperty(k)) picks.push(allResults[parseInt(k)]);
+    }
+    if (picks.length === 0) return;
+
+    document.getElementById('btnAdd').disabled = true;
+    setStatus('加入中...', 'info');
+
+    google.script.run
+      .withSuccessHandler(function(json) {
+        var res;
+        try { res = JSON.parse(json); } catch(e) { res = { added: 0, message: '回傳格式錯誤' }; }
+        if (res.added > 0) {
+          setStatus('✅ 已加入 ' + res.added + ' 筆商品', 'success');
+          checkedSet = {};
+          renderResults();
+        } else {
+          setStatus('❌ ' + (res.message || '加入失敗'), 'error');
+          document.getElementById('btnAdd').disabled = false;
+        }
+      })
+      .withFailureHandler(function(err) {
+        setStatus('加入失敗：' + err.message, 'error');
+        document.getElementById('btnAdd').disabled = false;
+      })
+      .addPickedProductsToPickingSheet(JSON.stringify(picks));
+  }
+
+  function escapeHtml(s) {
+    if (s === null || s === undefined) return '';
+    return String(s)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
+  }
+
+  // 進入時 focus 搜尋框
+  document.getElementById('keyword').focus();
+</script>
+</body>
+</html>

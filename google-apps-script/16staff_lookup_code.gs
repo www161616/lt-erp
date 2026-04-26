@@ -81,6 +81,8 @@ function onOpen() {
       .addItem('📦 從 ERP 匯入商品（指定結單日）', 'importProductsFromERP')
       .addItem('🎯 只同步全民（不動其他店）', 'syncQuanminOnly')
       .addSeparator()
+      .addItem('📦 建立今日撿貨表', 'createTodayPickingSheet')
+      .addItem('🔎 搜尋商品（加入撿貨表）', 'showPickingSearchSidebar')
       .addItem('📦 撿貨完成 → 一鍵建單', 'createSalesOrdersFromPicking')
       .addSeparator()
       .addItem('🔒 結單鎖定（指定結單日）', 'showLockDialog')
@@ -91,6 +93,8 @@ function onOpen() {
       .addToUi();
   } else if (isPicker) {
     SpreadsheetApp.getUi().createMenu('🛠️ 撿貨工具')
+      .addItem('📦 建立今日撿貨表', 'createTodayPickingSheet')
+      .addItem('🔎 搜尋商品（加入撿貨表）', 'showPickingSearchSidebar')
       .addItem('📦 撿貨完成 → 一鍵建單', 'createSalesOrdersFromPicking')
       .addSeparator()
       .addItem('📥 樂樂報表匯入', 'showCsvDialog')
@@ -867,6 +871,10 @@ function addProducts(products) {
 
 function normalizeDate_(dateStr) {
   if (!dateStr) return '';
+  // 支援 Sheet 的 Date 物件（getValues 對日期欄會回 Date）
+  if (dateStr instanceof Date) {
+    return (dateStr.getMonth() + 1) + '/' + dateStr.getDate();
+  }
   dateStr = String(dateStr).trim();
   var m = dateStr.match(/(\d{4})-(\d{1,2})-(\d{1,2})/);
   if (m) return parseInt(m[2]) + '/' + parseInt(m[3]);
@@ -1280,7 +1288,14 @@ function createSalesOrdersFromPicking() {
   // ===== Step 4：寫成立表 =====
   _writeResultSheet_(resultSheetName, results, pickerEmail, deliveryDate);
 
-  // ===== Step 5：摘要彈窗 =====
+  // ===== Step 5：產生今日撿貨差額表（比對應撿 vs 實撿） =====
+  var diffRows = _computeDiff_(items);
+  var diffSheetName = '今日撿貨差額表-' + orderDate;
+  if (diffRows.length > 0) {
+    _writeDiffSheet_(orderDate, diffRows);
+  }
+
+  // ===== Step 6：摘要彈窗 =====
   var okCount = 0, dupCount = 0, failCount = 0, totalAmount = 0;
   var failDetails = [];
   for (var r = 0; r < results.length; r++) {
@@ -1296,12 +1311,21 @@ function createSalesOrdersFromPicking() {
     }
   }
 
+  // 差額統計
+  var diffSummary = _summarizeDiff_(diffRows);
+
   var msg = '✅ 一鍵建單完成\n\n';
   msg += '建單成功：' + okCount + ' 張\n';
   msg += '已建過跳過：' + dupCount + ' 店\n';
   msg += '失敗：' + failCount + ' 店\n';
   msg += '總金額：$' + totalAmount.toLocaleString() + '\n\n';
   msg += '結果：' + resultSheetName + '\n';
+  if (diffRows.length > 0) {
+    msg += '差額表：' + diffSheetName + '\n';
+    msg += '  ✅ 持平：' + diffSummary.equal + ' 筆\n';
+    msg += '  🔴 少給：' + diffSummary.shortage + ' 筆\n';
+    msg += '  🟡 多給：' + diffSummary.surplus + ' 筆\n';
+  }
   if (failDetails.length > 0) {
     msg += '\n失敗明細：\n' + failDetails.join('\n');
   }
@@ -1310,42 +1334,100 @@ function createSalesOrdersFromPicking() {
 
 
 /**
+ * 比對應撿 vs 實撿，產生差額列表
+ * @return Array<{ pid, pname, store, expected, actual, diff }>
+ */
+function _computeDiff_(items) {
+  var diffRows = [];
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i];
+    // 收集所有「應撿或實撿」有值的店
+    var allStores = {};
+    for (var s in it.expectedByStore) allStores[s] = true;
+    for (var s2 in it.qtyByStore) allStores[s2] = true;
+
+    for (var store in allStores) {
+      var expected = it.expectedByStore[store] || 0;
+      var actual   = it.qtyByStore[store] || 0;
+      if (expected === 0 && actual === 0) continue; // 都 0 跳過
+      diffRows.push({
+        pid:      it.productId,
+        pname:    it.productName,
+        store:    store,
+        expected: expected,
+        actual:   actual,
+        diff:     actual - expected
+      });
+    }
+  }
+  return diffRows;
+}
+
+
+/** 差額統計（持平 / 少給 / 多給） */
+function _summarizeDiff_(diffRows) {
+  var s = { equal: 0, shortage: 0, surplus: 0 };
+  for (var i = 0; i < diffRows.length; i++) {
+    var d = diffRows[i].diff;
+    if (d === 0) s.equal++;
+    else if (d < 0) s.shortage++;
+    else s.surplus++;
+  }
+  return s;
+}
+
+
+/**
  * 讀撿貨表內容
- * @return Array<{ productId, productName, endDate, qtyByStore: {店名:數量, ...} }>
+ * cell value = 實撿（撿貨員填的最終值）
+ * cell note '應撿:N' = 應撿（加商品時帶入的訂購量）
+ * @return Array<{ productId, productName, endDate, qtyByStore (實撿), expectedByStore (應撿) }>
  */
 function _readPickingSheet_(sheet) {
   var lastRow = sheet.getLastRow();
   if (lastRow < 2) return [];
 
   var totalCols = COL.FIRST_STORE - 1 + STORES.length;
-  var data = sheet.getRange(2, 1, lastRow - 1, totalCols).getValues();
+  var range = sheet.getRange(2, 1, lastRow - 1, totalCols);
+  var data = range.getValues();
+  var notes = range.getNotes();
 
   var items = [];
   for (var i = 0; i < data.length; i++) {
     var row = data[i];
+    var noteRow = notes[i];
     var productId = String(row[COL.PRODUCT_ID - 1] || '').trim();
     if (!productId) continue;
 
     var productName = String(row[COL.PRODUCT_NAME - 1] || '').trim();
     var endDate = String(row[COL.END_DATE - 1] || '').trim();
 
-    var qtyByStore = {};
+    var qtyByStore = {};       // 實撿
+    var expectedByStore = {};  // 應撿
     var hasAnyQty = false;
+
     for (var s = 0; s < STORES.length; s++) {
       var colIdx = COL.FIRST_STORE - 1 + s;
       var qty = parseInt(row[colIdx]);
+      var expected = _parseExpectedFromNote_(noteRow[colIdx]);
+
       if (!isNaN(qty) && qty > 0) {
         qtyByStore[STORES[s]] = qty;
         hasAnyQty = true;
       }
+      if (expected > 0) {
+        expectedByStore[STORES[s]] = expected;
+      }
     }
-    if (!hasAnyQty) continue;
+
+    if (!hasAnyQty && Object.keys(expectedByStore).length === 0) continue;
 
     items.push({
-      productId:   productId,
-      productName: productName,
-      endDate:     endDate,
-      qtyByStore:  qtyByStore
+      productId:       productId,
+      productName:     productName,
+      endDate:         endDate,
+      qtyByStore:      qtyByStore,
+      expectedByStore: expectedByStore
     });
   }
   return items;
@@ -1512,4 +1594,351 @@ function _addOneDay_(dateStr) {
   if (mo.length < 2) mo = '0' + mo;
   if (da.length < 2) da = '0' + da;
   return y + '-' + mo + '-' + da;
+}
+
+
+// ==================== 📦 任務 2.5：建撿貨表 + 跨月搜尋 + 差額表 ====================
+// workflow：
+//   1. 撿貨員按「📦 建立今日撿貨表」→ 建空白撿貨表-YYYY-MM-DD（23 欄）
+//   2. 按「🔎 搜尋商品」→ 右側 sidebar
+//   3. 跨月份分頁搜尋 → 卡片清單 → 勾選 → 批次加入
+//   4. 各店欄位寫入「應撿（訂購量）」+ setNote 存應撿備份
+//   5. 列印 → 撿完回來 → 直接覆寫各店為實撿
+//   6. 一鍵建單 → 自動產生「今日撿貨差額表」
+
+
+/**
+ * Step 1：建立今日撿貨表（空白）
+ * 分頁名稱：撿貨表-YYYY-MM-DD（預設 today，admin/picker 可改）
+ */
+function createTodayPickingSheet() {
+  var ui = SpreadsheetApp.getUi();
+  var tz = Session.getScriptTimeZone() || 'Asia/Taipei';
+  var todayStr = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+
+  var resp = ui.prompt(
+    '📦 建立今日撿貨表',
+    '請輸入撿貨日期（格式 YYYY-MM-DD）\n預設今天：' + todayStr,
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (resp.getSelectedButton() !== ui.Button.OK) return;
+
+  var input = resp.getResponseText().trim() || todayStr;
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(input)) {
+    ui.alert('❌ 日期格式不對，請用 YYYY-MM-DD（例如 ' + todayStr + '）');
+    return;
+  }
+
+  var sheetName = '撿貨表-' + input;
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var existing = ss.getSheetByName(sheetName);
+  if (existing) {
+    var goRes = ui.alert(
+      '撿貨表已存在',
+      '「' + sheetName + '」已經存在。\n要切到那個分頁繼續加商品嗎？',
+      ui.ButtonSet.YES_NO
+    );
+    if (goRes === ui.Button.YES) ss.setActiveSheet(existing);
+    return;
+  }
+
+  // 新建空白撿貨表
+  var sheet = ss.insertSheet(sheetName);
+  _formatPickingSheetHeader_(sheet);
+  ss.setActiveSheet(sheet);
+
+  ui.alert(
+    '✅ 撿貨表建立完成\n\n' +
+    '分頁：' + sheetName + '\n\n' +
+    '下一步：點選單「🔎 搜尋商品（加入撿貨表）」打開右側面板，' +
+    '搜尋今天到貨的商品並加入。'
+  );
+}
+
+
+/**
+ * 撿貨表表頭格式（23 欄：A 狀態 / B 結單日 / C 編號 / D 名稱 / E 合計 / F~W 18 家店）
+ */
+function _formatPickingSheetHeader_(sheet) {
+  var headers = ['狀態', '結單日', '商品編號', '商品名稱', '合計'].concat(STORES);
+  var totalCols = headers.length; // 5 + 18 = 23
+
+  sheet.getRange(1, 1, 1, totalCols).setValues([headers]);
+
+  var headerRange = sheet.getRange(1, 1, 1, totalCols);
+  headerRange.setFontWeight('bold');
+  headerRange.setFontSize(14);
+  headerRange.setFontColor(COLORS.WHITE);
+  headerRange.setHorizontalAlignment('center');
+  headerRange.setVerticalAlignment('middle');
+
+  // 顏色（跟月份分頁一致）
+  sheet.getRange(1, COL.STATUS).setBackground(COLORS.GREEN);
+  sheet.getRange(1, COL.END_DATE).setBackground(COLORS.RED);
+  sheet.getRange(1, COL.PRODUCT_ID).setBackground(COLORS.GREEN);
+  sheet.getRange(1, COL.PRODUCT_NAME).setBackground(COLORS.GREEN);
+  sheet.getRange(1, COL.TOTAL_QTY).setBackground(COLORS.ORANGE);
+  sheet.getRange(1, COL.FIRST_STORE, 1, STORES.length).setBackground(COLORS.BLUE);
+
+  // 凍結
+  sheet.setFrozenRows(1);
+  sheet.setFrozenColumns(4);
+
+  // 欄寬
+  sheet.setColumnWidth(COL.STATUS, 55);
+  sheet.setColumnWidth(COL.END_DATE, 70);
+  sheet.setColumnWidth(COL.PRODUCT_ID, 105);
+  sheet.setColumnWidth(COL.PRODUCT_NAME, 280);
+  sheet.setColumnWidth(COL.TOTAL_QTY, 65);
+  for (var i = 0; i < STORES.length; i++) {
+    sheet.setColumnWidth(COL.FIRST_STORE + i, 60);
+  }
+
+  // 套用內建篩選器（給商品搜尋用）
+  sheet.getRange(1, 1, 1, totalCols).createFilter();
+}
+
+
+/**
+ * Step 2：開啟右側 sidebar（搜尋商品 + 卡片勾選 + 批次加入）
+ * 必須在「撿貨表-YYYY-MM-DD」分頁執行
+ */
+function showPickingSearchSidebar() {
+  var ui = SpreadsheetApp.getUi();
+  var sheet = SpreadsheetApp.getActiveSheet();
+  if (!/^撿貨表-\d{4}-\d{2}-\d{2}$/.test(sheet.getName())) {
+    ui.alert('⚠️ 請先切到「撿貨表-YYYY-MM-DD」分頁再開啟搜尋');
+    return;
+  }
+  var html = HtmlService.createHtmlOutputFromFile('PickingSearchSidebar')
+    .setTitle('🔎 搜尋商品 → 加入撿貨表')
+    .setWidth(380);
+  SpreadsheetApp.getUi().showSidebar(html);
+}
+
+
+/**
+ * 跨月份分頁搜尋商品（給 sidebar 呼叫）
+ * @param {string} keyword 搜尋關鍵字（編號 OR 名稱）
+ * @return {string} JSON：[{ pid, name, endDate, monthSheet, qtyByStore: {...}, totalQty }]
+ */
+function searchProductsAcrossMonths(keyword) {
+  if (!keyword) return JSON.stringify([]);
+  var kw = String(keyword).trim().toLowerCase();
+  if (!kw) return JSON.stringify([]);
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheets = ss.getSheets();
+  var results = [];
+
+  for (var i = 0; i < sheets.length; i++) {
+    var sh = sheets[i];
+    var name = sh.getName();
+    if (!/^\d{4}-\d{2}$/.test(name)) continue; // 只掃月份分頁
+
+    var lastRow = sh.getLastRow();
+    if (lastRow < 2) continue;
+    var totalCols = COL.FIRST_STORE - 1 + STORES.length;
+    var data = sh.getRange(2, 1, lastRow - 1, totalCols).getValues();
+
+    for (var r = 0; r < data.length; r++) {
+      var row = data[r];
+      var pid = String(row[COL.PRODUCT_ID - 1] || '').trim();
+      if (!pid) continue;
+      var pname = String(row[COL.PRODUCT_NAME - 1] || '').trim();
+
+      // 比對關鍵字
+      if (pid.toLowerCase().indexOf(kw) === -1 &&
+          pname.toLowerCase().indexOf(kw) === -1) continue;
+
+      // 結單日：用 normalizeDate_ 處理 Date 物件 / YYYY-MM-DD / M/D 都會變成 'M/D'
+      var endDate = normalizeDate_(row[COL.END_DATE - 1]);
+      var qtyByStore = {};
+      var totalQty = 0;
+      for (var s = 0; s < STORES.length; s++) {
+        var qty = parseInt(row[COL.FIRST_STORE - 1 + s]);
+        if (!isNaN(qty) && qty > 0) {
+          qtyByStore[STORES[s]] = qty;
+          totalQty += qty;
+        }
+      }
+
+      // 跳過沒有任何訂購量的商品（避免員工誤勾空商品）
+      if (totalQty <= 0) continue;
+
+      results.push({
+        pid: pid,
+        name: pname,
+        endDate: endDate,
+        monthSheet: name,
+        qtyByStore: qtyByStore,
+        totalQty: totalQty
+      });
+    }
+  }
+
+  // 按結單日新到舊排序（同月份分頁內按列順序）
+  results.sort(function(a, b) {
+    return parseSortDate_(b.endDate) - parseSortDate_(a.endDate);
+  });
+
+  return JSON.stringify(results);
+}
+
+
+/**
+ * Step 3：批次加入勾選的商品到撿貨表
+ * @param {string} itemsJson JSON：[{ pid, name, endDate, qtyByStore }]
+ * @return {string} JSON：{ added, skipped, message }
+ */
+function addPickedProductsToPickingSheet(itemsJson) {
+  var sheet = SpreadsheetApp.getActiveSheet();
+  if (!/^撿貨表-\d{4}-\d{2}-\d{2}$/.test(sheet.getName())) {
+    return JSON.stringify({ added: 0, skipped: 0, message: '請切到撿貨表分頁' });
+  }
+
+  var items;
+  try {
+    items = JSON.parse(itemsJson);
+  } catch (e) {
+    return JSON.stringify({ added: 0, skipped: 0, message: 'JSON 格式錯誤' });
+  }
+  if (!items || items.length === 0) {
+    return JSON.stringify({ added: 0, skipped: 0, message: '沒有勾選任何商品' });
+  }
+
+  var totalCols = 5 + STORES.length;
+  var startRow = sheet.getLastRow() + 1;
+  if (startRow < 2) startRow = 2;
+
+  var rows = [];
+  var notes = [];
+  var formulas = [];
+  var added = 0;
+
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i];
+    if (!it.pid || !it.name) continue;
+
+    var rowNum = startRow + rows.length;
+    var rowData = [
+      '🟢開',                       // A 狀態
+      it.endDate || '',             // B 結單日
+      it.pid,                       // C 編號
+      it.name,                      // D 名稱
+      ''                            // E 合計（之後設公式）
+    ];
+    var rowNotes = ['', '', '', '', ''];
+
+    for (var s = 0; s < STORES.length; s++) {
+      var storeQty = (it.qtyByStore && it.qtyByStore[STORES[s]]) || 0;
+      if (storeQty > 0) {
+        rowData.push(storeQty);              // 應撿（撿貨員之後可覆寫為實撿）
+        rowNotes.push('應撿:' + storeQty);   // setNote 存原值
+      } else {
+        rowData.push('');
+        rowNotes.push('');
+      }
+    }
+
+    rows.push(rowData);
+    notes.push(rowNotes);
+
+    // E 合計公式：SUM(F:W)
+    var firstStore = columnToLetter_(COL.FIRST_STORE);
+    var lastStore = columnToLetter_(COL.FIRST_STORE + STORES.length - 1);
+    formulas.push(['=SUM(' + firstStore + rowNum + ':' + lastStore + rowNum + ')']);
+    added++;
+  }
+
+  if (rows.length === 0) {
+    return JSON.stringify({ added: 0, skipped: items.length, message: '沒有有效資料' });
+  }
+
+  // 結單日欄強制 text 格式（避免 Google Sheet 把 '4/19' 自動轉成日期）
+  sheet.getRange(startRow, COL.END_DATE, rows.length, 1).setNumberFormat('@');
+  // 商品編號欄也強制 text（避免 360420123 被當成數字、可能科學記號）
+  sheet.getRange(startRow, COL.PRODUCT_ID, rows.length, 1).setNumberFormat('@');
+
+  // 一次寫入
+  sheet.getRange(startRow, 1, rows.length, totalCols).setValues(rows);
+  sheet.getRange(startRow, 1, rows.length, totalCols).setNotes(notes);
+  sheet.getRange(startRow, COL.TOTAL_QTY, formulas.length, 1).setFormulas(formulas);
+
+  // 格式
+  var dataRange = sheet.getRange(startRow, 1, rows.length, totalCols);
+  dataRange.setFontSize(14);
+  dataRange.setHorizontalAlignment('center');
+  sheet.getRange(startRow, COL.PRODUCT_NAME, rows.length, 1).setHorizontalAlignment('left');
+  sheet.getRange(startRow, COL.TOTAL_QTY, rows.length, 1 + STORES.length).setNumberFormat('#,##0');
+
+  return JSON.stringify({
+    added: added,
+    skipped: 0,
+    message: '已加入 ' + added + ' 筆商品到撿貨表'
+  });
+}
+
+
+/**
+ * Step 5：寫今日撿貨差額表（一鍵建單成功後自動呼叫）
+ * @param {string} pickingDate 撿貨日 YYYY-MM-DD（從 wave_id 取）
+ * @param {Array} diffRows [{ pid, pname, store, expected, actual, diff }]
+ */
+function _writeDiffSheet_(pickingDate, diffRows) {
+  if (!diffRows || diffRows.length === 0) return;
+
+  var sheetName = '今日撿貨差額表-' + pickingDate;
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheet = ss.getSheetByName(sheetName);
+  if (!sheet) {
+    sheet = ss.insertSheet(sheetName);
+    var headers = ['商品編號', '商品名稱', '店名', '應撿', '實撿', '差額', '狀態'];
+    sheet.getRange(1, 1, 1, headers.length).setValues([headers]);
+    var headerRange = sheet.getRange(1, 1, 1, headers.length);
+    headerRange.setFontWeight('bold');
+    headerRange.setFontSize(14);
+    headerRange.setFontColor(COLORS.WHITE);
+    headerRange.setBackground(COLORS.GREEN);
+    headerRange.setHorizontalAlignment('center');
+    sheet.setFrozenRows(1);
+    sheet.setColumnWidth(1, 110);
+    sheet.setColumnWidth(2, 280);
+    sheet.setColumnWidth(3, 80);
+    sheet.setColumnWidth(4, 70);
+    sheet.setColumnWidth(5, 70);
+    sheet.setColumnWidth(6, 70);
+    sheet.setColumnWidth(7, 100);
+  }
+
+  // 重跑保護：每次重寫前先清掉舊資料（保留表頭）
+  var oldLastRow = sheet.getLastRow();
+  if (oldLastRow > 1) {
+    sheet.getRange(2, 1, oldLastRow - 1, sheet.getLastColumn()).clearContent();
+  }
+
+  var rows = [];
+  for (var i = 0; i < diffRows.length; i++) {
+    var d = diffRows[i];
+    var status = d.diff === 0 ? '✅ 持平' :
+                 d.diff < 0 ? '🔴 少給 ' + (-d.diff) + ' 件' :
+                 '🟡 多給 ' + d.diff + ' 件';
+    rows.push([d.pid, d.pname, d.store, d.expected, d.actual, d.diff, status]);
+  }
+
+  if (rows.length === 0) return;
+
+  sheet.getRange(2, 1, rows.length, 7).setValues(rows);
+  var dataRange = sheet.getRange(2, 1, rows.length, 7);
+  dataRange.setFontSize(14);
+  dataRange.setHorizontalAlignment('center');
+  sheet.getRange(2, 2, rows.length, 1).setHorizontalAlignment('left');
+}
+
+
+/** 從 cell note 解析應撿值（'應撿:N' → N）*/
+function _parseExpectedFromNote_(noteText) {
+  if (!noteText) return 0;
+  var m = String(noteText).match(/應撿\s*[:：]\s*(\d+)/);
+  return m ? parseInt(m[1], 10) : 0;
 }
