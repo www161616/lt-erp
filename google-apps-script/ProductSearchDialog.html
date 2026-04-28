@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html>
+<head>
+<base target="_top">
+<style>
+  body { font-family: 'Microsoft JhengHei', sans-serif; font-size: 13px; margin: 0; padding: 14px; color: #333; }
+  h2 { margin: 0 0 8px; font-size: 16px; color: #1565c0; }
+  .desc { color: #666; font-size: 12px; margin-bottom: 12px; }
+  .search-bar { display: flex; gap: 8px; align-items: center; margin-bottom: 12px; }
+  .search-bar input[type=text] {
+    flex: 1; padding: 6px 10px; font-size: 14px;
+    border: 1px solid #ccc; border-radius: 4px;
+  }
+  .search-bar input[type=text]:focus { outline: none; border-color: #1976d2; }
+  .search-bar button {
+    padding: 6px 14px; font-size: 13px; cursor: pointer;
+    background: #1565c0; color: white; border: 0; border-radius: 4px; font-weight: bold;
+  }
+  .search-bar button:hover { background: #0d47a1; }
+  .search-bar label { font-size: 12px; color: #555; }
+
+  .status-bar {
+    padding: 8px 12px; border-radius: 4px; font-size: 12px; margin-bottom: 12px;
+  }
+  .status-info    { background: #e3f2fd; color: #1565c0; }
+  .status-success { background: #e8f5e9; color: #2e7d32; }
+  .status-error   { background: #ffebee; color: #c62828; }
+
+  .results {
+    max-height: 360px; overflow-y: auto;
+    border: 1px solid #ddd; border-radius: 4px;
+    margin-bottom: 12px;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  th { background: #f5f7fa; padding: 6px 8px; text-align: left; font-weight: bold; color: #555; position: sticky; top: 0; }
+  td { padding: 5px 8px; border-bottom: 1px solid #eee; }
+  tr.in-sheet { background: #f0f0f0; color: #999; }
+  tr.in-sheet td { font-style: italic; }
+  tr.inactive { background: #fff3e0; }
+  td.r { text-align: right; }
+  td.c { text-align: center; }
+  .badge {
+    display: inline-block; padding: 1px 6px; border-radius: 3px; font-size: 11px;
+  }
+  .b-active { background: #e8f5e9; color: #2e7d32; }
+  .b-inactive { background: #ffe0b2; color: #e65100; }
+  .b-insheet { background: #e0e0e0; color: #555; }
+
+  .actions {
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .actions button {
+    padding: 8px 16px; font-size: 13px; cursor: pointer;
+    border: 0; border-radius: 4px; font-weight: bold;
+  }
+  .btn-primary { background: #1565c0; color: white; }
+  .btn-primary:hover { background: #0d47a1; }
+  .btn-primary:disabled { background: #aaa; cursor: not-allowed; }
+  .btn-secondary { background: #eceff1; color: #455a64; }
+  .btn-secondary:hover { background: #cfd8dc; }
+</style>
+</head>
+<body>
+  <h2>🔍 從 products 搜尋商品並補入「商品管理」分頁</h2>
+  <p class="desc">輸入編號或名稱（部分匹配即可）。已在商品管理分頁的編號會灰底，無法勾選。</p>
+
+  <div class="search-bar">
+    <input type="text" id="kw" placeholder="輸入編號或名稱關鍵字..." autofocus>
+    <label><input type="checkbox" id="inactive"> 含已停用</label>
+    <button id="btn-search" type="button">🔍 搜尋</button>
+  </div>
+
+  <div id="status" class="status-bar status-info" style="display:none;"></div>
+
+  <div class="results">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:90px;">編號</th>
+          <th>名稱</th>
+          <th class="r" style="width:60px;">售價</th>
+          <th class="r" style="width:60px;">成本</th>
+          <th class="r" style="width:60px;">分店價</th>
+          <th class="c" style="width:50px;">單位</th>
+          <th style="width:90px;">廠商</th>
+          <th class="c" style="width:60px;">狀態</th>
+          <th class="c" style="width:50px;">勾選</th>
+        </tr>
+      </thead>
+      <tbody id="tbody">
+        <tr><td colspan="9" style="text-align:center; color:#999; padding:24px;">輸入關鍵字後按「🔍 搜尋」</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="actions">
+    <span id="select-count" style="color:#666;">已選：0</span>
+    <span>
+      <button class="btn-secondary" id="btn-cancel" type="button">✕ 取消</button>
+      <button class="btn-primary" id="btn-add" type="button" disabled>➕ 補入勾選</button>
+    </span>
+  </div>
+
+<script>
+  var lastRows = [];
+
+  function setStatus(msg, type) {
+    var el = document.getElementById('status');
+    if (!msg) { el.style.display = 'none'; return; }
+    el.className = 'status-bar status-' + (type || 'info');
+    el.textContent = msg;
+    el.style.display = '';
+  }
+
+  function escHtml(s) {
+    if (s === null || s === undefined) return '';
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+  }
+
+  function fmtNum(n) {
+    var v = Number(n) || 0;
+    return v.toLocaleString();
+  }
+
+  function render(rows) {
+    var tbody = document.getElementById('tbody');
+    if (!rows || rows.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="9" style="text-align:center; color:#999; padding:24px;">沒有符合的商品</td></tr>';
+      updateAddBtn();
+      return;
+    }
+    var html = '';
+    for (var i = 0; i < rows.length; i++) {
+      var r = rows[i];
+      var inSheet = !!r._inSheet;
+      var inactive = (r.status !== '啟用');
+      var rowCls = inSheet ? 'in-sheet' : (inactive ? 'inactive' : '');
+
+      var statusBadge = '';
+      if (inSheet) {
+        statusBadge = '<span class="badge b-insheet">已在 Sheet</span>';
+      } else if (r.status === '啟用') {
+        statusBadge = '<span class="badge b-active">啟用</span>';
+      } else {
+        statusBadge = '<span class="badge b-inactive">' + escHtml(r.status || '停用') + '</span>';
+      }
+
+      html += '<tr class="' + rowCls + '">';
+      html += '<td>' + escHtml(r.id) + '</td>';
+      html += '<td>' + escHtml(r.name) + '</td>';
+      html += '<td class="r">' + fmtNum(r.price) + '</td>';
+      html += '<td class="r">' + fmtNum(r.cost) + '</td>';
+      html += '<td class="r">' + fmtNum(r.price_branch) + '</td>';
+      html += '<td class="c">' + escHtml(r.unit || '') + '</td>';
+      html += '<td>' + escHtml(r.supplier || '') + '</td>';
+      html += '<td class="c">' + statusBadge + '</td>';
+      html += '<td class="c">';
+      if (inSheet) {
+        html += '<input type="checkbox" disabled title="已在商品管理分頁">';
+      } else {
+        html += '<input type="checkbox" class="row-check" data-idx="' + i + '">';
+      }
+      html += '</td>';
+      html += '</tr>';
+    }
+    tbody.innerHTML = html;
+
+    var checks = tbody.querySelectorAll('.row-check');
+    for (var j = 0; j < checks.length; j++) {
+      checks[j].addEventListener('change', updateAddBtn);
+    }
+    updateAddBtn();
+  }
+
+  function updateAddBtn() {
+    var checks = document.querySelectorAll('.row-check:checked');
+    var n = checks.length;
+    document.getElementById('select-count').textContent = '已選：' + n;
+    var btn = document.getElementById('btn-add');
+    btn.disabled = (n === 0);
+    btn.textContent = n > 0 ? ('➕ 補入勾選的（' + n + '）') : '➕ 補入勾選';
+  }
+
+  function doSearch() {
+    var kw = document.getElementById('kw').value.trim();
+    var includeInactive = document.getElementById('inactive').checked;
+    if (!kw) {
+      setStatus('請輸入關鍵字', 'error');
+      return;
+    }
+    setStatus('搜尋中...', 'info');
+    document.getElementById('btn-search').disabled = true;
+    google.script.run
+      .withSuccessHandler(function(res) {
+        document.getElementById('btn-search').disabled = false;
+        if (res && res.error) {
+          setStatus('❌ ' + res.error, 'error');
+          return;
+        }
+        var rows = (res && res.rows) || [];
+        lastRows = rows;
+        if (rows.length === 0) {
+          setStatus('共 0 筆', 'info');
+        } else if (rows.length >= 50) {
+          setStatus('共 ' + rows.length + ' 筆（已達上限 50，請輸入更精確的關鍵字）', 'info');
+        } else {
+          setStatus('共 ' + rows.length + ' 筆', 'success');
+        }
+        render(rows);
+      })
+      .withFailureHandler(function(err) {
+        document.getElementById('btn-search').disabled = false;
+        setStatus('❌ 搜尋失敗：' + (err.message || err), 'error');
+      })
+      .pmSearchProducts(kw, includeInactive);
+  }
+
+  function doAdd() {
+    var checks = document.querySelectorAll('.row-check:checked');
+    if (checks.length === 0) return;
+    var items = [];
+    for (var i = 0; i < checks.length; i++) {
+      var idx = parseInt(checks[i].dataset.idx);
+      if (!isNaN(idx) && lastRows[idx]) items.push(lastRows[idx]);
+    }
+    setStatus('補入中...', 'info');
+    document.getElementById('btn-add').disabled = true;
+    google.script.run
+      .withSuccessHandler(function(res) {
+        if (res && res.error) {
+          setStatus('❌ ' + res.error, 'error');
+          document.getElementById('btn-add').disabled = false;
+          return;
+        }
+        var msg = '✅ 已補入 ' + (res.added || 0) + ' 筆';
+        if (res.skipped) msg += '，跳過 ' + res.skipped + ' 筆已存在';
+        setStatus(msg, 'success');
+        // 1.5 秒後關閉 dialog
+        setTimeout(function() { google.script.host.close(); }, 1500);
+      })
+      .withFailureHandler(function(err) {
+        document.getElementById('btn-add').disabled = false;
+        setStatus('❌ 補入失敗：' + (err.message || err), 'error');
+      })
+      .pmAddSearchedToSheet(items);
+  }
+
+  document.getElementById('btn-search').addEventListener('click', doSearch);
+  document.getElementById('btn-add').addEventListener('click', doAdd);
+  document.getElementById('btn-cancel').addEventListener('click', function() {
+    google.script.host.close();
+  });
+  document.getElementById('kw').addEventListener('keydown', function(e) {
+    if (e.key === 'Enter') { e.preventDefault(); doSearch(); }
+  });
+</script>
+</body>
+</html>
