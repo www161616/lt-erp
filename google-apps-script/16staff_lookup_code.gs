@@ -46,6 +46,9 @@ const PICKER_EMAILS = ADMIN_EMAILS.concat([
 // 任務 5：退貨待辦分頁名稱
 const TAB_RETURN_PENDING = '🔁 退貨待辦';
 
+// 任務 4.1：暫存銷貨單分頁名稱
+const TAB_DRAFT_PENDING = '📝 暫存銷貨單';
+
 const SB_URL = 'https://asugjynpocwygggttxyo.supabase.co/rest/v1';
 const SB_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFzdWdqeW5wb2N3eWdnZ3R0eHlvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzMzNzU3MjksImV4cCI6MjA4ODk1MTcyOX0.LzcRQAl80rZxKKD8NIYWGvylfwCbs1ek5LtKpmZodBc';
 
@@ -71,39 +74,65 @@ const COLORS = {
 // ==================== 📋 選單 ====================
 
 function onOpen() {
-  var email = Session.getActiveUser().getEmail().toLowerCase();
-  var isAdmin = ADMIN_EMAILS.some(function(e) { return e.toLowerCase() === email; });
-  var isPicker = PICKER_EMAILS.some(function(e) { return e.toLowerCase() === email; });
+  // ⚠️ onOpen 是「簡單觸發器」，對非擁有者的個人 Gmail 取不到 email（Google 隱私限制）
+  // 員工（ant702212/ysc810512）會踩到這個雷 → email='' → 走 else 分支只看到「訂貨工具」
+  // 修法：取不到 email 時，預設顯示完整 admin 選單（員工 OR 真正擁有者都該看到全部）
+  // 實際權限由 Sheet 共用編輯權限控制（沒被 share 的人連 sheet 都打不開）
+  var email = '';
+  try { email = Session.getActiveUser().getEmail().toLowerCase(); } catch (e) {}
+
+  var isAdmin = email && ADMIN_EMAILS.some(function(e) { return e.toLowerCase() === email; });
+  var isPicker = email && PICKER_EMAILS.some(function(e) { return e.toLowerCase() === email; });
+
+  // email 取不到 → 當 admin 處理（員工 fallback）
+  if (!email) isAdmin = true;
 
   if (isAdmin) {
     SpreadsheetApp.getUi().createMenu('🛠️ 開團管理')
-      .addItem('📥 樂樂報表匯入（選店家）', 'showCsvDialog')
-      .addSeparator()
+      .addItem('── 開團前準備 ──', 'noopMenuLabel_')
       .addItem('📋 建立本月分頁', 'createCurrentMonthTab')
       .addItem('📋 建立指定月份分頁', 'createCustomMonthTab')
       .addItem('📦 從 ERP 匯入商品（指定結單日）', 'importProductsFromERP')
       .addItem('🎯 只同步全民（不動其他店）', 'syncQuanminOnly')
       .addSeparator()
-      .addItem('📦 建立今日撿貨表', 'createTodayPickingSheet')
-      .addItem('🔎 搜尋商品（加入撿貨表）', 'showPickingSearchSidebar')
-      .addItem('📦 撿貨完成 → 一鍵建單', 'createSalesOrdersFromPicking')
+      .addItem('── 撿貨員每日流程（依序執行）──', 'noopMenuLabel_')
+      .addItem('① 📦 建立今日撿貨表', 'createTodayPickingSheet')
+      .addItem('② 🔎 搜尋商品（加入撿貨表）', 'showPickingSearchSidebar')
+      .addItem('③ 📦 撿貨完成 → 一鍵建單（轉暫存）', 'createSalesOrdersFromPicking')
+      .addItem('④ 📝 刷新暫存銷貨單', 'refreshDraftOrders')
+      .addItem('⑤ 🔧 編輯選定暫存單（先點某筆，可省略）', 'openDraftEditDialog')
+      .addItem('⑥ ✅ 一鍵確認所有暫存單（轉正式）', 'finalizeAllDrafts')
       .addSeparator()
+      .addItem('── 補開銷貨單（手動，直接正式）──', 'noopMenuLabel_')
+      .addItem('📦 補開銷貨單（單店、多商品）', 'showManualSalesOrderDialog')
+      .addSeparator()
+      .addItem('── 退貨處理 ──', 'noopMenuLabel_')
       .addItem('🔁 刷新退貨待辦', 'refreshReturnPending')
       .addItem('🔧 處理選定退貨（先點某筆）', 'openReturnProcessDialog')
       .addSeparator()
+      .addItem('── 其他工具 ──', 'noopMenuLabel_')
+      .addItem('📥 樂樂報表匯入（選店家）', 'showCsvDialog')
       .addItem('🔒 結單鎖定（指定結單日）', 'showLockDialog')
       .addItem('🔓 解除鎖定（指定結單日）', 'showUnlockDialog')
-      .addSeparator()
       .addItem('🛡️ 設定欄位保護', 'setupColumnProtection')
+      .addItem('📦 封存舊分頁（隱藏 N 天前）', 'archiveOldDailySheets')
       .addItem('📂 從 JSON 檔匯入（不需網路）', 'showJsonImportDialog')
       .addToUi();
   } else if (isPicker) {
     SpreadsheetApp.getUi().createMenu('🛠️ 撿貨工具')
-      .addItem('📦 建立今日撿貨表', 'createTodayPickingSheet')
-      .addItem('🔎 搜尋商品（加入撿貨表）', 'showPickingSearchSidebar')
-      .addItem('📦 撿貨完成 → 一鍵建單', 'createSalesOrdersFromPicking')
+      .addItem('── 每日流程（請依①~⑥順序執行）──', 'noopMenuLabel_')
+      .addItem('① 📦 建立今日撿貨表', 'createTodayPickingSheet')
+      .addItem('② 🔎 搜尋商品（加入撿貨表）', 'showPickingSearchSidebar')
+      .addItem('③ 📦 撿貨完成 → 一鍵建單（轉暫存）', 'createSalesOrdersFromPicking')
+      .addItem('④ 📝 刷新暫存銷貨單（自己的）', 'refreshDraftOrders')
+      .addItem('⑤ 🔧 編輯選定暫存單（先點某筆，可省略）', 'openDraftEditDialog')
+      .addItem('⑥ ✅ 一鍵確認所有暫存單（轉正式 → 店家可收貨）', 'finalizeAllDrafts')
       .addSeparator()
-      .addItem('📥 樂樂報表匯入', 'showCsvDialog')
+      .addItem('── 補開銷貨單（手動，直接正式）──', 'noopMenuLabel_')
+      .addItem('📦 補開銷貨單（單店、多商品）', 'showManualSalesOrderDialog')
+      .addSeparator()
+      .addItem('── 補充工具 ──', 'noopMenuLabel_')
+      .addItem('📥 樂樂報表匯入（店家用 LINE 傳時才用）', 'showCsvDialog')
       .addToUi();
   } else {
     // 非 admin（含 email 讀不到的情況）都只顯示樂樂匯入
@@ -111,6 +140,16 @@ function onOpen() {
       .addItem('📥 樂樂報表匯入', 'showCsvDialog')
       .addToUi();
   }
+}
+
+
+// 選單小標題的 no-op callback（誤點時跳輕量提示）
+function noopMenuLabel_() {
+  SpreadsheetApp.getUi().alert(
+    'ℹ️ 這只是分組標題',
+    '這列「── XXX ──」只是分組標題，不是功能按鈕。\n\n請點上下方有 ① ② ③ 編號或圖示的項目來執行操作。',
+    SpreadsheetApp.getUi().ButtonSet.OK
+  );
 }
 
 
@@ -1964,6 +2003,16 @@ function _getAdminSecret_() {
 }
 
 
+/** 取 Script Property: PICKER_SECRET（任務 7B 補開銷貨單也需要） */
+function _getPickerSecret_() {
+  var v = PropertiesService.getScriptProperties().getProperty('PICKER_SECRET');
+  if (!v || String(v).trim().length === 0) {
+    throw new Error('Script Properties「PICKER_SECRET」未設定（請到專案設定 → 指令碼屬性新增）');
+  }
+  return String(v).trim();
+}
+
+
 /** 通用 RPC 呼叫（throws on error） */
 function _callSimpleRpc_(funcName, body) {
   var response = UrlFetchApp.fetch(SB_URL + '/rpc/' + funcName, {
@@ -2199,4 +2248,612 @@ function processReturnFromDialog(detailId, action, adminResponse) {
   } catch (err) {
     return JSON.stringify({ success: false, error: err.message });
   }
+}
+
+
+// ============================================================
+// 任務 4.1：暫存銷貨單流程（admin / picker 都可用）
+// ============================================================
+// 權限分流：
+//   - admin：看全部暫存單（不傳 picker_email）
+//   - picker：只看自己建的暫存單（傳 picker_email = Session.getActiveUser().getEmail()）
+//   兩者共用 ADMIN_SECRET（在 Script Properties），靠 Apps Script 端做 UI 限制
+// ============================================================
+
+/** 判斷目前 user 是否 admin */
+function _isCurrentUserAdmin_() {
+  var email = (Session.getActiveUser().getEmail() || '').toLowerCase();
+  return ADMIN_EMAILS.some(function (e) { return e.toLowerCase() === email; });
+}
+
+
+/**
+ * 檢查暫存單操作權限：
+ *   - 必須是暫存單（is_draft=true）
+ *   - admin：可操作全部
+ *   - 非 admin：只能操作 picker_email = 自己 email 的暫存單
+ * @param {Object} order — order 物件（含 is_draft, picker_email）
+ * @throws Error 如果權限不足或不是暫存單
+ */
+function _checkDraftOwnership_(order) {
+  if (!order) throw new Error('單號不存在');
+  if (!order.is_draft) throw new Error('此單已正式化，不允許編輯（要改只能走退貨流程）');
+  if (!_isCurrentUserAdmin_()) {
+    var myEmail = (Session.getActiveUser().getEmail() || '').toLowerCase();
+    var ownerEmail = (order.picker_email || '').toLowerCase();
+    if (myEmail !== ownerEmail) {
+      throw new Error('權限不足：此暫存單由 ' + (order.picker_email || '?')
+                    + ' 建立，您（非 admin）只能操作自己建的單');
+    }
+  }
+}
+
+
+/**
+ * 撈暫存單 + 同時驗證權限（給 4 個變動 RPC 用）
+ * @param {string} orderNo
+ * @return {Object} order 物件
+ * @throws Error 如果單不存在 / 不是暫存 / 權限不足
+ */
+function _assertDraftOrderAccess_(orderNo) {
+  if (!orderNo) throw new Error('order_no 為空');
+  var secret = _getAdminSecret_();
+  var r = _callSimpleRpc_('simple_get_order_details_admin', {
+    p_admin_secret: secret,
+    p_order_no:     orderNo
+  });
+  if (!r || !r.order) throw new Error('單號 ' + orderNo + ' 不存在');
+  _checkDraftOwnership_(r.order);
+  return r.order;
+}
+
+
+/** 刷新暫存銷貨單分頁 */
+function refreshDraftOrders() {
+  var ui = SpreadsheetApp.getUi();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  var secret;
+  try { secret = _getAdminSecret_(); }
+  catch (err) { ui.alert('❌ 設定錯誤', err.message, ui.ButtonSet.OK); return; }
+
+  var isAdmin = _isCurrentUserAdmin_();
+  var pickerEmail = isAdmin ? null : (Session.getActiveUser().getEmail() || null);
+
+  var rows;
+  try {
+    rows = _callSimpleRpc_('simple_get_draft_orders', {
+      p_admin_secret: secret,
+      p_picker_email: pickerEmail
+    });
+    if (!Array.isArray(rows)) rows = [];
+  } catch (err) {
+    ui.alert('❌ 拉暫存單失敗', err.message, ui.ButtonSet.OK);
+    return;
+  }
+
+  _writeDraftSheet_(ss, rows);
+
+  var sh = ss.getSheetByName(TAB_DRAFT_PENDING);
+  if (sh) ss.setActiveSheet(sh);
+
+  var scopeMsg = isAdmin ? '全部暫存單' : ('您（' + pickerEmail + '）的暫存單');
+  ui.alert('✅ 完成',
+    '已刷新「' + TAB_DRAFT_PENDING + '」\n\n' +
+    '範圍：' + scopeMsg + '\n' +
+    '筆數：' + rows.length + ' 張\n\n' +
+    '處理方式：點某筆 → 選單「🔧 編輯選定暫存單」',
+    ui.ButtonSet.OK);
+}
+
+
+/** 確保暫存單分頁存在 */
+function _ensureDraftSheet_(ss) {
+  var sh = ss.getSheetByName(TAB_DRAFT_PENDING);
+  if (sh) return sh;
+
+  sh = ss.insertSheet(TAB_DRAFT_PENDING);
+
+  var headers = [
+    '單號', '店家', '訂單日', '出貨日', '件數', '金額',
+    '撿貨員', '建單時間', '撿貨表 wave_id'
+  ];
+
+  sh.getRange(1, 1, 1, headers.length).setValues([headers])
+    .setFontWeight('bold').setBackground('#fb8c00').setFontColor('#ffffff').setFontSize(13);
+  sh.setFrozenRows(1);
+
+  sh.setColumnWidth(1, 180); // 單號
+  sh.setColumnWidth(2, 80);  // 店家
+  sh.setColumnWidth(3, 110); // 訂單日
+  sh.setColumnWidth(4, 110); // 出貨日
+  sh.setColumnWidth(5, 70);  // 件數
+  sh.setColumnWidth(6, 100); // 金額
+  sh.setColumnWidth(7, 220); // 撿貨員
+  sh.setColumnWidth(8, 140); // 建單時間
+  sh.setColumnWidth(9, 200); // 撿貨表 wave_id
+
+  return sh;
+}
+
+
+/** 寫暫存單資料 */
+function _writeDraftSheet_(ss, rows) {
+  var sh = _ensureDraftSheet_(ss);
+
+  if (sh.getLastRow() > 1) {
+    var oldRange = sh.getRange(2, 1, sh.getLastRow() - 1, 9);
+    oldRange.clearContent();
+    oldRange.setBackground(null);
+  }
+
+  if (rows.length === 0) return;
+
+  var tz = Session.getScriptTimeZone() || 'Asia/Taipei';
+  var data = [];
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i];
+    data.push([
+      r.order_no || '',
+      r.store_name || '',
+      r.order_date || '',
+      r.delivery_date || '',
+      r.total_qty || 0,
+      r.total_amount || 0,
+      r.picker_email || '',
+      r.created_at ? Utilities.formatDate(new Date(r.created_at), tz, 'yyyy-MM-dd HH:mm') : '',
+      r.wave_id || ''
+    ]);
+  }
+
+  sh.getRange(2, 1, data.length, 9).setValues(data).setFontSize(13);
+  // 強制單號為文字
+  sh.getRange(2, 1, data.length, 1).setNumberFormat('@');
+  // 金額千分位
+  sh.getRange(2, 6, data.length, 1).setNumberFormat('#,##0');
+  // 整列淡黃底（暫存標示）
+  sh.getRange(2, 1, data.length, 9).setBackground('#fff8e1');
+}
+
+
+/** 開暫存單編輯 dialog（從 active cell 取 order_no） */
+function openDraftEditDialog() {
+  var ui = SpreadsheetApp.getUi();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sh = ss.getActiveSheet();
+
+  if (sh.getName() !== TAB_DRAFT_PENDING) {
+    ui.alert('❌ 請在「' + TAB_DRAFT_PENDING + '」分頁操作',
+      '請先點下方分頁切到「' + TAB_DRAFT_PENDING + '」，選一筆暫存單後再點此項。',
+      ui.ButtonSet.OK);
+    return;
+  }
+
+  var cell = sh.getActiveCell();
+  if (!cell || cell.getRow() < 2) {
+    ui.alert('❌ 沒選任何暫存單', '請先點某一行（第 2 列以後）再點此項', ui.ButtonSet.OK);
+    return;
+  }
+
+  var orderNo = String(sh.getRange(cell.getRow(), 1).getValue() || '').trim();
+  if (!orderNo || orderNo.indexOf('SS-') !== 0) {
+    ui.alert('❌ 此行無有效單號', '請先「📝 刷新暫存銷貨單」重新載入', ui.ButtonSet.OK);
+    return;
+  }
+
+  var tpl = HtmlService.createTemplateFromFile('DraftOrderEditDialog');
+  tpl.orderNo = orderNo;
+  var html = tpl.evaluate().setWidth(900).setHeight(650);
+  ui.showModelessDialog(html, '🔧 編輯暫存單：' + orderNo);
+}
+
+
+/** dialog 用：取暫存單明細
+ *  - 暫存單 + ownership OK → 回 { order, items }
+ *  - 已正式化 → 回 { finalized: true, order_no, order }（讓 dialog 顯示「看明細」按鈕）
+ *  - 暫存但非 owner → 回 { error: 權限不足 }
+ *  - 找不到 → 回 { error }
+ */
+function getDraftOrderForDialog(orderNo) {
+  if (!orderNo) return JSON.stringify({ error: '單號為空' });
+  var secret;
+  try { secret = _getAdminSecret_(); }
+  catch (err) { return JSON.stringify({ error: err.message }); }
+
+  try {
+    var r = _callSimpleRpc_('simple_get_order_details_admin', {
+      p_admin_secret: secret,
+      p_order_no:     orderNo
+    });
+    if (!r || !r.order) {
+      return JSON.stringify({ error: '單號 ' + orderNo + ' 不存在' });
+    }
+
+    // ⚡ 已正式化 → 回特殊 response（不擋，讓 dialog 顯示「看明細」按鈕）
+    if (!r.order.is_draft) {
+      return JSON.stringify({
+        finalized: true,
+        order_no:  orderNo,
+        order:     r.order
+      });
+    }
+
+    // 暫存單 → ownership 檢查
+    if (!_isCurrentUserAdmin_()) {
+      var myEmail = (Session.getActiveUser().getEmail() || '').toLowerCase();
+      var ownerEmail = (r.order.picker_email || '').toLowerCase();
+      if (myEmail !== ownerEmail) {
+        return JSON.stringify({
+          error: '權限不足：此暫存單由 ' + (r.order.picker_email || '?')
+                 + ' 建立，您（非 admin）只能操作自己建的單'
+        });
+      }
+    }
+
+    return JSON.stringify(r);
+  } catch (err) {
+    return JSON.stringify({ error: err.message });
+  }
+}
+
+
+/** dialog 用：改某筆品項數量（含 ownership 檢查）*/
+function updateDraftQtyFromDialog(orderNo, detailId, newQty) {
+  try { _assertDraftOrderAccess_(orderNo); }
+  catch (err) { return JSON.stringify({ success: false, error: err.message }); }
+
+  var secret = _getAdminSecret_();
+  var editedBy = Session.getActiveUser().getEmail() || '';
+  try {
+    var r = _callSimpleRpc_('simple_update_draft_qty', {
+      p_admin_secret: secret,
+      p_order_no:     orderNo,
+      p_detail_id:    detailId,
+      p_new_qty:      newQty,
+      p_edited_by:    editedBy
+    });
+    return JSON.stringify(r || { success: true });
+  } catch (err) {
+    return JSON.stringify({ success: false, error: err.message });
+  }
+}
+
+
+/** dialog 用：刪某筆品項（含 ownership 檢查）*/
+function deleteDraftDetailFromDialog(orderNo, detailId) {
+  try { _assertDraftOrderAccess_(orderNo); }
+  catch (err) { return JSON.stringify({ success: false, error: err.message }); }
+
+  var secret = _getAdminSecret_();
+  var editedBy = Session.getActiveUser().getEmail() || '';
+  try {
+    var r = _callSimpleRpc_('simple_delete_draft_detail', {
+      p_admin_secret: secret,
+      p_order_no:     orderNo,
+      p_detail_id:    detailId,
+      p_edited_by:    editedBy
+    });
+    return JSON.stringify(r || { success: true });
+  } catch (err) {
+    return JSON.stringify({ success: false, error: err.message });
+  }
+}
+
+
+/** dialog 用：暫存 → 正式（含 ownership 檢查）*/
+function finalizeOrderFromDialog(orderNo) {
+  try { _assertDraftOrderAccess_(orderNo); }
+  catch (err) { return JSON.stringify({ success: false, error: err.message }); }
+
+  var secret = _getAdminSecret_();
+  var finalizedBy = Session.getActiveUser().getEmail() || '';
+  try {
+    var r = _callSimpleRpc_('simple_finalize_order', {
+      p_admin_secret: secret,
+      p_order_no:     orderNo,
+      p_finalized_by: finalizedBy
+    });
+    return JSON.stringify(r || { success: true });
+  } catch (err) {
+    return JSON.stringify({ success: false, error: err.message });
+  }
+}
+
+
+/** dialog 用：砍整張暫存單（含 ownership 檢查）*/
+function voidDraftOrderFromDialog(orderNo) {
+  try { _assertDraftOrderAccess_(orderNo); }
+  catch (err) { return JSON.stringify({ success: false, error: err.message }); }
+
+  var secret = _getAdminSecret_();
+  var voidedBy = Session.getActiveUser().getEmail() || '';
+  try {
+    var r = _callSimpleRpc_('simple_void_draft_order', {
+      p_admin_secret: secret,
+      p_order_no:     orderNo,
+      p_voided_by:    voidedBy
+    });
+    return JSON.stringify(r || { success: true });
+  } catch (err) {
+    return JSON.stringify({ success: false, error: err.message });
+  }
+}
+
+
+/** 一鍵確認所有暫存單（admin 確認全部、picker 確認自己的） */
+function finalizeAllDrafts() {
+  var ui = SpreadsheetApp.getUi();
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+
+  var secret;
+  try { secret = _getAdminSecret_(); }
+  catch (err) { ui.alert('❌ 設定錯誤', err.message, ui.ButtonSet.OK); return; }
+
+  var isAdmin = _isCurrentUserAdmin_();
+  var pickerEmail = isAdmin ? null : (Session.getActiveUser().getEmail() || null);
+  var finalizedBy = Session.getActiveUser().getEmail() || '';
+
+  // 先撈暫存單清單
+  var rows;
+  try {
+    rows = _callSimpleRpc_('simple_get_draft_orders', {
+      p_admin_secret: secret,
+      p_picker_email: pickerEmail
+    });
+    if (!Array.isArray(rows)) rows = [];
+  } catch (err) {
+    ui.alert('❌ 拉暫存單失敗', err.message, ui.ButtonSet.OK);
+    return;
+  }
+
+  if (rows.length === 0) {
+    ui.alert('沒有暫存單可確認', isAdmin ? '目前沒有任何暫存單' : '您目前沒有暫存單', ui.ButtonSet.OK);
+    return;
+  }
+
+  var orderNos = rows.map(function (r) { return r.order_no; });
+
+  var scopeMsg = isAdmin ? '全部暫存單' : '您建的暫存單';
+  var confirmRes = ui.alert('確認送出 ' + rows.length + ' 張暫存單？',
+    '範圍：' + scopeMsg + '\n' +
+    '筆數：' + rows.length + ' 張\n\n' +
+    '⚠️ 確認後變正式單，店家可確認收貨 / 退貨。確認後不能撤銷。\n\n' +
+    '繼續？',
+    ui.ButtonSet.YES_NO);
+
+  if (confirmRes !== ui.Button.YES) return;
+
+  try {
+    var r = _callSimpleRpc_('simple_finalize_orders_batch', {
+      p_admin_secret: secret,
+      p_order_nos:    orderNos,
+      p_finalized_by: finalizedBy
+    });
+    ui.alert('✅ 完成',
+      '請求 ' + (r.requested || rows.length) + ' 張，'
+      + '成功確認 ' + (r.finalized || 0) + ' 張。\n\n'
+      + '請點「📝 刷新暫存銷貨單」確認列表清空。',
+      ui.ButtonSet.OK);
+  } catch (err) {
+    ui.alert('❌ 確認失敗', err.message, ui.ButtonSet.OK);
+  }
+}
+
+
+// ============================================================
+// 任務 7B：員工手動補開銷貨單（admin / picker 都可用）
+// ============================================================
+// 流程：
+//   1. 點「📦 補開銷貨單」→ 開 dialog
+//   2. dialog 選店家、搜商品（products 表）、加多筆品項、改數量
+//   3. 送出 → simple_create_sales_order RPC（is_draft=false 直接正式）
+//   4. wave_id 留 NULL（不偵測重複）
+// ============================================================
+
+/** 開「📦 補開銷貨單」dialog */
+function showManualSalesOrderDialog() {
+  var ui = SpreadsheetApp.getUi();
+
+  // 權限檢查：admin OR picker 都可
+  var email = (Session.getActiveUser().getEmail() || '').toLowerCase();
+  var isAdmin  = ADMIN_EMAILS.some(function (e) { return e.toLowerCase() === email; });
+  var isPicker = PICKER_EMAILS.some(function (e) { return e.toLowerCase() === email; });
+  if (!isAdmin && !isPicker) {
+    ui.alert('❌ 權限不足',
+      '此功能僅限 admin 或撿貨員白名單使用。\n\n您（' + email + '）不在名單內。',
+      ui.ButtonSet.OK);
+    return;
+  }
+
+  // 預檢 PICKER_SECRET + ADMIN_SECRET 都要存在
+  // （建單 RPC 用 picker_secret 驗，搜商品 RPC 用 admin_secret 驗）
+  try {
+    _getPickerSecret_();    // 沒設會 throw
+    _getAdminSecret_();     // 沒設會 throw
+  } catch (err) {
+    ui.alert('❌ 設定錯誤', err.message, ui.ButtonSet.OK);
+    return;
+  }
+
+  var tpl = HtmlService.createTemplateFromFile('ManualSalesOrderDialog');
+  tpl.stores      = STORES;
+  tpl.pickerEmail = email;
+  var html = tpl.evaluate().setWidth(900).setHeight(700);
+  ui.showModelessDialog(html, '📦 補開銷貨單');
+}
+
+
+/** dialog 用：搜尋 products（用 admin_secret） */
+function searchProductsForManualOrder(keyword) {
+  var k = String(keyword || '').trim();
+  if (k.length < 1) return JSON.stringify([]);
+
+  var secret;
+  try { secret = _getAdminSecret_(); }
+  catch (err) { return JSON.stringify({ error: err.message }); }
+
+  try {
+    var rows = _callSimpleRpc_('simple_search_products', {
+      p_admin_secret: secret,
+      p_keyword:      k,
+      p_limit:        30
+    });
+    return JSON.stringify(Array.isArray(rows) ? rows : []);
+  } catch (err) {
+    return JSON.stringify({ error: err.message });
+  }
+}
+
+
+/**
+ * dialog 用：補開銷貨單
+ * @param {string} storeName - 店家名稱
+ * @param {string} orderDate - YYYY-MM-DD
+ * @param {string} deliveryDate - YYYY-MM-DD（可空字串）
+ * @param {Array}  items     - [{ product_id, product_name, qty }]
+ * @param {string} notes     - 備註（可空）
+ */
+function createManualSalesOrderFromDialog(storeName, orderDate, deliveryDate, items, notes) {
+  var pickerEmail = Session.getActiveUser().getEmail() || '';
+  if (!pickerEmail) {
+    return JSON.stringify({ success: false, error: '抓不到您的 Google 帳號 email' });
+  }
+
+  // 前端驗證
+  if (!storeName || STORES.indexOf(storeName) < 0) {
+    return JSON.stringify({ success: false, error: '請選擇有效店家' });
+  }
+  if (!orderDate || !/^\d{4}-\d{2}-\d{2}$/.test(orderDate)) {
+    return JSON.stringify({ success: false, error: '訂單日格式錯誤（YYYY-MM-DD）' });
+  }
+  if (deliveryDate && !/^\d{4}-\d{2}-\d{2}$/.test(deliveryDate)) {
+    return JSON.stringify({ success: false, error: '出貨日格式錯誤（YYYY-MM-DD 或留空）' });
+  }
+  if (!Array.isArray(items) || items.length === 0) {
+    return JSON.stringify({ success: false, error: '請至少加一筆商品' });
+  }
+  for (var i = 0; i < items.length; i++) {
+    var it = items[i];
+    if (!it.product_id || !it.product_name) {
+      return JSON.stringify({ success: false, error: '第 ' + (i + 1) + ' 筆商品資料不完整' });
+    }
+    var q = parseInt(it.qty, 10);
+    if (isNaN(q) || q <= 0) {
+      return JSON.stringify({ success: false, error: '第 ' + (i + 1) + ' 筆數量必須 > 0' });
+    }
+    items[i].qty = q;
+  }
+
+  var secret;
+  try { secret = _getPickerSecret_(); }
+  catch (err) { return JSON.stringify({ success: false, error: err.message }); }
+
+  try {
+    var r = _callSimpleRpc_('simple_create_sales_order', {
+      p_payload: {
+        api_secret:      secret,
+        order_date:      orderDate,
+        delivery_date:   deliveryDate || null,
+        store_name:      storeName,
+        wave_id:         null,                  // 補開單不用 wave_id（不偵測重複）
+        is_draft:        false,                 // ⚡ 直接正式單，不走暫存
+        picker_email:    pickerEmail,
+        created_by_role: 'manual',
+        source:          'manual_supplement',
+        notes:           String(notes || '').trim() || null,
+        items:           items
+      }
+    });
+    return JSON.stringify(r || { success: true });
+  } catch (err) {
+    return JSON.stringify({ success: false, error: err.message });
+  }
+}
+
+
+// ============================================================
+// 📦 封存舊分頁（admin 限定 — 把 N 天前的舊每日分頁隱藏起來）
+// ============================================================
+// 對象：撿貨表-YYYY-MM-DD / 當日銷貨單成立表-YYYY-MM-DD / 今日撿貨差額表-YYYY-MM-DD
+// 動作：sheet.hideSheet()（不刪除）
+// 還原：右鍵任一分頁標籤 → 顯示 → 選名稱
+// ============================================================
+
+function archiveOldDailySheets() {
+  var ui = SpreadsheetApp.getUi();
+  var resp = ui.prompt(
+    '📦 封存舊分頁',
+    '封存幾天前的舊分頁？預設 3 天\n\n' +
+    '會【隱藏】（不刪除）以下類型分頁：\n' +
+    '  • 撿貨表-YYYY-MM-DD\n' +
+    '  • 當日銷貨單成立表-YYYY-MM-DD\n' +
+    '  • 今日撿貨差額表-YYYY-MM-DD\n\n' +
+    '隱藏後可右鍵任一分頁標籤 → 顯示 → 選名稱還原',
+    ui.ButtonSet.OK_CANCEL
+  );
+  if (resp.getSelectedButton() !== ui.Button.OK) return;
+
+  var input = resp.getResponseText().trim();
+  var days = parseInt(input || '3');
+  if (isNaN(days) || days < 1) {
+    ui.alert('❌ 天數必須是 >= 1 的整數');
+    return;
+  }
+
+  var tz = Session.getScriptTimeZone() || 'Asia/Taipei';
+  var todayStr = Utilities.formatDate(new Date(), tz, 'yyyy-MM-dd');
+  var todayMs  = new Date(todayStr + 'T00:00:00').getTime();
+  var cutoffMs = todayMs - days * 86400000;
+
+  var ss = SpreadsheetApp.getActiveSpreadsheet();
+  var sheets = ss.getSheets();
+  var patterns = [
+    /^撿貨表-(\d{4}-\d{2}-\d{2})$/,
+    /^當日銷貨單成立表-(\d{4}-\d{2}-\d{2})$/,
+    /^今日撿貨差額表-(\d{4}-\d{2}-\d{2})$/
+  ];
+
+  var hidden = [];
+  var skipped = [];
+  var failed  = [];
+
+  for (var i = 0; i < sheets.length; i++) {
+    var name = sheets[i].getName();
+    var dateStr = null;
+    for (var p = 0; p < patterns.length; p++) {
+      var m = name.match(patterns[p]);
+      if (m) { dateStr = m[1]; break; }
+    }
+    if (!dateStr) continue;  // 不符規則的分頁跳過（如 2026-04 / 退貨待辦）
+
+    var sheetMs = new Date(dateStr + 'T00:00:00').getTime();
+    if (sheetMs >= cutoffMs) {
+      skipped.push(name);
+      continue;
+    }
+    if (sheets[i].isSheetHidden()) {
+      skipped.push(name + '（已隱藏）');
+      continue;
+    }
+
+    try {
+      sheets[i].hideSheet();
+      hidden.push(name);
+    } catch (e) {
+      failed.push(name + '：' + e.message);
+    }
+  }
+
+  var msg = '✅ 已封存 ' + hidden.length + ' 個分頁（' + days + ' 天前）\n\n';
+  if (hidden.length > 0) {
+    msg += '【封存清單】\n  ' + hidden.slice(0, 15).join('\n  ');
+    if (hidden.length > 15) msg += '\n  ... 共 ' + hidden.length + ' 個';
+    msg += '\n\n';
+  }
+  if (failed.length > 0) {
+    msg += '【失敗】\n  ' + failed.join('\n  ') + '\n\n';
+  }
+  msg += '【還原方式】\n右鍵任一分頁標籤 → 顯示 → 選名稱';
+
+  ui.alert(msg);
 }

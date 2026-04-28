@@ -56,6 +56,33 @@
   .b-issued   { background: #e3f2fd; color: #1565c0; }
   .b-received { background: #e8f5e9; color: #2e7d32; }
   .b-issue    { background: #ffebee; color: #c62828; }
+  .b-draft    { background: #fff8e1; color: #e65100; border: 1px solid #ffb300; }
+
+  /* 暫存單大警示框（header card 下方） */
+  .draft-warn {
+    background: #fff8e1;
+    border: 2px solid #ffa000;
+    color: #bf360c;
+    padding: 12px 14px;
+    border-radius: 6px;
+    margin-bottom: 12px;
+    font-size: 14px;
+    line-height: 1.6;
+  }
+  .draft-warn b { color: #d84315; }
+
+  /* 暫存單底部禁用提示 */
+  .draft-locked {
+    flex: 1;
+    background: #fff8e1;
+    border: 1px solid #ffa000;
+    color: #bf360c;
+    padding: 10px 14px;
+    border-radius: 6px;
+    font-size: 14px;
+    text-align: center;
+    font-weight: bold;
+  }
 
   table {
     width: 100%;
@@ -222,16 +249,23 @@
   function render(data) {
     var o = data.order || {};
     var items = data.items || [];
+    var isLegacy = !!data.is_legacy;
     var html = '';
 
+    var isDraft = !!o.is_draft;
+
     var statusCls = 'b-issued';
-    if (o.status === '待處理') statusCls = 'b-pending';
+    if (isLegacy) statusCls = 'b-pending';     // 舊單灰黃色 badge
+    else if (isDraft) statusCls = 'b-draft';
+    else if (o.status === '待處理') statusCls = 'b-pending';
     else if (o.status === '已收到') statusCls = 'b-received';
     else if (o.status === '有問題') statusCls = 'b-issue';
 
     html += '<div class="header-card">';
     html += '<div class="order-no">' + escHtml(o.order_no);
-    html += '<span class="badge ' + statusCls + '">' + escHtml(o.status || '?') + '</span>';
+    html += '<span class="badge ' + statusCls + '">' +
+            (isLegacy ? '📜 歷史' : (isDraft ? '📝 暫存' : escHtml(o.status || '?'))) +
+            '</span>';
     html += '</div>';
     html += '<div class="meta">';
     if (o.order_date)    html += '<span class="meta-item">📅 訂單：' + escHtml(o.order_date) + '</span>';
@@ -240,11 +274,30 @@
     html += '<span class="meta-item">💰 $' + (Number(o.total_amount) || 0).toLocaleString() + '</span>';
     if (o.has_return)    html += '<span class="meta-item" style="background:#ffcdd2;color:#c62828;">⚠️ 退貨：' + escHtml(o.return_status) + '</span>';
     if (o.received_at)   html += '<span class="meta-item">✅ 收貨：' + escHtml(formatTs(o.received_at)) + '</span>';
-    html += '</div>';
-    if (o._outOfRange) {
-      html += '<div class="info-warning" style="margin-top:8px;">⚠️ 此單超過最近 30 天範圍，主表資訊不完整（明細仍可正常顯示）</div>';
+    if (isLegacy && o.order_type === 'return' && o.ref_order_no) {
+      html += '<span class="meta-item" style="background:#ffe0b2;color:#bf360c;">↩️ 原單：' + escHtml(o.ref_order_no) + '</span>';
     }
     html += '</div>';
+    if (o._outOfRange) {
+      html += '<div class="info-warning" style="margin-top:8px;">⚠️ 此單超過清單顯示範圍，主表資訊不完整（明細仍可正常顯示）</div>';
+    }
+    html += '</div>';
+
+    // 舊單唯讀提示
+    if (isLegacy) {
+      html += '<div class="info-warning" style="margin-bottom:10px;">';
+      html +=   '📜 <b>此為舊系統歷史單</b>，僅供查閱對帳，<b>無法執行確認收貨 / 退貨 / 撤銷等操作</b>。';
+      html += '</div>';
+    }
+
+    // ⚡ 任務 4.1 C 段：暫存單大警示框
+    if (isDraft) {
+      html += '<div class="draft-warn">';
+      html +=   '<b>⚠️ 此單為暫存單，數量與品項仍可能調整</b><br/>';
+      html +=   '請等狀態變「<b>已建單</b>」後再確認收貨。<br/>';
+      html +=   '<small style="color:#6d4c41;">（此單尚未由撿貨員確認送出，目前僅供預覽）</small>';
+      html += '</div>';
+    }
 
     currentItems = items;
 
@@ -257,16 +310,25 @@
       html += '<th class="r">單價</th><th class="r">小計</th><th class="c">動作</th>';
       html += '</tr></thead>';
       html += '<tbody>';
+      var isReturnOrder = isLegacy && o.order_type === 'return';
       for (var i = 0; i < items.length; i++) {
         var it = items[i];
-        var hasReturn = it.return_status && it.return_status !== '無';
+        // 過濾掉舊資料的 'none' / 'NULL' / 空白等無意義值
+        var rsRaw = String(it.return_status || '').trim();
+        var rsLow = rsRaw.toLowerCase();
+        var rsValid = rsRaw && rsRaw !== '無' && rsLow !== 'none' && rsLow !== 'null';
+        // RT 退貨單整張就是退貨，明細不重複標「↳ 退貨」
+        var hasReturn = rsValid && !isReturnOrder;
         html += '<tr' + (hasReturn ? ' class="return-row"' : '') + '>';
         html += '<td style="font-family:monospace;font-size:12px;">' + escHtml(it.product_id) + '</td>';
         html += '<td>' + escHtml(it.product_name);
         if (hasReturn) {
           html += '<br/><small style="color:#c62828;">↳ '
-               + escHtml(it.report_type || '') + ' x' + (it.return_qty || 0)
-               + '（' + escHtml(it.return_status) + '）</small>';
+               + escHtml(translateReportType(it.report_type)) + ' x' + (it.return_qty || 0)
+               + '（' + escHtml(translateReturnStatus(it.return_status)) + '）</small>';
+          if (it.return_reason) {
+            html += '<br/><small style="color:#555;">原因：' + escHtml(it.return_reason) + '</small>';
+          }
           if (it.admin_response) {
             html += '<br/><small style="color:#555;">admin：' + escHtml(it.admin_response) + '</small>';
           }
@@ -276,7 +338,13 @@
         html += '<td class="r">$' + (Number(it.unit_price) || 0).toLocaleString() + '</td>';
         html += '<td class="r">$' + (Number(it.subtotal)   || 0).toLocaleString() + '</td>';
         html += '<td class="c">';
-        if (!hasReturn && (it.qty || 0) > 0 && (o.status === '已建單' || o.status === '有問題')) {
+        if (isLegacy) {
+          // 舊單唯讀，不能退貨
+          html += '<small style="color:#999;">-</small>';
+        } else if (isDraft) {
+          // ⚡ 任務 4.1 C 段：暫存單禁用退貨
+          html += '<small style="color:#bf360c;" title="暫存單尚未確認，無法申請退貨">⏳ 暫存中</small>';
+        } else if (!hasReturn && (it.qty || 0) > 0 && (o.status === '已建單' || o.status === '有問題')) {
           html += '<button class="btn-return" onclick="openReturnForm(' + i + ')">📤 退貨</button>';
         } else if (hasReturn) {
           html += '<small style="color:#c62828;">已申請</small>';
@@ -316,7 +384,13 @@
     }
 
     html += '<div class="actions">';
-    if (o.status === '已建單') {
+    if (isLegacy) {
+      // 舊單沒有底部操作按鈕
+      html += '<div class="info-warning" style="flex:1;margin-bottom:0;">📜 歷史單僅供對帳查閱</div>';
+    } else if (isDraft) {
+      // ⚡ 任務 4.1 C 段：暫存單鎖所有操作
+      html += '<div class="draft-locked">✋ 暫存單尚未確認，待撿貨員按「確認送出」後才能操作</div>';
+    } else if (o.status === '已建單') {
       html += '<button class="btn-confirm" onclick="doConfirm()">✅ 確認收貨</button>';
     } else if (o.status === '已收到') {
       html += '<button class="btn-revoke" onclick="doRevoke()">↩️ 撤銷收貨</button>';
@@ -439,6 +513,27 @@
   function setButtonsDisabled(b) {
     var btns = document.querySelectorAll('button');
     for (var i = 0; i < btns.length; i++) btns[i].disabled = !!b;
+  }
+
+  // 舊系統 sales_details 用英文字串存退貨類型 / 狀態，這裡翻譯成中文顯示
+  // 新系統值已是中文，會直接 fallback 回原值（不會被誤翻）
+  function translateReportType(t) {
+    var s = String(t || '').toLowerCase();
+    if (s === 'return')   return '退';
+    if (s === 'shortage' || s === 'short') return '少';
+    if (s === 'damaged'  || s === 'damage') return '損';
+    if (s === 'missing')  return '缺';
+    return t || '';
+  }
+  function translateReturnStatus(s) {
+    var x = String(s || '').toLowerCase();
+    if (x === 'requested')  return '申請中';
+    if (x === 'accepted')   return '已同意';
+    if (x === 'rejected')   return '已拒絕';
+    if (x === 'received')   return '已收到';
+    if (x === 'waived')     return '免退';
+    if (x === 'processing') return '處理中';
+    return s || '';
   }
 
   function escHtml(s) {
