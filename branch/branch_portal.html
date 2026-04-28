@@ -3599,16 +3599,33 @@ const results = PRODUCT_DB.filter(p =>
     drop.innerHTML = `<div style="padding:10px 14px; color:#9ca3af; font-size:13px;">找不到商品</div>`;
   } else {
     const tempColor = t => t === '冷凍' ? '#3b82f6' : t === '冷藏' ? '#06b6d4' : '#f59e0b';
-    drop.innerHTML = results.map(p => `
-      <div onclick="selectTfProduct(${idx}, '${p.code}', '${p.name.replace(/'/g,"\\\\'")}', '${p.temp}', ${p.price||0})"
+    // 店轉店一律用 branchPrice，無分店價的商品不可加入（避免拿一般售價誤算金額）
+    drop.innerHTML = results.map(p => {
+      const hasBranchPrice = Number(p.branchPrice) > 0;
+      if (hasBranchPrice) {
+        return `
+      <div onclick="selectTfProduct(${idx}, '${p.code}', '${p.name.replace(/'/g,"\\\\'")}', '${p.temp}', ${p.branchPrice})"
         style="padding:9px 14px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; font-size:13px; border-bottom:1px solid #f3f4f6;"
         onmouseover="this.style.background='#fff0f6'" onmouseout="this.style.background=''">
         <span><b style="color:#6b7280; margin-right:6px;">${p.code}</b>${p.name}</span>
         <span style="display:flex; gap:6px; align-items:center;">
-          ${p.price ? '<span style="color:#be185d; font-weight:700; font-size:12px;">$' + p.price + '</span>' : ''}
+          <span style="color:#be185d; font-weight:700; font-size:12px;">$${p.branchPrice}</span>
           <span style="background:${tempColor(p.temp)}20; color:${tempColor(p.temp)}; padding:1px 6px; border-radius:6px; font-size:11px; font-weight:700;">${p.temp}</span>
         </span>
-      </div>`).join('');
+      </div>`;
+      } else {
+        return `
+      <div onclick="Swal.fire({icon:'warning', title:'無分店價', html:'商品 <b>${p.code}</b><br>${p.name.replace(/'/g,'&apos;')}<br><br>沒有設定分店價,無法用於店轉店。<br>請聯絡 admin 補完分店價後再使用。', confirmButtonColor:'#be185d'});"
+        style="padding:9px 14px; cursor:not-allowed; display:flex; justify-content:space-between; align-items:center; font-size:13px; border-bottom:1px solid #f3f4f6; background:#f9fafb; color:#9ca3af;"
+        title="無分店價,不可加入店轉店">
+        <span><b style="color:#9ca3af; margin-right:6px;">${p.code}</b>${p.name}</span>
+        <span style="display:flex; gap:6px; align-items:center;">
+          <span style="color:#dc2626; font-weight:700; font-size:11px;">⚠️ 無分店價</span>
+          <span style="background:${tempColor(p.temp)}20; color:${tempColor(p.temp)}; padding:1px 6px; border-radius:6px; font-size:11px; font-weight:700; opacity:0.5;">${p.temp}</span>
+        </span>
+      </div>`;
+      }
+    }).join('');
   }
   drop.style.display = 'block';
 }
@@ -3662,6 +3679,19 @@ async function submitTransfer() {
   if (!tempNote) { Swal.fire('提醒', '請選擇整單溫層（冷凍／冷藏／常溫）', 'warning'); return; }
   const validItems = tfItems.filter(i => i.name.trim() && parseInt(i.qty) > 0);
   if (validItems.length === 0) { Swal.fire('提醒', '請至少填寫一項商品', 'warning'); return; }
+
+  // 送出前二次驗證:店轉店一律須有分店價(防搜尋 UI 被繞過 / 舊狀態殘留)
+  const noBranchPriceItems = validItems.filter(i => !(Number(i.price) > 0));
+  if (noBranchPriceItems.length > 0) {
+    Swal.fire({
+      icon: 'warning',
+      title: '有商品沒有分店價',
+      html: noBranchPriceItems.map(i => `${i.code || ''} ${i.name}`).join('<br>') +
+        '<br><br>請先聯絡 admin 補完分店價後再建立店轉店。',
+      confirmButtonColor: '#be185d'
+    });
+    return;
+  }
 
   const tfId = await generateTfId();
 
@@ -4451,16 +4481,33 @@ function onTfCategoryChange(idx, category) {
     if (!category) { drop.style.display = 'none'; return; }
     const tempColor = t => t === '冷凍' ? '#3b82f6' : t === '冷藏' ? '#06b6d4' : '#f59e0b';
     const results = PRODUCT_DB.filter(p => p.category === category);
-    drop.innerHTML = results.map(p => `
-      <div onclick="selectTfProduct(${idx}, '${p.code}', '${p.name.replace(/'/g,"\\\\'")}', '${p.temp}', ${p.price||0})"
+    // 店轉店一律用 branchPrice，無分店價的商品不可加入（避免拿一般售價誤算金額）
+    drop.innerHTML = results.map(p => {
+      const hasBranchPrice = Number(p.branchPrice) > 0;
+      if (hasBranchPrice) {
+        return `
+      <div onclick="selectTfProduct(${idx}, '${p.code}', '${p.name.replace(/'/g,"\\\\'")}', '${p.temp}', ${p.branchPrice})"
         style="padding:9px 14px; cursor:pointer; display:flex; justify-content:space-between; align-items:center; font-size:13px; border-bottom:1px solid #f3f4f6;"
         onmouseover="this.style.background='#fff0f6'" onmouseout="this.style.background=''">
         <span><b style="color:#6b7280; margin-right:6px;">${p.code}</b>${p.name}</span>
         <span style="display:flex; gap:6px; align-items:center;">
-          ${p.price ? '<span style="color:#be185d; font-weight:700; font-size:12px;">$' + p.price + '</span>' : ''}
+          <span style="color:#be185d; font-weight:700; font-size:12px;">$${p.branchPrice}</span>
           <span style="background:${tempColor(p.temp)}20; color:${tempColor(p.temp)}; padding:1px 6px; border-radius:6px; font-size:11px; font-weight:700;">${p.temp}</span>
         </span>
-      </div>`).join('');
+      </div>`;
+      } else {
+        return `
+      <div onclick="Swal.fire({icon:'warning', title:'無分店價', html:'商品 <b>${p.code}</b><br>${p.name.replace(/'/g,'&apos;')}<br><br>沒有設定分店價,無法用於店轉店。<br>請聯絡 admin 補完分店價後再使用。', confirmButtonColor:'#be185d'});"
+        style="padding:9px 14px; cursor:not-allowed; display:flex; justify-content:space-between; align-items:center; font-size:13px; border-bottom:1px solid #f3f4f6; background:#f9fafb; color:#9ca3af;"
+        title="無分店價,不可加入店轉店">
+        <span><b style="color:#9ca3af; margin-right:6px;">${p.code}</b>${p.name}</span>
+        <span style="display:flex; gap:6px; align-items:center;">
+          <span style="color:#dc2626; font-weight:700; font-size:11px;">⚠️ 無分店價</span>
+          <span style="background:${tempColor(p.temp)}20; color:${tempColor(p.temp)}; padding:1px 6px; border-radius:6px; font-size:11px; font-weight:700; opacity:0.5;">${p.temp}</span>
+        </span>
+      </div>`;
+      }
+    }).join('');
     drop.style.display = 'block';
   }
 }
