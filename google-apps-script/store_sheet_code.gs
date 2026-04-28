@@ -306,9 +306,11 @@ function refreshTomorrowDeliveries() {
   const sh = ss.getSheetByName(TAB_TOMORROW);
   if (sh) ss.setActiveSheet(sh);
 
-  ui.alert('✅ 完成',
-    '已刷新「' + TAB_TOMORROW + '」\n\n隔日（' + tomorrowStr + '）出貨筆數：' + filtered.length,
-    ui.ButtonSet.OK);
+  let alertMsg = '已刷新「' + TAB_TOMORROW + '」\n\n隔日（' + tomorrowStr + '）出貨筆數：' + filtered.length;
+  if (orders.legacyFailed) {
+    alertMsg += '\n\n⚠️ 舊系統資料（4/1~4/21）暫時載入失敗，這次只顯示 4/22 之後的新系統單。請稍後再刷新。';
+  }
+  ui.alert('✅ 完成', alertMsg, ui.ButtonSet.OK);
 }
 
 
@@ -340,9 +342,11 @@ function refreshAllDeliveries() {
   const sh = ss.getSheetByName(TAB_ALL);
   if (sh) ss.setActiveSheet(sh);
 
-  ui.alert('✅ 完成',
-    '已刷新「' + TAB_ALL + '」\n\n最近 ' + ALL_ORDERS_DAYS + ' 天訂單筆數：' + orders.length,
-    ui.ButtonSet.OK);
+  let alertMsg = '已刷新「' + TAB_ALL + '」\n\n最近 ' + ALL_ORDERS_DAYS + ' 天訂單筆數：' + orders.length;
+  if (orders.legacyFailed) {
+    alertMsg += '\n\n⚠️ 舊系統資料（4/1~4/21）暫時載入失敗，這次只顯示 4/22 之後的新系統單。請稍後再刷新。';
+  }
+  ui.alert('✅ 完成', alertMsg, ui.ButtonSet.OK);
 }
 
 
@@ -370,7 +374,10 @@ function _fetchStoreOrdersForList_(secret, storeName) {
 
   // 2. 舊系統：sales_orders 的正常單（4/1~4/21 的單）
   //    若 RPC 還沒部署或無資料，回 [] 不阻擋主流程
+  //    ⚡ 加 legacyFailed 旗標：失敗時不靜默吞掉，回傳值多帶警示給 caller 顯示
   let legacyRows = [];
+  let legacyFailed = false;
+  let legacyErrMsg = '';
   try {
     legacyRows = _callRpc_('get_legacy_store_orders', {
       p_api_secret: secret,
@@ -379,7 +386,9 @@ function _fetchStoreOrdersForList_(secret, storeName) {
       p_date_to:    null
     });
   } catch (err) {
-    Logger.log('legacy orders fetch failed (繼續用新系統資料)：' + err);
+    Logger.log('legacy orders fetch failed:' + err);
+    legacyFailed = true;
+    legacyErrMsg = String(err && err.message || err).substring(0, 200);
   }
 
   const all = [].concat(
@@ -397,7 +406,7 @@ function _fetchStoreOrdersForList_(secret, storeName) {
     merged.push(all[i]);
   }
 
-  return merged.map(r => ({
+  const sorted = merged.map(r => ({
     order_no:      r.order_no || '',
     order_date:    r.order_date    ? String(r.order_date).slice(0, 10)    : '',
     delivery_date: r.delivery_date ? String(r.delivery_date).slice(0, 10) : '',
@@ -413,6 +422,11 @@ function _fetchStoreOrdersForList_(secret, storeName) {
     if (a.order_date !== b.order_date) return a.order_date < b.order_date ? 1 : -1;
     return a.order_no < b.order_no ? 1 : -1;
   });
+  // ⚡ 把舊系統失敗狀態掛到 array 上，讓 refresh* caller 可以顯示警示給店家
+  //    JS 允許在 array 物件上掛任意 property，.filter / .length / .map 都不受影響
+  sorted.legacyFailed = legacyFailed;
+  sorted.legacyErrMsg = legacyErrMsg;
+  return sorted;
 }
 
 function _writeOrdersToSheet_(ss, tabName, orders) {
