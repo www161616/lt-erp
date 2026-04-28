@@ -78,16 +78,24 @@ function _getStoreSecret_() {
 
 function _callRpc_(funcName, payload) {
   const url = SB_URL + '/rpc/' + funcName;
-  const res = UrlFetchApp.fetch(url, {
-    method: 'post',
-    contentType: 'application/json',
-    headers: {
-      'apikey': SB_KEY,
-      'Authorization': 'Bearer ' + SB_KEY
-    },
-    payload: JSON.stringify(payload),
-    muteHttpExceptions: true
-  });
+  let res;
+  try {
+    res = UrlFetchApp.fetch(url, {
+      method: 'post',
+      contentType: 'application/json',
+      headers: {
+        'apikey': SB_KEY,
+        'Authorization': 'Bearer ' + SB_KEY
+      },
+      payload: JSON.stringify(payload),
+      muteHttpExceptions: true
+    });
+  } catch (fetchErr) {
+    // GAS 平台級錯誤(已超出頻寬配額 / 網路斷線等)不會走 muteHttpExceptions,
+    // 必須在這裡攔下,統一交給 _formatRpcError_ 轉友善訊息,避免噴原始 URL
+    const errMsg = String(fetchErr && fetchErr.message || fetchErr);
+    throw new Error(_formatRpcError_(0, errMsg));
+  }
   const code = res.getResponseCode();
   const text = res.getContentText();
   if (code < 200 || code >= 300) {
@@ -463,7 +471,7 @@ function refreshReturnHistory() {
   const ui = SpreadsheetApp.getUi();
   const ss = SpreadsheetApp.getActiveSpreadsheet();
 
-  const cd = _checkRefreshCooldown_('LAST_REFRESH_RETURNS', 60);
+  const cd = _checkRefreshCooldown_('LAST_REFRESH_RETURNS', 120);
   if (!cd.ok) {
     ui.alert('⏳ 剛剛已刷新',
       '剛才（' + cd.elapsed + ' 秒前）已刷新過了。\n\n請等 ' + cd.wait + ' 秒後再試。',
